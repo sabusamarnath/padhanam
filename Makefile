@@ -2,7 +2,7 @@
 
 help:
 	@echo "Meridian — available targets:"
-	@echo "  up    Start the Compose stack in the background"
+	@echo "  up    Start the Compose stack (postgres, redis, caddy proxy) in the background"
 	@echo "  down  Stop the Compose stack"
 	@echo "  logs  Follow logs from all services"
 	@echo "  ps    Show service status"
