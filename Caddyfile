@@ -1,0 +1,16 @@
+{
+    auto_https off
+    admin off
+}
+
+localhost {
+    tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem
+
+    handle /health {
+        respond "ok" 200
+    }
+
+    handle {
+        respond "Meridian dev proxy. No backends configured yet." 503
+    }
+}
