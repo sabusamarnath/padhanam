@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.security.auth import Principal
+from vadakkan.security.auth import Principal
 from shared_kernel import TenantId
 
 

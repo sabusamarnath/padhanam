@@ -15,7 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
-from platform.config import ObservabilitySettings
+from vadakkan.config import ObservabilitySettings
 from shared_kernel import TenantId
 
 

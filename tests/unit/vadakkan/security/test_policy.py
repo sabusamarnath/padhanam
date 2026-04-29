@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from platform.security.auth import Principal
-from platform.security.policy import Decision, Resource, check
+from vadakkan.security.auth import Principal
+from vadakkan.security.policy import Decision, Resource, check
 from shared_kernel import TenantId
 
 

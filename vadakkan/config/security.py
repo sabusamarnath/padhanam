@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import field_validator
 
-from platform.config.base import MeridianSettings
+from vadakkan.config.base import MeridianSettings
 
 
 class AuthBackend(StrEnum):

@@ -4,15 +4,15 @@ Run before every session-closing commit. The checklist gates commits the
 same way the test suite does.
 
 ## Secrets and configuration
-- [ ] No `os.getenv` calls outside `platform/config/` (verified by import-linter).
-- [ ] No new `.env` reads outside `platform/config/`.
+- [ ] No `os.getenv` calls outside `vadakkan/config/` (verified by AST enforcement test).
+- [ ] No new `.env` reads outside `vadakkan/config/`.
 - [ ] No secret material in any tracked file (`git ls-files | xargs grep -l <known-secret-prefixes>`).
 - [ ] `.env` is gitignored and `git log -- .env` returns empty.
 - [ ] Any new secret has a placeholder in `.env.example`.
 
 ## Network exposure
 - [ ] No service in `compose.yaml` binds a host port except Caddy on 443.
-- [ ] All TLS-bearing services read TLS config through `platform/config/` (when applicable in this session).
+- [ ] All TLS-bearing services read TLS config through `vadakkan/config/` (when applicable in this session).
 
 ## Supply chain
 - [ ] All images in `compose.yaml` pinned to SHA256 digest.

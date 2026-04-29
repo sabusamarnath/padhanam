@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.security.auth import AuthError, issue_dev_token, verify_credential
+from vadakkan.security.auth import AuthError, issue_dev_token, verify_credential
 
 
 def test_valid_token_yields_principal() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.security import decrypt_field, encrypt_field
+from vadakkan.security import decrypt_field, encrypt_field
 
 
 def test_round_trip() -> None:

@@ -1,10 +1,10 @@
-"""Enforce D19's "no os.getenv outside platform/config/" rule.
+"""Enforce D19's "no os.getenv outside vadakkan/config/" rule.
 
 import-linter's contracts operate at module level, not attribute level —
 we can ban imports of the ``os`` module entirely, but ``os.urandom`` is a
-legitimate use in ``platform/security/crypto.py``. Banning ``os`` outright
+legitimate use in ``vadakkan/security/crypto.py``. Banning ``os`` outright
 is too coarse, so D19 is enforced here by AST walking instead. Any new
-``os.getenv(...)`` call outside ``platform/config/`` fails this test.
+``os.getenv(...)`` call outside ``vadakkan/config/`` fails this test.
 """
 
 from __future__ import annotations
@@ -13,11 +13,11 @@ import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ALLOWED_PATH = REPO_ROOT / "platform" / "config"
+ALLOWED_PATH = REPO_ROOT / "vadakkan" / "config"
 
 
 def _source_files() -> list[Path]:
-    roots = [REPO_ROOT / d for d in ("platform", "contexts", "shared_kernel")]
+    roots = [REPO_ROOT / d for d in ("vadakkan", "contexts", "shared_kernel")]
     return [p for r in roots for p in r.rglob("*.py")]
 
 
@@ -44,5 +44,5 @@ def test_no_os_getenv_outside_platform_config() -> None:
             if _is_os_getenv(node):
                 offenders.append((path.relative_to(REPO_ROOT), node.lineno))
     assert offenders == [], (
-        "os.getenv found outside platform/config/ (D19 violation): " + repr(offenders)
+        "os.getenv found outside vadakkan/config/ (D19 violation): " + repr(offenders)
     )

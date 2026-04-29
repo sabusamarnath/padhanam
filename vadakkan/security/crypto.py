@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from platform.config import SecuritySettings
+from vadakkan.config import SecuritySettings
 
 DEK_LEN = 32
 NONCE_LEN = 12

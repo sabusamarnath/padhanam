@@ -9,7 +9,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from platform.config.profiles import Profile, get_profile
+from vadakkan.config.profiles import Profile, get_profile
 
 
 class SecretManagerSource(PydanticBaseSettingsSource):

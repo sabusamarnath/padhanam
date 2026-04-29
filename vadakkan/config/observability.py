@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from platform.config.base import MeridianSettings
+from vadakkan.config.base import MeridianSettings
 
 
 class ObservabilitySettings(MeridianSettings):

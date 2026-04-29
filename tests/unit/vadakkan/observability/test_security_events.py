@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from platform.observability import (
+from vadakkan.observability import (
     SecurityEvent,
     SecurityEventCategory,
     file_security_event_logger,
@@ -64,7 +64,7 @@ def test_emit_creates_parent_directory(tmp_path: Path) -> None:
             principal_ref="system",
             tenant_id=None,
             action="settings.update",
-            resource_ref="platform.observability",
+            resource_ref="vadakkan.observability",
             outcome="success",
         )
     )

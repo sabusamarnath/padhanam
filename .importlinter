@@ -1,6 +1,6 @@
 [importlinter]
 root_packages =
-    platform
+    vadakkan
     contexts
     shared_kernel
 include_external_packages = True
@@ -52,14 +52,14 @@ forbidden_modules =
     sqlalchemy
 allow_indirect_imports = false
 
-# Contract 3: platform does not depend on contexts.
-# platform/ is cross-cutting infrastructure; it cannot reach into business
-# contexts. Any communication must flow contexts → platform, not the other way.
+# Contract 3: vadakkan (cross-cutting layer) does not depend on contexts.
+# vadakkan/ is cross-cutting infrastructure; it cannot reach into business
+# contexts. Any communication must flow contexts → vadakkan, not the other way.
 [importlinter:contract:3]
 name = Platform does not depend on contexts
 type = forbidden
 source_modules =
-    platform
+    vadakkan
 forbidden_modules =
     contexts
 allow_indirect_imports = false

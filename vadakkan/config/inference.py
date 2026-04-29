@@ -4,8 +4,8 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from platform.config.base import MeridianSettings
-from platform.config.profiles import Profile, get_profile
+from vadakkan.config.base import MeridianSettings
+from vadakkan.config.profiles import Profile, get_profile
 
 
 class TLSMode(StrEnum):

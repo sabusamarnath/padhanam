@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from platform.config import (
+from vadakkan.config import (
     InferenceSettings,
     ObservabilitySettings,
     Profile,
     SecuritySettings,
     get_profile,
 )
-from platform.config.inference import TLSMode
+from vadakkan.config.inference import TLSMode
 
 
 def test_profile_defaults_to_dev(monkeypatch: pytest.MonkeyPatch) -> None:

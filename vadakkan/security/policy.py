@@ -6,8 +6,8 @@ backend resolves to a policy-as-code engine (OPA-shaped) configured per
 tenant; the production swap is configuration, not refactor.
 
 Every check emits a security event (D26). The logger is wired in by
-``platform.observability.security_events`` rather than imported here so
-this module stays a leaf of the platform import graph.
+``vadakkan.observability.security_events`` rather than imported here so
+this module stays a leaf of the vadakkan import graph.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Callable
 
-from platform.security.auth import Principal
+from vadakkan.security.auth import Principal
 from shared_kernel import TenantId
 
 
