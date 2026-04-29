@@ -10,6 +10,15 @@ localhost {
         respond "ok" 200
     }
 
+    # /langfuse/* must precede the catch-all. Order matters in Caddy.
+    handle_path /langfuse/* {
+        reverse_proxy langfuse-web:3000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-For {remote}
+        }
+    }
+
     handle {
         respond "Meridian dev proxy. No backends configured yet." 503
     }
