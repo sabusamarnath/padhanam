@@ -32,3 +32,4 @@ Read every session. Kept tight on purpose.
 - Working files (`current-package.md`, session log entries) stay tight. Old content moves to archive at audit time, never deletes.
 - Log entries are one line where possible. Prose only when reasoning is non-obvious.
 - Strategic decisions and audits happen in Claude.ai. Build and test happen in Claude Code. Decisions written to local files bridge the two.
+- Exploratory notes and unresolved design questions live in /docs/notes/. Not read in normal sessions; consulted only when explicitly relevant.
