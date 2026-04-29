@@ -12,6 +12,7 @@ Read every session. Kept tight on purpose.
 - Observability is foundation, not feature. Trace capture from the first LLM call.
 - Tenant onboarding is configuration, not deployment. Per-tenant decisions (jurisdiction, identity federation, classification policy, model endpoints, retention) live in the tenant registry. Adding a tenant to an existing regional stack is an idempotent workflow. Adding a region is a separate infrastructure event.
 - Jurisdiction is a first-class attribute. Tenant context carries jurisdiction from P3 onward. Every component that touches customer data (databases, object storage, identity, trace store, LLM endpoints) is built to be regionally partitionable. Phase 1 deploys a single region; the architecture does not assume a single region anywhere in code.
+- Customer-specific behaviour is configuration. Tools (external services called by the platform on the tenant's behalf) cover most customer-supplied logic. Extensions exist for the residual cases at named interfaces (RetrievalClient, scorer, pre-processor), sandboxed per tenant. Forking the platform codebase is forbidden.
 
 ## Engineering practice
 
@@ -27,6 +28,6 @@ Read every session. Kept tight on purpose.
 
 - Claude Code reads only what the session needs.
 - Files over 200 lines are read in ranges, not whole.
-- Working files (`brief.md`, `current-package.md`, session log entries) stay tight. Old content moves to archive at audit time, never deletes.
+- Working files (`current-package.md`, session log entries) stay tight. Old content moves to archive at audit time, never deletes.
 - Log entries are one line where possible. Prose only when reasoning is non-obvious.
 - Strategic decisions and audits happen in Claude.ai. Build and test happen in Claude Code. Decisions written to local files bridge the two.

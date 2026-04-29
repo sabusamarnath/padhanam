@@ -4,10 +4,13 @@ Active package details. Updated when a new package starts. Archived to `docs/arc
 
 ## P1: Scaffold
 
-**Goal:** Working repo with Docker Compose stack, Make targets, mkcert HTTPS, baseline doc structure committed.
+**Goal:** Working repo with charter committed, structural tooling in place, minimal Compose stack on the laptop, mkcert HTTPS fronting it. Each subsequent package adds the services it consumes (per D11).
 
-**Sessions in this package:** S1 done, S2 done.
+**Sessions in this package:**
+- S1: Repo bootstrap. Charter and log structure committed at repo root, README, CLAUDE.md, .gitignore, .env.example, Makefile stub. Done.
+- S2: Minimal Docker Compose (Postgres with pgvector, Redis), Make targets for up, down, logs, ps, psql. Done.
+- S3: mkcert HTTPS, Caddy as dev proxy in front of Compose. Active.
 
-**Status:** In progress
+**Status:** S3 active.
 
-**Notes:** First package of Phase 1. Sets up everything subsequent packages depend on. Bootstraps the docs structure itself, since the docs files do not yet exist in the repo at the start of Session 1.
+**Notes:** P1 closes when `make up` brings a running, HTTPS-fronted minimal stack to life with charter committed. Caddy is the proxy choice for S3 per pre-S3 discussion: simplest config for the local case, no Docker-label coupling that becomes load-bearing later.

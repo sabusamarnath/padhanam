@@ -2,7 +2,7 @@
 
 The work breakdown for Phase 1. Order reflects dependency and learning value.
 
-- **P1: Scaffold.** Repo, Docker Compose, Make targets, mkcert HTTPS, .env.example, README, `/docs` structure committed.
+- **P1: Scaffold.** Repo, charter and log structure at repo root, README, .gitignore, .env.example, Makefile, incremental Compose stack (services land per package per D11), mkcert HTTPS fronting the stack.
 - **P2: Identity foundation.** Keycloak realm, OIDC integration, SAML SP, SCIM 2.0 endpoint, session management.
 - **P3: Tenancy primitives.** Tenant registry, per-tenant database connections, migration runner, audit log table.
 - **P4: LLM gateway.** LiteLLM-backed clients, trace capture middleware, OpenTelemetry GenAI conventions, self-hosted Langfuse wired up.
