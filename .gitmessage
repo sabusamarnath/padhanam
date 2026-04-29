@@ -1,0 +1,18 @@
+# <type>(p<package>/s<session>): <subject>
+#
+# Body: why, not what. Wrap at 72 chars. Leave a blank line above.
+#
+# Footer: references (e.g. "Refs: D11", "Closes: P1/S1").
+#
+# Types: feat, fix, docs, refactor, test, chore, build, ci, perf, revert
+# Scope: package/session, e.g. p1/s1, p3/s2. Use a broader scope only when
+#        the change spans multiple packages.
+#
+# Examples:
+#   feat(p1/s1): scaffold repo with charter, gitignore, env example
+#   docs(p1/s1): record D11 incremental scaffold decision
+#   chore(p2/s4): pin keycloak image to 26.0
+#
+# Reminders:
+# - Schema changes must update docs/charter/schema.md in the same commit.
+# - New observability metrics require a documented decision they inform.
