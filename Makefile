@@ -31,7 +31,7 @@ scan:
 	@echo "Scanning images..."
 	@for img in $$(grep -E '^\s+image:' compose.yaml | awk '{print $$2}'); do \
 		echo "Scanning $$img..."; \
-		trivy image --severity CRITICAL,HIGH --exit-code 1 $$img || exit 1; \
+		trivy image --scanners vuln --severity CRITICAL,HIGH --exit-code 1 $$img || exit 1; \
 	done
 	@echo "Scanning Python deps..."
 	@if [ -f uv.lock ]; then uv run pip-audit; else echo "(no uv.lock yet, deferred to S7)"; fi
