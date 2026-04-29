@@ -1,0 +1,71 @@
+[importlinter]
+root_packages =
+    platform
+    contexts
+    shared_kernel
+include_external_packages = True
+
+# Contract 1: domain code is pure (no Pydantic, no vendor SDKs).
+# When new contexts land, add their domain modules here.
+[importlinter:contract:1]
+name = Domain code is pure
+type = forbidden
+source_modules =
+    contexts.audit.domain
+forbidden_modules =
+    pydantic
+    pydantic_settings
+    cryptography
+    jwt
+    langfuse
+    langgraph
+    langchain
+    litellm
+    crewai
+    openai
+    anthropic
+    fastapi
+    sqlalchemy
+allow_indirect_imports = false
+
+# Contract 2: shared kernel is policed.
+# shared_kernel/ contains only types referentially equal across contexts.
+# Pydantic is banned to prevent framework version coupling.
+[importlinter:contract:2]
+name = Shared kernel is framework-free
+type = forbidden
+source_modules =
+    shared_kernel
+forbidden_modules =
+    pydantic
+    pydantic_settings
+    cryptography
+    jwt
+    langfuse
+    langgraph
+    langchain
+    litellm
+    crewai
+    openai
+    anthropic
+    fastapi
+    sqlalchemy
+allow_indirect_imports = false
+
+# Contract 3: platform does not depend on contexts.
+# platform/ is cross-cutting infrastructure; it cannot reach into business
+# contexts. Any communication must flow contexts → platform, not the other way.
+[importlinter:contract:3]
+name = Platform does not depend on contexts
+type = forbidden
+source_modules =
+    platform
+forbidden_modules =
+    contexts
+allow_indirect_imports = false
+
+# Contract 4 (D17): cross-context imports go only through context.api.
+# With only `audit` as a context in S5 this is trivially satisfied; the
+# structure is here so adding per-pair rules in S6/S7+ is mechanical.
+# When contexts/<X> lands, add a forbidden-import contract that bans
+# `contexts.<other>.{domain,application,adapters}` from `contexts.<X>`.
