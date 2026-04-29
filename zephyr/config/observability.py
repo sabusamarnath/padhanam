@@ -30,6 +30,10 @@ class ObservabilitySettings(QuorumSettings):
         default="sk-lf-dev-not-set",
         validation_alias="LANGFUSE_INIT_PROJECT_SECRET_KEY",
     )
+    langfuse_project_id: str = Field(
+        default="quorum-dev",
+        validation_alias="LANGFUSE_INIT_PROJECT_ID",
+    )
     langfuse_host: str = "https://langfuse.localhost"
     otlp_endpoint: str = (
         "http://langfuse-web:3000/api/public/otel/v1/traces"
