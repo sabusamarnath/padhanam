@@ -28,3 +28,8 @@ These were made before Session 1 and form the starting architecture.
 Appended as sessions produce them. New entries below this line.
 
 ---
+
+- **D11: Scaffold grows incrementally** (Package P1, Session 1)
+  - Choice: Each package adds the Compose services it requires. P1 ships repo structure, charter docs, and structural tooling. Compose at P1 close contains only services exercised by P1 or P2.
+  - Reasoning: Big-bang scaffold front-loads complexity before any service has earned a use case, contradicting the learning-sprint framing of Phase 1. Incremental scaffold reaches agent work faster and prevents unused-service drift.
+  - Alternatives considered: Big-bang scaffold (Postgres, Neo4j, Keycloak, Redis, LiteLLM, Langfuse all at P1 close). Rejected on learning-value and drift grounds.
