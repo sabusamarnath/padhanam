@@ -33,3 +33,6 @@ Thumbs.db
 
 # mkcert local development certificates
 certs/
+
+# Local logs directory (security events, application logs).
+logs/
