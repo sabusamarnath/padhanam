@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model scan sbom lint test
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from vadakkan/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -16,6 +16,7 @@ help:
 	@echo "  ps          Show service status"
 	@echo "  psql        Open a psql shell against the postgres service"
 	@echo "  pull-model  Pull the default Ollama model (idempotent; ~4.7GB on first run)"
+	@echo "  smoke-llm   End-to-end smoke through LiteLLM: completion + Langfuse trace"
 	@echo "  scan        Trivy + pip-audit; gates session-closing commits (D25)"
 	@echo "  sbom        Generate SBOM (stub until real Python deps land in S7)"
 	@echo "  lint        Run import-linter against the architectural contracts"
@@ -48,6 +49,28 @@ pull-model: derive-env
 	@model=$$(uv run python -c "from vadakkan.config import InferenceSettings; print(InferenceSettings().default_model)") && \
 	echo "Pulling $$model into the ollama_data volume (idempotent)..." && \
 	$(COMPOSE) exec ollama ollama pull "$$model"
+
+# End-to-end smoke through LiteLLM. Resolves the master key, model, and
+# endpoint through vadakkan/config/ (D19), then sends a real chat
+# completion request and prints the response. The request runs from
+# inside the caddy container (which carries wget) so no host-port
+# binding is needed for LiteLLM. After the response prints, the operator
+# verifies in the Langfuse UI at https://langfuse.localhost/ that the
+# trace appears with the GenAI semantic-convention attributes
+# (gen_ai.request.model, gen_ai.usage.{input,output,total}_tokens,
+# gen_ai.system, gen_ai.response.finish_reasons). Browser interactive
+# verification is the acceptance signal (S4 lesson, S6 prompt §5.6).
+smoke-llm: derive-env
+	@eval "$$(uv run python -m ops.smoke_config | sed 's/^/export /')" && \
+	body="{\"model\":\"$$SMOKE_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in five words.\"}]}" && \
+	echo "Smoking LiteLLM ($$SMOKE_MODEL) via internal network..." && \
+	$(COMPOSE) exec -T caddy wget -qO- \
+		--header="Authorization: Bearer $$SMOKE_KEY" \
+		--header="Content-Type: application/json" \
+		--post-data="$$body" \
+		http://litellm:4000/v1/chat/completions && \
+	echo && \
+	echo "OK. Verify the trace at $$SMOKE_VERIFY_URL (browser)."
 
 scan:
 	@echo "Scanning images..."
