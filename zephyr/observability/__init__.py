@@ -1,4 +1,4 @@
-from platform.observability.security_events import (
+from zephyr.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,

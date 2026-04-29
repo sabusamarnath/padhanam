@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import jwt
 
-from platform.config import AuthBackend, SecuritySettings
+from zephyr.config import AuthBackend, SecuritySettings
 from shared_kernel import TenantId
 
 ALGORITHM = "HS256"

@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import field_validator
 
-from platform.config.base import QuorumSettings
+from zephyr.config.base import QuorumSettings
 
 
 class AuthBackend(StrEnum):

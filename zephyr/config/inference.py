@@ -4,8 +4,8 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from platform.config.base import QuorumSettings
-from platform.config.profiles import Profile, get_profile
+from zephyr.config.base import QuorumSettings
+from zephyr.config.profiles import Profile, get_profile
 
 
 class TLSMode(StrEnum):
