@@ -37,19 +37,20 @@ langfuse/langfuse:3.172.0, langfuse/langfuse-worker:3.172.0.
 ### B. Base-image transitive CVEs — Go stdlib in vendor binaries
 
 **Scope:** Findings in `stdlib` from vendored Go binaries (`gosu`, image
-build tools) inside upstream images. Examples: `CVE-2025-68121`,
-`CVE-2026-25679`, the long Go-1.18-era list (`CVE-2022-*`,
-`CVE-2023-2453*`).
+build tools, the Ollama daemon binary) inside upstream images. Examples:
+`CVE-2025-68121`, `CVE-2026-25679`, `CVE-2025-22874`, `CVE-2026-32285`,
+the long Go-1.18-era list (`CVE-2022-*`, `CVE-2023-2453*`).
 
-**Rationale:** These are detections in Go binaries the upstream maintainer
-shipped (typically `gosu` or build helpers). They are not on Meridian's
-runtime path — the affected binaries either run once at container init
-under a privileged context already controlled by the orchestrator, or are
-not invoked at all. Same upstream-rebuild mechanism applies; same monthly
-digest-bump check.
+**Rationale:** These are detections in Go binaries the upstream
+maintainer shipped (typically `gosu`, build helpers, or — in the Ollama
+case — the daemon binary itself). They are not on Meridian's
+authored-code runtime path; the affected binaries either run once at
+container init under a privileged context already controlled by the
+orchestrator, or are part of the upstream maintainer's own runtime.
+Same upstream-rebuild mechanism applies; same monthly digest-bump check.
 
 **Affects:** pgvector/pgvector:pg17, postgres:17-alpine, redis:7-alpine,
-langfuse images.
+langfuse images, ollama/ollama:0.22.0.
 
 **Review date:** 2026-05-29.
 
@@ -59,15 +60,21 @@ langfuse images.
 current upstream release. Examples: `CVE-2026-4926` (path-to-regexp inside
 Langfuse worker), `CVE-2026-30836` (smallstep/certificates inside Caddy),
 `CVE-2026-33186` (gRPC inside Caddy), `CVE-2026-34986` (go-jose inside
-Caddy).
+Caddy), `CVE-2026-32597` (PyJWT inside LiteLLM), `CVE-2025-67221` (orjson
+inside LiteLLM), `CVE-2024-6345` and `CVE-2025-47273` (setuptools inside
+LiteLLM image), `CVE-2026-33671` (picomatch shipped inside the LiteLLM
+Node tooling tree).
 
-**Rationale:** These are upstream fixed in newer versions of the carrier
+**Rationale:** These are upstream-fixed in newer versions of the carrier
 images, but the carrier images themselves have not yet republished. Same
 posture: monthly digest-bump check (D25) catches these when upstream
 re-releases. We do not patch upstream images locally because doing so
-breaks the digest-pin guarantee.
+breaks the digest-pin guarantee. The LiteLLM-specific Python deps will
+likely re-release on the next stable cut; the picomatch finding is in
+Node tooling not on the proxy's runtime path.
 
-**Affects:** caddy:2-alpine, langfuse/langfuse-worker:3.172.0.
+**Affects:** caddy:2-alpine, langfuse/langfuse-worker:3.172.0,
+ghcr.io/berriai/litellm:v1.83.10-stable.
 
 **Review date:** 2026-05-29.
 
