@@ -20,3 +20,7 @@ Strategic work — bets, audits, package planning, decisions framed against Kano
 ## Where new contributors look first
 
 Start with [charter/bet.md](charter/bet.md), then [charter/principles.md](charter/principles.md). [CLAUDE.md](CLAUDE.md) describes how Claude Code is expected to operate inside the repo.
+
+## Local HTTPS
+
+[mkcert](https://github.com/FiloSottile/mkcert) is a host dependency: install with `brew install mkcert nss` and run `mkcert -install` once to add the local CA to the system trust store. Generate `localhost.pem` and `localhost-key.pem` into `./certs/` with `mkcert localhost`; the directory is gitignored because the certs are host-machine-specific. `make up` starts the Caddy proxy alongside Postgres and Redis, fronting the stack on `https://localhost`. Verify with `curl https://localhost/health` — it should return `ok` with a valid TLS handshake (no `-k` needed).
