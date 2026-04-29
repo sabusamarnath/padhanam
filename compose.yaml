@@ -194,6 +194,33 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Ollama (P2/S6). Local LLM runtime; LiteLLM reaches it on the internal
+  # Compose network at http://ollama:11434. No host port binding (D25 / S5
+  # network-exposure rule). Default model is qwen2.5:7b per D15 and is
+  # pulled into ollama_data via `make pull-model`; the volume persists the
+  # ~5GB blob across `make up`/`make down` cycles. OLLAMA_HOST=0.0.0.0:11434
+  # is required because the daemon defaults to 127.0.0.1 (loopback-only
+  # inside the container) and would not be reachable from sibling services.
+  ollama:
+    image: ollama/ollama:0.22.0@sha256:05ab093b257a54318fba39293f1640d53b507d1edec8fa6ca2d3e1817c02e53b
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: 5m
+      OLLAMA_NOPRUNE: "1"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Memory ceiling sized for Qwen 2.5 7B at Ollama's default q4 quantization
+    # (~5GB resident) plus KV cache and runtime overhead. Docker Desktop's VM
+    # memory allocation must be at least this large for the limit to be real.
+    mem_limit: 12g
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
@@ -203,3 +230,4 @@ volumes:
   clickhouse_data:
   clickhouse_logs:
   minio_data:
+  ollama_data:
