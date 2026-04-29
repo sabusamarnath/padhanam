@@ -1,0 +1,26 @@
+[project]
+name = "meridian"
+version = "0.0.0"
+description = "Meridian — local-first multi-tenant AI optimization platform."
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "cryptography>=43",
+    "pyjwt>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "import-linter>=2.1",
+    "pip-audit>=2.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.uv]
+package = false
