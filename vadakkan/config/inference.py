@@ -17,11 +17,16 @@ class TLSMode(StrEnum):
 class InferenceSettings(MeridianSettings):
     """LiteLLM gateway and model configuration.
 
-    Lands real values in S6 when LiteLLM and Ollama enter Compose. Defaults
-    here are dev-shaped so the smoke test can instantiate without an .env.
+    The endpoint, default model, and master key are the values used by
+    Meridian application code (when it lands in S7) and by the smoke-test
+    Make targets in S6. The master key has no default: it is a real
+    secret and must be supplied via .env, which surfaces a missing
+    configuration as a Pydantic validation error rather than a silent
+    fall-through.
     """
 
     litellm_endpoint: str = "http://litellm:4000"
+    litellm_master_key: str
     default_model: str = "qwen2.5:7b"
     tls_mode: TLSMode = TLSMode.PLAINTEXT
 

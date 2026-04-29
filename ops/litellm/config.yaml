@@ -1,0 +1,27 @@
+# LiteLLM proxy configuration.
+#
+# OTel emission is enabled via the "otel" callback (D27). The Langfuse
+# Python SDK is intentionally absent from the callbacks list — the trace
+# path is Meridian -> LiteLLM -> OTLP -> Langfuse, not Meridian ->
+# LiteLLM -> Langfuse SDK -> Langfuse. OTLP exporter wiring (endpoint,
+# headers, protocol) is configured via OTEL_* env vars on the container,
+# populated from vadakkan/config/ at compose-up time (see ops/derive_env.py
+# and the litellm service block in compose.yaml).
+#
+# The master key is read from LITELLM_MASTER_KEY which lives in .env and
+# is validated by InferenceSettings (D19). The model_list pins the
+# default development model (D15) at the local Ollama instance reachable
+# on the Compose-internal network.
+
+model_list:
+  - model_name: qwen2.5:7b
+    litellm_params:
+      model: ollama_chat/qwen2.5:7b
+      api_base: http://ollama:11434
+
+litellm_settings:
+  callbacks: ["otel"]
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

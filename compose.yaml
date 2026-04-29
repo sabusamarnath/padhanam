@@ -194,6 +194,40 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # LiteLLM (P2/S6). OpenAI-compatible gateway in front of Ollama (D4).
+  # OTel emission to Langfuse via OTLP/HTTP per D27 — the Langfuse Python
+  # SDK is deliberately not in the callbacks list. Auth header is
+  # derived from the existing Langfuse keys via ops/derive_env.py and
+  # arrives as ${LITELLM_OTEL_HEADERS} from .env.derived; OTEL_HEADERS is
+  # comma-separated key=value with values URL-encoded per the OTel spec.
+  # No host port binding (S5 rule); make smoke-llm reaches /v1/chat/...
+  # by exec-ing into the caddy container (which has wget) and hitting
+  # http://litellm:4000 on the internal network.
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.83.10-stable@sha256:6c82d338a60e7b273ae46bf1d8db814d2856ae010f96c44eeadde574d3893f76
+    depends_on:
+      ollama:
+        condition: service_healthy
+      langfuse-web:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_LOG: WARNING
+      OTEL_EXPORTER: otlp_http
+      OTEL_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
+      OTEL_HEADERS: ${LITELLM_OTEL_HEADERS}
+      OTEL_SERVICE_NAME: litellm
+    volumes:
+      - ./ops/litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness'); sys.exit(0)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   # Ollama (P2/S6). Local LLM runtime; LiteLLM reaches it on the internal
   # Compose network at http://ollama:11434. No host port binding (D25 / S5
   # network-exposure rule). Default model is qwen2.5:7b per D15 and is
