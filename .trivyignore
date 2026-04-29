@@ -66,3 +66,17 @@ CVE-2026-34986
 CVE-2026-39883
 CVE-2026-41989
 CVE-2026-4926
+
+# Added P2/S6 (ollama/ollama:0.22.0): Go stdlib + bundled jsonparser
+# inside the ollama binary. Category B in exceptions.md.
+CVE-2025-22874
+CVE-2026-32285
+
+# Added P2/S6 (ghcr.io/berriai/litellm:v1.83.10-stable): Python and Node
+# deps shipped in the carrier image, upstream-fixed but not yet
+# re-released by berriai. Category C in exceptions.md.
+CVE-2024-6345
+CVE-2025-47273
+CVE-2025-67221
+CVE-2026-32597
+CVE-2026-33671
