@@ -10,6 +10,8 @@ Read every session. Kept tight on purpose.
 - LLM-provider-agnostic via LiteLLM. Default development model is Ollama.
 - Hybrid retrieval. Vector via pgvector and graph via Neo4j, both behind a unified interface.
 - Observability is foundation, not feature. Trace capture from the first LLM call.
+- Tenant onboarding is configuration, not deployment. Per-tenant decisions (jurisdiction, identity federation, classification policy, model endpoints, retention) live in the tenant registry. Adding a tenant to an existing regional stack is an idempotent workflow. Adding a region is a separate infrastructure event.
+- Jurisdiction is a first-class attribute. Tenant context carries jurisdiction from P3 onward. Every component that touches customer data (databases, object storage, identity, trace store, LLM endpoints) is built to be regionally partitionable. Phase 1 deploys a single region; the architecture does not assume a single region anywhere in code.
 
 ## Engineering practice
 
@@ -19,6 +21,7 @@ Read every session. Kept tight on purpose.
 - Optimization output is recommendation-shaped, not chart-shaped.
 - Security as default: HTTPS via mkcert, secrets in `.env`, RLS on tenant-scoped tables, Pydantic validation on every endpoint, audit log on state changes.
 - Conventional commits referencing package and session number.
+- New components that touch tenant data accept jurisdiction as a parameter or column from inception. Adding it later is a refactor, not configuration.
 
 ## Token discipline
 
