@@ -205,7 +205,7 @@ class PostgresTenantRegistry:
             status=TenantStatus.ACTIVE,
             created_at=created_at,
         )
-        self._emit_audit(
+        await self._emit_audit(
             actor="system:control_plane",
             action_verb="tenant.register",
             resource_id=str(tenant_id),
@@ -278,7 +278,7 @@ class PostgresTenantRegistry:
             )
             after_row = after.mappings().first()
 
-        self._emit_audit(
+        await self._emit_audit(
             actor="system:control_plane",
             action_verb="tenant.update_status",
             resource_id=str(tenant_id),
@@ -326,7 +326,7 @@ class PostgresTenantRegistry:
     # Internals
     # ------------------------------------------------------------------
 
-    def _emit_audit(
+    async def _emit_audit(
         self,
         *,
         actor: str,
@@ -356,7 +356,7 @@ class PostgresTenantRegistry:
             correlation_id="",
             previous_event_hash=previous,
         )
-        self._audit.emit(
+        await self._audit.emit(
             AuditEvent(
                 actor=actor,
                 tenant_id=tenant_id,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import pytest
@@ -29,11 +30,11 @@ def _event() -> AuditEvent:
 def test_emit_does_not_raise(caplog: pytest.LogCaptureFixture) -> None:
     adapter = NoOpAuditAdapter()
     with caplog.at_level(logging.INFO, logger="contexts.audit.noop"):
-        adapter.emit(_event())
+        asyncio.run(adapter.emit(_event()))
     assert any("audit_event" in record.message for record in caplog.records)
 
 
 def test_verify_chain_raises_not_implemented() -> None:
     adapter = NoOpAuditAdapter()
     with pytest.raises(NotImplementedError, match="P3"):
-        adapter.verify_chain(TenantId("tenant-a"))
+        asyncio.run(adapter.verify_chain(TenantId("tenant-a")))
