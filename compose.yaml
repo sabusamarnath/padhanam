@@ -255,6 +255,42 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Vadakkan FastAPI application (P2/S7). Eleventh service in the stack.
+  # Hexagonal layers + bounded contexts are loaded as workspace members
+  # (D30); the image is built from apps/api/Dockerfile at the repo root
+  # so the build context sees vadakkan/, contexts/, shared_kernel/, and
+  # apps/. No host port binding (S5 rule); Caddy reverse-proxies on the
+  # internal Compose network at /api/*.
+  #
+  # The image tag floats during dev iteration but is digest-pinned for
+  # `make scan` and the security review checklist; rebuild with
+  # `docker compose build vadakkan-api` and refresh the digest after.
+  # The build:context: form is the development-mode default; the
+  # production manifest replaces this with an upstream-image digest pin.
+  vadakkan-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: vadakkan-api:dev
+    depends_on:
+      litellm:
+        condition: service_healthy
+      langfuse-web:
+        condition: service_healthy
+    environment:
+      VADAKKAN_PROFILE: dev
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

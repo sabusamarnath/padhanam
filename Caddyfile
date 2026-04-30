@@ -10,6 +10,21 @@ localhost {
         respond "ok" 200
     }
 
+    # Vadakkan API (P2/S7). Path-based routing under /api/* strips the
+    # prefix before reverse-proxying so the upstream FastAPI app sees
+    # /health and /inference/completions directly. Path routing is the
+    # right choice for an API surface — no Next.js basePath issue (the
+    # constraint that pushed Langfuse to a subdomain in S4 doesn't
+    # apply here). UI services keep going on subdomains; APIs on
+    # paths is the consistent pattern from S4.
+    handle_path /api/* {
+        reverse_proxy vadakkan-api:8000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-For {remote}
+        }
+    }
+
     handle {
         respond "Vadakkan dev proxy. No backends configured yet." 503
     }
