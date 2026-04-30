@@ -14,6 +14,9 @@ dependencies = [
     # duplicate the dep without scoping benefit.
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
+    # PyYAML for the scheduled-checks runner (D25); keeps ops tooling
+    # at the platform layer rather than dragging YAML into a context.
+    "pyyaml>=6",
     # Workspace members are pulled in as deps so `uv sync` from the root
     # installs every member's third-party deps into the shared venv. Each
     # member declares its own scoped third-party deps in its pyproject;

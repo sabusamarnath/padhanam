@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate scheduled-check
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from vadakkan/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -22,6 +22,7 @@ help:
 	@echo "  lint        Run import-linter against the architectural contracts"
 	@echo "  test        Run the unit and contract test suites"
 	@echo "  migrate     Apply control-plane Alembic migrations (S10; S11 chains the per-tenant track)"
+	@echo "  scheduled-check  Run scheduled supply-chain check; writes report to docs/security/scheduled-check-reports/"
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -103,3 +104,11 @@ test:
 # vendors alembic + psycopg through the root pyproject's runtime deps.
 migrate: derive-env
 	$(COMPOSE) exec vadakkan-api alembic --name control_plane upgrade head
+
+# Run the scheduled supply-chain check (D25). Reads
+# ops/scheduled_checks.yaml, queries upstream registries (PyPI online,
+# Docker Hub manual), writes a Markdown report under
+# docs/security/scheduled-check-reports/<today>.md. The operator
+# reviews the report and opens digest-bump PRs manually; no auto-PR.
+scheduled-check:
+	uv run python -m ops.run_scheduled_checks
