@@ -30,6 +30,15 @@ services:
   # lands when production deployment context arrives.
   postgres-control-plane:
     image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
+    # Loopback-only host port binding so the S10 contract tests run
+    # from `uv run pytest` on the laptop. This is a deliberate
+    # exception to the S5 "only Caddy binds host ports" rule, scoped
+    # to dev: control-plane needs host reachability for the
+    # integration test path that the S9 instance addition created. The
+    # binding is loopback-only (127.0.0.1) so external network does
+    # not see it; production manifests remove the binding entirely.
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_CONTROL_PLANE_USER}
       POSTGRES_PASSWORD: ${POSTGRES_CONTROL_PLANE_PASSWORD}
