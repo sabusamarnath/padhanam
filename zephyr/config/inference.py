@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
-from zephyr.config.base import QuorumSettings
+from zephyr.config.base import ZephyrSettings
 from zephyr.config.profiles import Profile, get_profile
 
 
@@ -14,11 +14,11 @@ class TLSMode(StrEnum):
     MTLS = "mtls"
 
 
-class InferenceSettings(QuorumSettings):
+class InferenceSettings(ZephyrSettings):
     """LiteLLM gateway and model configuration.
 
     The endpoint, default model, and master key are the values used by
-    Quorum application code (when it lands in S7) and by the smoke-test
+    Zephyr application code (when it lands in S7) and by the smoke-test
     Make targets in S6. The master key has no default: it is a real
     secret and must be supplied via .env, which surfaces a missing
     configuration as a Pydantic validation error rather than a silent
@@ -36,6 +36,6 @@ class InferenceSettings(QuorumSettings):
         if get_profile() is Profile.PROD and self.tls_mode is TLSMode.PLAINTEXT:
             raise ValueError(
                 "InferenceSettings.tls_mode=plaintext is not permitted under "
-                "QUORUM_PROFILE=prod (D20)."
+                "ZEPHYR_PROFILE=prod (D20)."
             )
         return self

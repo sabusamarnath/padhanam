@@ -10,10 +10,10 @@ class Profile(StrEnum):
 
 
 def get_profile() -> Profile:
-    """Resolve the active deployment profile from QUORUM_PROFILE.
+    """Resolve the active deployment profile from ZEPHYR_PROFILE.
 
     This is the only sanctioned os.getenv call in the codebase (see D19);
     every other module reads through platform/config/ Settings classes.
     """
-    raw = os.getenv("QUORUM_PROFILE", "dev").strip().lower()
+    raw = os.getenv("ZEPHYR_PROFILE", "dev").strip().lower()
     return Profile(raw)

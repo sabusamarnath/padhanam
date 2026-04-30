@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import field_validator
 
-from zephyr.config.base import QuorumSettings
+from zephyr.config.base import ZephyrSettings
 
 
 class AuthBackend(StrEnum):
@@ -12,7 +12,7 @@ class AuthBackend(StrEnum):
     KEYCLOAK = "keycloak"
 
 
-class SecuritySettings(QuorumSettings):
+class SecuritySettings(ZephyrSettings):
     """Crypto, auth, and policy configuration.
 
     Dev profile carries fixed material so the smoke tests run without .env

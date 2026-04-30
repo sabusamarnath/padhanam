@@ -36,8 +36,8 @@ class SecretManagerSource(PydanticBaseSettingsSource):
         return {}
 
 
-class QuorumSettings(BaseSettings):
-    """Base for every Quorum Settings class.
+class ZephyrSettings(BaseSettings):
+    """Base for every Zephyr Settings class.
 
     Every secret and environment-derived value enters the application through
     a subclass of this type. No other module reads .env or calls os.getenv

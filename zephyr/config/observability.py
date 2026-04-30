@@ -5,10 +5,10 @@ from pathlib import Path
 
 from pydantic import Field
 
-from zephyr.config.base import QuorumSettings
+from zephyr.config.base import ZephyrSettings
 
 
-class ObservabilitySettings(QuorumSettings):
+class ObservabilitySettings(ZephyrSettings):
     """Trace store and security-event configuration.
 
     Langfuse keys are read from the LANGFUSE_INIT_PROJECT_* env vars that
@@ -31,7 +31,7 @@ class ObservabilitySettings(QuorumSettings):
         validation_alias="LANGFUSE_INIT_PROJECT_SECRET_KEY",
     )
     langfuse_project_id: str = Field(
-        default="quorum-dev",
+        default="zephyr-dev",
         validation_alias="LANGFUSE_INIT_PROJECT_ID",
     )
     langfuse_host: str = "https://langfuse.localhost"
