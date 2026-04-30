@@ -168,6 +168,7 @@ async def update_tenant_status(
     security_events: SecurityEventLogger,
     tenant_id: TenantId,
     status: TenantStatus,
+    session_factory_cache: "_InvalidatableCache | None" = None,
 ) -> Tenant:
     if not is_operator(principal):
         raise _deny(
@@ -176,7 +177,19 @@ async def update_tenant_status(
             tenant_id=tenant_id,
             security_events=security_events,
         )
-    return await registry.update_tenant_status(tenant_id, status)
+    tenant = await registry.update_tenant_status(tenant_id, status)
+    # Per D36, any status transition invalidates the cached per-tenant
+    # session factory. Wired here at the application layer rather than
+    # in the registry adapter because cache lifecycle is application
+    # concern; the cache itself is optional so this use case still
+    # works under unit-test wiring that does not construct the cache.
+    if session_factory_cache is not None:
+        await session_factory_cache.invalidate(tenant_id)
+    return tenant
+
+
+class _InvalidatableCache(Protocol):
+    async def invalidate(self, tenant_id: TenantId) -> None: ...
 
 
 async def reveal_connection_config(
