@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import field_validator
 
-from vadakkan.config.base import MeridianSettings
+from vadakkan.config.base import VadakkanSettings
 
 
 class AuthBackend(StrEnum):
@@ -12,7 +12,7 @@ class AuthBackend(StrEnum):
     KEYCLOAK = "keycloak"
 
 
-class SecuritySettings(MeridianSettings):
+class SecuritySettings(VadakkanSettings):
     """Crypto, auth, and policy configuration.
 
     Dev profile carries fixed material so the smoke tests run without .env

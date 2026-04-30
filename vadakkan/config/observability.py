@@ -5,10 +5,10 @@ from pathlib import Path
 
 from pydantic import Field
 
-from vadakkan.config.base import MeridianSettings
+from vadakkan.config.base import VadakkanSettings
 
 
-class ObservabilitySettings(MeridianSettings):
+class ObservabilitySettings(VadakkanSettings):
     """Trace store and security-event configuration.
 
     Langfuse keys are read from the LANGFUSE_INIT_PROJECT_* env vars that
@@ -31,7 +31,7 @@ class ObservabilitySettings(MeridianSettings):
         validation_alias="LANGFUSE_INIT_PROJECT_SECRET_KEY",
     )
     langfuse_project_id: str = Field(
-        default="meridian-dev",
+        default="vadakkan-dev",
         validation_alias="LANGFUSE_INIT_PROJECT_ID",
     )
     langfuse_host: str = "https://langfuse.localhost"

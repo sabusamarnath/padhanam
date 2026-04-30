@@ -36,8 +36,8 @@ class SecretManagerSource(PydanticBaseSettingsSource):
         return {}
 
 
-class MeridianSettings(BaseSettings):
-    """Base for every Meridian Settings class.
+class VadakkanSettings(BaseSettings):
+    """Base for every Vadakkan Settings class.
 
     Every secret and environment-derived value enters the application through
     a subclass of this type. No other module reads .env or calls os.getenv
