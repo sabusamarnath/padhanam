@@ -4,7 +4,7 @@ The work breakdown for Phase 1. Order reflects dependency and learning value.
 
 - **P1: Scaffold.** Repo, charter and log structure at repo root, README, .gitignore, .env.example, Makefile, incremental Compose stack (services land per package per D11), mkcert HTTPS fronting the stack.
 - **P2: Identity foundation.** Keycloak realm, OIDC integration, SAML SP, SCIM 2.0 endpoint, session management.
-- **P3: Tenancy primitives.** Tenant registry, per-tenant database connections, migration runner, audit log table.
+- **P3: Tenancy primitives at enterprise grade.** Tenant registry on a dedicated control-plane Postgres instance, per-tenant database connections to per-tenant Postgres instances, two-phase Alembic migration runner (control-plane and per-tenant tracks), real audit context adapter with hash-chained append-only storage, credential encryption from inception via envelope encryption.
 - **P4: LLM gateway.** LiteLLM-backed clients, trace capture middleware, OpenTelemetry GenAI conventions, self-hosted Langfuse wired up.
 - **P5: Evaluation harness.** Canonical interaction set storage, replay engine, deterministic and LLM-as-judge scoring, regression reporting.
 - **P6: Source ingestion.** Upload, two-track pipeline (vector to pgvector, entity extraction to Neo4j), retrieval interfaces.
