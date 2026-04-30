@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from vadakkan/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -21,6 +21,7 @@ help:
 	@echo "  sbom        Generate SBOM (stub until real Python deps land in S7)"
 	@echo "  lint        Run import-linter against the architectural contracts"
 	@echo "  test        Run the unit and contract test suites"
+	@echo "  migrate     Apply control-plane Alembic migrations (S10; S11 chains the per-tenant track)"
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -91,3 +92,14 @@ lint:
 
 test:
 	uv run pytest
+
+# Apply Alembic migrations against the live control-plane Postgres
+# instance (D33). S10 ships the control-plane track only; S11 grows
+# the per-tenant track and chains both phases here.
+#
+# Runs from inside the vadakkan-api container so the migration script
+# can resolve the postgres-control-plane hostname over the Compose
+# network (S5 rule: only Caddy binds host ports). The api image
+# vendors alembic + psycopg through the root pyproject's runtime deps.
+migrate: derive-env
+	$(COMPOSE) exec vadakkan-api alembic --name control_plane upgrade head

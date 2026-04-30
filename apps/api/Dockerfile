@@ -28,6 +28,7 @@ COPY apps/api/pyproject.toml ./apps/api/
 COPY contexts/inference/pyproject.toml ./contexts/inference/
 COPY contexts/observability/pyproject.toml ./contexts/observability/
 COPY contexts/audit/pyproject.toml ./contexts/audit/
+COPY contexts/tenancy/pyproject.toml ./contexts/tenancy/
 
 RUN uv sync --frozen --no-dev --no-install-project
 
@@ -37,6 +38,13 @@ COPY vadakkan ./vadakkan
 COPY shared_kernel ./shared_kernel
 COPY contexts ./contexts
 COPY apps ./apps
+# Alembic config + migration scripts (D34). Operator invokes
+# `alembic --name control_plane upgrade head` via `docker compose exec`
+# from the host; the binary and the script tree both need to be inside
+# the image because postgres-control-plane only resolves on the Compose
+# network (S5 host-port-binding rule).
+COPY alembic.ini ./
+COPY alembic ./alembic
 RUN uv sync --frozen --no-dev
 
 

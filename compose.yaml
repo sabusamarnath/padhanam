@@ -333,7 +333,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: vadakkan-api:dev@sha256:58252163c6088ade60a24e6ff16a8e9cb1ed91a26157c5c16f3e6f1b8bef4648
+    image: vadakkan-api:dev@sha256:369d44ea71737cab751d85202c8e31acda2034a3463cf10d43ed6ad188934e06
     depends_on:
       litellm:
         condition: service_healthy
@@ -345,6 +345,12 @@ services:
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
       LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
+      # Tenancy: control-plane connection details (D33). Read by
+      # ControlPlaneSettings in vadakkan/config/tenancy.py for the
+      # registry adapter and the alembic env.py.
+      POSTGRES_CONTROL_PLANE_USER: ${POSTGRES_CONTROL_PLANE_USER}
+      POSTGRES_CONTROL_PLANE_PASSWORD: ${POSTGRES_CONTROL_PLANE_PASSWORD}
+      POSTGRES_CONTROL_PLANE_DB: ${POSTGRES_CONTROL_PLANE_DB}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
