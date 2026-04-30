@@ -1,6 +1,6 @@
-# Quorum
+# Zephyr
 
-Quorum is an agentic workflow SaaS platform whose core differentiator is the observability and optimization layer that production agentic systems need but most teams do not build. A NotebookLM-plus-Gems agent surface sits on top.
+Zephyr is an agentic workflow SaaS platform whose core differentiator is the observability and optimization layer that production agentic systems need but most teams do not build. A NotebookLM-plus-Gems agent surface sits on top.
 
 ## How to read the charter
 
