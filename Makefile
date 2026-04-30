@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate scheduled-check
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from vadakkan/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -21,7 +21,8 @@ help:
 	@echo "  sbom        Generate SBOM (stub until real Python deps land in S7)"
 	@echo "  lint        Run import-linter against the architectural contracts"
 	@echo "  test        Run the unit and contract test suites"
-	@echo "  migrate     Apply control-plane Alembic migrations (S10; S11 chains the per-tenant track)"
+	@echo "  migrate     Apply Alembic migrations: control-plane phase, then per-tenant phase against each registered tenant (D36)"
+	@echo "  seed-tenants  Register the test set tenants in the registry; idempotent"
 	@echo "  scheduled-check  Run scheduled supply-chain check; writes report to docs/security/scheduled-check-reports/"
 
 derive-env:
@@ -95,15 +96,25 @@ test:
 	uv run pytest
 
 # Apply Alembic migrations against the live control-plane Postgres
-# instance (D33). S10 ships the control-plane track only; S11 grows
-# the per-tenant track and chains both phases here.
+# instance (D33), then iterate over registered tenants and apply the
+# per-tenant track to each (D36, S11). The orchestrator at
+# ops/migrate.py runs the control-plane phase first, then the
+# per-tenant phase. Per-tenant transactional: failure on tenant B
+# leaves tenant A migrated, retry resumes from tenant B.
 #
 # Runs from inside the vadakkan-api container so the migration script
-# can resolve the postgres-control-plane hostname over the Compose
-# network (S5 rule: only Caddy binds host ports). The api image
-# vendors alembic + psycopg through the root pyproject's runtime deps.
+# can resolve the postgres-control-plane and per-tenant hostnames
+# over the Compose network (S5 rule: only Caddy binds host ports).
+# The api image vendors alembic + psycopg through the root pyproject's
+# runtime deps.
 migrate: derive-env
-	$(COMPOSE) exec vadakkan-api alembic --name control_plane upgrade head
+	$(COMPOSE) exec vadakkan-api python -m ops.migrate
+
+# Register the test set tenants (postgres-tenant-a, postgres-tenant-b)
+# in the registry. Idempotent: skips already-registered ids.
+# Runs inside vadakkan-api so the Compose service hostnames resolve.
+seed-tenants: derive-env
+	$(COMPOSE) exec vadakkan-api python -m ops.seed_tenants
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,

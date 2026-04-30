@@ -38,13 +38,18 @@ COPY vadakkan ./vadakkan
 COPY shared_kernel ./shared_kernel
 COPY contexts ./contexts
 COPY apps ./apps
-# Alembic config + migration scripts (D34). Operator invokes
-# `alembic --name control_plane upgrade head` via `docker compose exec`
-# from the host; the binary and the script tree both need to be inside
-# the image because postgres-control-plane only resolves on the Compose
-# network (S5 host-port-binding rule).
+# Alembic config + migration scripts (D34). Operator invokes the
+# control-plane track via `docker compose exec`; the binary and the
+# script tree both need to be inside the image because the Postgres
+# instances only resolve on the Compose network (S5 host-port-binding
+# rule). S11 grows the per-tenant track here too (D36).
 COPY alembic.ini ./
 COPY alembic ./alembic
+# ops/ scripts. S11 (D36) introduces ops.seed_tenants and ops.migrate
+# which `make seed-tenants` and `make migrate` invoke as `python -m
+# ops.<name>` inside this container so per-tenant Compose hostnames
+# resolve.
+COPY ops ./ops
 RUN uv sync --frozen --no-dev
 
 
