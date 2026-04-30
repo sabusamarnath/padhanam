@@ -23,7 +23,10 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False so the runner's "ops.migrate"
+    # logger keeps its INFO level after Alembic runs fileConfig per
+    # tenant; otherwise per-tenant progress messages are silenced.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 
 def _runtime_url() -> str:
