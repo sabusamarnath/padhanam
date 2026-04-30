@@ -5,6 +5,12 @@ we can ban imports of the ``os`` module entirely, but ``os.urandom`` is a
 legitimate use in ``vadakkan/security/crypto.py``. Banning ``os`` outright
 is too coarse, so D19 is enforced here by AST walking instead. Any new
 ``os.getenv(...)`` call outside ``vadakkan/config/`` fails this test.
+
+Source-of-truth discovery (S7 housekeeping): the set of directories to
+walk is read from the workspace topology (root pyproject.toml plus its
+declared members), not from a hardcoded list. Renaming a context
+directory updates this discovery automatically because the workspace
+manifest is the canonical reference.
 """
 
 from __future__ import annotations
@@ -12,13 +18,14 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests._enforcement._discovery import enforced_source_roots
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_PATH = REPO_ROOT / "vadakkan" / "config"
 
 
 def _source_files() -> list[Path]:
-    roots = [REPO_ROOT / d for d in ("vadakkan", "contexts", "shared_kernel")]
-    return [p for r in roots for p in r.rglob("*.py")]
+    return [p for r in enforced_source_roots(REPO_ROOT) for p in r.rglob("*.py")]
 
 
 def _is_os_getenv(node: ast.AST) -> bool:

@@ -87,6 +87,7 @@ sbom:
 
 lint:
 	uv run lint-imports
+	uv run pytest tests/_enforcement/
 
 test:
 	uv run pytest

@@ -3,14 +3,107 @@ root_packages =
     vadakkan
     contexts
     shared_kernel
+    apps
 include_external_packages = True
 
-# Contract 1: domain code is pure (no Pydantic, no vendor SDKs).
-# When new contexts land, add their domain modules here.
-[importlinter:contract:1]
+# ---------------------------------------------------------------------------
+# Hexagonal layers within each context (D16).
+# Layer ordering top-down: outer layers may import inner ones, never the
+# reverse. Domain is the innermost and imports nothing else.
+#
+#   adapters       — outermost (vendor SDKs live here only)
+#     │
+#     ├─▶ application — use cases; calls ports
+#     │     │
+#     │     ├─▶ ports — abstractions
+#     │     │     │
+#     │     │     └─▶ domain — value objects, errors
+#     │     │
+#     │     └─▶ domain
+#     │
+#     └─▶ ports + domain
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:layers-inference]
+name = Inference layers (hexagonal)
+type = layers
+layers =
+    contexts.inference.adapters
+    contexts.inference.application
+    contexts.inference.ports
+    contexts.inference.domain
+
+[importlinter:contract:layers-observability]
+name = Observability layers (hexagonal)
+type = layers
+layers =
+    contexts.observability.adapters
+    contexts.observability.application
+    contexts.observability.ports
+    contexts.observability.domain
+
+[importlinter:contract:layers-audit]
+name = Audit layers (hexagonal)
+type = layers
+layers =
+    contexts.audit.adapters
+    contexts.audit.application
+    contexts.audit.domain
+
+# ---------------------------------------------------------------------------
+# Cross-context boundary (D17). Contexts are independent at all internal
+# layers. Cross-context reads go through the .api facade.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:contexts-independent-domain]
+name = Cross-context: domain layers are independent
+type = independence
+modules =
+    contexts.inference.domain
+    contexts.observability.domain
+    contexts.audit.domain
+
+[importlinter:contract:contexts-independent-application]
+name = Cross-context: application layers are independent
+type = independence
+modules =
+    contexts.inference.application
+    contexts.observability.application
+    contexts.audit.application
+
+[importlinter:contract:contexts-independent-adapters]
+name = Cross-context: adapter trees are independent
+type = independence
+modules =
+    contexts.inference.adapters
+    contexts.observability.adapters
+    contexts.audit.adapters
+
+# ---------------------------------------------------------------------------
+# Platform isolation (D16, established in S5).
+# vadakkan/ cross-cutting code cannot import contexts/.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:platform-no-contexts]
+name = Platform does not depend on contexts
+type = forbidden
+source_modules =
+    vadakkan
+forbidden_modules =
+    contexts
+allow_indirect_imports = false
+
+# ---------------------------------------------------------------------------
+# Domain code is pure (extended for S7 contexts).
+# Domain may not import Pydantic, vendor SDKs, or HTTP clients.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:domain-purity]
 name = Domain code is pure
 type = forbidden
 source_modules =
+    contexts.inference.domain
+    contexts.observability.domain
     contexts.audit.domain
 forbidden_modules =
     pydantic
@@ -25,13 +118,15 @@ forbidden_modules =
     openai
     anthropic
     fastapi
+    httpx
     sqlalchemy
 allow_indirect_imports = false
 
-# Contract 2: shared kernel is policed.
-# shared_kernel/ contains only types referentially equal across contexts.
-# Pydantic is banned to prevent framework version coupling.
-[importlinter:contract:2]
+# ---------------------------------------------------------------------------
+# Shared kernel is policed (Contract 2 from S5).
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:shared-kernel-policed]
 name = Shared kernel is framework-free
 type = forbidden
 source_modules =
@@ -49,23 +144,76 @@ forbidden_modules =
     openai
     anthropic
     fastapi
+    httpx
     sqlalchemy
 allow_indirect_imports = false
 
-# Contract 3: vadakkan (cross-cutting layer) does not depend on contexts.
-# vadakkan/ is cross-cutting infrastructure; it cannot reach into business
-# contexts. Any communication must flow contexts → vadakkan, not the other way.
-[importlinter:contract:3]
-name = Platform does not depend on contexts
+# ---------------------------------------------------------------------------
+# Vendor-SDK confinement (D27, D30). Each vendor SDK enters the codebase
+# only through its dedicated adapter directory. The `apps` source list
+# uses allow_indirect_imports=true so apps/api/main.py may wire the
+# adapter facade without seeing the SDK transitively as a violation;
+# direct `import litellm` from apps still fails.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:litellm-confined]
+name = litellm SDK confined to inference outbound adapter
 type = forbidden
 source_modules =
     vadakkan
+    shared_kernel
+    contexts.inference.domain
+    contexts.inference.application
+    contexts.inference.ports
+    contexts.inference.adapters.inbound
+    contexts.observability
+    contexts.audit
 forbidden_modules =
-    contexts
+    litellm
 allow_indirect_imports = false
 
-# Contract 4 (D17): cross-context imports go only through context.api.
-# With only `audit` as a context in S5 this is trivially satisfied; the
-# structure is here so adding per-pair rules in S6/S7+ is mechanical.
-# When contexts/<X> lands, add a forbidden-import contract that bans
-# `contexts.<other>.{domain,application,adapters}` from `contexts.<X>`.
+[importlinter:contract:litellm-confined-apps]
+name = litellm direct import forbidden in apps
+type = forbidden
+source_modules =
+    apps
+forbidden_modules =
+    litellm
+allow_indirect_imports = true
+
+[importlinter:contract:langfuse-confined]
+name = langfuse SDK confined to observability outbound adapter
+type = forbidden
+source_modules =
+    vadakkan
+    shared_kernel
+    contexts.inference
+    contexts.audit
+    contexts.observability.domain
+    contexts.observability.application
+    contexts.observability.ports
+    contexts.observability.adapters.inbound
+forbidden_modules =
+    langfuse
+allow_indirect_imports = false
+
+[importlinter:contract:langfuse-confined-apps]
+name = langfuse direct import forbidden in apps
+type = forbidden
+source_modules =
+    apps
+forbidden_modules =
+    langfuse
+allow_indirect_imports = true
+
+[importlinter:contract:fastapi-confined]
+name = fastapi confined to apps/
+type = forbidden
+source_modules =
+    vadakkan
+    shared_kernel
+    contexts
+forbidden_modules =
+    fastapi
+    starlette
+allow_indirect_imports = false
