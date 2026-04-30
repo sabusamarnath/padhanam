@@ -29,6 +29,37 @@ encrypts on write via `vadakkan/security/crypto.py` and never decrypts
 on read. Decryption flows through the operator-context-only
 `reveal_connection_config` use case (D34).
 
+### `tenant_audit` (control-plane)
+
+Lands at S12 via Alembic revision `0002_create_cp_tenant_audit`.
+Holds operator-context audit events (registry mutations, control-plane
+state changes) routed to this destination per D35's empty-string
+sentinel for `tenant_id`. The schema mirrors the per-tenant
+`tenant_audit` table column-for-column; the hash-chain helpers in
+`contexts/audit/domain/events.py` operate identically against either
+destination.
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `tenant_id`           | `text`          | not null; CHECK `tenant_id = ''` (empty-string sentinel for control-plane scope per D35) |
+| `actor`               | `text`          | not null                                       |
+| `jurisdiction`        | `text`          | not null                                       |
+| `timestamp`           | `timestamptz`   | not null; indexed (`ix_control_plane_tenant_audit_timestamp`) |
+| `action_verb`         | `text`          | not null                                       |
+| `resource_type`       | `text`          | not null                                       |
+| `resource_id`         | `text`          | not null                                       |
+| `before_state`        | `jsonb`         | not null                                       |
+| `after_state`         | `jsonb`         | not null                                       |
+| `correlation_id`      | `text`          | not null; indexed (`ix_control_plane_tenant_audit_correlation_id`) |
+| `previous_event_hash` | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
+| `this_event_hash`     | `text`          | not null; SHA-256 of the event payload + previous hash |
+
+The CHECK constraint on `tenant_id` is symmetric to the per-tenant
+table's CHECK (non-empty `tenant_id`). Accidental cross-destination
+writes raise constraint violations rather than silently corrupting
+the destination chain (D37).
+
 ## Per-tenant tables
 
 Live on each tenant's dedicated Postgres instance per D32. Schema is
@@ -44,7 +75,7 @@ the per-tenant Alembic track at `alembic/tenant/`
 | Column                | Type            | Constraints                                    |
 |-----------------------|-----------------|------------------------------------------------|
 | `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
-| `tenant_id`           | `text`          | not null; the routed tenant's id (denormalised on the table for self-describing rows per D22) |
+| `tenant_id`           | `text`          | not null; the routed tenant's id (denormalised on the table for self-describing rows per D22); CHECK `tenant_id <> ''` (S12 revision `0002_audit_sentinel_check`, symmetric to the control-plane CHECK) |
 | `actor`               | `text`          | not null                                       |
 | `jurisdiction`        | `text`          | not null                                       |
 | `timestamp`           | `timestamptz`   | not null; indexed (`ix_tenant_audit_timestamp`) |
