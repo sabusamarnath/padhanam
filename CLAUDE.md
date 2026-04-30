@@ -10,11 +10,15 @@ Operating manual for Claude Code working in this repo. Reading discipline matter
 
 Sessions follow Design → Build → Test → Close. Do not skip steps.
 
+Browser interactive verification is the success criterion for any acceptance criterion that involves a UI surface, not CLI smoke. The lesson lands from S4 (Langfuse trace UI display correctness) and reinforces every session that touches a user-visible surface. CLI smoke alone passes while the user experience is broken; both must be verified.
+
 ## Token discipline
 
 - Files over 200 lines: read in ranges, not whole.
 - Working files (`charter/current-package.md`, session log entries) stay tight. Old content moves to [docs/archive/](docs/archive/) at audit time. Nothing is ever deleted.
 - Do not enumerate the repo. Read only what the session requires.
+
+Configuration values that appear in multiple files (package name, compose project name, default model, port numbers) are discovered from a single source rather than hardcoded. The rename session caught the AST enforcement test having hardcoded the package name; the lesson generalises. When writing tests, contracts, or scripts that reference such values, read from `vadakkan/config/`, `pyproject.toml`, or the appropriate configuration surface.
 
 ## Commits
 
@@ -29,3 +33,7 @@ Conventional commits, scoped to package and session: `feat(p1/s1): ...`, `docs(p
 ## Where strategy and build meet
 
 Strategy, audits, and option-framing happen in Claude.ai. Build and test happen here. The bridge is local files — decisions written upstream are constraints downstream. If a request conflicts with a decision in [charter/decisions.md](charter/decisions.md), surface it before building.
+
+## Enforcement layer naming
+
+When a session establishes architectural enforcement (import-linter contracts, AST tests, integration tests asserting an invariant), name the enforcement layer explicitly in the session log entry: which contracts, which tests, what they prevent. Future sessions inherit the enforcement and need to know what is already guaranteed by tooling versus what still requires review.
