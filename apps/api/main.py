@@ -41,6 +41,12 @@ from contexts.inference.ports import InferencePort
 from vadakkan.config import InferenceSettings, ObservabilitySettings
 from vadakkan.events import DomainEvent, SynchronousEventBus
 
+# httpx instrumentation propagates the W3C traceparent header through
+# every outbound HTTP call. LiteLLM's Python SDK uses httpx internally,
+# so this is what makes the gateway-emitted span land as a child of the
+# adapter span rather than starting a separate trace (D27 propagation).
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _HTTPXInstr
+
 _log = logging.getLogger("vadakkan.api")
 
 
@@ -119,6 +125,14 @@ def create_app(
     # registered so span context propagates into the auth-middleware
     # frame and into the router handler frame.
     FastAPIInstrumentor.instrument_app(app)
+
+    # httpx instrumentation injects the W3C traceparent header into
+    # every outbound HTTP call so the LiteLLM gateway picks up the
+    # request's trace context and the gateway-emitted span lands as a
+    # grandchild of the FastAPI request span (D27 propagation). The
+    # instrumentor is process-global; instrumenting once is enough.
+    if not _HTTPXInstr().is_instrumented_by_opentelemetry:
+        _HTTPXInstr().instrument()
 
     # Routers.
     app.include_router(health_router.router)

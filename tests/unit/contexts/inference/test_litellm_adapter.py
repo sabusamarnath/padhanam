@@ -86,7 +86,10 @@ def test_adapter_resolves_default_model_when_none() -> None:
             tenant_id=TenantId("tenant-a"),
         )
 
-    assert captured["model"] == _settings().default_model
+    # The adapter prefixes with "openai/" so the LiteLLM SDK treats the
+    # gateway endpoint as an OpenAI-compatible proxy (the gateway's
+    # config.yaml maps the un-prefixed name to the real backend).
+    assert captured["model"] == f"openai/{_settings().default_model}"
 
 
 def test_adapter_passes_endpoint_and_master_key() -> None:
