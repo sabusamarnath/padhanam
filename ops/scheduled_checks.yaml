@@ -1,0 +1,56 @@
+# Scheduled supply-chain dependency checks
+# 
+# Each entry names a dependency family, the cadence at which it is reviewed,
+# and the trigger conditions for off-cycle checks. The scheduled-job runner
+# reads this file and opens digest-bump PRs with changelog excerpts and
+# breaking-change flags. Operator reviews and merges; no auto-merge per D25.
+#
+# Implementation: see ops/run_scheduled_checks.{sh|py} (P3 session work).
+
+cadences:
+  monthly:
+    description: |
+      High-velocity dependencies on the inference, observability, or edge
+      paths. Reviewed in a single batch event per month.
+    families:
+      - name: langfuse
+        scope: ["langfuse self-hosted images", "langfuse SDK"]
+        precedent: "Established at S4 close, P2 Session 4."
+      - name: otel-instrumentation
+        scope:
+          - "opentelemetry-instrumentation-fastapi"
+          - "opentelemetry-instrumentation-httpx"
+          - "opentelemetry-semantic-conventions (GenAI conventions package)"
+        precedent: "Added at P2 retrospective. OTel API and SDK core excluded as stable."
+      - name: litellm
+        scope: ["litellm SDK", "litellm proxy image"]
+        precedent: "Added at P2 retrospective. CVE GHSA-xqmj-j6mv-4862 caught in S7 motivated scheduled coverage."
+      - name: fastapi-uvicorn
+        scope: ["fastapi", "uvicorn"]
+        precedent: "Added at P2 retrospective. Edge-path coupling with otel-instrumentation."
+
+  quarterly:
+    description: |
+      Production-critical dependencies on a slower cadence. Reviewed once
+      per quarter, out of phase with the monthly batch.
+    families:
+      - name: pydantic-chain
+        scope: ["pydantic", "pydantic-settings"]
+        precedent: "Added at P2 retrospective. Production-critical for config and API schemas, slower cadence than inference and observability stacks."
+
+  annual:
+    description: |
+      Slow-cadence enforcement infrastructure. Reviewed once per year unless
+      a contract-count milestone or named trigger fires earlier.
+    families:
+      - name: import-linter
+        scope: ["import-linter"]
+        triggers:
+          - "Contract count crosses 25 (currently 14 at P2 close)."
+        precedent: "Added at P2 retrospective. Load-bearing for architectural enforcement; slow upstream cadence."
+
+# Review process applies to every cadence:
+# 1. Scheduled job opens a PR per family with digest bumps and changelog excerpts.
+# 2. Operator reviews changelog for breaking changes.
+# 3. Operator merges or closes with reasoning logged in PR.
+# 4. No auto-merge.
