@@ -36,11 +36,28 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from apps.api.middleware import AuthenticationMiddleware
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
+from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
+from contexts.audit.domain.ports import AuditPort
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
 from contexts.inference.ports import InferencePort
-from vadakkan.config import InferenceSettings, ObservabilitySettings
+from contexts.tenancy.adapters.outbound.postgres.registry import (
+    PostgresTenantRegistry,
+)
+from contexts.tenancy.adapters.outbound.sqlalchemy.session_factory import (
+    SqlAlchemyTenantSessionFactory,
+)
+from contexts.tenancy.api import TenantSessionFactoryCache
+from contexts.tenancy.application.use_cases import OPERATOR_ROLE
+from shared_kernel import TenantId as SharedTenantId
+from vadakkan.config import (
+    ControlPlaneSettings,
+    InferenceSettings,
+    ObservabilitySettings,
+)
 from vadakkan.events import DomainEvent, SynchronousEventBus
 from vadakkan.observability import install_credential_scrub
+from vadakkan.observability.security_events import file_security_event_logger
+from vadakkan.security import Principal
 
 # httpx instrumentation propagates the W3C traceparent header through
 # every outbound HTTP call. LiteLLM's Python SDK uses httpx internally,
@@ -53,17 +70,75 @@ _log = logging.getLogger("vadakkan.api")
 
 @dataclass(frozen=True)
 class AppCompositions:
-    """The seams the factory exposes for tests to substitute."""
+    """The seams the factory exposes for tests to substitute.
+
+    Fields with no default are load-bearing for every flow exercised in
+    P2 (inference + auth + trace propagation). The S12 additions
+    (audit, tenant registry, routing cache) default to ``None`` so
+    pre-existing tests that don't exercise the audit-and-routing path
+    can keep their narrow factory invocations; the production wiring
+    in ``_build_default_compositions`` populates all of them.
+    """
 
     inference_port: InferencePort
     event_bus: SynchronousEventBus
+    audit_port: AuditPort | None = None
+    tenant_registry: PostgresTenantRegistry | None = None
+    session_factory_cache: TenantSessionFactoryCache | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
     inference_settings = InferenceSettings()
+    cp_settings = ControlPlaneSettings()
+    sec = file_security_event_logger()
+
+    # Tenancy: registry + per-tenant routing cache. The registry adapter
+    # holds the control-plane engine; the cache lazily resolves per-
+    # tenant sessionmakers via reveal_connection_config (operator-context
+    # system actor) per D36.
+    session_factory_cache = TenantSessionFactoryCache(
+        SqlAlchemyTenantSessionFactory()
+    )
+
+    # Audit: real Postgres adapter (D37) replaces the no-op since S5.
+    # The resolver bridges the AuditPort's tenant_id parameter into the
+    # tenancy routing layer's operator-context get path.
+    operator_principal = Principal(
+        subject="system:audit",
+        tenant_id=SharedTenantId("operator"),
+        roles=frozenset({OPERATOR_ROLE}),
+        credential_ref="system:audit",
+    )
+
+    # The registry adapter is constructed below because PostgresAuditAdapter
+    # needs only the control-plane settings; the resolver closure captures
+    # registry by name once both are constructed.
+    registry: PostgresTenantRegistry  # forward declaration for the closure
+
+    async def _resolve_per_tenant(tenant_id):
+        return await session_factory_cache.get(
+            tenant_id=tenant_id,
+            principal=operator_principal,
+            registry=registry,
+            security_events=sec,
+        )
+
+    audit_adapter = PostgresAuditAdapter.from_settings(
+        control_plane_settings=cp_settings,
+        per_tenant_sessionmaker_resolver=_resolve_per_tenant,
+    )
+    registry = PostgresTenantRegistry.from_settings(
+        settings=cp_settings,
+        audit=audit_adapter,
+        security_events=sec,
+    )
+
     return AppCompositions(
         inference_port=LiteLLMAdapter(settings=inference_settings),
         event_bus=SynchronousEventBus(),
+        audit_port=audit_adapter,
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
     )
 
 
@@ -147,6 +222,9 @@ def create_app(
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
+    app.state.audit_port = compositions.audit_port
+    app.state.tenant_registry = compositions.tenant_registry
+    app.state.session_factory_cache = compositions.session_factory_cache
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit

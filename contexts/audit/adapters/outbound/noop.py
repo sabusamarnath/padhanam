@@ -17,7 +17,7 @@ _log = logging.getLogger("contexts.audit.noop")
 
 
 class NoOpAuditAdapter:
-    def emit(self, event: AuditEvent) -> None:
+    async def emit(self, event: AuditEvent) -> None:
         _log.info(
             "audit_event tenant=%s actor=%s action=%s resource=%s/%s hash=%s",
             event.tenant_id,
@@ -28,7 +28,7 @@ class NoOpAuditAdapter:
             event.this_event_hash[:12],
         )
 
-    def verify_chain(self, tenant_id: TenantId) -> ChainVerificationResult:
+    async def verify_chain(self, tenant_id: TenantId) -> ChainVerificationResult:
         raise NotImplementedError(
             "Chain verification requires durable storage. Real adapter "
             "lands in P3 with the tenant registry."
