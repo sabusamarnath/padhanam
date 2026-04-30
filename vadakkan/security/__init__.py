@@ -1,9 +1,10 @@
 from vadakkan.security.auth import AuthError, Principal, verify_credential
 from vadakkan.security.crypto import EncryptedField, decrypt_field, encrypt_field
-from vadakkan.security.policy import Decision, Resource, check
+from vadakkan.security.policy import AuthorizationError, Decision, Resource, check
 
 __all__ = [
     "AuthError",
+    "AuthorizationError",
     "Decision",
     "EncryptedField",
     "Principal",
