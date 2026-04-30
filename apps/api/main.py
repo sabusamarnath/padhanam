@@ -139,5 +139,28 @@ def create_app(
     return app
 
 
-# Uvicorn entrypoint: `uvicorn apps.api.main:app` resolves here.
-app = create_app()
+def _asgi_app() -> FastAPI:
+    """Lazy uvicorn entrypoint.
+
+    Constructed on first attribute access so importing this module
+    (in tests, in import-linter graphs, in the AST enforcement
+    walkers) does not bring up the full OTel exporter and reach for
+    the Langfuse endpoint. uvicorn's ``--factory`` flag picks this up
+    when the app is started in production: ``uvicorn apps.api.main:app
+    --factory`` calls _asgi_app() once at boot.
+
+    For backward compatibility, ``apps.api.main.app`` resolves to the
+    constructed instance via ``__getattr__`` below.
+    """
+    return create_app()
+
+
+def __getattr__(name: str) -> object:
+    if name == "app":
+        global _cached_app
+        try:
+            return _cached_app
+        except NameError:
+            _cached_app = _asgi_app()
+            return _cached_app
+    raise AttributeError(f"module {__name__} has no attribute {name!r}")
