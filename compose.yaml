@@ -14,6 +14,68 @@ services:
       retries: 5
       start_period: 10s
 
+  # Tenancy Postgres instances (P3/S9). Three new services share the P1
+  # postgres digest (single image reference, three service definitions —
+  # same image-cache hit, single supply-chain surface). Each has its own
+  # internal volume; no host port binding (S5 rule).
+  #
+  # postgres-control-plane hosts the tenant registry and any other
+  # operator-owned, jurisdiction-spanning data (D33). It is operationally
+  # separate from tenant data planes and never co-located with one.
+  #
+  # postgres-tenant-a and postgres-tenant-b are the two test-set tenant
+  # data planes (D32). Each hosts a single tenant's schema once S11
+  # lands the per-tenant migration runner. Adding tenants beyond these
+  # two in P3 requires editing this file; instance-creation-as-config
+  # lands when production deployment context arrives.
+  postgres-control-plane:
+    image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
+    environment:
+      POSTGRES_USER: ${POSTGRES_CONTROL_PLANE_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_CONTROL_PLANE_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_CONTROL_PLANE_DB}
+    volumes:
+      - postgres_control_plane_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres-tenant-a:
+    image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
+    environment:
+      POSTGRES_USER: ${POSTGRES_TENANT_A_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_TENANT_A_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_TENANT_A_DB}
+    volumes:
+      - postgres_tenant_a_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres-tenant-b:
+    image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
+    environment:
+      POSTGRES_USER: ${POSTGRES_TENANT_B_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_TENANT_B_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_TENANT_B_DB}
+    volumes:
+      - postgres_tenant_b_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
     volumes:
@@ -293,6 +355,9 @@ services:
 
 volumes:
   postgres_data:
+  postgres_control_plane_data:
+  postgres_tenant_a_data:
+  postgres_tenant_b_data:
   redis_data:
   caddy_data:
   caddy_config:
