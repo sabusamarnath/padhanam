@@ -36,6 +36,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from apps.api.middleware import AuthenticationMiddleware
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
+from apps.api.routers import tenant_audit as tenant_audit_router
 from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
 from contexts.audit.domain.ports import AuditPort
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
@@ -218,6 +219,7 @@ def create_app(
     # Routers.
     app.include_router(health_router.router)
     app.include_router(inference_router.router)
+    app.include_router(tenant_audit_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
