@@ -58,7 +58,8 @@ class LiteLLMAdapter:
     """Implements InferencePort against the LiteLLM OpenAI-compatible gateway.
 
     Configuration (endpoint, master key, default model) flows through
-    InferenceSettings — never through os.getenv (D19). Each request
+    InferenceSettings (D19; environment access is centralised in
+    vadakkan/config/, never scattered across adapters). Each request
     constructs an InferenceSettings instance so configuration changes
     via .env reload between calls without restart.
     """
