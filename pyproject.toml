@@ -8,6 +8,12 @@ dependencies = [
     "pydantic-settings>=2.5",
     "cryptography>=43",
     "pyjwt>=2.9",
+    # Alembic is operator tooling for migrations (D34). It belongs to the
+    # cross-cutting platform package because both control-plane (S10) and
+    # per-tenant (S11) tracks invoke it; per-context manifests would
+    # duplicate the dep without scoping benefit.
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
     # Workspace members are pulled in as deps so `uv sync` from the root
     # installs every member's third-party deps into the shared venv. Each
     # member declares its own scoped third-party deps in its pyproject;
