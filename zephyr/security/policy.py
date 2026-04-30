@@ -25,6 +25,17 @@ class Decision(StrEnum):
     DENY = "deny"
 
 
+class AuthorizationError(Exception):
+    """Raised when a use case rejects an authorization decision.
+
+    Decisions are made by ``check()``; use cases that turn DENY into a
+    raised exception (rather than a returned value) raise this. The
+    auth middleware does not raise this directly; it returns 401 on
+    auth failure (AuthError) or 403 on policy denial via use-case
+    propagation.
+    """
+
+
 @dataclass(frozen=True)
 class Resource:
     """The thing being acted upon. Tenant-scoped resources carry tenant_id."""
