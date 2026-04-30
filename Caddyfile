@@ -11,7 +11,7 @@ localhost {
     }
 
     handle {
-        respond "Meridian dev proxy. No backends configured yet." 503
+        respond "Vadakkan dev proxy. No backends configured yet." 503
     }
 }
 
@@ -19,7 +19,7 @@ localhost {
 # work because Langfuse is a Next.js app whose asset URLs (/_next/*) only
 # respect a basePath set at build time (NEXT_PUBLIC_BASE_PATH). Subdomain
 # serving keeps the upstream image pinned to digest and sets the pattern for
-# future UI services (Keycloak as auth.localhost, Meridian app UI, etc.).
+# future UI services (Keycloak as auth.localhost, Vadakkan app UI, etc.).
 # *.localhost resolves to 127.0.0.1 on macOS without /etc/hosts changes.
 langfuse.localhost {
     tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem

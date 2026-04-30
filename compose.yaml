@@ -37,8 +37,8 @@ services:
 
   # Langfuse stack (P2/S4). Six services total: this langfuse-db (Postgres for metadata),
   # clickhouse (trace data plane), minio (S3-compatible blob store), langfuse-web (UI+API),
-  # langfuse-worker (async ingestion), and the existing redis above (shared with Meridian
-  # via DB number per D18 — Meridian uses DB 0, Langfuse uses DB 1).
+  # langfuse-worker (async ingestion), and the existing redis above (shared with Vadakkan
+  # via DB number per D18 — Vadakkan uses DB 0, Langfuse uses DB 1).
 
   langfuse-db:
     image: postgres:17-alpine@sha256:c7526c0f6c3f30260a563d7bcf8ad778effac59a44f8ffa86678c35418338609

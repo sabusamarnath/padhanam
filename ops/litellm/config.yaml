@@ -2,7 +2,7 @@
 #
 # OTel emission is enabled via the "otel" callback (D27). The Langfuse
 # Python SDK is intentionally absent from the callbacks list — the trace
-# path is Meridian -> LiteLLM -> OTLP -> Langfuse, not Meridian ->
+# path is Vadakkan -> LiteLLM -> OTLP -> Langfuse, not Vadakkan ->
 # LiteLLM -> Langfuse SDK -> Langfuse. OTLP exporter wiring (endpoint,
 # headers, protocol) is configured via OTEL_* env vars on the container,
 # populated from vadakkan/config/ at compose-up time (see ops/derive_env.py

@@ -8,7 +8,7 @@
 COMPOSE := docker compose --env-file .env --env-file .env.derived
 
 help:
-	@echo "Meridian — available targets:"
+	@echo "Vadakkan — available targets:"
 	@echo "  up          Start the Compose stack (10 services) in the background"
 	@echo "  down        Stop the Compose stack"
 	@echo "  derive-env  Recompute .env.derived from vadakkan/config/ (idempotent)"
