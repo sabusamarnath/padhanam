@@ -40,6 +40,7 @@ from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
 from contexts.inference.ports import InferencePort
 from vadakkan.config import InferenceSettings, ObservabilitySettings
 from vadakkan.events import DomainEvent, SynchronousEventBus
+from vadakkan.observability import install_credential_scrub
 
 # httpx instrumentation propagates the W3C traceparent header through
 # every outbound HTTP call. LiteLLM's Python SDK uses httpx internally,
@@ -97,6 +98,11 @@ def create_app(
     setup (the SDK's default no-op tracer is fine for unit tests).
     """
     compositions = compositions or _build_default_compositions()
+
+    # Defense-in-depth around plaintext credential leakage (D34
+    # control (a)). Installed before any registry-touching adapter has
+    # a chance to log; idempotent so test fixtures may invoke it too.
+    install_credential_scrub()
 
     if configure_tracing:
         _configure_tracing()
