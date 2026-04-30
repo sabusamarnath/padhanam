@@ -9,6 +9,7 @@ members = [
     "vadakkan-audit",
     "vadakkan-inference",
     "vadakkan-observability",
+    "vadakkan-tenancy",
 ]
 
 [[package]]
@@ -1731,6 +1732,7 @@ dependencies = [
     { name = "vadakkan-audit" },
     { name = "vadakkan-inference" },
     { name = "vadakkan-observability" },
+    { name = "vadakkan-tenancy" },
 ]
 
 [package.dev-dependencies]
@@ -1751,6 +1753,7 @@ requires-dist = [
     { name = "vadakkan-audit", virtual = "contexts/audit" },
     { name = "vadakkan-inference", virtual = "contexts/inference" },
     { name = "vadakkan-observability", virtual = "contexts/observability" },
+    { name = "vadakkan-tenancy", virtual = "contexts/tenancy" },
 ]
 
 [package.metadata.requires-dev]
@@ -1822,6 +1825,11 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "langfuse", specifier = ">=2.50,<3" }]
+
+[[package]]
+name = "vadakkan-tenancy"
+version = "0.0.0"
+source = { virtual = "contexts/tenancy" }
 
 [[package]]
 name = "watchfiles"

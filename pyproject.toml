@@ -15,6 +15,7 @@ dependencies = [
     "vadakkan-inference",
     "vadakkan-observability",
     "vadakkan-audit",
+    "vadakkan-tenancy",
     "vadakkan-api",
 ]
 
@@ -34,6 +35,7 @@ members = [
     "contexts/inference",
     "contexts/observability",
     "contexts/audit",
+    "contexts/tenancy",
     "apps/api",
 ]
 
@@ -41,6 +43,7 @@ members = [
 vadakkan-inference = {workspace = true}
 vadakkan-observability = {workspace = true}
 vadakkan-audit = {workspace = true}
+vadakkan-tenancy = {workspace = true}
 vadakkan-api = {workspace = true}
 
 [tool.pytest.ini_options]

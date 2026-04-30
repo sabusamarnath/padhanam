@@ -1,0 +1,13 @@
+[project]
+name = "vadakkan-tenancy"
+version = "0.0.0"
+description = "Tenancy bounded context (D1, D32, D33). Tenant aggregate, registry port, control-plane and per-tenant Postgres routing. S10 lands the registry adapter; S11 lands per-tenant connection resolution."
+requires-python = ">=3.14"
+# S9 ships only the domain model and the registry port; both are pure
+# Python and need no third-party dependencies. SQLAlchemy and Alembic
+# enter this manifest at S10 with the registry adapter (D16 keeps the
+# domain free of vendor SDKs; the adapter declares them here).
+dependencies = []
+
+[tool.uv]
+package = false
