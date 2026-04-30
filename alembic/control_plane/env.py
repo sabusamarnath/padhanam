@@ -22,7 +22,9 @@ from vadakkan.config import ControlPlaneSettings
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False so a calling runner's loggers
+    # (e.g. ops.migrate) keep their levels after fileConfig.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 
 def _control_plane_url() -> str:
