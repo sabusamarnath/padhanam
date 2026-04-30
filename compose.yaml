@@ -342,7 +342,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: vadakkan-api:dev@sha256:09348a90983319544d320d0f86cbde375897664159445244df23d1e41e37c347
+    image: vadakkan-api:dev@sha256:8d2251647454568ffa09e2d7b1171dfe73c85ea760f684f0e1b26ff334435e5b
     depends_on:
       litellm:
         condition: service_healthy
