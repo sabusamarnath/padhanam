@@ -1,7 +1,7 @@
 [project]
-name = "quorum"
+name = "zephyr"
 version = "0.0.0"
-description = "Quorum — local-first multi-tenant AI optimization platform."
+description = "Zephyr — local-first multi-tenant AI optimization platform."
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.9",
