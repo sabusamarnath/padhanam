@@ -1,7 +1,7 @@
 [project]
-name = "meridian"
+name = "vadakkan"
 version = "0.0.0"
-description = "Meridian — local-first multi-tenant AI optimization platform."
+description = "Vadakkan — local-first multi-tenant AI optimization platform."
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.9",
