@@ -48,8 +48,13 @@ RUN useradd --create-home --uid 1000 zephyr
 
 WORKDIR /app
 
-COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /app /app
+COPY --from=builder --chown=zephyr:zephyr /opt/venv /opt/venv
+COPY --from=builder --chown=zephyr:zephyr /app /app
+
+# logs/ is the default directory for security_events.py. Pre-create it
+# with the right ownership so the non-root user can write
+# logs/security.jsonl (D26) at runtime.
+RUN mkdir -p /app/logs && chown zephyr:zephyr /app/logs
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

@@ -90,8 +90,14 @@ class LiteLLMAdapter:
             },
         ) as span:
             try:
+                # Calling the LiteLLM gateway service (S6): the gateway
+                # itself is OpenAI-compatible, so we tell the LiteLLM
+                # SDK to treat the endpoint as an OpenAI proxy via the
+                # `openai/` prefix on the model. The gateway then maps
+                # the model name (e.g. "qwen2.5:7b") to its configured
+                # backend (Ollama) per ops/litellm/config.yaml.
                 response = litellm.completion(
-                    model=resolved_model,
+                    model=f"openai/{resolved_model}",
                     messages=[{"role": m.role, "content": m.content} for m in messages],
                     api_base=endpoint,
                     api_key=master_key,
