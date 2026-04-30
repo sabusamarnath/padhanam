@@ -36,3 +36,9 @@ certs/
 
 # Local logs directory (security events, application logs).
 logs/
+
+# Repo-root archive artefacts (accidental downloads, transient export blobs).
+# Subdirectory archives may be legitimate fixtures and are not covered.
+/*.zip
+/*.tar.gz
+/*.tgz
