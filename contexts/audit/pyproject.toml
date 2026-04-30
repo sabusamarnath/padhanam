@@ -1,0 +1,12 @@
+[project]
+name = "vadakkan-audit"
+version = "0.0.0"
+description = "Audit bounded context (D22). Append-only hash-chained event store, scaffolded in S5; real Postgres adapter lands in P3 with the tenant registry."
+requires-python = ">=3.14"
+# Audit's domain is pure — the chain helpers in domain/events.py use only
+# stdlib hashlib/json. The no-op adapter logs through stdlib logging. Real
+# durable storage (asyncpg) lands when the P3 tenant registry exists.
+dependencies = []
+
+[tool.uv]
+package = false

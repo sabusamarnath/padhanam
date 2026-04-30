@@ -1,0 +1,19 @@
+[project]
+name = "vadakkan-observability"
+version = "0.0.0"
+description = "Observability bounded context (D16, D27). Trace-query read path for the recommendation engine; distinct from vadakkan/observability/ which is the span-emission mechanism."
+requires-python = ">=3.14"
+# Vendor-SDK confinement (D27, D30): the langfuse SDK only enters the
+# codebase through this manifest. Import-linter contract additionally
+# constrains the SDK to adapters/outbound/langfuse/. The S7 adapter is
+# a no-op stub; the real query adapter lands when the recommendation
+# engine work begins.
+#
+# langfuse listed here as the future query-adapter dep; pinned now
+# rather than at engine-time so the boundary is real today.
+dependencies = [
+    "langfuse>=2.50,<3",
+]
+
+[tool.uv]
+package = false

@@ -1,0 +1,27 @@
+[project]
+name = "vadakkan-inference"
+version = "0.0.0"
+description = "Inference bounded context (D16, D17). Application use case + InferencePort + LiteLLM outbound adapter."
+requires-python = ">=3.14"
+# Vendor-SDK confinement (D27, D30): litellm only enters the codebase
+# through this manifest. Domain code is pure (no SDKs); the LiteLLM
+# adapter under adapters/outbound/litellm/ is the only place
+# `import litellm` resolves to a real package.
+#
+# OTel libs live here too because the LiteLLM adapter wraps its calls
+# in a span with GenAI semantic-convention attributes; the root never
+# names them so non-inference contexts cannot accidentally take a hard
+# dependency on a particular OTel SDK release. The instrumentation
+# package for httpx is the propagation hop that carries the FastAPI
+# request span context into LiteLLM's outbound HTTP call (LiteLLM uses
+# httpx internally).
+dependencies = [
+    "litellm>=1.83,<2",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+    "opentelemetry-semantic-conventions>=0.48b0",
+]
+
+[tool.uv]
+package = false

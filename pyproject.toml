@@ -1,13 +1,21 @@
 [project]
 name = "vadakkan"
 version = "0.0.0"
-description = "Vadakkan — local-first multi-tenant AI optimization platform."
+description = "Vadakkan — local-first multi-tenant AI optimization platform. Cross-cutting platform package and uv workspace root (D16, D30)."
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "cryptography>=43",
     "pyjwt>=2.9",
+    # Workspace members are pulled in as deps so `uv sync` from the root
+    # installs every member's third-party deps into the shared venv. Each
+    # member declares its own scoped third-party deps in its pyproject;
+    # the root never names litellm, fastapi, or langfuse directly (D30).
+    "vadakkan-inference",
+    "vadakkan-observability",
+    "vadakkan-audit",
+    "vadakkan-api",
 ]
 
 [dependency-groups]
@@ -15,12 +23,27 @@ dev = [
     "pytest>=8",
     "import-linter>=2.1",
     "pip-audit>=2.7",
+    "httpx>=0.27",
 ]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "contexts/inference",
+    "contexts/observability",
+    "contexts/audit",
+    "apps/api",
+]
+
+[tool.uv.sources]
+vadakkan-inference = {workspace = true}
+vadakkan-observability = {workspace = true}
+vadakkan-audit = {workspace = true}
+vadakkan-api = {workspace = true}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
-
-[tool.uv]
-package = false
