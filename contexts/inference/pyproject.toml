@@ -16,7 +16,7 @@ requires-python = ">=3.14"
 # request span context into LiteLLM's outbound HTTP call (LiteLLM uses
 # httpx internally).
 dependencies = [
-    "litellm>=1.83,<2",
+    "litellm>=1.83.7,<2",
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
     "opentelemetry-instrumentation-httpx>=0.48b0",
