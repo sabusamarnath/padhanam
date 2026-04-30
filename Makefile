@@ -9,7 +9,7 @@ COMPOSE := docker compose --env-file .env --env-file .env.derived
 
 help:
 	@echo "Zephyr — available targets:"
-	@echo "  up          Start the Compose stack (10 services) in the background"
+	@echo "  up          Start the Compose stack (11 services) in the background"
 	@echo "  down        Stop the Compose stack"
 	@echo "  derive-env  Recompute .env.derived from zephyr/config/ (idempotent)"
 	@echo "  logs        Follow logs from all services"
