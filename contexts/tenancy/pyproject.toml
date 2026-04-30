@@ -3,11 +3,14 @@ name = "vadakkan-tenancy"
 version = "0.0.0"
 description = "Tenancy bounded context (D1, D32, D33). Tenant aggregate, registry port, control-plane and per-tenant Postgres routing. S10 lands the registry adapter; S11 lands per-tenant connection resolution."
 requires-python = ">=3.14"
-# S9 ships only the domain model and the registry port; both are pure
-# Python and need no third-party dependencies. SQLAlchemy and Alembic
-# enter this manifest at S10 with the registry adapter (D16 keeps the
-# domain free of vendor SDKs; the adapter declares them here).
-dependencies = []
+# S10: SQLAlchemy + asyncpg enter the tenancy manifest with the
+# Postgres registry adapter. Domain code is unaffected (D16: domain is
+# pure); the adapter declares them here so D30's per-context dep-
+# scoping invariant holds.
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+]
 
 [tool.uv]
 package = false

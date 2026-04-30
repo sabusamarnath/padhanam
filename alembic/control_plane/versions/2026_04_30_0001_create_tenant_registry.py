@@ -31,6 +31,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql as pg
 
 
 revision: str = "0001_create_tenant_registry"
@@ -45,7 +46,7 @@ _STATUS_VALUES = ("active", "suspended", "deprovisioned")
 def upgrade() -> None:
     op.create_table(
         "tenant_registry",
-        sa.Column("tenant_id", sa.dialects.postgresql.UUID(as_uuid=False), primary_key=True),
+        sa.Column("tenant_id", pg.UUID(as_uuid=False), primary_key=True),
         sa.Column("display_name", sa.Text(), nullable=False),
         sa.Column("jurisdiction", sa.Text(), nullable=False),
         sa.Column(
