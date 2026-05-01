@@ -1,10 +1,10 @@
-"""Enforce D19's "no os.getenv outside vadakkan/config/" rule.
+"""Enforce D19's "no os.getenv outside padhanam/config/" rule.
 
 import-linter's contracts operate at module level, not attribute level —
 we can ban imports of the ``os`` module entirely, but ``os.urandom`` is a
-legitimate use in ``vadakkan/security/crypto.py``. Banning ``os`` outright
+legitimate use in ``padhanam/security/crypto.py``. Banning ``os`` outright
 is too coarse, so D19 is enforced here by AST walking instead. Any new
-``os.getenv(...)`` call outside ``vadakkan/config/`` fails this test.
+``os.getenv(...)`` call outside ``padhanam/config/`` fails this test.
 
 Source-of-truth discovery (S7 housekeeping): the set of directories to
 walk is read from the workspace topology (root pyproject.toml plus its
@@ -21,7 +21,7 @@ from pathlib import Path
 from tests._enforcement._discovery import enforced_source_roots
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ALLOWED_PATH = REPO_ROOT / "vadakkan" / "config"
+ALLOWED_PATH = REPO_ROOT / "padhanam" / "config"
 
 
 def _source_files() -> list[Path]:
@@ -51,5 +51,5 @@ def test_no_os_getenv_outside_platform_config() -> None:
             if _is_os_getenv(node):
                 offenders.append((path.relative_to(REPO_ROOT), node.lineno))
     assert offenders == [], (
-        "os.getenv found outside vadakkan/config/ (D19 violation): " + repr(offenders)
+        "os.getenv found outside padhanam/config/ (D19 violation): " + repr(offenders)
     )

@@ -23,7 +23,7 @@ from pathlib import Path
 # and apps/. These live at the workspace root rather than as members so
 # they aren't named in [tool.uv.workspace] but are part of the codebase
 # the AST enforcement covers.
-_ALWAYS_INCLUDED = ("vadakkan", "shared_kernel", "apps")
+_ALWAYS_INCLUDED = ("padhanam", "shared_kernel", "apps")
 
 
 def enforced_source_roots(repo_root: Path) -> list[Path]:
