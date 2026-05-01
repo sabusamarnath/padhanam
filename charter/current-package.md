@@ -4,7 +4,7 @@ Active package details. Updated when a new package starts. Archived to `docs/arc
 
 ## Between packages
 
-P3 closed at S12. P3-close-adjacent reframe-and-rename work landed at S13 (the project is now padhanam, a personal learning sprint under enterprise-realistic constraints; see D38 for the reframe and the rename of the Python package namespace `vadakkan/` → `padhanam/`). Archive at [docs/archive/packages/p3.md](../docs/archive/packages/p3.md).
+P3 closed at S12. P3-close-adjacent reframe-and-rename work landed at S13 (the project is now padhanam, a personal learning sprint under enterprise-realistic constraints; see D38 for the reframe and the package-namespace rename). Archive at [docs/archive/packages/p3.md](../docs/archive/packages/p3.md).
 
 P4 framing is the next strategic activity in Claude.ai. The pattern matches the post-P2 between-packages state: this block is a placeholder until P4 opens with its session breakdown.
 
