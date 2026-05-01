@@ -54,13 +54,13 @@ from contexts.tenancy.domain.tenant import Tenant, TenantStatus
 from contexts.tenancy.domain.tenant_connection_config import TenantConnectionConfig
 from contexts.tenancy.domain.tenant_id import TenantId
 from shared_kernel import Jurisdiction
-from zephyr.config import ControlPlaneSettings
-from zephyr.observability.security_events import (
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from zephyr.security import crypto
+from padhanam.security import crypto
 
 CREDENTIAL_PURPOSE = "tenant.credentials.v1"
 CONTROL_PLANE_TENANT_SENTINEL = ""

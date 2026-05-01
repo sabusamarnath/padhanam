@@ -59,12 +59,12 @@ from contexts.tenancy.domain import (
     TenantId,
 )
 from shared_kernel import Jurisdiction, TenantId as SharedTenantId
-from zephyr.config import ControlPlaneSettings
-from zephyr.observability.security_events import (
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
 )
-from zephyr.security import AuthorizationError, Principal, crypto
+from padhanam.security import AuthorizationError, Principal, crypto
 import sqlalchemy as sa
 
 

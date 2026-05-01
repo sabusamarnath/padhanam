@@ -18,8 +18,8 @@ from contexts.tenancy.domain import (
     TenantStatus,
 )
 from shared_kernel import TenantId as SharedTenantId
-from zephyr.observability.security_events import SecurityEvent
-from zephyr.security import AuthorizationError, Principal
+from padhanam.observability.security_events import SecurityEvent
+from padhanam.security import AuthorizationError, Principal
 
 
 VALID_UUID = "00000000-0000-4000-8000-0000000000a1"

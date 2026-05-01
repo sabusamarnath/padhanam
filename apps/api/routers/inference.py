@@ -26,7 +26,7 @@ from contexts.inference.domain.errors import (
     InferenceUnavailable,
 )
 from contexts.inference.ports import InferencePort
-from zephyr.security import Principal
+from padhanam.security import Principal
 
 router = APIRouter(prefix="/inference", tags=["inference"])
 

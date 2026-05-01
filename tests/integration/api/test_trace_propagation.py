@@ -38,7 +38,7 @@ def trace_capture() -> Any:
     """
     exporter = InMemorySpanExporter()
     provider = TracerProvider(
-        resource=Resource.create({"service.name": "zephyr-api-test"})
+        resource=Resource.create({"service.name": "padhanam-api-test"})
     )
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     previous = trace.get_tracer_provider()
@@ -79,9 +79,9 @@ def test_request_produces_parent_child_grandchild_trace(
     from apps.api.main import AppCompositions, create_app
     from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
     from fastapi.testclient import TestClient
-    from zephyr.config import InferenceSettings
-    from zephyr.events import SynchronousEventBus
-    from zephyr.security.auth import issue_dev_token
+    from padhanam.config import InferenceSettings
+    from padhanam.events import SynchronousEventBus
+    from padhanam.security.auth import issue_dev_token
 
     real_adapter = LiteLLMAdapter(
         settings=InferenceSettings(litellm_master_key="sk-test-trace")
@@ -137,7 +137,7 @@ def test_request_produces_parent_child_grandchild_trace(
     assert attrs.get("gen_ai.operation.name") == "chat"
     assert attrs.get("gen_ai.usage.input_tokens") == 12
     assert attrs.get("gen_ai.usage.output_tokens") == 4
-    assert attrs.get("zephyr.tenant_id") == "tenant-a"
+    assert attrs.get("padhanam.tenant_id") == "tenant-a"
 
     # Parent-child verification: the LLM span's parent must share a
     # trace with the FastAPI request span (if the FastAPI instrumentation
@@ -168,9 +168,9 @@ def test_completion_response_includes_trace_id(
     from apps.api.main import AppCompositions, create_app
     from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
     from fastapi.testclient import TestClient
-    from zephyr.config import InferenceSettings
-    from zephyr.events import SynchronousEventBus
-    from zephyr.security.auth import issue_dev_token
+    from padhanam.config import InferenceSettings
+    from padhanam.events import SynchronousEventBus
+    from padhanam.security.auth import issue_dev_token
 
     real_adapter = LiteLLMAdapter(
         settings=InferenceSettings(litellm_master_key="sk-test-trace-id")

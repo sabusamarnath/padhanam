@@ -49,8 +49,8 @@ from sqlalchemy.ext.asyncio import (
 from contexts.tenancy.application.use_cases import reveal_connection_config
 from contexts.tenancy.domain.tenant_connection_config import TenantConnectionConfig
 from contexts.tenancy.domain.tenant_id import TenantId
-from zephyr.observability.security_events import SecurityEventLogger
-from zephyr.security import Principal
+from padhanam.observability.security_events import SecurityEventLogger
+from padhanam.security import Principal
 
 
 class _SessionFactoryAdapter(Protocol):
