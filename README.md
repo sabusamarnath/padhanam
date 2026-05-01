@@ -1,21 +1,22 @@
 # Padhanam
 
-Padhanam (Esperanto for "learning") is a personal learning sprint by the operator to develop fluency in building agentic systems under enterprise-realistic constraints. The repository documents the architectural decisions, builds, and reflections. The platform shape is agentic workflow with an observability and optimization layer; the deliverable is the operator's fluency, not a sellable product.
+Padhanam (Esperanto for "studying") is a public demonstration that a senior product leader can direct the end-to-end implementation of an enterprise-grade agentic platform through Claude Code without writing code. The platform is built to enterprise standards: multi-tenant, identity-federated, audit-chained, jurisdiction-aware, OTel-instrumented. The architectural discipline is the test of whether AI-assisted development can sustain production-shaped software when directed by a product leader rather than implemented by engineers. The methodology that emerges from running the experiment is the proprietary insight; the platform is the artefact that proves it.
 
 ## How to read the charter
 
-The charter under [charter/](charter/) holds design intent. Read in this order:
+The charter under charter/ holds design intent. Read in this order:
 
-1. [bet.md](charter/bet.md) — strategic intent and what success looks like
-2. [principles.md](charter/principles.md) — engineering rules, read every session
-3. [decisions.md](charter/decisions.md) — append-only architectural decisions log
-4. [packages.md](charter/packages.md) — Phase 1 work breakdown, then [current-package.md](charter/current-package.md) for active scope
+1. bet.md — strategic intent, the proposition being investigated, and what success looks like
+2. methodology.md — how the product-leader-and-implementer pattern is being run, descriptive at this stage and growing as sessions surface new patterns
+3. principles.md — engineering rules, read every session
+4. decisions.md — append-only architectural decisions log
+5. packages.md — Phase 1 work breakdown, then current-package.md for active scope
 
 History lives separately under [log/](log/) (sessions, packages, audits) and old material is moved to [docs/archive/](docs/archive/) at audit boundaries — never deleted.
 
 ## Claude.ai vs Claude Code
 
-Strategic work — bets, audits, package planning, decisions framed against Kano — happens in Claude.ai, where breadth of context and reasoning matter more than tool access. Build and test work — implementation, schema migrations, tests, commits — happens in Claude Code against this repo. The two surfaces meet through the local files: decisions written in Claude.ai land in [decisions.md](charter/decisions.md), and Claude Code reads them as constraints. Audit findings flow back the same way.
+Strategic work — bets, audits, package planning, decisions framed against Kano — happens in Claude.ai, where breadth of context and reasoning matter more than tool access. Build and test work — implementation, schema migrations, tests, commits — happens in Claude Code against this repo. The two surfaces meet through the local files: decisions written in Claude.ai land in [decisions.md](charter/decisions.md), and Claude Code reads them as constraints. Audit findings flow back the same way. The methodology by which strategy and build are bridged is itself the artefact under investigation; it is documented in charter/methodology.md.
 
 ## Where new contributors look first
 

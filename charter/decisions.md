@@ -169,3 +169,36 @@ Appended as sessions produce them. New entries below this line.
   - Choice: The project is reframed from "agentic workflow SaaS platform under build" to "personal learning sprint executed under enterprise-realistic constraints." The architectural commitments (SOC 2 Type II and ISO 27001 compliance targets, database-per-tenant tenancy, hash-chained audit, envelope encryption, supply-chain hardening, jurisdiction as a first-class attribute, OTel as observability portability boundary, all D-entries D1-D37) stand unchanged; the constraints are now correctly framed as the curriculum the operator is learning, not as commercial-platform requirements. Prior D-entries' reasoning citing "enterprise procurement," "enterprise customers," or "what makes the platform sellable" is now read as "what enterprises require from systems they buy or build internally," which is the substrate the operator wants fluency in. The reasoning is factually correct as originally written; only the framing it sat inside has changed. The project is renamed from zephyr to padhanam (Esperanto for "learning"). The package namespace is renamed `zephyr/` → `padhanam/`. Project name and package name converge again; D28's package-name-decoupled-from-product-name rationale (commercial-rebrand-protection) no longer applies because there is no commercial product identity to protect against future rebranding of. Historical D-entries and session log reflections retain their original wording per the append-only principle.
   - Reasoning: The current Bet's framing as "an agentic workflow SaaS platform" with "commercial differentiator" framing was inconsistent with the operator's actual purpose, which has always been personal learning under enterprise-realistic constraints. The inconsistency was not load-bearing for any architectural decision (every D-entry's reasoning is grounded in what enterprises actually require, regardless of commercial framing), but it was inconsistent enough to mislead future strategic conversations and prospective collaborators reading the charter. The reframe corrects the framing to match the actual purpose. The rename to padhanam reflects the learning-sprint framing in the project's identity itself; the Esperanto name continues the operator's personal-resonance lineage from zephyr. Renaming and reframing in one D-entry rather than two reflects that the rename is consequent to the reframe; doing them separately would imply they are independent decisions, which they are not.
   - Alternatives considered: Reframe without renaming (rejected: the project name "Zephyr" carried platform-product weight that the reframe makes inappropriate; the name needs to align with the new framing). Rename without reframing (rejected: would produce new directory names but leave the Bet claiming commercial intent, requiring this work to redo at the next strategic conversation). Edit historical D-entries and session log reflections in place to remove commercial framing (rejected: violates the append-only principle, destroys audit-trail value, and is exactly the erosion S8's reflection on D29 explicitly flagged as the failure mode of "one-time exception" framing). Archive the existing charter wholesale and start fresh (rejected: the architectural commitments stand unchanged, and the audit trail value of the existing decisions log is preserved by the reframe-without-rewrite shape). Use a different package name from the project name to preserve D28's decoupling (rejected: D28's decoupling was specifically commercial-rebrand-protection, which doesn't apply to a learning sprint; convergence is cleaner).
+
+ ## D[39]: Project framing reframed from learning sprint to product-led AI-assisted enterprise development case study
+
+**Context.** `bet.md` rewritten in full to describe the actual proposition being investigated. The operating model is now explicitly a senior product leader directing implementation through Claude Code, with the methodology as the proprietary insight and the platform as the public demonstration. Prior framing as "personal learning sprint" understated what was being built and why; the reframe makes the bet honest about the audience (senior product leaders, CPOs, consultancies) and the deliverable (the methodology, demonstrated through the platform).
+
+**Architectural impact.** None. Existing decisions D1 through D[current] stand unchanged; their technical reasoning was never dependent on the learning-sprint framing.
+
+**Documentation impact.**
+- `charter/bet.md` rewritten in full.
+- `charter/methodology.md` added as a new document, descriptive at this stage. Captures the product-leader-and-implementer pattern as it surfaces during sessions; will mature toward prescriptive at a phase audit.
+- `charter/deferred-decisions.md` data-plane-ownership block rewritten to give an architectural reason for the commitment rather than a commercial-IP reason. Other deferred-decision blocks unchanged.
+- `README.md` opening paragraph and "How to read the charter" section updated; `methodology.md` added to the reading order.
+- `CLAUDE.md` gains a sub-section on methodology capture in session log entries.
+
+**Operating model impact.** Session log entries should now surface methodology observations briefly under a "methodology" line when the session exercises something about the architect-implementer pattern itself (a brief format that worked or didn't, a class of drift caught and corrected, a moment where the model and product leader diverged on approach). Accumulated observations are promoted into `methodology.md` upstream at audit boundaries. 
+
+## D[40]: Methodology measured against DORA Four Keys and CORE4 dimensions
+
+**Context.** The methodology is the proprietary insight that the case study is testing. Measuring it against the established frameworks for software delivery performance produces evidence in the form the engineering and product leadership audience already recognises. Anecdotal demonstrations are common in the AI-assisted development space; quantitative evidence at this scale, sustained over months, in public, is rare and is the differentiating asset.
+
+**Cadence.** Capture every session, compute every package close, trend-analyse every phase audit. Detail in `methodology.md` under the Measurement section.
+
+**Public reporting.** Metrics are reported publicly as part of the case study, including when the numbers do not flatter the methodology. Honesty is the discipline.
+
+**Operational impact.**
+- `methodology.md` gains a Measurement section describing the dimensions, definitions, and cadence.
+- `methodology.md` gains a session log tagging format that becomes the source data for all downstream computation.
+- `deferred-decisions.md` gains a "Methodology metrics" entry covering the deferred operational commitments (tooling, format, benchmarks).
+- Session log entries from this point forward include the structured tagging block.
+- Package retrospectives in `packages.md` gain a measured-outcomes paragraph at each package close.
+- Phase audits in `audits.md` gain a measured-outcomes section at each phase audit.
+
+**Architectural impact.** None. The platform is unchanged; the measurement is of the methodology, not of the platform's runtime characteristics.

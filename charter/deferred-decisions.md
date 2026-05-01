@@ -26,13 +26,13 @@ Activates when orchestration enters the codebase (P5 or wherever orchestration f
 
 **Specific D-entries land when each adapter lands.** Premature commitment to specific frameworks ahead of integration is paper architecture.
 
-## Data-plane ownership
+### Data-plane ownership
 
 Activates in Phase 2 architectural commitments.
 
-**Trace history that feeds the recommendation engine flows into Padhanam-owned storage, not Langfuse-only.** Padhanam's commercial differentiator is the optimization layer that builds recommendations from trace history. The recommendations are Padhanam's IP; the trace data they build on is the substrate. Long-term, that data should not live exclusively in Langfuse. The architecture commits to a Padhanam-owned trace data plane for the data the recommendation engine consumes: traces flow into Langfuse for operational observability *and* into Padhanam's own store for analytical use.
+**Trace history that feeds the recommendation engine flows into Padhanam-owned storage, not Langfuse-only.** Architectural reason: a multi-tenant platform serving analytical workloads over trace data should not depend on a single observability vendor's data layer for queries that go beyond operational observability. Vendor lock-in at the analytical-data layer is the kind of architectural debt that compounds and is expensive to unwind later. Traces flow into Langfuse for operational observability *and* into Padhanam's own store for analytical use, behind a unified retrieval interface. This commitment is independent of any future decision about whether the platform is commercialised; the architectural correctness holds either way.
 
-**Durable agent state lives in domain tables, not orchestrator-managed checkpointers.** When stateful long-running agents land (Phase 2 or later), the durable state lives in Padhanam-owned Postgres tables. Orchestrator checkpointers are for ephemeral graph state only. This makes orchestrator swap meaningful even for stateful agents.
+**Durable agent state lives in domain tables, not orchestrator-managed checkpointers.** When stateful long-running agents land (Phase 2 or later), the durable state lives in Padhanam-owned Postgres tables. Orchestrator checkpointers are for ephemeral graph state only. This makes orchestrator swap meaningful even for stateful agents and keeps long-lived state under the same tenant-isolation, audit, and jurisdiction guarantees as other domain data. Treating durable state as orchestrator-managed would couple the platform to a specific framework's lifecycle assumptions and undermine the multi-orchestrator portability that the orchestration architecture commitment is built around.
 
 Both architectural commitments will be made explicit in Phase 2 with specific D-entries when the data shapes are known.
 
@@ -47,3 +47,17 @@ Activates when tools and extensions enter the codebase (P5 or wherever tools and
 **Configuration scope follows tenant agency.** Tenants have agency over which tools they register and which extensions they upload, and therefore over the surveillance posture for those artefacts (notification preferences, severity thresholds for auto-disable, grace periods). They do not have agency over the platform's own supply-chain monitoring.
 
 **The specific D-entry lands when tools and extensions enter the codebase.** Premature commitment to specific scanning tools, severity thresholds, or notification mechanisms ahead of integration is paper architecture.
+
+## Methodology metrics
+
+Activates at first package close for the package-level computation, and at first phase audit for the phase-level computation. Session-level capture begins immediately upon adoption of the tagging format described in `methodology.md`.
+
+**The methodology is measured against DORA Four Keys and CORE4 dimensions.** Capture at every session, computation at every package close, trend analysis at every phase audit. The metrics are reported publicly as part of the case study, with package-level numbers added to package retrospectives and phase-level numbers added to phase audit entries.
+
+**Definitions are explicit and adapted where necessary.** Deployment frequency uses "merged-to-main frequency" as a proxy in Phase 1 and shifts to traditional deployment frequency from Phase 2 onwards if a hosted environment exists. Change failure rate is defined as sessions whose output is later corrected by a subsequent session within the same phase. The full definitions live in `methodology.md`.
+
+**Reporting tooling is deferred.** Initial computation is manual at package close and phase audit; if and when the manual computation becomes a meaningful overhead, a small script under `tools/metrics/` computes the numbers from session log tags. Premature tooling commitment ahead of the data shape stabilising is paper architecture.
+
+**Honest reporting is a discipline.** Periods of poor methodology performance are reported alongside periods of strong performance. The case study's credibility depends on honest measurement, including when the metrics do not flatter the proposition. If at any phase audit the trend suggests the methodology is not sustaining performance, the bet document and methodology document are revised to reflect what was actually learned.
+
+**The specific D-entry lands at the first package close with computed metrics.** The architectural commitment is recorded now in `decisions.md`; the operational commitments (specific computation tooling, specific reporting format, specific benchmark comparisons) are made when the data exists to inform them.

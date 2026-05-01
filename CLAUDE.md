@@ -30,9 +30,14 @@ Conventional commits, scoped to package and session: `feat(p1/s1): ...`, `docs(p
 - **New observability metrics** require a documented decision in [charter/decisions.md](charter/decisions.md) describing the action the metric will inform.
 - **Architectural decisions** made during a session append a new entry to [charter/decisions.md](charter/decisions.md) before the session closes.
 
+## Methodology capture
+
+The product-leader-and-implementer pattern is being documented in [charter/methodology.md](charter/methodology.md). When a session surfaces something about the pattern itself (a brief format that worked or didn't, a class of drift the product leader caught and corrected, a moment where the model and product leader diverged on approach, a discipline added or relaxed), surface it briefly in the session log entry under a `methodology:` line. Keep it to one or two sentences. The product leader promotes accumulated observations into [charter/methodology.md](charter/methodology.md) at audit boundaries; do not write to that document directly from a Claude Code session, since it is curated upstream in Claude.ai.
+
 ## Where strategy and build meet
 
 Strategy, audits, and option-framing happen in Claude.ai. Build and test happen here. The bridge is local files — decisions written upstream are constraints downstream. If a request conflicts with a decision in [charter/decisions.md](charter/decisions.md), surface it before building.
+
 
 ## Enforcement layer naming
 

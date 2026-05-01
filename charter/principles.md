@@ -37,6 +37,7 @@ Read every session. Kept tight on purpose.
 - Security as default: HTTPS via mkcert, secrets in `.env`, RLS on tenant-scoped tables, Pydantic validation on every endpoint, audit log on state changes.
 - Conventional commits referencing package and session number.
 - New components that touch tenant data accept jurisdiction as a parameter or column from inception. Adding it later is a refactor, not configuration.
+- Methodology is measured against DORA and CORE4 (see `charter/methodology.md` for definitions and cadence). Session log entries include the structured tagging block.
 
 ## Token discipline
 
