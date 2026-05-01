@@ -1,7 +1,7 @@
 [project]
-name = "vadakkan"
+name = "padhanam"
 version = "0.0.0"
-description = "Vadakkan — local-first multi-tenant AI optimization platform. Cross-cutting platform package and uv workspace root (D16, D30)."
+description = "Padhanam — local-first multi-tenant AI optimization platform. Cross-cutting platform package and uv workspace root (D16, D30)."
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.9",
@@ -21,11 +21,11 @@ dependencies = [
     # installs every member's third-party deps into the shared venv. Each
     # member declares its own scoped third-party deps in its pyproject;
     # the root never names litellm, fastapi, or langfuse directly (D30).
-    "vadakkan-inference",
-    "vadakkan-observability",
-    "vadakkan-audit",
-    "vadakkan-tenancy",
-    "vadakkan-api",
+    "padhanam-inference",
+    "padhanam-observability",
+    "padhanam-audit",
+    "padhanam-tenancy",
+    "padhanam-api",
 ]
 
 [dependency-groups]
@@ -49,11 +49,11 @@ members = [
 ]
 
 [tool.uv.sources]
-vadakkan-inference = {workspace = true}
-vadakkan-observability = {workspace = true}
-vadakkan-audit = {workspace = true}
-vadakkan-tenancy = {workspace = true}
-vadakkan-api = {workspace = true}
+padhanam-inference = {workspace = true}
+padhanam-observability = {workspace = true}
+padhanam-audit = {workspace = true}
+padhanam-tenancy = {workspace = true}
+padhanam-api = {workspace = true}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

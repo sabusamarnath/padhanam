@@ -38,14 +38,14 @@ from contexts.tenancy.domain.tenant_connection_config import TenantConnectionCon
 from contexts.tenancy.domain.tenant_id import TenantId
 from contexts.tenancy.ports import TenantRegistryPort
 from shared_kernel import Jurisdiction
-from vadakkan.observability.security_events import (
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from vadakkan.security import AuthorizationError, Principal
+from padhanam.security import AuthorizationError, Principal
 
-OPERATOR_ROLE = "vadakkan.operator"
+OPERATOR_ROLE = "padhanam.operator"
 
 
 def is_operator(principal: Principal) -> bool:

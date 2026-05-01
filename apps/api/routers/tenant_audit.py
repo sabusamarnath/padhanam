@@ -16,7 +16,7 @@ so the S12 integration test can drive an end-to-end run and so the
 Langfuse trace UI verification has a deterministic surface to look at.
 
 OTel attribute namespace: ``tenant.id`` and ``tenant.jurisdiction`` are
-Vadakkan-domain names per D37 — the OTel semantic-conventions group
+Padhanam-domain names per D37 — the OTel semantic-conventions group
 has not stabilised multi-tenant attribute naming, so the names live
 in the domain. If the OTel group converges on a different namespace,
 the migration is a one-line rename here.
@@ -39,11 +39,11 @@ from contexts.tenancy.adapters.outbound.postgres.registry import (
 )
 from contexts.tenancy.application.use_cases import OPERATOR_ROLE
 from contexts.tenancy.domain.tenant_id import TenantId
-from vadakkan.security import Principal
+from padhanam.security import Principal
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 
-_tracer = trace.get_tracer("vadakkan.tenant_audit")
+_tracer = trace.get_tracer("padhanam.tenant_audit")
 
 
 class TestEventResponse(BaseModel):

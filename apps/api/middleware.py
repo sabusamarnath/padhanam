@@ -8,7 +8,7 @@ gets a 401 if unauthenticated, only falling through to 404 once the
 principal is established.
 
 The dev backend (HS256 signed tokens) is sourced from
-vadakkan.security.auth (S5). The production swap is profile selection
+padhanam.security.auth (S5). The production swap is profile selection
 plus a different SecuritySettings.auth_backend; the middleware code
 does not change.
 
@@ -25,13 +25,13 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from vadakkan.observability import (
+from padhanam.observability import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,
     file_security_event_logger,
 )
-from vadakkan.security import AuthError, Principal, verify_credential
+from padhanam.security import AuthError, Principal, verify_credential
 
 
 # Routes that bypass authentication. The set is deliberately tiny and

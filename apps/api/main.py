@@ -1,4 +1,4 @@
-"""Vadakkan FastAPI application factory.
+"""Padhanam FastAPI application factory.
 
 The factory owns composition: it instantiates the InferencePort
 adapter, registers the auth middleware so it sits in front of every
@@ -50,15 +50,15 @@ from contexts.tenancy.adapters.outbound.sqlalchemy.session_factory import (
 from contexts.tenancy.api import TenantSessionFactoryCache
 from contexts.tenancy.application.use_cases import OPERATOR_ROLE
 from shared_kernel import TenantId as SharedTenantId
-from vadakkan.config import (
+from padhanam.config import (
     ControlPlaneSettings,
     InferenceSettings,
     ObservabilitySettings,
 )
-from vadakkan.events import DomainEvent, SynchronousEventBus
-from vadakkan.observability import install_credential_scrub
-from vadakkan.observability.security_events import file_security_event_logger
-from vadakkan.security import Principal
+from padhanam.events import DomainEvent, SynchronousEventBus
+from padhanam.observability import install_credential_scrub
+from padhanam.observability.security_events import file_security_event_logger
+from padhanam.security import Principal
 
 # httpx instrumentation propagates the W3C traceparent header through
 # every outbound HTTP call. LiteLLM's Python SDK uses httpx internally,
@@ -66,7 +66,7 @@ from vadakkan.security import Principal
 # adapter span rather than starting a separate trace (D27 propagation).
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _HTTPXInstr
 
-_log = logging.getLogger("vadakkan.api")
+_log = logging.getLogger("padhanam.api")
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ def _build_default_compositions() -> AppCompositions:
     )
 
 
-def _configure_tracing(service_name: str = "vadakkan-api") -> None:
+def _configure_tracing(service_name: str = "padhanam-api") -> None:
     """Wire OTel SDK with OTLP/HTTP export to the Langfuse endpoint.
 
     The endpoint comes from ObservabilitySettings (D19). The exporter
@@ -185,12 +185,12 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        _log.info("vadakkan-api starting up")
+        _log.info("padhanam-api starting up")
         yield
-        _log.info("vadakkan-api shutting down")
+        _log.info("padhanam-api shutting down")
 
     app = FastAPI(
-        title="Vadakkan API",
+        title="Padhanam API",
         version="0.0.0",
         lifespan=lifespan,
     )

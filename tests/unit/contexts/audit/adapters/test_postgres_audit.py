@@ -38,7 +38,7 @@ from contexts.audit.domain.events import (
     compute_event_hash,
 )
 from shared_kernel import TenantId
-from vadakkan.config import ControlPlaneSettings
+from padhanam.config import ControlPlaneSettings
 
 
 CONTROL_PLANE_HOST = os.environ.get("CONTROL_PLANE_HOST_OVERRIDE", "127.0.0.1")

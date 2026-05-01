@@ -3,7 +3,7 @@
 This type carries plaintext credentials. It exists only at the boundaries
 where credentials must be plaintext: at `register_tenant` time, the caller
 constructs one and hands it to the registry port (which encrypts before
-persisting); at routing time post-S11, `vadakkan/security/crypto.py`
+persisting); at routing time post-S11, `padhanam/security/crypto.py`
 returns one from the unwrap path so the AsyncSession factory can open a
 real connection.
 

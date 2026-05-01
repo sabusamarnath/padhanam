@@ -2,7 +2,7 @@
 
 The recommendation engine queries traces via this port. Adapters
 implement against whatever observability backend stores the data —
-Langfuse for the dev stack, a Vadakkan-owned trace store for the
+Langfuse for the dev stack, a Padhanam-owned trace store for the
 Phase 2 data-plane (deferred-decisions.md → data-plane ownership).
 
 S7 ships a no-op adapter under adapters/outbound/langfuse/. The real

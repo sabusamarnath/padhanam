@@ -23,8 +23,8 @@ from contexts.tenancy.application.connection_resolution import (
     TenantSessionFactoryCache,
 )
 from contexts.tenancy.domain.tenant_id import TenantId
-from vadakkan.observability.security_events import SecurityEventLogger
-from vadakkan.security import Principal
+from padhanam.observability.security_events import SecurityEventLogger
+from padhanam.security import Principal
 
 
 async def get_tenant_session_factory(

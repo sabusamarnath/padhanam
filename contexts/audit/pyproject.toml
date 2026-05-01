@@ -1,5 +1,5 @@
 [project]
-name = "vadakkan-audit"
+name = "padhanam-audit"
 version = "0.0.0"
 description = "Audit bounded context (D22). Append-only hash-chained event store, scaffolded in S5; real Postgres adapter lands in P3 with the tenant registry."
 requires-python = ">=3.14"

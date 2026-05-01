@@ -58,9 +58,9 @@ from contexts.audit.adapters.outbound.postgres.audit import (
 )
 from contexts.audit.domain.events import AuditEvent, GENESIS_HASH
 from shared_kernel import TenantId
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.security.auth import Principal
-from vadakkan.security.policy import Decision, Resource, check
+from padhanam.config import ControlPlaneSettings
+from padhanam.security.auth import Principal
+from padhanam.security.policy import Decision, Resource, check
 
 
 # --------------------------------------------------------------------

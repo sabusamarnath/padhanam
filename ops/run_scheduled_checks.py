@@ -92,7 +92,7 @@ def _read_pyproject_pins() -> dict[str, str]:
             break
         if in_deps and stripped.startswith('"'):
             spec = stripped.strip(",").strip('"')
-            if spec.startswith("vadakkan-"):
+            if spec.startswith("padhanam-"):
                 continue
             # PEP 508 simple form: name[extras][operators]version
             m = re.match(r"([A-Za-z0-9_.\-]+)", spec)

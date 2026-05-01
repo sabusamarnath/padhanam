@@ -108,7 +108,7 @@ def test_invalid_credential_logs_security_event(
     # a fresh logger pointed at tmp_path.
     log_path = tmp_path / "security.jsonl"
 
-    from vadakkan.observability.security_events import (
+    from padhanam.observability.security_events import (
         _FileSecurityEventLogger,
     )
     from apps.api import middleware as middleware_module
@@ -126,7 +126,7 @@ def test_invalid_credential_logs_security_event(
         Message,
         TokenUsage,
     )
-    from vadakkan.events import SynchronousEventBus
+    from padhanam.events import SynchronousEventBus
 
     class _Stub:
         def complete(self, messages, model, tenant_id) -> Completion:

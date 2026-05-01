@@ -9,7 +9,7 @@ Contract notes:
 
 - `register_tenant` accepts a *plaintext* `TenantConnectionConfig`. The
   port contract guarantees the implementation wraps the plaintext
-  through `vadakkan/security/crypto.py` (D21 envelope encryption) before
+  through `padhanam/security/crypto.py` (D21 envelope encryption) before
   persistence. The returned Tenant carries `EncryptedCredentials`, never
   plaintext. The plaintext argument goes out of scope at the end of the
   call. The leak-prevention controls (logging filter, AST test, isolation

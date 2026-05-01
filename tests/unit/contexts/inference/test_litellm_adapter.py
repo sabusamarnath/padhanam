@@ -27,7 +27,7 @@ from contexts.inference.domain.errors import (
     InferenceUnavailable,
 )
 from shared_kernel import TenantId
-from vadakkan.config import InferenceSettings
+from padhanam.config import InferenceSettings
 
 
 def _settings() -> InferenceSettings:

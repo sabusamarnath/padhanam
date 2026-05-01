@@ -34,8 +34,8 @@ from contexts.tenancy.domain import (
 )
 from contexts.tenancy.ports import TenantRegistryPort
 from shared_kernel import Jurisdiction
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.observability.security_events import (
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
 )

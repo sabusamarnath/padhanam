@@ -57,7 +57,7 @@ def app(stub_port: _StubInferencePort, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-integration")
 
     from apps.api.main import AppCompositions, create_app
-    from vadakkan.events import SynchronousEventBus
+    from padhanam.events import SynchronousEventBus
 
     return create_app(
         compositions=AppCompositions(
@@ -78,7 +78,7 @@ def client(app: Any) -> Any:
 @pytest.fixture
 def dev_token() -> str:
     """Issue a dev signed token for tenant-a / role audit.read."""
-    from vadakkan.security.auth import issue_dev_token
+    from padhanam.security.auth import issue_dev_token
 
     return issue_dev_token(
         subject="alice",

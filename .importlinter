@@ -1,6 +1,6 @@
 [importlinter]
 root_packages =
-    vadakkan
+    padhanam
     contexts
     shared_kernel
     apps
@@ -93,14 +93,14 @@ modules =
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
-# vadakkan/ cross-cutting code cannot import contexts/.
+# padhanam/ cross-cutting code cannot import contexts/.
 # ---------------------------------------------------------------------------
 
 [importlinter:contract:platform-no-contexts]
 name = Platform does not depend on contexts
 type = forbidden
 source_modules =
-    vadakkan
+    padhanam
 forbidden_modules =
     contexts
 allow_indirect_imports = false
@@ -173,7 +173,7 @@ allow_indirect_imports = false
 name = litellm SDK confined to inference outbound adapter
 type = forbidden
 source_modules =
-    vadakkan
+    padhanam
     shared_kernel
     contexts.inference.domain
     contexts.inference.application
@@ -199,7 +199,7 @@ allow_indirect_imports = true
 name = langfuse SDK confined to observability outbound adapter
 type = forbidden
 source_modules =
-    vadakkan
+    padhanam
     shared_kernel
     contexts.inference
     contexts.audit
@@ -225,7 +225,7 @@ allow_indirect_imports = true
 name = fastapi confined to apps/
 type = forbidden
 source_modules =
-    vadakkan
+    padhanam
     shared_kernel
     contexts
 forbidden_modules =

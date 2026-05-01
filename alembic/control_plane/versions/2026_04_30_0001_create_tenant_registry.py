@@ -19,7 +19,7 @@ Schema notes:
   simple and avoids the enum-rename pain point.
 - The credential columns (wrapped_dek, dek_wrap_nonce, ciphertext,
   nonce, key_version, aad) hold the wire-format output of
-  vadakkan/security/crypto.py (D21) plus the AAD bytes that bind the
+  padhanam/security/crypto.py (D21) plus the AAD bytes that bind the
   ciphertext to the tenant_id and purpose. No plaintext column exists;
   the registry adapter encrypts before insert and never decrypts on
   read (decryption flows through reveal_connection_config in the

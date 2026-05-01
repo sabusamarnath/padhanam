@@ -1,5 +1,5 @@
 [project]
-name = "vadakkan-tenancy"
+name = "padhanam-tenancy"
 version = "0.0.0"
 description = "Tenancy bounded context (D1, D32, D33). Tenant aggregate, registry port, control-plane and per-tenant Postgres routing. S10 lands the registry adapter; S11 lands per-tenant connection resolution."
 requires-python = ">=3.14"

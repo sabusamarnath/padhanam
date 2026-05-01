@@ -41,12 +41,12 @@ from contexts.tenancy.adapters.outbound.postgres.registry import (
 from contexts.tenancy.application import OPERATOR_ROLE, list_tenants, reveal_connection_config
 from contexts.tenancy.domain.tenant_connection_config import TenantConnectionConfig
 from shared_kernel import TenantId as SharedTenantId
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.observability.security_events import (
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
 )
-from vadakkan.security import Principal
+from padhanam.security import Principal
 
 log = logging.getLogger("ops.migrate")
 

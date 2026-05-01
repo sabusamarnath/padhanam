@@ -8,7 +8,7 @@ data plane → OTel span emission → Langfuse ingestion.
 The seeded tenants registered by ``make seed-tenants`` live on
 Compose-internal-only Postgres instances (postgres-tenant-a,
 postgres-tenant-b) which are not directly reachable from host pytest.
-The audit row verification therefore runs *inside* the vadakkan-api
+The audit row verification therefore runs *inside* the padhanam-api
 container via ``docker compose exec`` so the per-tenant Compose
 hostnames resolve. This matches the same pattern ``make migrate`` and
 ``make seed-tenants`` use for the same reason.
@@ -37,8 +37,8 @@ import urllib.request
 
 import pytest
 
-from vadakkan.config import ObservabilitySettings
-from vadakkan.security.auth import issue_dev_token
+from padhanam.config import ObservabilitySettings
+from padhanam.security.auth import issue_dev_token
 
 
 # The local stack uses mkcert TLS at the Caddy edge. macOS's system
@@ -58,7 +58,7 @@ TENANT_B_JURISDICTION = "us-east"
 
 
 def _api_base() -> str:
-    return os.environ.get("VADAKKAN_API_BASE", "https://localhost/api")
+    return os.environ.get("PADHANAM_API_BASE", "https://localhost/api")
 
 
 def _langfuse_base() -> str:
@@ -69,7 +69,7 @@ def _operator_token() -> str:
     return issue_dev_token(
         subject="system:test:s12",
         tenant_id="operator",
-        roles=["vadakkan.operator"],
+        roles=["padhanam.operator"],
     )
 
 
@@ -117,8 +117,8 @@ _LIST_TENANTS_SCRIPT = """
 import asyncio
 from contexts.tenancy.adapters.outbound.postgres.registry import PostgresTenantRegistry
 from contexts.audit.adapters.outbound.noop import NoOpAuditAdapter
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.observability.security_events import file_security_event_logger
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import file_security_event_logger
 reg = PostgresTenantRegistry.from_settings(
     settings=ControlPlaneSettings(),
     audit=NoOpAuditAdapter(),
@@ -137,10 +137,10 @@ def _seeded_tenants_present() -> bool:
     """
     result = subprocess.run(
         [
-            "docker", "compose", "exec", "-T", "vadakkan-api",
+            "docker", "compose", "exec", "-T", "padhanam-api",
             "python", "-",
         ],
-        cwd=os.environ.get("VADAKKAN_REPO_ROOT", os.getcwd()),
+        cwd=os.environ.get("PADHANAM_REPO_ROOT", os.getcwd()),
         input=_LIST_TENANTS_SCRIPT,
         capture_output=True,
         text=True,
@@ -155,7 +155,7 @@ def _seeded_tenants_present() -> bool:
 _AUDIT_COUNT_SCRIPT = """
 import asyncio, sys
 from sqlalchemy.ext.asyncio import create_async_engine
-from vadakkan.config import TenantPostgresSettings
+from padhanam.config import TenantPostgresSettings
 import sqlalchemy as sa
 s = TenantPostgresSettings.for_tenant(sys.argv[1])
 url = f"postgresql+asyncpg://{s.user}:{s.password}@{s.host}:{s.port}/{s.db}"
@@ -169,16 +169,16 @@ asyncio.run(go())
 
 
 def _audit_count_for_tenant(tenant_uuid: str) -> int:
-    """Run a SELECT COUNT(*) inside the vadakkan-api container against
+    """Run a SELECT COUNT(*) inside the padhanam-api container against
     the tenant's data-plane database. Returns -1 if the lookup failed.
     """
     label = "a" if tenant_uuid == SEEDED_TENANT_A_UUID else "b"
     result = subprocess.run(
         [
-            "docker", "compose", "exec", "-T", "vadakkan-api",
+            "docker", "compose", "exec", "-T", "padhanam-api",
             "python", "-", label,
         ],
-        cwd=os.environ.get("VADAKKAN_REPO_ROOT", os.getcwd()),
+        cwd=os.environ.get("PADHANAM_REPO_ROOT", os.getcwd()),
         input=_AUDIT_COUNT_SCRIPT,
         capture_output=True,
         text=True,
@@ -201,7 +201,7 @@ def _langfuse_basic_auth_header() -> str:
 @pytest.fixture(scope="module")
 def stack_ready() -> None:
     if not _stack_reachable():
-        pytest.skip("vadakkan-api not reachable at " + _api_base())
+        pytest.skip("padhanam-api not reachable at " + _api_base())
     if not _seeded_tenants_present():
         pytest.skip("seeded tenants not present; run `make seed-tenants` first")
 

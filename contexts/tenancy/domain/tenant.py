@@ -4,7 +4,7 @@ Composes the validated TenantId, the Jurisdiction (reused from
 shared_kernel/ per D16), the EncryptedCredentials, and tenant-level
 metadata (display name, created_at, status). The aggregate is the unit
 the registry returns; routing reads its EncryptedCredentials and decrypts
-through `vadakkan/security/crypto.py` (S11).
+through `padhanam/security/crypto.py` (S11).
 
 Domain code is framework-free (D16). Status is a stdlib StrEnum, not a
 Pydantic Literal; created_at is a stdlib datetime.

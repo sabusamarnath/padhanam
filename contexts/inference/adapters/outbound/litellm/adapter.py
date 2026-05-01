@@ -49,9 +49,9 @@ from contexts.inference.domain.errors import (
     InferenceUnavailable,
 )
 from shared_kernel import TenantId
-from vadakkan.config import InferenceSettings
+from padhanam.config import InferenceSettings
 
-_tracer = trace.get_tracer("vadakkan.inference.litellm")
+_tracer = trace.get_tracer("padhanam.inference.litellm")
 
 
 class LiteLLMAdapter:
@@ -59,7 +59,7 @@ class LiteLLMAdapter:
 
     Configuration (endpoint, master key, default model) flows through
     InferenceSettings (D19; environment access is centralised in
-    vadakkan/config/, never scattered across adapters). Each request
+    padhanam/config/, never scattered across adapters). Each request
     constructs an InferenceSettings instance so configuration changes
     via .env reload between calls without restart.
     """
@@ -87,7 +87,7 @@ class LiteLLMAdapter:
                 "gen_ai.system": "litellm",
                 "gen_ai.request.model": resolved_model,
                 "gen_ai.operation.name": "chat",
-                "vadakkan.tenant_id": str(tenant_id),
+                "padhanam.tenant_id": str(tenant_id),
             },
         ) as span:
             try:

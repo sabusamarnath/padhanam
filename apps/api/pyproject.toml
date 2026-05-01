@@ -1,7 +1,7 @@
 [project]
-name = "vadakkan-api"
+name = "padhanam-api"
 version = "0.0.0"
-description = "Vadakkan FastAPI application (apps/api/). Composes the inference and observability contexts and wires authentication middleware in front of every route."
+description = "Padhanam FastAPI application (apps/api/). Composes the inference and observability contexts and wires authentication middleware in front of every route."
 requires-python = ">=3.14"
 # FastAPI and its OTel instrumentation live here, not at the root, so
 # non-app code cannot import fastapi (D30). Uvicorn ships in the dev

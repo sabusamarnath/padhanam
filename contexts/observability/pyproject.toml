@@ -1,7 +1,7 @@
 [project]
-name = "vadakkan-observability"
+name = "padhanam-observability"
 version = "0.0.0"
-description = "Observability bounded context (D16, D27). Trace-query read path for the recommendation engine; distinct from vadakkan/observability/ which is the span-emission mechanism."
+description = "Observability bounded context (D16, D27). Trace-query read path for the recommendation engine; distinct from padhanam/observability/ which is the span-emission mechanism."
 requires-python = ">=3.14"
 # Vendor-SDK confinement (D27, D30): the langfuse SDK only enters the
 # codebase through this manifest. Import-linter contract additionally

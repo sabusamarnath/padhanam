@@ -49,9 +49,9 @@ from contexts.tenancy.domain import (
     TenantStatus,
 )
 from shared_kernel import Jurisdiction, TenantId as SharedTenantId
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.observability.security_events import SecurityEvent
-from vadakkan.security import Principal
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import SecurityEvent
+from padhanam.security import Principal
 
 
 CONTROL_PLANE_HOST = os.environ.get("CONTROL_PLANE_HOST_OVERRIDE", "127.0.0.1")

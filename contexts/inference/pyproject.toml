@@ -1,5 +1,5 @@
 [project]
-name = "vadakkan-inference"
+name = "padhanam-inference"
 version = "0.0.0"
 description = "Inference bounded context (D16, D17). Application use case + InferencePort + LiteLLM outbound adapter."
 requires-python = ">=3.14"

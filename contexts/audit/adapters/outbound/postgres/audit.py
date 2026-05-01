@@ -46,7 +46,7 @@ from contexts.audit.domain.events import (
     verify_chain,
 )
 from shared_kernel import TenantId
-from vadakkan.config import ControlPlaneSettings
+from padhanam.config import ControlPlaneSettings
 
 _log = logging.getLogger("contexts.audit.postgres")
 

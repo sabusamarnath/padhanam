@@ -5,7 +5,7 @@ envelope encryption. The wrapped DEK is the per-row Data Encryption Key
 encrypted by the KEK; the ciphertext is the credentials encrypted by
 the DEK. Neither field is plaintext at rest or in this object.
 
-Unwrapping happens at the routing layer in `vadakkan/security/crypto.py`
+Unwrapping happens at the routing layer in `padhanam/security/crypto.py`
 (lands S11) which returns a transient `TenantConnectionConfig` whose
 plaintext does not persist beyond function-call scope.
 

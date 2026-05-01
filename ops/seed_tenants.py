@@ -3,7 +3,7 @@
 The two test tenants ``a`` and ``b`` correspond to the
 ``postgres-tenant-a`` and ``postgres-tenant-b`` Compose services
 landed at S9. Connection configs reference them by their Compose
-service hostnames; this script must run inside the ``vadakkan-api``
+service hostnames; this script must run inside the ``padhanam-api``
 container so those hostnames resolve.
 
 Idempotent: if a tenant id already exists in the registry, the script
@@ -32,9 +32,9 @@ from contexts.tenancy.adapters.outbound.postgres.registry import (
 from contexts.tenancy.application import OPERATOR_ROLE, register_tenant
 from contexts.tenancy.domain import TenantConnectionConfig, TenantId
 from shared_kernel import Jurisdiction, TenantId as SharedTenantId
-from vadakkan.config import ControlPlaneSettings, TenantPostgresSettings
-from vadakkan.observability.security_events import SecurityEvent
-from vadakkan.security import Principal
+from padhanam.config import ControlPlaneSettings, TenantPostgresSettings
+from padhanam.observability.security_events import SecurityEvent
+from padhanam.security import Principal
 
 
 # Deterministic test-set tenant ids. These are wired into the

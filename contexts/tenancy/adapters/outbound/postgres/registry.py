@@ -54,13 +54,13 @@ from contexts.tenancy.domain.tenant import Tenant, TenantStatus
 from contexts.tenancy.domain.tenant_connection_config import TenantConnectionConfig
 from contexts.tenancy.domain.tenant_id import TenantId
 from shared_kernel import Jurisdiction
-from vadakkan.config import ControlPlaneSettings
-from vadakkan.observability.security_events import (
+from padhanam.config import ControlPlaneSettings
+from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from vadakkan.security import crypto
+from padhanam.security import crypto
 
 CREDENTIAL_PURPOSE = "tenant.credentials.v1"
 CONTROL_PLANE_TENANT_SENTINEL = ""
