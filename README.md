@@ -1,6 +1,6 @@
-# Vadakkan
+# Padhanam
 
-Vadakkan is an agentic workflow SaaS platform whose core differentiator is the observability and optimization layer that production agentic systems need but most teams do not build. A NotebookLM-plus-Gems agent surface sits on top.
+Padhanam (Malayalam for "learning") is a personal learning sprint by the operator to develop fluency in building agentic systems under enterprise-realistic constraints. The repository documents the architectural decisions, builds, and reflections. The platform shape is agentic workflow with an observability and optimization layer; the deliverable is the operator's fluency, not a sellable product.
 
 ## How to read the charter
 
