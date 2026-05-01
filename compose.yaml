@@ -108,8 +108,8 @@ services:
 
   # Langfuse stack (P2/S4). Six services total: this langfuse-db (Postgres for metadata),
   # clickhouse (trace data plane), minio (S3-compatible blob store), langfuse-web (UI+API),
-  # langfuse-worker (async ingestion), and the existing redis above (shared with Vadakkan
-  # via DB number per D18 — Vadakkan uses DB 0, Langfuse uses DB 1).
+  # langfuse-worker (async ingestion), and the existing redis above (shared with Padhanam
+  # via DB number per D18 — Padhanam uses DB 0, Langfuse uses DB 1).
 
   langfuse-db:
     image: postgres:17-alpine@sha256:c7526c0f6c3f30260a563d7bcf8ad778effac59a44f8ffa86678c35418338609
@@ -326,36 +326,36 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # Vadakkan FastAPI application (P2/S7). Eleventh service in the stack.
+  # Padhanam FastAPI application (P2/S7). Eleventh service in the stack.
   # Hexagonal layers + bounded contexts are loaded as workspace members
   # (D30); the image is built from apps/api/Dockerfile at the repo root
-  # so the build context sees vadakkan/, contexts/, shared_kernel/, and
+  # so the build context sees padhanam/, contexts/, shared_kernel/, and
   # apps/. No host port binding (S5 rule); Caddy reverse-proxies on the
   # internal Compose network at /api/*.
   #
   # The image tag floats during dev iteration but is digest-pinned for
   # `make scan` and the security review checklist; rebuild with
-  # `docker compose build vadakkan-api` and refresh the digest after.
+  # `docker compose build padhanam-api` and refresh the digest after.
   # The build:context: form is the development-mode default; the
   # production manifest replaces this with an upstream-image digest pin.
-  vadakkan-api:
+  padhanam-api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: vadakkan-api:dev@sha256:8d2251647454568ffa09e2d7b1171dfe73c85ea760f684f0e1b26ff334435e5b
+    image: padhanam-api:dev@sha256:9ccc2bcb3356a0c753cf3e1317ad6f844a16f3b6612d2c406161bb96832a09b2
     depends_on:
       litellm:
         condition: service_healthy
       langfuse-web:
         condition: service_healthy
     environment:
-      VADAKKAN_PROFILE: dev
+      PADHANAM_PROFILE: dev
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
       LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
       # Tenancy: control-plane connection details (D33). Read by
-      # ControlPlaneSettings in vadakkan/config/tenancy.py for the
+      # ControlPlaneSettings in padhanam/config/tenancy.py for the
       # registry adapter and the alembic env.py.
       POSTGRES_CONTROL_PLANE_USER: ${POSTGRES_CONTROL_PLANE_USER}
       POSTGRES_CONTROL_PLANE_PASSWORD: ${POSTGRES_CONTROL_PLANE_PASSWORD}

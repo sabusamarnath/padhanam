@@ -1,17 +1,17 @@
 .PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check
 
 # .env carries the operator-edited values; .env.derived carries values
-# computed from vadakkan/config/ (currently just LITELLM_OTEL_HEADERS).
+# computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
 # Compose loads both via repeated --env-file flags (later files override
 # earlier ones for the same key). Targets that drive compose declare
 # derive-env as a prerequisite so .env.derived is always fresh.
 COMPOSE := docker compose --env-file .env --env-file .env.derived
 
 help:
-	@echo "Vadakkan — available targets:"
+	@echo "Padhanam — available targets:"
 	@echo "  up          Start the Compose stack (14 services) in the background"
 	@echo "  down        Stop the Compose stack"
-	@echo "  derive-env  Recompute .env.derived from vadakkan/config/ (idempotent)"
+	@echo "  derive-env  Recompute .env.derived from padhanam/config/ (idempotent)"
 	@echo "  logs        Follow logs from all services"
 	@echo "  ps          Show service status"
 	@echo "  psql        Open a psql shell against the postgres service"
@@ -43,18 +43,18 @@ ps: derive-env
 psql: derive-env
 	$(COMPOSE) exec postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-# Pulls the default model resolved from vadakkan/config/ (D15, D19). The
+# Pulls the default model resolved from padhanam/config/ (D15, D19). The
 # model name flows through InferenceSettings rather than a hardcoded Make
 # variable so substituting the default later (or per-profile) is a config
 # change, not a Makefile edit. Idempotent: `ollama pull` on a model that
 # is already current is a no-op.
 pull-model: derive-env
-	@model=$$(uv run python -c "from vadakkan.config import InferenceSettings; print(InferenceSettings().default_model)") && \
+	@model=$$(uv run python -c "from padhanam.config import InferenceSettings; print(InferenceSettings().default_model)") && \
 	echo "Pulling $$model into the ollama_data volume (idempotent)..." && \
 	$(COMPOSE) exec ollama ollama pull "$$model"
 
 # End-to-end smoke through LiteLLM. Resolves the master key, model, and
-# endpoint through vadakkan/config/ (D19), then sends a real chat
+# endpoint through padhanam/config/ (D19), then sends a real chat
 # completion request and prints the response. The request runs from
 # inside the caddy container (which carries wget) so no host-port
 # binding is needed for LiteLLM. After the response prints, the operator
@@ -102,19 +102,19 @@ test:
 # per-tenant phase. Per-tenant transactional: failure on tenant B
 # leaves tenant A migrated, retry resumes from tenant B.
 #
-# Runs from inside the vadakkan-api container so the migration script
+# Runs from inside the padhanam-api container so the migration script
 # can resolve the postgres-control-plane and per-tenant hostnames
 # over the Compose network (S5 rule: only Caddy binds host ports).
 # The api image vendors alembic + psycopg through the root pyproject's
 # runtime deps.
 migrate: derive-env
-	$(COMPOSE) exec vadakkan-api python -m ops.migrate
+	$(COMPOSE) exec padhanam-api python -m ops.migrate
 
 # Register the test set tenants (postgres-tenant-a, postgres-tenant-b)
 # in the registry. Idempotent: skips already-registered ids.
-# Runs inside vadakkan-api so the Compose service hostnames resolve.
+# Runs inside padhanam-api so the Compose service hostnames resolve.
 seed-tenants: derive-env
-	$(COMPOSE) exec vadakkan-api python -m ops.seed_tenants
+	$(COMPOSE) exec padhanam-api python -m ops.seed_tenants
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,

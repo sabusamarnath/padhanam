@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
 #
-# Vadakkan FastAPI image. Multi-stage so the final image carries only
+# Padhanam FastAPI image. Multi-stage so the final image carries only
 # the runtime venv + source, not the build toolchain. Pinned upstream
 # digest is enforced in compose.yaml; the FROM here uses the floating
 # tag so the digest pin lives in one place (S5 pattern).
 #
-# Build: docker build -f apps/api/Dockerfile -t vadakkan-api:dev .
+# Build: docker build -f apps/api/Dockerfile -t padhanam-api:dev .
 # (run from the repo root; uv.lock and pyproject.toml live there)
 
 FROM python:3.14-slim AS builder
@@ -34,7 +34,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy the source and finalise the install. --no-dev ships a runtime
 # venv only; tests and lint tooling stay out of the image.
-COPY vadakkan ./vadakkan
+COPY padhanam ./padhanam
 COPY shared_kernel ./shared_kernel
 COPY contexts ./contexts
 COPY apps ./apps
@@ -57,23 +57,23 @@ FROM python:3.14-slim AS runtime
 
 # Run as a non-root user. UID 1000 is the conventional first non-root
 # UID and matches the image's expectation when bind-mounting a volume.
-RUN useradd --create-home --uid 1000 vadakkan
+RUN useradd --create-home --uid 1000 padhanam
 
 WORKDIR /app
 
-COPY --from=builder --chown=vadakkan:vadakkan /opt/venv /opt/venv
-COPY --from=builder --chown=vadakkan:vadakkan /app /app
+COPY --from=builder --chown=padhanam:padhanam /opt/venv /opt/venv
+COPY --from=builder --chown=padhanam:padhanam /app /app
 
 # logs/ is the default directory for security_events.py. Pre-create it
 # with the right ownership so the non-root user can write
 # logs/security.jsonl (D26) at runtime.
-RUN mkdir -p /app/logs && chown vadakkan:vadakkan /app/logs
+RUN mkdir -p /app/logs && chown padhanam:padhanam /app/logs
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-USER vadakkan
+USER padhanam
 
 EXPOSE 8000
 
