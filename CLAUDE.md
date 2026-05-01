@@ -18,7 +18,7 @@ Browser interactive verification is the success criterion for any acceptance cri
 - Working files (`charter/current-package.md`, session log entries) stay tight. Old content moves to [docs/archive/](docs/archive/) at audit time. Nothing is ever deleted.
 - Do not enumerate the repo. Read only what the session requires.
 
-Configuration values that appear in multiple files (package name, compose project name, default model, port numbers) are discovered from a single source rather than hardcoded. The rename session caught the AST enforcement test having hardcoded the package name; the lesson generalises. When writing tests, contracts, or scripts that reference such values, read from `vadakkan/config/`, `pyproject.toml`, or the appropriate configuration surface.
+Configuration values that appear in multiple files (package name, compose project name, default model, port numbers) are discovered from a single source rather than hardcoded. The rename session caught the AST enforcement test having hardcoded the package name; the lesson generalises. When writing tests, contracts, or scripts that reference such values, read from `padhanam/config/`, `pyproject.toml`, or the appropriate configuration surface.
 
 ## Commits
 

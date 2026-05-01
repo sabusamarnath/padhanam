@@ -43,7 +43,7 @@ the long Go-1.18-era list (`CVE-2022-*`, `CVE-2023-2453*`).
 
 **Rationale:** These are detections in Go binaries the upstream
 maintainer shipped (typically `gosu`, build helpers, or — in the Ollama
-case — the daemon binary itself). They are not on Vadakkan's
+case — the daemon binary itself). They are not on Padhanam's
 authored-code runtime path; the affected binaries either run once at
 container init under a privileged context already controlled by the
 orchestrator, or are part of the upstream maintainer's own runtime.

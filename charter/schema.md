@@ -25,7 +25,7 @@ D33. Schema lands at S10 via Alembic revision
 | `aad`            | `bytea`         | not null; AAD bytes (binds `tenant_id` + purpose `"tenant.credentials.v1"`) |
 
 No plaintext credential column exists; the registry adapter at S10
-encrypts on write via `vadakkan/security/crypto.py` and never decrypts
+encrypts on write via `padhanam/security/crypto.py` and never decrypts
 on read. Decryption flows through the operator-context-only
 `reveal_connection_config` use case (D34).
 
