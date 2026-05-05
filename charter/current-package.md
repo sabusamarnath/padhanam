@@ -2,26 +2,61 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P4: LLM gateway
+## Between packages — P4 closed, P5 not yet open
 
-Active. Epic note at [charter/packages/p4-epic.md](packages/p4-epic.md). Two-session breakdown.
+P4 closed at S15 close on 2026-05-05. The P4 retrospective lives at
+[docs/archive/packages/p4.md](../docs/archive/packages/p4.md);
+the first measured-outcomes paragraph in
+[log/packages.md](../log/packages.md) covers S14 and S15.
 
-### Sessions
+The next strategic-mode conversation frames P5 (eval-harness scaffold
+per `charter/roadmap.md` and `charter/packages.md`). The framing
+produces a P5 epic note at `charter/packages/p5-epic.md` per D43, the
+S16 (and beyond) session prompts, and any P5 D-entries that follow
+from framing decisions. This file transitions to the active-P5 state
+at the strategic boundary.
 
-- **S14: Cost capture and registry migration.** Closed 2026-05-05. Pricing table at `padhanam/config/inference.py` (`PRICING_TABLE` dict with `qwen2.5:7b` at zero rates and `gpt-4o-mini` at 0.150 / 0.600 USD per 1M tokens). LiteLLMAdapter emits four attributes per completion (`gen_ai.cost.input_usd`, `output_usd`, `total_usd`, `pricing_status`); browser-verified on trace `9677d5252e095b8d8a2158e11d17a4c6`. Control-plane Alembic revision `0003_add_cost_columns` added `cost_attribution_id` (NOT NULL, populated from `tenant_id::text` for both seeded tenants), `cost_ceiling_usd_monthly` and `cost_ceiling_action` (forward-affordance, CHECK on action enum). Monthly pricing-table review added to `ops/scheduled_checks.yaml` (first run 2026-06-05). D49 records the wiring shape (Kano: must-have).
-- **S15: Tenant context enrichment and P4 close.** Pending. Tenant context value object propagated through the inference path. Package archive at `docs/archive/packages/p4.md` per D31. First entry in `log/packages.md` with measured-outcomes paragraph per D40.
+## Carryovers active across the P4→P5 boundary
 
-### Carryovers active in P4
+- **Classification field on TenantContext.** Deferred per S15 framing
+  decision option C; lands at the package that genuinely consumes it
+  (P7 or P8 per the P4 epic note's out-of-scope section).
+  TenantContext at P4 close carries three fields, not four; adding
+  the field later is a one-line edit on the value object plus a
+  registry-row column.
+- **Cost-ceiling forward-affordance columns.** Configuration columns
+  landed at S14 alongside the cost-attribution column per D41.
+  Reading and enforcing the columns defers to Phase 2 per
+  [charter/deferred-decisions.md](deferred-decisions.md). Migration
+  comments mark the columns as not-yet-read; tenant-isolation tests
+  confirm absence on per-tenant DBs.
+- **Pricing-table monthly review.** Cadence in
+  `ops/scheduled_checks.yaml` per D41; first run scheduled
+  2026-06-05.
+- **Pricing-table format evolution.** S14 reflection forward-note: the
+  format-(b) Pydantic + dict shape will need to evolve to
+  YAML/TOML under `ops/` when multi-region rates, time-zoned rates,
+  or rate-card complexity arrives. Phase 2 framing.
+- **PRFAQ operator-voice rewrite.** Follow-on strategic conversation;
+  carried forward from the P3 post-close strategic session.
+- **Phase 1 PRD operator-review of the problem-statement and
+  target-user sections.** Follow-on strategic conversation on the
+  same cadence as the PRFAQ rewrite.
 
-- **Cost-ceiling forward-affordance.** Cost-ceiling configuration columns ship at S14 alongside the cost-attribution column per D41. Reading and enforcing the columns defers to Phase 2 per [charter/deferred-decisions.md](deferred-decisions.md). Migration comments mark the columns as not-yet-read; tenant-isolation tests confirm absence on per-tenant DBs.
-- **Pricing table monthly review.** Cadence lands in `ops/scheduled_checks.yaml` per D41.
-- **Tenant context value-object placement.** S15 decides where the value object lives (`shared_kernel/` vs context-local) when the build session faces the cross-context import question; the architectural choice carries Kano category at the D-entry per D42.
+## Deferred items remaining visible
 
-### Deferred items remaining visible
-
-- Production-shaped tenant onboarding workflow (full D13 implementation): awaits production deployment context.
-- Cross-replica cache invalidation for the routing layer (D36): single-replica dev makes this a non-issue.
-- Hash chain caching as a performance optimisation (D37): deferred until measurement justifies.
-- Load testing of the chain-concurrency posture: deferred to whichever future session has multi-writer load.
-- PRFAQ operator-voice rewrite: follow-on strategic session.
-- Phase 1 PRD operator-review of the problem-statement and target-user sections: follow-on strategic session on the same cadence.
+- Production-shaped tenant onboarding workflow (full D13
+  implementation): awaits production deployment context.
+- Cross-replica cache invalidation for the routing layer (D36):
+  single-replica dev makes this a non-issue.
+- Hash chain caching as a performance optimisation (D37): deferred
+  until measurement justifies.
+- Load testing of the chain-concurrency posture: deferred to whichever
+  future session has multi-writer load.
+- Methodology mechanical-enforcement upgrades (decision-to-code
+  translation gate, per-package reconciliation gate, adaptive
+  reassessment prompt, `make doctor`, session-close walkthrough
+  template, edge-case hunter procedural shape): tracked in
+  [charter/deferred-decisions.md](deferred-decisions.md). Earliest
+  meaningful activations are at the P4→P5 boundary or the Phase 1
+  close audit.
