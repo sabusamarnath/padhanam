@@ -24,4 +24,3 @@ Carryover items added at the P3→P4 boundary strategic session:
 - P4 epic note at `charter/packages/p4-epic.md` is the first instance of the package-epic-note convention from D43, written at P4 open.
 - PRFAQ operator-voice rewrite is a follow-on strategic session, sequenced before P4 opens or alongside P4 framing at operator discretion.
 - Phase 1 PRD operator-review of the problem-statement and target-user sections is a follow-on strategic session on the same cadence.
-- The methodology document at `charter/methodology.md` committed by D39 has not yet been authored. Surfacing as a carryover so that the gap is visible at the next strategic conversation; authorship is operator-led in strategic mode per D47, not in build-mode sessions.

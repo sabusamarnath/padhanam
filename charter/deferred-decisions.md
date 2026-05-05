@@ -93,3 +93,21 @@ Activates at Phase 2 framing.
 **Full DORA instrumentation when production deployment exists.** D40 commits the methodology to DORA Four Keys and CORE4 measurement; `methodology.md` (pending operator authorship per D39) will adapt the definitions for Phase 1 (deployment frequency proxied by merged-to-main frequency; mean time to restore deferred until production traffic exists; change failure rate defined per same-phase corrective sessions). Phase 2 framing activates the full instrumentation when a hosted environment exists, deployment frequency means deploys-to-production, and MTTR measures real restoration. CORE4's effective developer experience axis activates fully when team scaling or productisation makes it load-bearing; Phase 1 partial coverage tracks what is tractable now via reflection density and operational-friction signals.
 
 **The specific D-entry lands at Phase 2 framing.** Operational commitments (tooling, format, benchmarks) are deferred per D40's deferral structure.
+
+## Methodology mechanical-enforcement upgrades
+
+Items absorbed from the methodology comparison process that are committed in principle but await mechanical implementation. The principle landings live in `charter/methodology.md`; this section tracks what activates each upgrade.
+
+**Decision-to-code translation gate.** A CI test that walks new D-entries and asserts they appear in commits or session prompts within N sessions of being committed. Promotes the existing operator-discipline check into mechanical enforcement. Activation: when the discipline-adherence metrics in `charter/methodology.md` produce a measured baseline against which the gate's threshold can be set honestly. Earliest meaningful activation: Phase 1 close audit.
+
+**Per-package reconciliation gate (mechanical).** D43 commits the structural pattern: epic note at package open, archive at package close, delta as audit deliverable. Mechanical enforcement would assert that every closed package has both files and that the archive references the epic note's commitments. Activation: when the epic-note convention has run for at least two packages (P4 and P5) and the reconciliation pattern has stabilised. Earliest activation: P5 close.
+
+**Adaptive per-package reassessment as explicit prompt.** Standing reflection prompt at session close: does the rest of the package plan still hold given what this session surfaced? Activation: integrated into the session-close template at the next P-boundary strategic session (P4→P5 boundary).
+
+**`make doctor` for operational drift.** Detection of orphan Compose projects, stale virtualenv interpreters, port collisions, drifted image digests, basic git hygiene. Activation: when operational drift surfaces as a session-open failure mode three times across the package boundary, per the structural-promotion threshold from the S11–S12 reflection. Tracked at session opens; the count is the activation condition.
+
+**Session-close walkthrough template (checkpoint-preview pattern).** Standing template: what was the intent, what changed, what was verified, what is the residual risk. Activation: integrated into the session-close template at the next P-boundary strategic session (P4→P5 boundary), alongside the adaptive reassessment prompt above.
+
+**Edge-case hunter procedural shape in phase-audit template.** Procedural checklist for phase audits: boundary input, empty input, malformed input, concurrent actor, retry, partial failure. Activation: integrated into the Phase 1 close audit template; reviewed for coverage at the audit and refined for Phase 2.
+
+These are performance-category improvements: each scales the bet linearly by reducing operator-discipline reliance in favour of mechanical enforcement. None is must-have for Phase 1 close, which is why they sit here rather than in the active package's scope. Phase audits review the activation backlog and pull items into specific packages where conditions warrant.
