@@ -81,6 +81,14 @@ tenant_registry = sa.Table(
     sa.Column("nonce", sa.LargeBinary, nullable=False),
     sa.Column("key_version", sa.Integer, nullable=False),
     sa.Column("aad", sa.LargeBinary, nullable=False),
+    # Cost-attribution and cost-ceiling columns landed at S14 per D41
+    # (Alembic revision 0003_add_cost_columns). cost_attribution_id is
+    # populated on register_tenant from str(tenant_id) by default; the
+    # cost-ceiling columns are forward-affordance and not read by any
+    # code path until Phase 2 enforcement architecture lands.
+    sa.Column("cost_attribution_id", sa.Text, nullable=False),
+    sa.Column("cost_ceiling_usd_monthly", sa.Numeric, nullable=True),
+    sa.Column("cost_ceiling_action", sa.Text, nullable=True),
 )
 
 
@@ -189,6 +197,14 @@ class PostgresTenantRegistry:
                     nonce=encrypted.nonce,
                     key_version=encrypted.key_version,
                     aad=aad_bytes,
+                    # 1:1 mapping to tenant_id at inception per D41.
+                    # Future tenants may share a cost_attribution_id
+                    # (e.g. subsidiaries of one parent organisation
+                    # sharing billing); the column accepts non-tenant-
+                    # shaped values when that shape stabilises. The
+                    # cost-ceiling columns stay NULL at insert time —
+                    # forward-affordance, not consumed at S14.
+                    cost_attribution_id=str(tenant_id),
                 )
             )
             await session.commit()
