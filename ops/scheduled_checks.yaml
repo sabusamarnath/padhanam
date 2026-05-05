@@ -28,6 +28,16 @@ cadences:
       - name: fastapi-uvicorn
         scope: ["fastapi", "uvicorn"]
         precedent: "Added at P2 retrospective. Edge-path coupling with otel-instrumentation."
+      - name: pricing-table-review
+        scope:
+          - "PRICING_TABLE entries in padhanam/config/inference.py"
+        precedent: |
+          Added at P4 Session 14 per D41. Vendor pricing for the
+          commercial models in PRICING_TABLE drifts; monthly review
+          catches the drift before downstream cost rollups (P9+) and
+          optimization recommendations (P11) compound on stale rates.
+          The dev/Ollama row stays at zero across reviews. First-run
+          target: 2026-06-05.
 
   quarterly:
     description: |
