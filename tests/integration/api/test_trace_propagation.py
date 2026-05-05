@@ -152,7 +152,12 @@ def test_request_produces_parent_child_grandchild_trace(
     assert attrs.get("gen_ai.operation.name") == "chat"
     assert attrs.get("gen_ai.usage.input_tokens") == 12
     assert attrs.get("gen_ai.usage.output_tokens") == 4
-    assert attrs.get("padhanam.tenant_id") == _FIXTURE_TENANT_ID
+    # tenant.* attributes per D37 + S15. Legacy padhanam.tenant_id
+    # removed.
+    assert attrs.get("tenant.id") == _FIXTURE_TENANT_ID
+    assert attrs.get("tenant.jurisdiction") == "eu-west"
+    assert attrs.get("tenant.cost_attribution_id") == _FIXTURE_TENANT_ID
+    assert "padhanam.tenant_id" not in attrs
 
     # Parent-child verification: the LLM span's parent must share a
     # trace with the FastAPI request span (if the FastAPI instrumentation

@@ -1,12 +1,13 @@
 """InferencePort — the abstraction the application use case calls.
 
 Adapters (LiteLLM, future provider-direct paths) implement this port.
-The shape is deliberately narrow: messages, model, tenant_id in;
-Completion out. Tenant ID is required from inception per the
-jurisdiction principle (principles.md / D12) — a future tenant
-registry will resolve tenant_id to per-tenant routing, jurisdiction,
-and budget; the port carries the dimension so adding the registry is
-configuration, not signature change.
+The shape is narrow: messages, model, tenant_context in; Completion
+out. The tenant identity is a full ``TenantContext`` value object
+from S15 onward (D-entry) rather than a bare ``tenant_id`` string —
+adapters that need jurisdiction at request time (jurisdiction-aware
+routing) or cost_attribution_id (per-tenant trace-level cost rollup)
+read those fields directly without a second registry lookup at the
+adapter boundary.
 
 The future orchestration ports (deferred-decisions.md → orchestration
 architecture) sit alongside this port; the InferencePort shape stays
@@ -19,7 +20,7 @@ from __future__ import annotations
 from typing import Protocol, Sequence
 
 from contexts.inference.domain.completion import Completion, Message
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
 
 
 class InferencePort(Protocol):
@@ -27,5 +28,5 @@ class InferencePort(Protocol):
         self,
         messages: Sequence[Message],
         model: str | None,
-        tenant_id: TenantId,
+        tenant_context: TenantContext,
     ) -> Completion: ...

@@ -18,7 +18,7 @@ from typing import Sequence
 from contexts.inference.application import request_completion as _request_completion
 from contexts.inference.domain.completion import Completion, Message
 from contexts.inference.ports import InferencePort
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
 
 
 def request_completion(
@@ -26,7 +26,7 @@ def request_completion(
     port: InferencePort,
     messages: Sequence[Message],
     model: str | None,
-    tenant_id: TenantId,
+    tenant_context: TenantContext,
 ) -> Completion:
     """Run a completion through the supplied InferencePort.
 
@@ -37,7 +37,7 @@ def request_completion(
         port=port,
         messages=messages,
         model=model,
-        tenant_id=tenant_id,
+        tenant_context=tenant_context,
     )
 
 

@@ -8,22 +8,29 @@ from contexts.inference.domain.completion import (
     Message,
     TokenUsage,
 )
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
+
+
+_TENANT_A = TenantContext(
+    tenant_id="00000000-0000-4000-8000-00000000a001",
+    jurisdiction="eu-west",
+    cost_attribution_id="00000000-0000-4000-8000-00000000a001",
+)
 
 
 class _FakeInferencePort:
     def __init__(self) -> None:
         self.calls: list[
-            tuple[Sequence[Message], str | None, TenantId]
+            tuple[Sequence[Message], str | None, TenantContext]
         ] = []
 
     def complete(
         self,
         messages: Sequence[Message],
         model: str | None,
-        tenant_id: TenantId,
+        tenant_context: TenantContext,
     ) -> Completion:
-        self.calls.append((messages, model, tenant_id))
+        self.calls.append((messages, model, tenant_context))
         return Completion(
             text="hi",
             model=model or "default",
@@ -39,12 +46,12 @@ def test_use_case_passes_arguments_to_port() -> None:
         port=port,
         messages=messages,
         model="qwen2.5:7b",
-        tenant_id=TenantId("tenant-a"),
+        tenant_context=_TENANT_A,
     )
 
     assert result.text == "hi"
     assert result.usage.total_tokens == 6
-    assert port.calls == [(messages, "qwen2.5:7b", TenantId("tenant-a"))]
+    assert port.calls == [(messages, "qwen2.5:7b", _TENANT_A)]
 
 
 def test_use_case_passes_none_model_through() -> None:
@@ -54,7 +61,7 @@ def test_use_case_passes_none_model_through() -> None:
         port=port,
         messages=[Message(role="user", content="x")],
         model=None,
-        tenant_id=TenantId("tenant-a"),
+        tenant_context=_TENANT_A,
     )
 
     assert result.model == "default"

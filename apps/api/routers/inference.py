@@ -130,13 +130,6 @@ def completions(
     tenant_context: Annotated[TenantContext, Depends(get_tenant_context)],
     port: Annotated[InferencePort, Depends(get_inference_port)],
 ) -> CompletionResponse:
-    # S15 commit 2: the TenantContext is resolved from the registry but
-    # only the tenant_id flows to the use case → adapter chain. The
-    # port-signature widening to TenantContext lands at S15 commit 3
-    # alongside the adapter's tenant.* OTel attribute emission, keeping
-    # commit 2 focused on the resolution path.
-    from shared_kernel import TenantId as SharedTenantId
-
     try:
         completion = request_completion(
             port=port,
@@ -144,7 +137,7 @@ def completions(
                 Message(role=m.role, content=m.content) for m in body.messages
             ],
             model=body.model,
-            tenant_id=SharedTenantId(tenant_context.tenant_id),
+            tenant_context=tenant_context,
         )
     except InferenceConfigurationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

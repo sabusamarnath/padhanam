@@ -129,7 +129,7 @@ def test_invalid_credential_logs_security_event(
     from padhanam.events import SynchronousEventBus
 
     class _Stub:
-        def complete(self, messages, model, tenant_id) -> Completion:
+        def complete(self, messages, model, tenant_context) -> Completion:
             return Completion(
                 text="x",
                 model="m",

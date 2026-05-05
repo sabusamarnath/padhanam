@@ -11,7 +11,7 @@ from contexts.inference.domain.completion import (
     Message,
     TokenUsage,
 )
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import TenantContext
 
 
 # Deterministic fixture tenant_id for FastAPI integration tests. The
@@ -31,16 +31,16 @@ class _StubInferencePort:
 
     def __init__(self) -> None:
         self.calls: list[
-            tuple[Sequence[Message], str | None, TenantId]
+            tuple[Sequence[Message], str | None, TenantContext]
         ] = []
 
     def complete(
         self,
         messages: Sequence[Message],
         model: str | None,
-        tenant_id: TenantId,
+        tenant_context: TenantContext,
     ) -> Completion:
-        self.calls.append((messages, model, tenant_id))
+        self.calls.append((messages, model, tenant_context))
         return Completion(
             text="stub completion",
             model=model or "stub-model",

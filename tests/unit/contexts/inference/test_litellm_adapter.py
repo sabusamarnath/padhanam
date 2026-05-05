@@ -26,8 +26,15 @@ from contexts.inference.domain.errors import (
     InferenceTimeout,
     InferenceUnavailable,
 )
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
 from padhanam.config import InferenceSettings
+
+
+_TENANT_A = TenantContext(
+    tenant_id="00000000-0000-4000-8000-00000000a001",
+    jurisdiction="eu-west",
+    cost_attribution_id="00000000-0000-4000-8000-00000000a001",
+)
 
 
 def _settings() -> InferenceSettings:
@@ -57,7 +64,7 @@ def test_adapter_maps_response_to_domain_completion() -> None:
         result = adapter.complete(
             messages=[Message(role="user", content="hi")],
             model="qwen2.5:7b",
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     assert result.text == "hello back"
@@ -83,7 +90,7 @@ def test_adapter_resolves_default_model_when_none() -> None:
         adapter.complete(
             messages=[Message(role="user", content="hi")],
             model=None,
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     # The adapter prefixes with "openai/" so the LiteLLM SDK treats the
@@ -107,7 +114,7 @@ def test_adapter_passes_endpoint_and_master_key() -> None:
         adapter.complete(
             messages=[Message(role="user", content="hi")],
             model="qwen2.5:7b",
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     assert captured["api_base"] == "http://litellm:4000"
@@ -125,7 +132,7 @@ def test_timeout_maps_to_inference_timeout() -> None:
             adapter.complete(
                 messages=[Message(role="user", content="hi")],
                 model="qwen2.5:7b",
-                tenant_id=TenantId("tenant-a"),
+                tenant_context=_TENANT_A,
             )
 
 
@@ -140,7 +147,7 @@ def test_rate_limit_maps_to_inference_unavailable() -> None:
             adapter.complete(
                 messages=[Message(role="user", content="hi")],
                 model="qwen2.5:7b",
-                tenant_id=TenantId("tenant-a"),
+                tenant_context=_TENANT_A,
             )
 
 
@@ -155,7 +162,7 @@ def test_auth_error_maps_to_inference_configuration_error() -> None:
             adapter.complete(
                 messages=[Message(role="user", content="hi")],
                 model="qwen2.5:7b",
-                tenant_id=TenantId("tenant-a"),
+                tenant_context=_TENANT_A,
             )
 
 
@@ -170,7 +177,7 @@ def test_bad_request_maps_to_inference_configuration_error() -> None:
             adapter.complete(
                 messages=[Message(role="user", content="hi")],
                 model="qwen2.5:7b",
-                tenant_id=TenantId("tenant-a"),
+                tenant_context=_TENANT_A,
             )
 
 
@@ -192,7 +199,7 @@ def test_completion_carries_trace_id_when_span_active() -> None:
             result = adapter.complete(
                 messages=[Message(role="user", content="hi")],
                 model="qwen2.5:7b",
-                tenant_id=TenantId("tenant-a"),
+                tenant_context=_TENANT_A,
             )
 
     # The default tracer provider produces invalid (zero) span contexts
@@ -270,7 +277,7 @@ def test_cost_attributes_zero_for_dev_model(captured_spans) -> None:
         adapter.complete(
             messages=[Message(role="user", content="hi")],
             model="qwen2.5:7b",
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     spans = captured_spans.get_finished_spans()
@@ -295,7 +302,7 @@ def test_cost_attributes_for_commercial_model(captured_spans) -> None:
         adapter.complete(
             messages=[Message(role="user", content="hi")],
             model="gpt-4o-mini",
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     spans = captured_spans.get_finished_spans()
@@ -322,7 +329,7 @@ def test_cost_attributes_zero_for_unknown_model_with_drift_flag(captured_spans) 
         adapter.complete(
             messages=[Message(role="user", content="hi")],
             model="not-a-real-model",
-            tenant_id=TenantId("tenant-a"),
+            tenant_context=_TENANT_A,
         )
 
     spans = captured_spans.get_finished_spans()
@@ -334,3 +341,35 @@ def test_cost_attributes_zero_for_unknown_model_with_drift_flag(captured_spans) 
     assert attrs["gen_ai.cost.pricing_status"] == "unknown_model"
 
 
+def test_tenant_attributes_emitted_on_span(captured_spans) -> None:
+    """The three tenant.* attributes (D37 + S15) land on the adapter
+    span alongside the gen_ai.cost.* attributes from S14. The legacy
+    padhanam.tenant_id from S7 is removed; tenant.id is the single
+    source.
+    """
+    adapter = LiteLLMAdapter(settings=_settings())
+    ctx = TenantContext(
+        tenant_id="00000000-0000-4000-8000-00000000b002",
+        jurisdiction="us-east",
+        cost_attribution_id="acme-billing-2026",
+    )
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_ok_response(),
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="qwen2.5:7b",
+            tenant_context=ctx,
+        )
+
+    spans = captured_spans.get_finished_spans()
+    assert len(spans) == 1
+    attrs = spans[0].attributes
+    assert attrs["tenant.id"] == "00000000-0000-4000-8000-00000000b002"
+    assert attrs["tenant.jurisdiction"] == "us-east"
+    assert attrs["tenant.cost_attribution_id"] == "acme-billing-2026"
+    # The legacy padhanam.tenant_id attribute is removed in S15 — D37's
+    # tenant.id is now the single source.
+    assert "padhanam.tenant_id" not in attrs

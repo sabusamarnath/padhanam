@@ -48,7 +48,7 @@ from contexts.inference.domain.errors import (
     InferenceTimeout,
     InferenceUnavailable,
 )
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
 from padhanam.config import InferenceSettings, UnknownModelError, cost_for
 
 _tracer = trace.get_tracer("padhanam.inference.litellm")
@@ -71,7 +71,7 @@ class LiteLLMAdapter:
         self,
         messages: Sequence[Message],
         model: str | None,
-        tenant_id: TenantId,
+        tenant_context: TenantContext,
     ) -> Completion:
         resolved_model = model or self._settings.default_model
         endpoint = self._settings.litellm_endpoint
@@ -80,6 +80,15 @@ class LiteLLMAdapter:
         # GenAI semantic conventions per D27. The span name follows the
         # OTel GenAI guidance ("chat {model}") so Langfuse renders it as
         # an LLM-call span rather than an opaque internal span.
+        #
+        # tenant.* attributes use the Padhanam-domain namespace
+        # established by D37 (tenant.id, tenant.jurisdiction). S15
+        # extends the namespace with tenant.cost_attribution_id, which
+        # joins the same forward-compat shape: if OTel converges on a
+        # multi-tenant attribute namespace, the migration is a span-
+        # attribute rename here. The legacy padhanam.tenant_id from
+        # S7 is removed in this commit — D37's tenant.id is the single
+        # source.
         with _tracer.start_as_current_span(
             f"chat {resolved_model}",
             kind=SpanKind.CLIENT,
@@ -87,7 +96,9 @@ class LiteLLMAdapter:
                 "gen_ai.system": "litellm",
                 "gen_ai.request.model": resolved_model,
                 "gen_ai.operation.name": "chat",
-                "padhanam.tenant_id": str(tenant_id),
+                "tenant.id": tenant_context.tenant_id,
+                "tenant.jurisdiction": tenant_context.jurisdiction,
+                "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
             },
         ) as span:
             try:
