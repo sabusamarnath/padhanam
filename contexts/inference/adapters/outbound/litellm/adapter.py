@@ -49,7 +49,7 @@ from contexts.inference.domain.errors import (
     InferenceUnavailable,
 )
 from shared_kernel import TenantId
-from padhanam.config import InferenceSettings
+from padhanam.config import InferenceSettings, UnknownModelError, cost_for
 
 _tracer = trace.get_tracer("padhanam.inference.litellm")
 
@@ -138,6 +138,43 @@ class LiteLLMAdapter:
                     "gen_ai.response.finish_reasons",
                     [completion.finish_reason],
                 )
+
+            # Cost capture per D41. The pricing table at
+            # padhanam.config.inference resolves model -> USD rates;
+            # cost_for() multiplies token counts by the rates. Cost
+            # attributes use Padhanam-domain naming because the OTel
+            # GenAI semantic-conventions group has not stabilised cost
+            # attribute namespaces as of 2026-05-05; if/when OTel
+            # converges on (e.g.) gen_ai.usage.cost.*, the migration
+            # is a span-attribute rename here. The dev/Ollama zero-
+            # cost case still emits the three cost attributes (as 0.0)
+            # so downstream consumers always see the structure. An
+            # unknown-model lookup is a configuration-drift signal
+            # (a model routed through LiteLLM but missing from the
+            # pricing table); the adapter emits zeros plus a
+            # gen_ai.cost.pricing_status attribute so the monthly
+            # review (D41) and runtime observability can both detect
+            # it without breaking inference.
+            try:
+                breakdown = cost_for(
+                    completion.model,
+                    completion.usage.input_tokens,
+                    completion.usage.output_tokens,
+                )
+                input_usd = float(breakdown.input_usd)
+                output_usd = float(breakdown.output_usd)
+                total_usd = float(breakdown.total_usd)
+                pricing_status = "table_hit"
+            except UnknownModelError:
+                input_usd = 0.0
+                output_usd = 0.0
+                total_usd = 0.0
+                pricing_status = "unknown_model"
+
+            span.set_attribute("gen_ai.cost.input_usd", input_usd)
+            span.set_attribute("gen_ai.cost.output_usd", output_usd)
+            span.set_attribute("gen_ai.cost.total_usd", total_usd)
+            span.set_attribute("gen_ai.cost.pricing_status", pricing_status)
 
             ctx = span.get_span_context()
             trace_id = format(ctx.trace_id, "032x") if ctx.trace_id else None

@@ -200,3 +200,135 @@ def test_completion_carries_trace_id_when_span_active() -> None:
     # is that *if* a non-zero trace_id is available, it is set; this
     # test asserts the field exists on the result.
     assert hasattr(result, "trace_id")
+
+
+@pytest.fixture
+def captured_spans(monkeypatch: pytest.MonkeyPatch):
+    """Replace the adapter's module-level tracer with an SDK tracer
+    backed by an in-memory exporter, so cost-attribute assertions can
+    inspect the recorded span. Restored automatically by monkeypatch.
+    """
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    from contexts.inference.adapters.outbound.litellm import adapter as adapter_module
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    test_tracer = provider.get_tracer("padhanam.inference.litellm.test")
+    monkeypatch.setattr(adapter_module, "_tracer", test_tracer)
+    return exporter
+
+
+def _commercial_response() -> SimpleNamespace:
+    """A response that looks like it came from a commercial model.
+
+    Token counts (1M input + 500K output) are chosen so the per-call
+    USD math produces clean decimals against gpt-4o-mini's pinned
+    rates: 0.150 input + 0.300 output = 0.450 total.
+    """
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="hi"),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=1_000_000, completion_tokens=500_000),
+        model="gpt-4o-mini",
+    )
+
+
+def _unknown_model_response() -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="hi"),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=10),
+        model="not-a-real-model",
+    )
+
+
+def test_cost_attributes_zero_for_dev_model(captured_spans) -> None:
+    """qwen2.5:7b is in the pricing table at zero rates. The three
+    cost attributes still emit (as 0.0) so downstream consumers see
+    the structure regardless of whether the model carries vendor cost.
+    """
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_ok_response(),
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="qwen2.5:7b",
+            tenant_id=TenantId("tenant-a"),
+        )
+
+    spans = captured_spans.get_finished_spans()
+    assert len(spans) == 1
+    attrs = spans[0].attributes
+    assert attrs["gen_ai.cost.input_usd"] == 0.0
+    assert attrs["gen_ai.cost.output_usd"] == 0.0
+    assert attrs["gen_ai.cost.total_usd"] == 0.0
+    assert attrs["gen_ai.cost.pricing_status"] == "table_hit"
+
+
+def test_cost_attributes_for_commercial_model(captured_spans) -> None:
+    """gpt-4o-mini at 0.150 input / 0.600 output USD per 1M tokens.
+    1M input + 500K output -> 0.150 + 0.300 = 0.450 total USD.
+    """
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_commercial_response(),
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="gpt-4o-mini",
+            tenant_id=TenantId("tenant-a"),
+        )
+
+    spans = captured_spans.get_finished_spans()
+    assert len(spans) == 1
+    attrs = spans[0].attributes
+    assert attrs["gen_ai.cost.input_usd"] == pytest.approx(0.150)
+    assert attrs["gen_ai.cost.output_usd"] == pytest.approx(0.300)
+    assert attrs["gen_ai.cost.total_usd"] == pytest.approx(0.450)
+    assert attrs["gen_ai.cost.pricing_status"] == "table_hit"
+
+
+def test_cost_attributes_zero_for_unknown_model_with_drift_flag(captured_spans) -> None:
+    """A model not in the pricing table produces zeros plus the
+    pricing_status flag so observability can alert on drift without
+    inference itself breaking. The monthly pricing-table review (D41)
+    is the reconciling mechanism.
+    """
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_unknown_model_response(),
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="not-a-real-model",
+            tenant_id=TenantId("tenant-a"),
+        )
+
+    spans = captured_spans.get_finished_spans()
+    assert len(spans) == 1
+    attrs = spans[0].attributes
+    assert attrs["gen_ai.cost.input_usd"] == 0.0
+    assert attrs["gen_ai.cost.output_usd"] == 0.0
+    assert attrs["gen_ai.cost.total_usd"] == 0.0
+    assert attrs["gen_ai.cost.pricing_status"] == "unknown_model"
