@@ -158,11 +158,15 @@ asyncio.run(go())
 
 
 def _fetch_trace(trace_id: str) -> dict | None:
-    """Poll Langfuse public API for the trace; ingestion is async so
-    we wait up to ~20s before giving up.
+    """Poll Langfuse public API for the trace until the LiteLLMAdapter
+    span ("chat ...") is present in observations. Ingestion is async
+    through Redis → worker → ClickHouse, and the trace shell becomes
+    queryable before all child observations ingest; we keep polling
+    while the trace exists but the chat span is missing.
     """
     headers = {"Authorization": _langfuse_basic_auth()}
-    deadline = time.monotonic() + 20.0
+    deadline = time.monotonic() + 30.0
+    last_body: dict | None = None
     while time.monotonic() < deadline:
         req = urllib.request.Request(
             f"{_langfuse_base()}/api/public/traces/{trace_id}",
@@ -171,11 +175,17 @@ def _fetch_trace(trace_id: str) -> dict | None:
         try:
             with urllib.request.urlopen(req, timeout=5, context=_SSL_CTX) as resp:
                 if resp.status == 200:
-                    return json.loads(resp.read().decode())
+                    last_body = json.loads(resp.read().decode())
+                    has_chat = any(
+                        (o.get("name") or "").startswith("chat ")
+                        for o in last_body.get("observations") or []
+                    )
+                    if has_chat:
+                        return last_body
         except urllib.error.HTTPError:
             pass
         time.sleep(2)
-    return None
+    return last_body
 
 
 def _llm_span_attrs(trace: dict) -> dict:
