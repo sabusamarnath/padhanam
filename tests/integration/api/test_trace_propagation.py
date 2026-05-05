@@ -65,18 +65,32 @@ def _ok_litellm_response() -> Any:
     )
 
 
+_FIXTURE_TENANT_ID = "00000000-0000-4000-8000-0000000000a0"
+
+
+def _fixture_tenant_context() -> Any:
+    from shared_kernel import TenantContext
+
+    return TenantContext(
+        tenant_id=_FIXTURE_TENANT_ID,
+        jurisdiction="eu-west",
+        cost_attribution_id=_FIXTURE_TENANT_ID,
+    )
+
+
 def test_request_produces_parent_child_grandchild_trace(
     trace_capture: InMemorySpanExporter,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """End-to-end: HTTP request → FastAPI span → inference port span
     → LiteLLM call span. The hierarchy is asserted via parent/child
-    span context relationships and span names; GenAI attributes are
-    asserted on the LLM-call span.
+    span context relationships and span names; GenAI attributes and
+    tenant.* attributes are asserted on the LLM-call span.
     """
     monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-trace")
 
     from apps.api.main import AppCompositions, create_app
+    from apps.api.routers.inference import get_tenant_context
     from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
     from fastapi.testclient import TestClient
     from padhanam.config import InferenceSettings
@@ -93,10 +107,11 @@ def test_request_produces_parent_child_grandchild_trace(
         ),
         configure_tracing=False,
     )
+    app.dependency_overrides[get_tenant_context] = _fixture_tenant_context
     client = TestClient(app)
     token = issue_dev_token(
         subject="alice",
-        tenant_id="tenant-a",
+        tenant_id=_FIXTURE_TENANT_ID,
         roles=["inference.invoke"],
     )
 
@@ -137,7 +152,7 @@ def test_request_produces_parent_child_grandchild_trace(
     assert attrs.get("gen_ai.operation.name") == "chat"
     assert attrs.get("gen_ai.usage.input_tokens") == 12
     assert attrs.get("gen_ai.usage.output_tokens") == 4
-    assert attrs.get("padhanam.tenant_id") == "tenant-a"
+    assert attrs.get("padhanam.tenant_id") == _FIXTURE_TENANT_ID
 
     # Parent-child verification: the LLM span's parent must share a
     # trace with the FastAPI request span (if the FastAPI instrumentation
@@ -166,6 +181,7 @@ def test_completion_response_includes_trace_id(
     monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-trace-id")
 
     from apps.api.main import AppCompositions, create_app
+    from apps.api.routers.inference import get_tenant_context
     from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
     from fastapi.testclient import TestClient
     from padhanam.config import InferenceSettings
@@ -182,10 +198,11 @@ def test_completion_response_includes_trace_id(
         ),
         configure_tracing=False,
     )
+    app.dependency_overrides[get_tenant_context] = _fixture_tenant_context
     client = TestClient(app)
     token = issue_dev_token(
         subject="alice",
-        tenant_id="tenant-a",
+        tenant_id=_FIXTURE_TENANT_ID,
         roles=["inference.invoke"],
     )
 

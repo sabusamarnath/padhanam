@@ -220,6 +220,7 @@ class PostgresTenantRegistry:
             ),
             status=TenantStatus.ACTIVE,
             created_at=created_at,
+            cost_attribution_id=str(tenant_id),
         )
         await self._emit_audit(
             actor="system:control_plane",
@@ -407,4 +408,5 @@ def _row_to_tenant(row) -> Tenant:
         ),
         status=TenantStatus(row["status"]),
         created_at=row["created_at"],
+        cost_attribution_id=row["cost_attribution_id"],
     )

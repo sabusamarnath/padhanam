@@ -332,3 +332,5 @@ def test_cost_attributes_zero_for_unknown_model_with_drift_flag(captured_spans) 
     assert attrs["gen_ai.cost.output_usd"] == 0.0
     assert attrs["gen_ai.cost.total_usd"] == 0.0
     assert attrs["gen_ai.cost.pricing_status"] == "unknown_model"
+
+

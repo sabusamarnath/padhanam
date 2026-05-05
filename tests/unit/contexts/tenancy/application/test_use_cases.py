@@ -74,6 +74,7 @@ class _FakeRegistry:
             ),
             status=TenantStatus.ACTIVE,
             created_at=datetime.now(timezone.utc),
+            cost_attribution_id=VALID_UUID,
         )
 
     async def register_tenant(self, **kwargs):

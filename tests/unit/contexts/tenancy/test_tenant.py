@@ -28,6 +28,7 @@ def _build_tenant() -> Tenant:
         ),
         status=TenantStatus.ACTIVE,
         created_at=datetime(2026, 4, 30, tzinfo=timezone.utc),
+        cost_attribution_id=VALID_UUID,
     )
 
 

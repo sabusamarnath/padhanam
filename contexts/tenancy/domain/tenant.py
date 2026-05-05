@@ -36,3 +36,4 @@ class Tenant:
     credentials: EncryptedCredentials
     status: TenantStatus
     created_at: datetime
+    cost_attribution_id: str
