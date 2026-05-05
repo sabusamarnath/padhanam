@@ -37,7 +37,19 @@ Read every session. Kept tight on purpose.
 - Security as default: HTTPS via mkcert, secrets in `.env`, RLS on tenant-scoped tables, Pydantic validation on every endpoint, audit log on state changes.
 - Conventional commits referencing package and session number.
 - New components that touch tenant data accept jurisdiction as a parameter or column from inception. Adding it later is a refactor, not configuration.
-- Methodology is measured against DORA and CORE4 (see `charter/methodology.md` for definitions and cadence). Session log entries include the structured tagging block.
+- Methodology is measured against DORA and CORE4 per D40. Definitions and cadence will live in `charter/methodology.md` (pending operator authorship per D39). Session-log entries include the structured tagging block.
+- Throughput pressure is information about scope, not a license to delegate decisions. The first response to operator-capacity constraints is to cut scope, not to automate the work that builds fluency.
+- PRD-shaped documentation surfaces (phase PRDs, package epic notes, user stories, PRFAQ) are living artefacts. Original draft is preserved alongside as-built reality; delta capture is the audit deliverable. Append-only at the version level, per D43.
+- Reflection density distinguishes session-log entries by conversation type. Strategic conversations produce shorter entries focused on what was decided. Build sessions produce longer entries with substantive reflection on what was learned. The mix of conversation types over time is signal at phase audits.
+- Each session-log entry carries a one-line `roles:` tag naming which of the five role-functions (analyst, PM, architect, engineer, technical writer) were exercised, per D46. The distribution over time surfaces functional atrophy.
+
+## Decision discipline
+
+- Strategic placement uses the bet → phase → package → session tree (the strategic-tree artefact lives at `charter/roadmap.md` per D44). Used at framing and at phase audits.
+- Option assessment uses Kano. D-entries that select between alternatives carry a Kano category field at the bottom of the entry (must-have, performance, delighter, indifferent, reverse). Per D42.
+- Sequencing uses RICE (Reach, Impact, Confidence, Effort). Recorded explicitly on packages and on implementation backlog items where sequencing involves real choice. Per D42.
+- Each framework operates at its own moment of the work. Conflating them produces ceremony without reasoning value.
+- Phase audits review Kano-category distribution (too many must-haves suggests conflation with default), RICE-score defensibility (forecasts versus post-hoc rationalisations), and roadmap reasoning-category distribution per D44.
 
 ## Token discipline
 
@@ -45,6 +57,6 @@ Read every session. Kept tight on purpose.
 - Files over 200 lines are read in ranges, not whole.
 - Working files (`current-package.md`, session log entries) stay tight. Old content moves to archive at audit time, never deletes.
 - Log entries are one line where possible. Prose only when reasoning is non-obvious.
-- Strategic decisions and audits happen in Claude.ai. Build and test happen in Claude Code. Decisions written to local files bridge the two.
+- Strategic mode and build mode are different work modes, not different UIs. Mode declaration at conversation start is the standing discipline (per D47). Distinct deliverables (strategic produces charter edits, session prompts, or roadmap version updates; build produces code commits and session-log entries) and distinct commit conventions (`docs(charter): ...` or `docs(pN/<boundary-name>): ...` for strategic; `feat(pN/sN): ...` or `docs(pN/sN): ...` for build) carry the separation regardless of which UI is active. Charter files bridge the two modes.
 - Architectural commitments deferred to future sessions live in `charter/deferred-decisions.md`. They are inherited by sessions when their context activates and are reviewed at phase audits.
 - Exploratory notes and unresolved design questions live in /docs/notes/. Not read in normal sessions; consulted only when explicitly relevant.

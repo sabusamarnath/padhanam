@@ -7,16 +7,19 @@ Padhanam (Esperanto for "studying") is a public demonstration that a senior prod
 The charter under charter/ holds design intent. Read in this order:
 
 1. bet.md — strategic intent, the proposition being investigated, and what success looks like
-2. methodology.md — how the product-leader-and-implementer pattern is being run, descriptive at this stage and growing as sessions surface new patterns
+2. methodology.md — how the product-leader-and-implementer pattern is being run (pending operator authorship per D39; the gap is recorded in `current-package.md`)
 3. principles.md — engineering rules, read every session
 4. decisions.md — append-only architectural decisions log
-5. packages.md — Phase 1 work breakdown, then current-package.md for active scope
+5. roadmap.md — living strategic-tree artefact (bet, phases, packages, sessions) with versioned reasoning per D44; packages.md is the static reference
+6. phase-1-prd.md — living phase PRD with delta capture at audit per D43
+7. prfaq.md — living external-voice storytelling artefact, refreshed at every phase audit per D45
+8. current-package.md — active scope and carryover items
 
-History lives separately under [log/](log/) (sessions, packages, audits) and old material is moved to [docs/archive/](docs/archive/) at audit boundaries — never deleted.
+History lives separately under [log/](log/) (sessions, packages, audits, captures) and old material is moved to [docs/archive/](docs/archive/) at audit boundaries — never deleted.
 
-## Claude.ai vs Claude Code
+## Strategic mode and build mode
 
-Strategic work — bets, audits, package planning, decisions framed against Kano — happens in Claude.ai, where breadth of context and reasoning matter more than tool access. Build and test work — implementation, schema migrations, tests, commits — happens in Claude Code against this repo. The two surfaces meet through the local files: decisions written in Claude.ai land in [decisions.md](charter/decisions.md), and Claude Code reads them as constraints. Audit findings flow back the same way. The methodology by which strategy and build are bridged is itself the artefact under investigation; it is documented in charter/methodology.md.
+Strategic work — bets, audits, package planning, decisions assessed under Kano — produces charter edits, session prompts, and roadmap version updates. Build and test work — implementation, schema migrations, tests, commits — produces code commits and session-log entries. Both modes happen through Claude Code; mode separation is maintained by the operator declaring mode at conversation start, by distinct deliverables, and by distinct commit conventions (`docs(charter): ...` or `docs(pN/<boundary-name>): ...` for strategic; `feat(pN/sN): ...` and `docs(pN/sN): ...` for build), per D47. The charter files bridge the two modes: decisions made in strategic mode land in [decisions.md](charter/decisions.md) and become constraints in build mode; audit findings flow back through the same files. The methodology by which strategy and build are bridged is itself the artefact under investigation, to be documented in `charter/methodology.md`.
 
 ## Where new contributors look first
 

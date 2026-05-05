@@ -50,14 +50,46 @@ Activates when tools and extensions enter the codebase (P5 or wherever tools and
 
 ## Methodology metrics
 
-Activates at first package close for the package-level computation, and at first phase audit for the phase-level computation. Session-level capture begins immediately upon adoption of the tagging format described in `methodology.md`.
+Activates at first package close for the package-level computation, and at first phase audit for the phase-level computation. Session-level capture begins immediately upon adoption of the tagging format that will be specified in `methodology.md` (pending operator authorship per D39).
 
 **The methodology is measured against DORA Four Keys and CORE4 dimensions.** Capture at every session, computation at every package close, trend analysis at every phase audit. The metrics are reported publicly as part of the case study, with package-level numbers added to package retrospectives and phase-level numbers added to phase audit entries.
 
-**Definitions are explicit and adapted where necessary.** Deployment frequency uses "merged-to-main frequency" as a proxy in Phase 1 and shifts to traditional deployment frequency from Phase 2 onwards if a hosted environment exists. Change failure rate is defined as sessions whose output is later corrected by a subsequent session within the same phase. The full definitions live in `methodology.md`.
+**Definitions are explicit and adapted where necessary.** Deployment frequency uses "merged-to-main frequency" as a proxy in Phase 1 and shifts to traditional deployment frequency from Phase 2 onwards if a hosted environment exists. Change failure rate is defined as sessions whose output is later corrected by a subsequent session within the same phase. The full definitions are pending in `methodology.md` per D39 and D40.
 
 **Reporting tooling is deferred.** Initial computation is manual at package close and phase audit; if and when the manual computation becomes a meaningful overhead, a small script under `tools/metrics/` computes the numbers from session log tags. Premature tooling commitment ahead of the data shape stabilising is paper architecture.
 
 **Honest reporting is a discipline.** Periods of poor methodology performance are reported alongside periods of strong performance. The case study's credibility depends on honest measurement, including when the metrics do not flatter the proposition. If at any phase audit the trend suggests the methodology is not sustaining performance, the bet document and methodology document are revised to reflect what was actually learned.
 
 **The specific D-entry lands at the first package close with computed metrics.** The architectural commitment is recorded now in `decisions.md`; the operational commitments (specific computation tooling, specific reporting format, specific benchmark comparisons) are made when the data exists to inform them.
+
+## Cost ceilings, multi-tier model routing, progressive throttling
+
+Activates at Phase 2 framing.
+
+**Per-tenant USD ceilings, multi-tier model routing based on task complexity, and progressive throttling at named thresholds.** D41 commits cost capture and per-tenant attribution from Phase 1 (P4 wiring and P4 schema migration) but defers the enforcement architecture to Phase 2. Phase 1 runs single-model in dev (D15: Qwen 2.5 7B via Ollama), so there is no multi-tier routing to enforce against and no production traffic against which ceilings would bite. The configuration columns for ceilings can land in P4 alongside the cost-attribution column to avoid retrofit; the enforcement architecture (which tier to route which task type to, which threshold triggers throttling, what the operator-facing controls look like) lands at Phase 2 when production traffic exists and routing has signal to react to.
+
+**The specific D-entry lands when ceiling enforcement enters the codebase.** Premature commitment to specific threshold percentages, throttling mechanisms, or routing tiers ahead of integration is paper architecture.
+
+## Step-mode-shaped automation for narrow task types
+
+Activates at Phase 1 close audit, with implementation at Phase 2 if the audit produces a safe-task-type list.
+
+**Step-mode-shaped agent assistance for routine task types.** Once Phase 1 produces sustained methodology evidence, certain task types may become safe for higher automation: dependency bumps following `ops/scheduled_checks.yaml`, schema migrations following established patterns, eval-harness execution against pre-designed tests, supply-chain scanning and triage in pre-defined categories. Full auto mode stays out permanently because it conflicts with the architect-implementer pattern's append-only discipline, the D-entry alternatives requirement, the reflection-density expectation, and the two-surface mode-declaration discipline (D47). Step-mode-shaped engagement preserves operator approval at every unit boundary.
+
+**The Phase 1 close audit produces the safe-task-type list.** That list is the input to the Phase 2 D-entry that commits to specific automation surfaces.
+
+## Brownfield-shaped onboarding artefact for additional contributors
+
+Activates when a contributor (human or model) approaches the project who has not been part of the existing operator-led history.
+
+**Brownfield-shaped onboarding artefact synthesised from the charter.** The charter is currently the operating context, hand-maintained, and onboarding is the operator reading it. The moment a second contributor arrives, the friction surfaces as a real gap. The cheap version is a script that walks the charter and produces a single distilled `ONBOARDING.md`; the expensive version is full brownfield codebase scanning. The activation condition is contributor scaling becoming a real planning question, not an anticipation of it.
+
+**The specific D-entry lands when contributor scaling becomes a real planning question.** Premature commitment to specific synthesis tooling is paper architecture.
+
+## Full DORA and CORE4 instrumentation
+
+Activates at Phase 2 framing.
+
+**Full DORA instrumentation when production deployment exists.** D40 commits the methodology to DORA Four Keys and CORE4 measurement; `methodology.md` (pending operator authorship per D39) will adapt the definitions for Phase 1 (deployment frequency proxied by merged-to-main frequency; mean time to restore deferred until production traffic exists; change failure rate defined per same-phase corrective sessions). Phase 2 framing activates the full instrumentation when a hosted environment exists, deployment frequency means deploys-to-production, and MTTR measures real restoration. CORE4's effective developer experience axis activates fully when team scaling or productisation makes it load-bearing; Phase 1 partial coverage tracks what is tractable now via reflection density and operational-friction signals.
+
+**The specific D-entry lands at Phase 2 framing.** Operational commitments (tooling, format, benchmarks) are deferred per D40's deferral structure.
