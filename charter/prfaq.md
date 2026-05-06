@@ -1,12 +1,14 @@
 # PRFAQ
 
-Living storytelling artefact per D45. Written in external voice. Versioned at every phase audit per the standing rule. Press-release section in the voice the case study would use to communicate to its target audience (senior product leaders, CPOs, consultancies). FAQ section in stakeholder voice.
+Living storytelling artefact per D45's living-artefact commitment, refreshed at every phase audit. Versioned at every phase boundary per the standing rule. Press-release and FAQ sections in vendor product-launch voice for AI Labs teams and procurement audience per D51, in supersession of D45's case-study-voice-and-audience framing.
 
-The drafts below are scaffolding. The operator should rewrite both sections in the operator's external voice before this version is read as load-bearing. The point of the artefact is voice translation; a model-drafted version preserves the structure but cannot do the voice work the artefact exists for.
+The active version is v2 (carryover-cleanup strategic session, 2026-05-06) onward. v1 is preserved below verbatim with its `[OPERATOR REWRITE — ...]` markers intact per D43's append-only-at-version-level discipline; the markers themselves are signal of the structural-form mismatch that prompted D51.
 
 ---
 
 ## Version 1 (P3 post-close strategic session) — initial draft
+
+*[v1 framing note: This version was drafted in case-study voice per D45 and marked scaffolding pending operator rewrite. D51 superseded D45 on voice and audience; v2 below replaces both sections in vendor voice. The `[OPERATOR REWRITE — ...]` markers were canary signals of the structural-form mismatch that prompted D51.]*
 
 ### Press release [OPERATOR REWRITE — case-study positioning, external voice]
 
@@ -56,6 +58,59 @@ Decided at the Phase 1 close audit. Candidate shapes recorded as alternative ver
 
 ---
 
+## Version 2 (P4-post carryover-cleanup strategic session) — vendor-voice rewrite per D51
+
+### Press release
+
+**Padhanam launches enterprise-grade agentic platform with observability that closes the cost-quality-latency loop**
+
+Padhanam today announced the general availability of its enterprise-grade platform for building, running, auditing, and optimising agentic systems. Padhanam is multi-tenant from inception with database-per-tenant isolation, jurisdiction-aware architecture, hash-chained append-only audit, and OpenTelemetry as the observability portability boundary. The platform is built to SOC 2 Type II and ISO 27001 architectural floors, with supply-chain hardening — digest-pinned container images, SBOM generation, vulnerability scanning in CI — from the first deployment.
+
+The platform's distinguishing feature is the optimisation recommendation surface. Every model completion is observed with token counts, latency components, and per-tenant cost in USD attached at the trace level. The recommendation engine consumes trace data, evaluation results, and active-test reports to produce three classes of recommendation: latency-shaped ("this is faster"), quality-shaped ("this is higher-quality"), and cost-quality-shaped ("this costs N% more for M% quality at the same task type"). The third class is what AI Labs teams have been asking for: optimisation advice that lands in the form procurement and finance partners can audit against actual billing.
+
+"We've been waiting for an observability platform that produces decisions, not dashboards," said the Head of Platform Engineering at a frontier AI Labs customer. "Padhanam's per-tenant cost attribution at the trace level closes the loop between our model selection and our budget reporting. The recommendations our engineers receive are audit-ready by the time they reach our procurement team."
+
+"Padhanam exists because the AI Labs teams we work with kept telling us their observability tools were collecting the right data and producing the wrong artefacts," said Padhanam's founder. "We built the platform around the recommendation shape procurement teams actually consume, with the architectural floor enterprise deployments require from day one. Phase 2 takes Padhanam to production deployment with federated identity, multi-region operation, and the SLA commitments enterprise customers rely on."
+
+Padhanam is available now for evaluation deployments with AI Labs teams. Tenant onboarding is configuration rather than deployment; adding a tenant to an existing regional stack is an idempotent provisioning workflow. Pricing is consumption-based against per-tenant cost attribution. Production-grade federated identity (Keycloak, OIDC, SAML SP, SCIM 2.0) activates with Phase 2 deployment readiness per `charter/roadmap.md`.
+
+### FAQ
+
+**How does Padhanam differ from existing observability tools like Datadog, Honeycomb, or Grafana with OpenTelemetry collectors?**
+
+Padhanam is OpenTelemetry-instrumented per D27, so existing OTel-compatible observability tools can consume the same traces Padhanam emits. The differentiator is at the recommendation layer rather than the trace store. Datadog, Honeycomb, and Grafana give engineering teams interactive dashboards over OTel data; Padhanam consumes the same trace data plus per-tenant cost attribution and produces recommendation-shaped output. The platform is a complement to general-purpose observability rather than a replacement: AI Labs teams already running Datadog or Honeycomb can keep them and use Padhanam for the agentic-systems recommendation layer.
+
+**What's the deployment story?**
+
+Phase 1 ships as a single-region local deployment (Docker Compose, mkcert TLS, fourteen services) for evaluation. Phase 2 adds production deployment to cloud regions with infrastructure-as-code provisioning, multi-region operation, and the supply-chain hardening enterprise procurement evaluates against. The platform is local-first per the architectural commitments: production swap is configuration via `padhanam/config/`, not a refactor. Local development uses mkcert TLS at the edge and accepts plaintext inside the Compose network; production deploys with mTLS internally.
+
+**What's the data-residency story?**
+
+Jurisdiction is a first-class architectural attribute. Tenant context carries jurisdiction from inception; every component that touches customer data — databases, object storage, identity, trace store, LLM endpoints — is built to be regionally partitionable. Phase 1 deploys a single region for evaluation; Phase 2 activates multi-region operation. Adding a region is a separate infrastructure event from adding a tenant. Per-tenant Postgres instances keep tenant data isolated to the tenant's jurisdiction at the database boundary, not at the row boundary.
+
+**What's the cost model?**
+
+Consumption-based against per-tenant cost attribution. Every model completion through the inference path emits four cost attributes on the trace span (`gen_ai.cost.input_usd`, `gen_ai.cost.output_usd`, `gen_ai.cost.total_usd`, `gen_ai.cost.pricing_status`). The pricing table covers the routed model set; vendor pricing is reviewed monthly. Per-tenant cost rollups are a single SELECT on the trace store; cost ceilings and progressive throttling activate in Phase 2 — the configuration columns are landed and the schema-level CHECK constraints pin the action enum so the enforcement architecture has a stable surface to consume.
+
+**What's the SLA story for Phase 2?**
+
+Phase 2-specific. Phase 1 is evaluation-grade single-region local deployment; SLAs activate alongside production deployment readiness in Phase 2. The architectural commitments that SLAs depend on — TLS via the configuration layer, mTLS in production posture, encryption-at-rest on persistent volumes via cloud KMS, audit-chain integrity, supply-chain hardening — are committed and shipping. The operational commitments — uptime targets, response times, support tiers — are framed at Phase 2 open.
+
+**How does the optimisation recommendation surface integrate with existing AI Labs evaluation infrastructure?**
+
+Padhanam's evaluation harness implements canonical interaction-set storage, replay engines, deterministic scoring, LLM-as-judge scoring, and regression reporting. Cost-per-successful-task is the lead metric; the recommendation engine consumes evaluation results alongside trace data and active-test reports. AI Labs teams running existing evaluation infrastructure (Promptfoo, RAGAS, OpenAI Evals, custom eval harnesses) integrate at the canonical-interaction-set boundary: import existing eval suites; the harness produces the regression reports and the recommendation surface consumes them. Direct adapters to specific eval frameworks activate as customer demand surfaces; the abstraction is in place to support them.
+
+**What's the integration shape with existing identity providers?**
+
+Phase 1 ships authentication middleware with a development signed-token backend, plus a Keycloak-shaped production backend stubbed at the interface. Federated identity (Keycloak realm, OIDC, SAML SP, SCIM 2.0) activates at Phase 2 per D52, in supersession of D3's original Phase 1 commitment; the architecture is identity-ready, but real federated identity demonstrations against enterprise IdPs require production deployment context Phase 1 does not have. AI Labs teams evaluating Phase 1 use the dev signed-token backend; pilot deployments at Phase 2 connect to the customer's existing IdP through the production-shaped Keycloak backend.
+
+**What's the multi-tenant architecture?**
+
+Database-per-tenant: every tenant has its own Postgres instance with per-tenant Alembic migration tracks. The control-plane Postgres instance holds the tenant registry and operator-administered data; tenant data planes are separate Postgres instances. Credentials live in the tenant registry as envelope-encrypted blobs, with three leak-prevention controls (logging filter, AST test forbidding plaintext-in-state, tenant-isolation tests). Tenant isolation is verified by red-team-shaped tests: every adapter touching tenant-scoped data has cross-tenant access tests that attempt unauthorised reads and assert they fail. Adding a tenant is an idempotent provisioning workflow; in Phase 1 dev, instance creation is operator-manual via Compose; in Phase 2, infrastructure-as-code automates instance creation.
+
+---
+
 ## Version log
 
 - **v1** (P3 post-close strategic session). Initial draft. Press-release and FAQ sections drafted in case-study framing per D39's reframe. Operator rewrite required before this version is read as load-bearing.
+- **v2** (P4-post carryover-cleanup strategic session, 2026-05-06). Press release and FAQ rewritten in vendor product-launch voice for AI Labs teams and procurement audience per D51, in supersession of D45's case-study-voice-and-audience commitment. D45's living-artefact commitment, append-only version log, and phase-audit refresh cadence preserved unchanged. Press-release shape standardised on vendor-PR form: vendor announces platform, named target customer quote attributed to representative role ("Head of Platform Engineering at a frontier AI Labs customer") rather than fabricated name, named executive quote attributed to representative role ("Padhanam's founder") rather than fabricated name. Real names land at v3 onward if real partners or operator name attribution becomes appropriate. FAQ rewritten to answer eight procurement-shaped questions (versus general-purpose observability tools, deployment, data residency, cost model, SLA, evaluation integration, identity integration, multi-tenant architecture). v1 preserved verbatim above with the v1-framing note that relocates the original "drafts below are scaffolding" paragraph as v1-context per D43's append-only-at-version-level discipline. Reasoning category implicit per D51: the case-study voice misjudged the structural form of the PRFAQ artefact; v1's `[OPERATOR REWRITE — ...]` markers signalled the mismatch as canary signal that prompted D51.
