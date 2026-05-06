@@ -70,6 +70,16 @@ Activates at Phase 2 framing.
 
 **The specific D-entry lands when ceiling enforcement enters the codebase.** Premature commitment to specific threshold percentages, throttling mechanisms, or routing tiers ahead of integration is paper architecture.
 
+## Multi-currency cost reporting
+
+Activates at Phase 2 framing when the first non-USD-jurisdiction tenant enters scope.
+
+**Cost reporting evolves from USD-only to amount-plus-currency shape.** Phase 1 cost capture (D49) and the cost-query path (D57) embed USD across OTel span attributes (`gen_ai.cost.input_usd`, `gen_ai.cost.output_usd`, `gen_ai.cost.total_usd`), the `CostBreakdown` value object on TraceQueryPort, and the `CostPerSuccessfulTaskResult.cost_per_task_usd` field. The single-currency commitment was implicit, falling out of vendor pricing being in USD plus dev-environment defaults; the architectural commitment was not made deliberately, which the methodology Failure modes section records.
+
+**The evolution shape is amount-plus-currency at every cost-bearing surface.** OTel span attributes shift to `gen_ai.cost.input.amount` plus `gen_ai.cost.input.currency` (or whatever the OTel GenAI conventions group converges on); `CostBreakdown` and `CostPerSuccessfulTaskResult` gain explicit currency fields; the pricing table at `padhanam/config/inference.py` declares per-model currency. Vendor pricing remains USD-quoted in dev; production deployments with non-USD-jurisdiction tenants resolve currency conversion at the trace-store query layer (per-tenant currency preference applied at read time, not write time, so historical traces remain queryable in their original currency).
+
+**The specific D-entry lands when the first non-USD tenant arrives.** Premature commitment to specific currency-conversion mechanics, specific FX-data sources, or per-tenant currency-preference-resolution policy ahead of integration with a real non-USD-jurisdiction customer is paper architecture. D12 commits jurisdiction as the architectural attribute that drives the evolution; the migration follows D12's "by construction, not by policy" framing once the second jurisdiction enters scope.
+
 ## Step-mode-shaped automation for narrow task types
 
 Activates at Phase 1 close audit, with implementation at Phase 2 if the audit produces a safe-task-type list.
