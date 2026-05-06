@@ -286,3 +286,105 @@ def test_get_costs_by_trace_ids_handles_empty_input() -> None:
 
     adapter = _build_adapter(handler)
     assert asyncio.run(adapter.get_costs_by_trace_ids([], _TENANT_A)) == {}
+
+
+# ---------------------------------------------------------------------
+# wait_for_trace_availability (D59, S18)
+# ---------------------------------------------------------------------
+
+
+def test_wait_for_trace_availability_returns_true_on_immediate_hit() -> None:
+    """Trace is already ingested — first poll succeeds, no sleeping
+    needed and no further HTTP calls."""
+    payload = _trace_payload(trace_id="trace-1")
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=payload)
+
+    adapter = _build_adapter(handler)
+    result = asyncio.run(
+        adapter.wait_for_trace_availability(
+            "trace-1",
+            _TENANT_A,
+            timeout_seconds=5.0,
+            poll_interval_seconds=0.001,
+        )
+    )
+    assert result is True
+    assert calls == 1
+
+
+def test_wait_for_trace_availability_returns_true_after_polling() -> None:
+    """Trace is not yet ingested at first; appears after a few polls.
+    Helper retries until the trace materialises."""
+    payload = _trace_payload(trace_id="trace-1")
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            return httpx.Response(404, json={"error": "not found"})
+        return httpx.Response(200, json=payload)
+
+    adapter = _build_adapter(handler)
+    result = asyncio.run(
+        adapter.wait_for_trace_availability(
+            "trace-1",
+            _TENANT_A,
+            timeout_seconds=5.0,
+            poll_interval_seconds=0.001,
+        )
+    )
+    assert result is True
+    assert calls == 3
+
+
+def test_wait_for_trace_availability_returns_false_on_timeout() -> None:
+    """Trace never appears within the timeout window. Helper returns
+    False rather than blocking forever or raising."""
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(404, json={"error": "not found"})
+
+    adapter = _build_adapter(handler)
+    result = asyncio.run(
+        adapter.wait_for_trace_availability(
+            "trace-1",
+            _TENANT_A,
+            timeout_seconds=0.05,
+            poll_interval_seconds=0.01,
+        )
+    )
+    assert result is False
+    assert calls >= 1
+
+
+def test_wait_for_trace_availability_treats_cross_tenant_trace_as_unavailable() -> None:
+    """A trace owned by a different tenant looks identical to a
+    not-yet-ingested trace from this tenant's perspective. The helper
+    times out rather than reporting the trace as available."""
+    other_tenant_payload = _trace_payload(
+        trace_id="trace-1",
+        tenant_id="00000000-0000-4000-8000-00000000b002",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=other_tenant_payload)
+
+    adapter = _build_adapter(handler)
+    result = asyncio.run(
+        adapter.wait_for_trace_availability(
+            "trace-1",
+            _TENANT_A,
+            timeout_seconds=0.05,
+            poll_interval_seconds=0.01,
+        )
+    )
+    assert result is False

@@ -37,12 +37,29 @@ attributes as strings, so the adapter parses to ``Decimal`` (not
 a trace that carries the attributes — for FastAPI-rooted traces the
 chat child carries cost data; for bare-script-rooted traces (the
 S17b e2e test) the chat span itself is root and carries cost data.
+
+Polling for trace availability (D59, S18): Langfuse trace ingestion
+is asynchronous from OTel emission — the OTLP receiver writes to
+ClickHouse and a worker pipeline materialises the queryable trace
+on a separate cadence. Consumers that emit a trace and immediately
+query for its cost (the CLI runner's replay → cost-aggregate flow)
+hit a race window between OTel export and Langfuse ingestion. S17b
+worked around this with an 8s force-flush-and-sleep that is brittle
+under variable load (insufficient at peak ingestion lag, wasteful
+when ingestion is fast). S18 commits ``wait_for_trace_availability``
+as the architectural shape: poll ``get_trace`` at a configurable
+interval until the trace is queryable or the timeout elapses.
+Polling-with-timeout is honest about the asynchrony — it waits
+exactly as long as needed, surfaces timeout as a clear False return
+that the caller can treat as a clear failure, and tunes via
+parameters rather than magic constants.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -123,6 +140,46 @@ class LangfuseHTTPTraceQueryAdapter:
         # at P11. Returning empty here rather than half-implementing a
         # filter that has no reader yet.
         return []
+
+    async def wait_for_trace_availability(
+        self,
+        trace_id: str,
+        tenant_context: TenantContext,
+        *,
+        timeout_seconds: float = 30.0,
+        poll_interval_seconds: float = 1.0,
+    ) -> bool:
+        """Poll ``get_trace`` until the trace is available or timeout elapses.
+
+        Returns True on availability, False on timeout. The cost-query
+        path (CLI runner at S18; future programmatic consumers at P11)
+        calls this helper between trace emission and cost query for
+        traces that may not yet be ingested. Default timeout 30s,
+        default poll interval 1s; both tunable.
+
+        Tenant scoping: the polling uses ``get_trace`` (which applies
+        the tenant.id span-attribute filter), not the lower-level
+        ``_fetch_trace``, so a cross-tenant probe sees the same
+        not-yet-available behaviour as a genuinely-not-yet-ingested
+        trace and times out without leaking existence information.
+        The trade-off is that legitimate same-tenant polls cost one
+        round-trip more than a bare existence check; at a 1s default
+        interval, the overhead is small relative to the time spent
+        sleeping between polls.
+
+        D59 commits this method shape as the architectural answer to
+        Langfuse trace-ingestion asynchrony. The 30s default is
+        conservative for CLI flows; programmatic consumers can tune
+        down for batch operations or up for high-load scenarios.
+        """
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            record = await self.get_trace(trace_id, tenant_context)
+            if record is not None:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            await asyncio.sleep(poll_interval_seconds)
 
     async def get_costs_by_trace_ids(
         self,
