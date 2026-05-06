@@ -228,6 +228,7 @@ agent-trajectory inputs without schema variation.
 | `human_score`                | `text`          | nullable; data-substrate for the deferred human-review path per D53 |
 | `reviewed_by_user_id`        | `text`          | nullable; data-substrate for the deferred human-review path per D53 |
 | `confirmed_at`               | `timestamptz`   | nullable; data-substrate for the deferred human-review path per D53 |
+| `trace_id`                   | `text`          | nullable; lands at S17a via revision `0004_add_rubric_apps_trace_id` alongside the replay engine; links each rubric application to the trace that produced its scored output |
 | `created_at`                 | `timestamptz`   | not null; default `now()`                      |
 
 Score columns are `text` per D55. Score interpretation is
@@ -239,10 +240,18 @@ pattern. The reading and write surfaces consume the criterion's
 level definitions to determine pass/fail, threshold breaches, or
 continuous aggregation.
 
-`trace_id` for replay-engine wiring is intentionally absent at S16
-per the forward-affordance discipline (no S17 data needs to backfill
-against existing rows; the replay engine and `trace_id` column land
-together at S17 alongside cost-per-successful-task computation).
+`trace_id` lands at S17a alongside the replay engine via revision
+`0004_add_rubric_apps_trace_id`; the column links each rubric
+application to the trace that produced its scored output,
+enabling cost-per-successful-task computation at S17b without
+coupling evaluation to a specific trace store implementation per
+D27. The column is nullable so that rubric_applications produced by
+paths that do not pass through the replay engine (deterministic
+applier invoked from a flow that does not run a model) leave
+trace_id null; downstream cost queries skip those rows. The S16
+forward-affordance discipline held — the column landed at the
+session that introduced its proximate consumer rather than at S16
+speculatively.
 
 ## Vector store
 
