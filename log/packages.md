@@ -159,3 +159,178 @@ this entry are signal about whether the discipline stayed tight on
 a small package, not signal about whether a senior product leader
 at scale can sustain this performance — that question requires
 phase-level data that does not yet exist.
+
+---
+
+## P5: Evaluation harness
+
+- Closed: 2026-05-06
+- Sessions: S16 (foundations), S17a (replay engine and appliers),
+  S17b (cost-per-successful-task and observability application
+  surface), S18 (regression report, CLI runner, P5 close)
+- Archive: [docs/archive/packages/p5.md](../docs/archive/packages/p5.md)
+
+### Measured outcomes
+
+**Deployment frequency (merged-to-main proxy).** Four sessions in
+the P5 window, all merging on 2026-05-06. Single-day cadence
+across all four sessions, including the S17 split and S18's ten-
+commit close. The merge-event count of four reflects P5's wider
+RICE-effort score (1.4) than P4's (0.8); even at the wider effort
+the cadence held same-day, supported by the briefs/ convention
+introduction at `b6a1bcc` between S17a and S17b reducing
+context-switch cost at session boundaries.
+
+**Lead time for changes.** Per-session brief-to-merge timestamps:
+S16 brief written 2026-05-06, merged same day; S17a brief written
+2026-05-06, merged same day; S17b brief written 2026-05-06,
+merged same day; S18 brief written 2026-05-06, merged same day.
+Effective lead time same-day across all four sessions. As at P4
+close the single-day cadence at this scale is consistent with the
+small-package shape; reading lead-time as a methodology signal at
+this granularity remains small-sample noise.
+
+**Change failure rate.** Zero sessions in P5 have a non-empty
+`corrected_by` field as of P5 close. The mid-package strategic
+commits (`b6a1bcc` introducing the briefs/ convention; `24561c9`
+making the USD-only scope explicit) are methodology refinements,
+not corrective sessions targeting earlier P5 build work. The
+`>= 0` adjustment at S17b's e2e test is in-session refinement
+(documented in S17b's session log reflection per the no-in-place-
+edits rule of the briefs/ convention), not a corrective session
+against S17a. Change failure rate for P5 = 0/4 = 0%. Combined
+with P4's 0/2, the running Phase-1 number is 0/6 across the
+P4-P5 window; small enough to remain non-trend-bearing but
+honestly reportable.
+
+**Mean time to restoration.** Vacuous: no failures introduced by
+P5 sessions, no corrective sessions exist. Reportable as N/A; the
+distribution shape requires data the methodology has not yet
+generated.
+
+**Reliability (clean close rate).** All four P5 sessions closed
+clean: tests passing, principles intact, charter touch-points
+updated. Reliability = 4/4 = 100%. Combined with P4's 2/2, the
+running Phase-1 reliability is 6/6 = 100%; the discipline is
+holding under the small-sample window. The P5 sample is the
+first to include both a session split (S17a/S17b at S17 framing)
+and a package-close session with substantive close artefacts
+(S18's archive + measured-outcomes + current-package transition);
+both were absorbed without breaking the clean-close discipline.
+
+**Developer experience (CORE4 dimensions, qualitative).** Flow
+state held across all four sessions, with the briefs/ convention
+introduction at `b6a1bcc` reducing the context-switch cost from
+strategic-mode framing to build-mode execution. The convention
+landed mid-package as response to the S17a→S17b transition where
+the brief was the only artefact bridging strategic and build
+mode; preserving it as a repo file made the bridge auditable and
+reduced operator cognitive load at session start. Feedback loops
+were tight at every commit boundary: `make lint`, `uv run pytest`,
+`make migrate` (where schema work landed), and the integration
+tests with the live stack available for end-to-end verification
+on the same laptop session. Cognitive load was concentrated at
+two moments: S17 framing (the substrate-vs-consumer split that
+produced S17a/S17b) and S17b post-close (the USD-currency drift
+correction that produced the strategic commit `24561c9` and the
+methodology Failure-modes entry naming the new drift class). Both
+were resolved through strategic-mode work that absorbed the
+findings into the charter rather than carrying them as
+operational debt.
+
+**Contribution effectiveness (substantive vs cleanup proportion).**
+S16: 8 substantive commits (scaffold + migration + applier port +
+use case + e2e + 2× D-entries + session log). S17a: 8 substantive
+commits (trace_id migration + InferencePort + rename + prompt
+branch + orchestrator + e2e + current-package transition + session
+log). S17b: 10 substantive commits (port revisions + Langfuse
+adapter + observability use case + cost-query port + cost-per-task
+use case + e2e + 2× D-entries + current-package transition +
+session log). S18: 11 substantive commits including this measured-
+outcomes paragraph (1 strategic preservation + 4 substantive
+features + 1 e2e + 2 D-entries + 4 close-work commits). All
+commits are forward-progress on P5's stated goal; zero commits in
+P5 corrective against earlier sessions in the same phase.
+Contribution effectiveness ≈ 100% within P5. The mid-package
+strategic commits (`b6a1bcc`, `24561c9`) are not counted in P5's
+build-session totals because they belong to strategic-mode work
+between sessions per D47's commit convention.
+
+### Bet-native metrics
+
+**Discipline-adherence.** Charter touch-points updated in-commit
+at every required boundary across P5: `charter/schema.md` updated
+in the same commit as the per-tenant migration at S16 (revision
+`0003_create_evaluation_tables`) and S17a (revision
+`0004_add_rubric_apps_trace_id`); D-entries appended within the
+session that produced the implementation (D54 + D55 at S16; D56 +
+D57 at S17b; D58 + D59 at S18); `charter/current-package.md`
+transitioned at S16 open (P5-active), at S17a close (four-session
+shape recorded), at S17b close (S18 active), and at S18 close
+(between-packages). AST enforcement tests passed at every commit
+(7 enforcement tests, unchanged from P4 close). Decision-to-code
+translation: every D-entry produced its corresponding code or
+charter change within the session it was decided in; no D-entry
+carried forward without its implementation in P5.
+
+**Architectural-durability.** Import-linter contract count:
+15 (P4 close) → 16 (P5 close). The new contract is
+`layers-evaluation` for the new bounded context. The api-facade
+`ignore_imports` refinement at S17b is a contract-internal shape
+change (each context's api.py → its own application/domain edges
+are explicitly exempted from the independence checks per D17's
+facade pattern) without moving the count. Drift findings: five
+named entries surfaced and recorded explicitly in the P5 archive's
+"Drift surfaced" section (D54 build-time return-type deviation,
+S17b `>= 0` assertion adjustment, USD-currency drift caught at
+S17b post-close, alembic version_num 32-char constraint,
+recurring bare-script OTel-init pattern). Test density: +80 tests
+over P4-close baseline of 155, bringing the codebase to 235
+passing + 7 skipped = 242 collected at P5 close. Per-session
+contributions: S16 +19, S17a +13, S17b +20, S18 +28. Supply-chain
+check cadence: no new entries in `ops/scheduled_checks.yaml`
+during P5 (the pricing-table monthly review from S14 stands at
+its first scheduled run 2026-06-05).
+
+**Bet-direction integrity.** Roadmap reasoning-category changes:
+zero new roadmap versions during P5. All four sessions executed
+within the framing decisions made at the P5-open strategic block
+that closed the P4→P5 boundary (D53). PRD delta size: not yet
+reportable at the package level (Phase 1 PRD is reviewed at the
+Phase 1 close audit per D43). PRFAQ coherence: not refreshed
+during P5; the v2 PRFAQ from the P4-post carryover-cleanup
+strategic session stands until the Phase 1 close audit per D45.
+Role-function activity distribution across P5: every session
+exercised analyst, architect, engineer, technical writer; no
+session exercised the PM function explicitly because P5
+implements architecture decided at framing rather than re-
+prioritising. The PM function exercised at the P4→P5 boundary
+strategic block (P5 framing) and will exercise again at the
+P5→P6 boundary; the methodology document accommodates this
+through reflection-density-by-conversation-type (strategic
+conversations carry the PM-function load).
+
+### What the numbers do not say
+
+The four-session sample is too small to read as a methodology
+trend on its own; the running P4-P5 window (six sessions across
+two packages) is also small-sample. The Phase 1 close audit
+will be the first credible signal at the methodology-trend
+scale. The discipline-adherence and architectural-durability
+metrics surface honestly at the package level (every charter
+touch-point updated in-commit; +80 tests; +1 import-linter
+contract; seven D-entries with non-trivial alternatives weighed);
+the industry-overlay metrics surface in the shape the case
+study's audience reads but at a small enough sample that
+trend-claims are premature. P5's specific contribution to the
+methodology's evolving shape — the briefs/ convention, the
+USD-currency drift class, the polling-with-timeout discipline —
+is the kind of mid-package methodology refinement the bet's
+substrate explicitly tolerates and absorbs through the
+append-only charter discipline. The "metrics measure
+methodology, not operator" framing continues to apply: the
+perfect numbers in this entry are signal about whether the
+discipline stayed tight as P5's design space widened beyond
+P4's; whether a senior product leader at scale can sustain
+this performance is a phase-level question that requires data
+the methodology has not yet generated.
