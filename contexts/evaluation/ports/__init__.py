@@ -1,4 +1,5 @@
 from contexts.evaluation.ports.applier_port import ApplierPort
+from contexts.evaluation.ports.cost_query_port import CostQueryPort
 from contexts.evaluation.ports.inference_port import InferencePort
 from contexts.evaluation.ports.interaction_repository_port import (
     InteractionRepositoryPort,
@@ -12,6 +13,7 @@ from contexts.evaluation.ports.scoring_sheet_repository_port import (
 
 __all__ = [
     "ApplierPort",
+    "CostQueryPort",
     "InferencePort",
     "InteractionRepositoryPort",
     "RubricApplicationRepositoryPort",
