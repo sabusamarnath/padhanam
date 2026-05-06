@@ -20,6 +20,16 @@ Strategic mode and build mode are different work modes with different deliverabl
 
 The two functions need different outputs and different rhythms. Without explicit mode separation, strategic reasoning gets compressed into rushed pre-build framing or scatters through code commits, and build sessions get derailed by architectural questions that should have been settled first. Mode declaration is the load-bearing discipline because the UI is the same; without the declaration, charter-edit work and implementation work collapse into unbounded conversations that produce neither shape well. The charter files are the persistent bridge between modes regardless of which UI is active: decisions made in strategic mode become constraints in build mode, and audit findings flow back through the same files.
 
+### Session brief preservation
+
+Strategic-mode conversations that produce a build-session brief preserve the brief as a repo artifact at `briefs/<package>/<session>.md`. The brief is the forward-looking specification the architect commits to before build begins; preserving it at the same level as the eventual session log makes the audit trail symmetric between intent and outcome.
+
+The convention activates from S17b forward (P5 mid-package). Earlier session briefs live in conversation history only; retroactive preservation is not in scope. The file is markdown, written at strategic-mode close, and committed to the repo before the build session runs.
+
+Briefs do not version mid-package: a saved brief is the v1 specification, and deviations during build are documented in the session log rather than in-place brief edits. This mirrors D43's epic-note-and-archive-reconciliation discipline at the session granularity.
+
+The "no in-place brief edits" rule is load-bearing: if the build session needs to deviate from the brief, the deviation lives in the session log reflection. We did this with D54's return-type deviation at S17a — S17a's reflection captured the deviation; brief stayed at framing-time text. That's the discipline that makes brief preservation worth more than session-log-only retrospection.
+
 ## Work hierarchy
 
 Padhanam organises work in a four-level tree.

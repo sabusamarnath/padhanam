@@ -18,6 +18,8 @@ Every conversation opens with a one-line mode statement: "strategic session, del
 
 The two-surface model is conceptual, not UI-bound. Mode separation is maintained by the declaration line, by distinct deliverables, and by distinct commit conventions (`docs(charter): ...` or `docs(pN/<boundary-name>): ...` for strategic; `feat(pN/sN): ...` and `docs(pN/sN): ...` for build). The charter files are the bridge between modes regardless of which UI is active.
 
+Strategic-mode conversations that produce a build-session brief preserve the brief at [briefs/](briefs/) as `briefs/<package>/<session>.md` from S17b forward; see [charter/methodology.md](charter/methodology.md) under "Session brief preservation" for the full convention.
+
 Browser interactive verification is the success criterion for any acceptance criterion that involves a UI surface, not CLI smoke. The lesson lands from S4 (Langfuse trace UI display correctness) and reinforces every session that touches a user-visible surface. CLI smoke alone passes while the user experience is broken; both must be verified.
 
 ## Token discipline
