@@ -30,11 +30,23 @@ class CriterionLevel:
     ``label`` is the score value applied to a rubric_application when
     this level is the chosen interpretation (e.g. ``"pass"``,
     ``"4"``, ``"0.85"``); ``definition`` is the human-readable
-    description of what produces that level.
+    description of what produces that level. ``is_success`` flags
+    whether a rubric_application landing on this level counts as a
+    successful task for the cost-per-successful-task metric (S17b
+    extension); the criterion is the architectural authority on what
+    "success" means for it (D55 — score interpretation is criterion-
+    level), and ``is_success`` is the explicit boolean projection of
+    that authority into the levels jsonb shape.
+
+    The jsonb wire shape gains the ``is_success`` key alongside the
+    existing ``label`` and ``definition``; the postgres adapter
+    defaults missing keys to False so legacy rows persisted before
+    the S17b extension stay readable until they are rewritten.
     """
 
     label: str
     definition: str
+    is_success: bool
 
 
 @dataclass(frozen=True)

@@ -99,8 +99,12 @@ def test_prompt_branch_formats_template_and_calls_inference_with_judge_model() -
     )
     criterion = _criterion(
         levels=(
-            CriterionLevel(label="pass", definition="answer is good"),
-            CriterionLevel(label="fail", definition="answer is bad"),
+            CriterionLevel(
+                label="pass", definition="answer is good", is_success=True
+            ),
+            CriterionLevel(
+                label="fail", definition="answer is bad", is_success=False
+            ),
         )
     )
 
@@ -131,11 +135,13 @@ def test_prompt_branch_parses_first_integer_when_no_label_matches() -> None:
     )
     criterion = _criterion(
         levels=(
-            CriterionLevel(label="1", definition="bad"),
-            CriterionLevel(label="2", definition="okay"),
-            CriterionLevel(label="3", definition="good"),
-            CriterionLevel(label="4", definition="great"),
-            CriterionLevel(label="5", definition="excellent"),
+            CriterionLevel(label="1", definition="bad", is_success=False),
+            CriterionLevel(label="2", definition="okay", is_success=False),
+            CriterionLevel(label="3", definition="good", is_success=True),
+            CriterionLevel(label="4", definition="great", is_success=True),
+            CriterionLevel(
+                label="5", definition="excellent", is_success=True
+            ),
         )
     )
 
@@ -165,8 +171,8 @@ def test_prompt_branch_returns_empty_when_no_label_or_integer_matches() -> None:
     )
     criterion = _criterion(
         levels=(
-            CriterionLevel(label="pass", definition="good"),
-            CriterionLevel(label="fail", definition="bad"),
+            CriterionLevel(label="pass", definition="good", is_success=True),
+            CriterionLevel(label="fail", definition="bad", is_success=False),
         )
     )
 
@@ -187,7 +193,11 @@ def test_prompt_branch_returns_empty_when_no_label_or_integer_matches() -> None:
 def test_prompt_branch_raises_when_adapter_constructed_without_inference_port() -> None:
     applier = PolymorphicApplier()  # no inference port
     criterion = _criterion(
-        levels=(CriterionLevel(label="pass", definition="ok"),)
+        levels=(
+            CriterionLevel(
+                label="pass", definition="ok", is_success=True
+            ),
+        )
     )
 
     try:
@@ -213,8 +223,10 @@ def test_deterministic_branch_unaffected_by_prompt_branch_addition() -> None:
     applier = PolymorphicApplier()
     criterion = _criterion(
         levels=(
-            CriterionLevel(label="pass", definition="ok"),
-            CriterionLevel(label="fail", definition="not ok"),
+            CriterionLevel(label="pass", definition="ok", is_success=True),
+            CriterionLevel(
+                label="fail", definition="not ok", is_success=False
+            ),
         )
     )
     interaction = Interaction(

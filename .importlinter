@@ -71,6 +71,14 @@ layers =
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
+#
+# The api facade is the single legal cross-context import target per D17;
+# api modules legitimately re-export their own context's application use
+# cases and domain value objects so callers have one stable surface.
+# ignore_imports clauses below exempt the facade-internal edges (api → its
+# own application/domain) from independence checks, which is what D17
+# means by "the .api module is the public surface". Cross-context
+# violations not mediated by api still fail.
 # ---------------------------------------------------------------------------
 
 [importlinter:contract:contexts-independent-domain]
@@ -82,6 +90,10 @@ modules =
     contexts.audit.domain
     contexts.tenancy.domain
     contexts.evaluation.domain
+ignore_imports =
+    contexts.inference.api -> contexts.inference.domain.**
+    contexts.observability.api -> contexts.observability.domain.**
+    contexts.tenancy.api -> contexts.tenancy.domain.**
 
 [importlinter:contract:contexts-independent-application]
 name = Cross-context: application layers are independent
@@ -92,6 +104,10 @@ modules =
     contexts.audit.application
     contexts.tenancy.application
     contexts.evaluation.application
+ignore_imports =
+    contexts.inference.api -> contexts.inference.application.**
+    contexts.observability.api -> contexts.observability.application.**
+    contexts.tenancy.api -> contexts.tenancy.application.**
 
 [importlinter:contract:contexts-independent-adapters]
 name = Cross-context: adapter trees are independent

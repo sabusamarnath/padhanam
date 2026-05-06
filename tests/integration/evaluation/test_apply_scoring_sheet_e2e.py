@@ -158,8 +158,16 @@ async def _insert_fixtures(session_factory):
                 name="exact match",
                 description="output exactly equals expected_output['value']",
                 levels=[
-                    {"label": "pass", "definition": "exact match"},
-                    {"label": "fail", "definition": "not exact match"},
+                    {
+                        "label": "pass",
+                        "definition": "exact match",
+                        "is_success": True,
+                    },
+                    {
+                        "label": "fail",
+                        "definition": "not exact match",
+                        "is_success": False,
+                    },
                 ],
                 ordering=0,
             )

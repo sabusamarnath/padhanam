@@ -67,6 +67,13 @@ class PostgresScoringSheetRepository:
                     CriterionLevel(
                         label=level["label"],
                         definition=level["definition"],
+                        # S17b extension: is_success flags whether a
+                        # rubric_application at this level counts as
+                        # a successful task. Legacy rows persisted
+                        # before the extension default to False so
+                        # the read path stays tolerant until rows are
+                        # rewritten.
+                        is_success=bool(level.get("is_success", False)),
                     )
                     for level in row["levels"]
                 ),

@@ -89,8 +89,12 @@ def _criterion(name: str, ordering: int, revision_id: UUID) -> Criterion:
         name=name,
         description=f"{name} criterion",
         levels=(
-            CriterionLevel(label="pass", definition="exact match"),
-            CriterionLevel(label="fail", definition="not exact match"),
+            CriterionLevel(
+                label="pass", definition="exact match", is_success=True
+            ),
+            CriterionLevel(
+                label="fail", definition="not exact match", is_success=False
+            ),
         ),
         ordering=ordering,
     )

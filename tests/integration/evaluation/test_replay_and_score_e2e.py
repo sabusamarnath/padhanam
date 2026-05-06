@@ -250,8 +250,16 @@ async def _insert_fixtures(session_factory):
                 name="exact_match_check",
                 description="output exactly equals expected_output['value']",
                 levels=[
-                    {"label": "pass", "definition": "exact match"},
-                    {"label": "fail", "definition": "not exact match"},
+                    {
+                        "label": "pass",
+                        "definition": "exact match",
+                        "is_success": True,
+                    },
+                    {
+                        "label": "fail",
+                        "definition": "not exact match",
+                        "is_success": False,
+                    },
                 ],
                 ordering=0,
             )
@@ -263,8 +271,16 @@ async def _insert_fixtures(session_factory):
                 name="answer_quality",
                 description="LLM-as-judge: is the answer reasonable",
                 levels=[
-                    {"label": "good", "definition": "answer is reasonable"},
-                    {"label": "bad", "definition": "answer is unreasonable"},
+                    {
+                        "label": "good",
+                        "definition": "answer is reasonable",
+                        "is_success": True,
+                    },
+                    {
+                        "label": "bad",
+                        "definition": "answer is unreasonable",
+                        "is_success": False,
+                    },
                 ],
                 ordering=1,
             )
