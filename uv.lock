@@ -7,6 +7,7 @@ members = [
     "padhanam",
     "padhanam-api",
     "padhanam-audit",
+    "padhanam-cli",
     "padhanam-evaluation",
     "padhanam-inference",
     "padhanam-observability",
@@ -1166,6 +1167,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "padhanam-api" },
     { name = "padhanam-audit" },
+    { name = "padhanam-cli" },
     { name = "padhanam-evaluation" },
     { name = "padhanam-inference" },
     { name = "padhanam-observability" },
@@ -1191,6 +1193,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=43" },
     { name = "padhanam-api", virtual = "apps/api" },
     { name = "padhanam-audit", virtual = "contexts/audit" },
+    { name = "padhanam-cli", virtual = "apps/cli" },
     { name = "padhanam-evaluation", virtual = "contexts/evaluation" },
     { name = "padhanam-inference", virtual = "contexts/inference" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
@@ -1248,6 +1251,25 @@ dependencies = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
+name = "padhanam-cli"
+version = "0.0.0"
+source = { virtual = "apps/cli" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "opentelemetry-api", specifier = ">=1.27" },
+    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.27" },
+    { name = "opentelemetry-sdk", specifier = ">=1.27" },
+    { name = "typer", specifier = ">=0.12" },
 ]
 
 [[package]]

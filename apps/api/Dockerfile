@@ -25,6 +25,7 @@ WORKDIR /app
 # whole graph from these files alone.
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml ./apps/api/
+COPY apps/cli/pyproject.toml ./apps/cli/
 COPY contexts/inference/pyproject.toml ./contexts/inference/
 COPY contexts/observability/pyproject.toml ./contexts/observability/
 COPY contexts/audit/pyproject.toml ./contexts/audit/

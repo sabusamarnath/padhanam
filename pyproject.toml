@@ -27,6 +27,7 @@ dependencies = [
     "padhanam-tenancy",
     "padhanam-evaluation",
     "padhanam-api",
+    "padhanam-cli",
 ]
 
 [dependency-groups]
@@ -48,6 +49,7 @@ members = [
     "contexts/tenancy",
     "contexts/evaluation",
     "apps/api",
+    "apps/cli",
 ]
 
 [tool.uv.sources]
@@ -57,6 +59,7 @@ padhanam-audit = {workspace = true}
 padhanam-tenancy = {workspace = true}
 padhanam-evaluation = {workspace = true}
 padhanam-api = {workspace = true}
+padhanam-cli = {workspace = true}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

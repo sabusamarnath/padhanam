@@ -1,0 +1,19 @@
+[project]
+name = "padhanam-cli"
+version = "0.0.0"
+description = "Padhanam CLI runner. S18 introduces 'padhanam eval run' and 'padhanam eval report' for the evaluation harness; future packages extend with source-ingestion, agent CRUD, and operator commands."
+requires-python = ">=3.14"
+# typer for the CLI surface; OTel SDK + OTLP exporter for bare-script
+# trace emission (the eval-run command emits inference spans the same
+# way apps/api does at request time, per the S17a-established pattern
+# that bare-script drivers must mirror the FastAPI app's TracerProvider
+# setup or trace_id is zero on the LiteLLMAdapter span).
+dependencies = [
+    "typer>=0.12",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-http>=1.27",
+]
+
+[tool.uv]
+package = false

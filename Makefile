@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -24,6 +24,8 @@ help:
 	@echo "  migrate     Apply Alembic migrations: control-plane phase, then per-tenant phase against each registered tenant (D36)"
 	@echo "  seed-tenants  Register the test set tenants in the registry; idempotent"
 	@echo "  scheduled-check  Run scheduled supply-chain check; writes report to docs/security/scheduled-check-reports/"
+	@echo "  eval-run     Run the eval CLI's 'eval run' command inside padhanam-api; pass ARGS=\"--tenant-id a --interaction-set-id <uuid> ...\""
+	@echo "  eval-report  Run the eval CLI's 'eval report' command inside padhanam-api; pass ARGS=\"--tenant-id a --baseline-revision-id <uuid> ...\""
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -123,3 +125,15 @@ seed-tenants: derive-env
 # reviews the report and opens digest-bump PRs manually; no auto-PR.
 scheduled-check:
 	uv run python -m ops.run_scheduled_checks
+
+# S18 eval CLI. Runs from inside the padhanam-api container so per-
+# tenant Postgres hostnames resolve over the Compose network and the
+# OTel exporter reaches Langfuse on the in-network address. Pass the
+# CLI arguments via ARGS, e.g.
+#   make eval-run ARGS="--tenant-id a --interaction-set-id <uuid> \
+#                       --scoring-sheet-revision-id <uuid>"
+eval-run: derive-env
+	$(COMPOSE) exec padhanam-api python -m apps.cli eval run $(ARGS)
+
+eval-report: derive-env
+	$(COMPOSE) exec padhanam-api python -m apps.cli eval report $(ARGS)
