@@ -35,6 +35,7 @@ class ObservabilitySettings(PadhanamSettings):
         validation_alias="LANGFUSE_INIT_PROJECT_ID",
     )
     langfuse_host: str = "https://langfuse.localhost"
+    langfuse_api_base_url: str = "http://langfuse-web:3000"
     otlp_endpoint: str = (
         "http://langfuse-web:3000/api/public/otel/v1/traces"
     )
