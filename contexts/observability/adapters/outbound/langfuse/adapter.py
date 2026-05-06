@@ -1,35 +1,42 @@
 """No-op Langfuse trace-query adapter (D27).
 
 Vendor isolation: this is the only directory permitted to import
-``langfuse``. The import-linter contract confines the SDK here.
+``langfuse`` per import-linter, and the only directory that imports
+``httpx`` for the Langfuse public API. The S7 no-op stub kept the
+import-linter and cross-context wiring shape real before any consumer
+existed; S17b replaces the stub with the real HTTP-against-public-API
+implementation in ``http_adapter.py``. This module is retained as the
+no-op fallback used by unit tests that exercise the port-shape
+contract without standing up a Langfuse instance.
 
-S7 ships a stub: get_trace returns None for every query, so the
-recommendation engine work has a no-result baseline to develop
-against; list_recent_traces returns an empty list. Write attempts
-raise NotImplementedError because the read path is read-only by
-design — the write side is the OTel span emission already in place
-through LiteLLM and apps/api/.
-
-The directory existing is what S7 needs. The real Langfuse query
-implementation (HTTP GET against /api/public/traces, mapped to
-TraceRecord) lands when the recommendation engine begins.
+Real implementation lands at S17b alongside cost-per-successful-task,
+the first cross-context consumer of the port.
 """
 
 from __future__ import annotations
 
+from contexts.observability.domain.cost import CostBreakdown
 from contexts.observability.domain.trace import TraceRecord
-from shared_kernel import TenantId
+from shared_kernel import TenantContext
 
 
 class LangfuseTraceQueryAdapter:
-    """No-op stub. Real implementation lands with the recommendation engine."""
+    """No-op stub. Real adapter lives in
+    ``contexts/observability/adapters/outbound/langfuse/http_adapter.py``."""
 
-    def get_trace(
-        self, trace_id: str, tenant_id: TenantId
+    async def get_trace(
+        self, trace_id: str, tenant_context: TenantContext
     ) -> TraceRecord | None:
         return None
 
-    def list_recent_traces(
-        self, tenant_id: TenantId, limit: int
+    async def list_recent_traces(
+        self, tenant_context: TenantContext, limit: int
     ) -> list[TraceRecord]:
         return []
+
+    async def get_costs_by_trace_ids(
+        self,
+        trace_ids: list[str],
+        tenant_context: TenantContext,
+    ) -> dict[str, CostBreakdown]:
+        return {}
