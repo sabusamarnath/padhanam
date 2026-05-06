@@ -106,6 +106,144 @@ adapter at S12 routes by the `tenant_id` sentinel: empty string
 indicates control-plane scope; non-empty indicates this per-tenant
 table on the routed tenant's data plane.
 
+## Evaluation tables
+
+Per-tenant track, lands at S16 via Alembic revision
+`0003_create_evaluation_tables`. Seven tables comprise the eval
+harness data model: `scoring_sheets` (the named primitive),
+`scoring_sheet_revisions` (immutable per-version), `scoring_sheet_criteria`
+(per revision), `appliers` (per criterion), `interaction_sets`,
+`interactions` (per set), and `rubric_applications` (the score-result
+records). `appliers` lives in its own table rather than collapsed into
+`scoring_sheet_criteria` so that D53's appliers-as-data framing is
+preserved structurally and so that multi-applier-per-criterion (e.g.,
+cross-validation pairing a deterministic check with an LLM-as-judge
+on the same criterion) lands as a row addition rather than a schema
+migration. The `applier_type` column uses a CHECK constraint to pin
+valid values; cross-column NULL invariants (e.g.,
+`deterministic_function_name` non-null iff
+`applier_type='deterministic'`) are enforced at the domain layer
+rather than via schema CHECK clauses, with the type-tag-plus-nullable-
+columns shape as a watch-item: if S17's prompt applier addition or
+future applier types strain the shape, single-table inheritance
+promotes to class-table inheritance (`deterministic_appliers`,
+`prompt_appliers`) at that point.
+
+### `scoring_sheets`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                | `text`          | not null                                       |
+| `description`         | `text`          | nullable                                       |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+| `archived_at`         | `timestamptz`   | nullable                                       |
+
+### `scoring_sheet_revisions`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `scoring_sheet_id`    | `uuid`          | not null; FK → `scoring_sheets.id`             |
+| `version`             | `integer`       | not null                                       |
+| `description`         | `text`          | nullable                                       |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+
+`UNIQUE(scoring_sheet_id, version)` —
+`scoring_sheet_revisions_sheet_version_unique`. Revisions are
+immutable per D53: updates create new revision rows, never edit
+existing ones.
+
+### `scoring_sheet_criteria`
+
+| Column                       | Type            | Constraints                                    |
+|------------------------------|-----------------|------------------------------------------------|
+| `id`                         | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `scoring_sheet_revision_id`  | `uuid`          | not null; FK → `scoring_sheet_revisions.id`    |
+| `name`                       | `text`          | not null                                       |
+| `description`                | `text`          | nullable                                       |
+| `levels`                     | `jsonb`         | not null; structured array of `{label, definition}` objects |
+| `ordering`                   | `integer`       | not null                                       |
+
+`levels` carries the criterion's score-interpretation contract per
+D55: each entry pairs a score label (numeric like `"4"`,
+categorical like `"pass"`, or continuous like `"0.85"`) with a
+human-readable definition of what produces that label. The criterion
+is the architectural authority on what its scores mean.
+
+### `appliers`
+
+| Column                          | Type    | Constraints                                                     |
+|---------------------------------|---------|-----------------------------------------------------------------|
+| `id`                            | `uuid`  | primary key; default `gen_random_uuid()`                        |
+| `scoring_sheet_revision_id`     | `uuid`  | not null; FK → `scoring_sheet_revisions.id`                     |
+| `criterion_id`                  | `uuid`  | not null; FK → `scoring_sheet_criteria.id`                      |
+| `applier_type`                  | `text`  | not null; CHECK ∈ {`deterministic`, `prompt`, `human`}          |
+| `deterministic_function_name`   | `text`  | nullable                                                        |
+| `prompt_template`               | `text`  | nullable                                                        |
+| `judge_model`                   | `text`  | nullable                                                        |
+
+Cross-column NULL invariants enforced at the domain layer per the
+section rationale above; no schema-level CHECKs on the cross-column
+shape at S16. The `applier_type` CHECK pins the type-tag space so
+unknown applier_types cannot land.
+
+### `interaction_sets`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                | `text`          | not null                                       |
+| `description`         | `text`          | nullable                                       |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+
+### `interactions`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `interaction_set_id`  | `uuid`          | not null; FK → `interaction_sets.id`           |
+| `input`               | `jsonb`         | not null                                       |
+| `expected_output`     | `jsonb`         | nullable                                       |
+| `ordering`            | `integer`       | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+
+`input` and `expected_output` are jsonb so the interaction model
+carries text prompts, structured payloads, and future
+agent-trajectory inputs without schema variation.
+
+### `rubric_applications`
+
+| Column                       | Type            | Constraints                                    |
+|------------------------------|-----------------|------------------------------------------------|
+| `id`                         | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `scoring_sheet_revision_id`  | `uuid`          | not null; FK → `scoring_sheet_revisions.id`    |
+| `criterion_id`               | `uuid`          | not null; FK → `scoring_sheet_criteria.id`     |
+| `interaction_id`             | `uuid`          | not null; FK → `interactions.id`               |
+| `applier_id`                 | `uuid`          | not null; FK → `appliers.id`                   |
+| `automated_score`            | `text`          | nullable; populated by deterministic and prompt appliers per D53 |
+| `human_score`                | `text`          | nullable; data-substrate for the deferred human-review path per D53 |
+| `reviewed_by_user_id`        | `text`          | nullable; data-substrate for the deferred human-review path per D53 |
+| `confirmed_at`               | `timestamptz`   | nullable; data-substrate for the deferred human-review path per D53 |
+| `created_at`                 | `timestamptz`   | not null; default `now()`                      |
+
+Score columns are `text` per D55. Score interpretation is
+criterion-level: each criterion's `levels` jsonb defines what its
+score values mean. SQL aggregation across `rubric_applications`
+requires criterion-level filtering and explicit casting; direct
+`AVG(automated_score)` is foreclosed and is not the intended access
+pattern. The reading and write surfaces consume the criterion's
+level definitions to determine pass/fail, threshold breaches, or
+continuous aggregation.
+
+`trace_id` for replay-engine wiring is intentionally absent at S16
+per the forward-affordance discipline (no S17 data needs to backfill
+against existing rows; the replay engine and `trace_id` column land
+together at S17 alongside cost-per-successful-task computation).
+
 ## Vector store
 
 (Empty until P6 ships.)
