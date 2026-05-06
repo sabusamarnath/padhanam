@@ -3,7 +3,7 @@
 Drives the full apply_scoring_sheet use case through:
 - a real per-tenant Postgres database (tenant-a's data plane);
 - the PostgresScoringSheetRepository read path;
-- the ExactMatchApplier dispatching to the deterministic library;
+- the PolymorphicApplier dispatching to the deterministic library;
 - the PostgresRubricApplicationRepository write path.
 
 The seeded tenants live on Compose-internal-only Postgres instances so
@@ -72,8 +72,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from contexts.evaluation.adapters.outbound.exact_match_applier import (
-    ExactMatchApplier,
+from contexts.evaluation.adapters.outbound.polymorphic_applier import (
+    PolymorphicApplier,
 )
 from contexts.evaluation.adapters.outbound.postgres._tables import (
     appliers,
@@ -220,7 +220,7 @@ async def _run() -> dict:
 
         sheet_repo = PostgresScoringSheetRepository(a_factory)
         rubric_repo = PostgresRubricApplicationRepository(a_factory)
-        applier = ExactMatchApplier()
+        applier = PolymorphicApplier()
         tenant_context = TenantContext(
             tenant_id=TENANT_A_UUID,
             jurisdiction="eu-west",
