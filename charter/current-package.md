@@ -28,7 +28,7 @@ append-only-at-version-level discipline):
   migration; D54 (Applier port shape — single polymorphic async port) and D55
   (Score representation on rubric_applications — text with criterion-level
   interpretation) committed.
-- **S17a: Replay engine, prompt applier, trace_id.** *Closing 2026-05-06.*
+- **S17a: Replay engine, prompt applier, trace_id.** *Closed 2026-05-06.*
   trace_id column on rubric_applications; InferencePort + ModelConfig +
   ReplayResult value objects in evaluation's domain, with adapter calling
   `contexts.inference.api.request_completion` per D17; ExactMatchApplier
@@ -38,17 +38,27 @@ append-only-at-version-level discipline):
   full flow against tenant_a's DB through the live inference path. Charter
   touches: `charter/schema.md` updated alongside the trace_id migration; this
   current-package.md shifted to the four-session shape.
-- **S17b: Cost-per-successful-task path and observability surface.** *Queued.*
-  Cost-query path joining rubric_applications by trace_id to the trace store's
-  gen_ai.cost.* attributes per D8/D41; cost-per-successful-task computation
-  use case in `contexts/evaluation/application/`; `contexts/observability/`
-  application surface establishment for the cost-query read (the bounded
-  context exists but its api.py surface for evaluation's consumption needs
-  to be named — the S17a reflection answers prompt 3 with "no inference
-  surface needed" because contexts.inference.api was already shaped at S6;
-  S17b confirms whether contexts.observability follows the same pattern or
-  whether the surface is established in this session).
-- **S18: Regression report, CLI runner, P5 close.** *Queued.* Regression-
+- **S17b: Cost-per-successful-task path and observability surface.** *Closed
+  2026-05-06.* TraceQueryPort revised (sub-D50 widening to TenantContext;
+  new `get_costs_by_trace_ids` batch method); real
+  `LangfuseHTTPTraceQueryAdapter` against the public API replacing the no-op
+  stub, with cross-tenant isolation enforced at the adapter layer; first
+  use case in `contexts/observability/application/` (`query_cost_by_trace_ids`)
+  re-exported via the api facade; `CostQueryPort` and adapter in
+  `contexts/evaluation/` calling `contexts.observability.api.query_cost_by_trace_ids`
+  per D57's two-layer abstraction; `cost_per_successful_task` use case
+  reads `is_success` per criterion level (levels jsonb extended with
+  `is_success: bool`; existing fixtures backfilled), aggregates cost across
+  unique successful trace_ids, returns `CostPerSuccessfulTaskResult`;
+  end-to-end test exercises replay → score → cost-aggregate against
+  tenant_a's DB through live Langfuse and live LiteLLM with cross-tenant
+  isolation verified. Two D-entries committed (D56 — TraceQueryPort method
+  shape; D57 — cost-query two-layer abstraction); import-linter refined
+  with `ignore_imports` on each context's api.py → its own
+  application/domain edges so the D17 facade pattern is allowed structurally.
+  Charter touches: `charter/decisions.md` (D56, D57); this
+  current-package.md updated to reflect S17a + S17b closed and S18 active.
+- **S18: Regression report, CLI runner, P5 close.** *Active.* Regression-
   report shape comparing two runs of a scoring sheet against an interaction
   set; CLI entry point (`make eval-run` or equivalent); archive at
   `docs/archive/packages/p5.md`; measured-outcomes paragraph in
