@@ -59,6 +59,15 @@ layers =
     contexts.tenancy.ports
     contexts.tenancy.domain
 
+[importlinter:contract:layers-evaluation]
+name = Evaluation layers (hexagonal)
+type = layers
+layers =
+    contexts.evaluation.adapters
+    contexts.evaluation.application
+    contexts.evaluation.ports
+    contexts.evaluation.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -72,6 +81,7 @@ modules =
     contexts.observability.domain
     contexts.audit.domain
     contexts.tenancy.domain
+    contexts.evaluation.domain
 
 [importlinter:contract:contexts-independent-application]
 name = Cross-context: application layers are independent
@@ -81,6 +91,7 @@ modules =
     contexts.observability.application
     contexts.audit.application
     contexts.tenancy.application
+    contexts.evaluation.application
 
 [importlinter:contract:contexts-independent-adapters]
 name = Cross-context: adapter trees are independent
@@ -90,6 +101,7 @@ modules =
     contexts.observability.adapters
     contexts.audit.adapters
     contexts.tenancy.adapters
+    contexts.evaluation.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -118,6 +130,7 @@ source_modules =
     contexts.observability.domain
     contexts.audit.domain
     contexts.tenancy.domain
+    contexts.evaluation.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -182,6 +195,7 @@ source_modules =
     contexts.observability
     contexts.audit
     contexts.tenancy
+    contexts.evaluation
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -204,6 +218,7 @@ source_modules =
     contexts.inference
     contexts.audit
     contexts.tenancy
+    contexts.evaluation
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports

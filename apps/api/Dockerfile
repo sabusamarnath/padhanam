@@ -29,6 +29,7 @@ COPY contexts/inference/pyproject.toml ./contexts/inference/
 COPY contexts/observability/pyproject.toml ./contexts/observability/
 COPY contexts/audit/pyproject.toml ./contexts/audit/
 COPY contexts/tenancy/pyproject.toml ./contexts/tenancy/
+COPY contexts/evaluation/pyproject.toml ./contexts/evaluation/
 
 RUN uv sync --frozen --no-dev --no-install-project
 

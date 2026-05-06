@@ -25,6 +25,7 @@ dependencies = [
     "padhanam-observability",
     "padhanam-audit",
     "padhanam-tenancy",
+    "padhanam-evaluation",
     "padhanam-api",
 ]
 
@@ -45,6 +46,7 @@ members = [
     "contexts/observability",
     "contexts/audit",
     "contexts/tenancy",
+    "contexts/evaluation",
     "apps/api",
 ]
 
@@ -53,6 +55,7 @@ padhanam-inference = {workspace = true}
 padhanam-observability = {workspace = true}
 padhanam-audit = {workspace = true}
 padhanam-tenancy = {workspace = true}
+padhanam-evaluation = {workspace = true}
 padhanam-api = {workspace = true}
 
 [tool.pytest.ini_options]

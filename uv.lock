@@ -7,6 +7,7 @@ members = [
     "padhanam",
     "padhanam-api",
     "padhanam-audit",
+    "padhanam-evaluation",
     "padhanam-inference",
     "padhanam-observability",
     "padhanam-tenancy",
@@ -1165,6 +1166,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "padhanam-api" },
     { name = "padhanam-audit" },
+    { name = "padhanam-evaluation" },
     { name = "padhanam-inference" },
     { name = "padhanam-observability" },
     { name = "padhanam-tenancy" },
@@ -1189,6 +1191,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=43" },
     { name = "padhanam-api", virtual = "apps/api" },
     { name = "padhanam-audit", virtual = "contexts/audit" },
+    { name = "padhanam-evaluation", virtual = "contexts/evaluation" },
     { name = "padhanam-inference", virtual = "contexts/inference" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
     { name = "padhanam-tenancy", virtual = "contexts/tenancy" },
@@ -1236,6 +1239,21 @@ requires-dist = [
 name = "padhanam-audit"
 version = "0.0.0"
 source = { virtual = "contexts/audit" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
+name = "padhanam-evaluation"
+version = "0.0.0"
+source = { virtual = "contexts/evaluation" }
 dependencies = [
     { name = "asyncpg" },
     { name = "sqlalchemy", extra = ["asyncio"] },
