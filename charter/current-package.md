@@ -16,21 +16,52 @@ absorbs human review (`reviewed_by_user_id` and `confirmed_at` on
 rubric-application records); UI surfacing the human-review path defers to
 P10 or P11 territory.
 
-Three sessions framed (v1 intent; revisable at build-session framing per D43):
+Four sessions actual (v2 shape; revised from the v1 three-session forecast at
+S17 framing per D43, with the original draft preserved alongside per the
+append-only-at-version-level discipline):
 
-- **S16: Foundations.** Bounded context creation, scoring sheet domain model
-  (sheet, revision, criterion, applier, rubric-application), per-tenant
-  migration, first deterministic applier, end-to-end test through the new
-  context. Charter touch-points: `charter/schema.md`, possibly a D-entry on
-  scoring-extensibility shape if a structural decision surfaces.
-- **S17: Replay engine and appliers.** Replay against the inference adapter
-  (replay-seam decision committed at this session), additional deterministic
-  appliers, LLM-as-judge applier, cost-per-successful-task computation locus
-  committed.
-- **S18: Regression report, CLI runner, P5 close.** Regression-report shape,
-  CLI entry point, archive at `docs/archive/packages/p5.md`, measured-outcomes
-  paragraph in `log/packages.md`, current-package transition to between-
-  packages.
+- **S16: Foundations.** *Closed 2026-05-06.* Bounded context creation, scoring
+  sheet domain model (sheet, revision, criterion, applier, rubric-application),
+  per-tenant migration, first deterministic applier (`exact_match`), polymorphic
+  ApplierPort, apply_scoring_sheet use case, end-to-end test through the new
+  context. Charter touches: `charter/schema.md` updated alongside the
+  migration; D54 (Applier port shape — single polymorphic async port) and D55
+  (Score representation on rubric_applications — text with criterion-level
+  interpretation) committed.
+- **S17a: Replay engine, prompt applier, trace_id.** *Closing 2026-05-06.*
+  trace_id column on rubric_applications; InferencePort + ModelConfig +
+  ReplayResult value objects in evaluation's domain, with adapter calling
+  `contexts.inference.api.request_completion` per D17; ExactMatchApplier
+  renamed to PolymorphicApplier; prompt-applier branch lands; replay_and_score
+  orchestrator composes the existing apply_scoring_sheet (which gains an
+  optional `trace_id` parameter); end-to-end integration test exercises the
+  full flow against tenant_a's DB through the live inference path. Charter
+  touches: `charter/schema.md` updated alongside the trace_id migration; this
+  current-package.md shifted to the four-session shape.
+- **S17b: Cost-per-successful-task path and observability surface.** *Queued.*
+  Cost-query path joining rubric_applications by trace_id to the trace store's
+  gen_ai.cost.* attributes per D8/D41; cost-per-successful-task computation
+  use case in `contexts/evaluation/application/`; `contexts/observability/`
+  application surface establishment for the cost-query read (the bounded
+  context exists but its api.py surface for evaluation's consumption needs
+  to be named — the S17a reflection answers prompt 3 with "no inference
+  surface needed" because contexts.inference.api was already shaped at S6;
+  S17b confirms whether contexts.observability follows the same pattern or
+  whether the surface is established in this session).
+- **S18: Regression report, CLI runner, P5 close.** *Queued.* Regression-
+  report shape comparing two runs of a scoring sheet against an interaction
+  set; CLI entry point (`make eval-run` or equivalent); archive at
+  `docs/archive/packages/p5.md`; measured-outcomes paragraph in
+  `log/packages.md`; current-package transition to between-packages state.
+
+The three-session forecast at framing (v1) anticipated replay-engine and
+appliers at one session ("S17"); the build-session framing surface that
+the work split cleanly into a substrate session (S17a — replay engine + prompt
+applier + trace_id) and a consumer session (S17b — cost-per-successful-task
++ observability application surface). The split is recorded here at S17a
+close; the v1 draft above is preserved per D43's append-only-at-version-level
+discipline; the eventual P5 archive at S18 close reconciles the four-session
+actual against the three-session forecast as the audit deliverable.
 
 ## Carryovers active across the P4→P5 boundary
 
