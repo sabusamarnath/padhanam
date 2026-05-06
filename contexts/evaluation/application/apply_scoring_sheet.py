@@ -46,6 +46,7 @@ async def apply_scoring_sheet(
     scoring_sheet_repository: ScoringSheetRepositoryPort,
     rubric_application_repository: RubricApplicationRepositoryPort,
     applier: ApplierPort,
+    trace_id: str | None = None,
 ) -> list[RubricApplication]:
     pairs = await scoring_sheet_repository.get_criteria_with_appliers(
         scoring_sheet_revision_id
@@ -69,6 +70,7 @@ async def apply_scoring_sheet(
             reviewed_by_user_id=None,
             confirmed_at=None,
             created_at=datetime.now(timezone.utc),
+            trace_id=trace_id,
         )
         await rubric_application_repository.save(rubric_application)
         results.append(rubric_application)

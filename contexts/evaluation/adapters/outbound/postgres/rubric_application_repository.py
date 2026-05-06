@@ -41,6 +41,7 @@ class PostgresRubricApplicationRepository:
                     reviewed_by_user_id=rubric_application.reviewed_by_user_id,
                     confirmed_at=rubric_application.confirmed_at,
                     created_at=rubric_application.created_at,
+                    trace_id=rubric_application.trace_id,
                 )
             )
             await session.commit()

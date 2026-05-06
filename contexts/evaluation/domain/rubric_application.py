@@ -35,3 +35,4 @@ class RubricApplication:
     reviewed_by_user_id: str | None
     confirmed_at: datetime | None
     created_at: datetime
+    trace_id: str | None = None

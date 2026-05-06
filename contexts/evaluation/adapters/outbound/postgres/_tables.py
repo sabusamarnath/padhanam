@@ -103,4 +103,5 @@ rubric_applications = sa.Table(
     sa.Column("reviewed_by_user_id", sa.Text, nullable=True),
     sa.Column("confirmed_at", sa.TIMESTAMP(timezone=True), nullable=True),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("trace_id", sa.Text, nullable=True),
 )

@@ -168,6 +168,37 @@ def test_use_case_calls_applier_once_per_criterion_and_persists_each() -> None:
     assert saved_b.criterion_id == crit_b.id
 
 
+def test_use_case_persists_trace_id_when_passed() -> None:
+    """S17a addition: optional trace_id parameter threads through into
+    the persisted RubricApplication record. Backward-compatible: the
+    default-None path is exercised by the original tests above.
+    """
+    revision_id = uuid4()
+    crit = _criterion("a", 0, revision_id)
+    pairs = [(crit, _applier_config(revision_id, crit.id))]
+    sheet_repo = _FakeScoringSheetRepository(pairs)
+    rubric_repo = _FakeRubricApplicationRepository()
+    applier = _FakeApplier({"a": "pass"})
+    interaction = _interaction()
+
+    results = asyncio.run(
+        apply_scoring_sheet(
+            tenant_context=_tenant_context(),
+            scoring_sheet_revision_id=revision_id,
+            interaction=interaction,
+            output="hello",
+            scoring_sheet_repository=sheet_repo,
+            rubric_application_repository=rubric_repo,
+            applier=applier,
+            trace_id="abcd1234" * 4,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].trace_id == "abcd1234" * 4
+    assert rubric_repo.saved[0].trace_id == "abcd1234" * 4
+
+
 def test_use_case_returns_empty_when_revision_has_no_criteria() -> None:
     revision_id = uuid4()
     sheet_repo = _FakeScoringSheetRepository(pairs=[])
