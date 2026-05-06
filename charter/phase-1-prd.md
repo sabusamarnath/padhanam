@@ -76,6 +76,14 @@ Phase 1 close audit produces:
 
 ---
 
+## v1 in-flight correction (carryover-cleanup strategic session, 2026-05-06)
+
+D52 (this session) defers identity foundation (Keycloak realm, OIDC integration, SAML SP, SCIM 2.0 endpoint, federated session management) from Phase 1 to Phase 2 in explicit supersession of D3. The v1 Scope section's package enumeration in the In-scope bullet list reads "Identity, tenancy, LLM gateway, evaluation, source ingestion, agent CRUD, agent runtime, run history, audit viewer, optimization dashboard, active testing — the twelve packages as specified in `packages.md`." That enumeration is corrected as follows: P2 is "First LLM call" per `charter/packages.md` and `charter/roadmap.md` v3, not "Identity foundation"; the original identity foundation work activates at Phase 2 when production deployment context arrives (real IdP connections, SCIM provisioning from real HR systems, SAML against enterprise IdPs). Phase 1 retains auth-middleware-on-every-endpoint per D23 with the dev signed-token backend and the production-shaped Keycloak backend stubbed.
+
+v1 body preserved verbatim per D43's append-only-at-version-level discipline; this correction is recorded as a separate section rather than as an in-place edit to v1. The carryover operator-review pass on the v1 Problem statement and Target user sections (carryover from the P3-post strategic session) will catch any further drift surfaced by this scope correction.
+
+---
+
 ## As-built section (appended at Phase 1 close)
 
 [Empty until Phase 1 close audit. The delta between this draft and the as-built reality is the audit deliverable.]
