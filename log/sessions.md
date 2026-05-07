@@ -570,3 +570,34 @@ metrics:
   corrected_by:
 ```
 
+## P6 mid-package strategic commit — product reframe absorption
+roles: analyst, PM, technical writer
+mode: strategic
+
+- Produced: One charter commit landing four artefacts: a new section "The demonstration's scope" in `charter/bet.md` capturing the four functional domains, the methodology-embedded-not-gated commitment, and the build sequence; a new principle "Methodology is embedded as defaults, not gated as workflow steps" in `charter/principles.md` under the Architectural section; a new file `charter/product-methodology.md` holding the four functional domains, candidate methodologies per domain, build sequence with per-domain reasoning, and selection discipline; and a scope-note paragraph at the top of `charter/methodology.md` distinguishing build methodology from product methodology.
+
+- Decisions: None new. The reframe sharpens the bet's articulation and surfaces a new product-methodology layer in the charter. Per-domain methodology selection stays as a selection space; per-domain decisions land as each domain enters package scope.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: The reframe was operator-driven against drift accumulating in the framing conversations. The shape of the drift is worth recording: deep technical framing on Phase 1 substrate (Neo4j topology, embedding model, graph extraction shape) without periodic re-grounding in what the platform demonstrates and for whom. The drift is a recurrent class — same shape as the operator pullbacks at the within-tenant segmentation question, the JPMorgan reference architecture absorption, and the data-retrieval design-session elevation. Each pullback was structurally similar: model framing pushed past architectural altitude into commitment territory; operator pulled back to defer or reframe; charter absorbed the discipline. Worth a Patterns-observed entry at Phase 1 close audit alongside the framing-prompt-as-recommendation pattern: external-reference and bet-reframe inputs need triage by category and abstraction level before they can land on the right charter surface, and operator-initiated reframes are the recovery mechanism when conversation drift accumulates.
+
+  Two methodology layers now live distinctly in the charter. Build methodology at `charter/methodology.md` covers how Padhanam itself is built; product methodology at `charter/product-methodology.md` covers what the platform encodes for users. The distinction matters because conflation produces architectural ambiguity (is "methodology" the operator's discipline or the product's surface?) and obscures which layer's commitments apply at which moment. Future charter content that touches "methodology" needs to identify which layer it modifies.
+
+  The build sequence (PM, L&D + Marketing, PgM) is non-trivially ordered. PM-first is operator expertise depth and audience match. L&D + Marketing-second is user-validation availability. PgM-last is commercial leverage plus hardest embedding test, which inverts how the order initially read. The ordering encodes a learning trajectory: embedding patterns accumulate across the first three domains before the hardest test runs.
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-07
+  session_started: 2026-05-07
+  session_closed: 2026-05-07
+  merged: 2026-05-07
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
