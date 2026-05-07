@@ -640,3 +640,34 @@ metrics:
   corrected_by:
 ```
 
+## P6 close strategic block
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing the P6 package close: `charter/methodology.md` gains two prescriptive principles (framing-prompt-as-recommendation; pre-write reconciliation against vendor docs) and one Patterns-observed entry (user-driven course-correction); `charter/current-package.md` transitions to between-packages state pointing at the P6 archive and measured-outcomes paragraph; `log/packages.md` gains the P6 measured-outcomes paragraph per D40 with seven industry-overlay metrics and three bet-native metric layers; `docs/archive/packages/p6.md` created per D31's package-archive discipline with ten sections including delta-against-epic-note reconciliation per D43.
+
+- Decisions: None new. The methodology promotions are descriptive lift of patterns observed across S19 through S22 reflections, not new architectural commitments. Roadmap unchanged at P6 close per Option A from framing (data-retrieval design session lives as a strategic-mode conversation between P6 and P7; possible roadmap v5 if design surfaces package-shaped scope).
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: P6 close is the second package close in the recent run (P5 closed at S18) and the first close to land methodology promotions of pattern-observed material to named disciplines. Three patterns earned lift: framing-prompt-as-recommendation (fourteen-plus instances; the dominant methodology pattern of the run; structurally the brief-format-meets-build discipline that allows session prompts to absorb refinement without corrective sessions); pre-write reconciliation (four load-bearing instances; the discipline that catches vendor-quirks-class drift before it reaches code); user-driven course-correction (two instances at P6 mid-package strategic blocks; promoted as Patterns-observed rather than as a discipline because drift-recovery is operator vigilance not workflow gating). The categorisation matters: prescriptive principles produce expectations on how briefs are structured and how build absorbs refinement; descriptive Patterns-observed entries name the recovery surface so it is reusable when the pattern fires again. The asymmetry tracks the methodology document's existing structure (prescriptive principles in the body; Patterns-observed and Failure-modes entries below).
+
+  P6 itself shipped four sessions (S19 ingestion skeleton, S20 embedding, S21 graph extraction and Neo4j topology, S22 retrieval and cross-track readiness) plus two mid-package strategic blocks (Ask David external reference absorption; product reframe with the four-domain demonstration scope and the methodology-embedded-not-gated principle). Six D-entries landed (D60 through D65); 152 new tests (235 → 387); 3 new import-linter contracts (16 → 19); 1 new AST enforcement test (no-raw-neo4j-session); two-track coordination across pgvector and Neo4j held cleanly through to retrieval. The data-retrieval design session is queued as a strategic-mode conversation; the product reframe's four-domain demonstration scope is queued as P7 framing input; the per-tenant Neo4j topology deferred entry remains as the production-deployment revisit marker.
+
+  Phase 1 close audit horizon now visible: P6 close brings the run to 5 of 12 packages closed, ~60% by RICE-effort weeks. The three methodology promotions at this commit are the substantive Phase 1 audit material on the methodology side; the procurement-grade orchestration posture corroborated by the external case study at the mid-package absorption is the substantive Phase 1 audit material on the bet side. P7 framing is the next strategic-mode conversation either after the data-retrieval design session (if that lands first) or directly.
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-07
+  session_started: 2026-05-07
+  session_closed: 2026-05-07
+  merged: 2026-05-07
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
