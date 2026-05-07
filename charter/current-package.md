@@ -12,35 +12,37 @@ the two mid-package strategic commits (Ask David external-reference
 absorption; product reframe with the four-domain demonstration
 scope).
 
-The next strategic-mode conversation either frames the data-retrieval
-design session (per the strategic-mode commitment at P6 mid-package
-absorption) or frames P7 (Agent CRUD per
-[charter/roadmap.md](roadmap.md) and
-[charter/packages.md](packages.md)) directly. The data-retrieval
-design session is queued ahead of P7 framing per the operator's
-commitment at P6 close; output is architectural commitments
-inheriting into P7+ packages, with possible roadmap v5 if scope
-warrants package-shaped elevation. P7 (Agent CRUD) inherits the
-Gem-with-embedded-methodology pattern from the product reframe;
-the methodology-embedding shape established in
-[charter/product-methodology.md](product-methodology.md) is part
-of P7 framing inputs.
+The next strategic-mode conversation frames P7 (Agent CRUD per
+[charter/roadmap.md](roadmap.md) and [charter/packages.md](packages.md)).
+The data-retrieval design session held 2026-05-07 between P6 close and
+P7 framing produced D66 (hybrid composition architecture) and D67
+(filter expression architecture); both inherit into P7's agent config
+schema (default strategy field, filter tree field) and P8's agent
+runtime (composition orchestrator, strategy registry, three-strategy
+starter catalogue, filter tree translator). No package elevation
+needed; no roadmap v5. P7 (Agent CRUD) inherits the
+Gem-with-embedded-methodology pattern from the product reframe and
+the agent-config schema commitments from D66 and D67; the
+methodology-embedding shape established in
+[charter/product-methodology.md](product-methodology.md) plus the
+retrieval-config shape established in D66 and D67 are P7 framing
+inputs. The retrieval-evaluation design session is queued as a
+separate strategic-mode commitment ahead of P11; see the carryovers
+section.
 
 ## Carryovers active across the P6→P7 boundary
 
-- **Data-retrieval design session.** Queued strategic-mode
-  conversation between P6 and P7. The substrate exists at S22
-  close (vector retrieval against pgvector with HNSW + cosine,
-  graph traversal against shared Neo4j with property-based
-  scoping); the design session settles richer access patterns
-  (hybrid composition strategy at the agent layer per D5,
-  re-ranking, query rewriting/decomposition, filter expressions,
-  cursor-based pagination, projection patterns if cross-store
-  readiness query becomes a hot path), the structured-data port
-  shape, the analytics-agent shape, the retrieval evaluation
-  surface, and projection patterns if the two-store readiness
-  query becomes load-bearing under Phase 2 corpus sizes. Possible
-  roadmap v5 if scope warrants package elevation.
+- **Retrieval-evaluation design session.** Queued strategic-mode
+  conversation ahead of P11 (recommendation engine). The audience
+  is the existing eval harness from P5 and the optimisation layer
+  at P11; the design space (gold-set construction, offline versus
+  online relevance signals, recall@k versus precision@k tradeoffs,
+  test corpus shape) warrants its own focused session at the
+  audience-relevant moment. Must-have for the bet's optimisation
+  claim because the optimisation layer has to distinguish retrieval
+  failures from reasoning failures; deferred at the data-retrieval
+  design session on Kano-versus-RICE asymmetry grounds (must-have
+  on Kano, high effort on RICE relative to its on-runtime impact).
 - **Product methodology selection-space.** P7 (Agent CRUD)
   inherits the methodology-embedded-not-gated principle from the
   product reframe absorption; per-domain methodology selection
