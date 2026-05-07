@@ -20,6 +20,27 @@ Building under them produces a second-order benefit: the operator's existing flu
 
 The operator's working domain is agentic systems. Building toward an agentic workflow platform means architectural decisions exercise the substrate the operator already understands at the procurement and product level, which keeps the architectural direction credible across sessions. A different platform shape (a generic CRUD application, a content-management system) would be a weaker demonstration because the operator's evaluative judgement on whether the model is producing the right thing would be lower. The shape of the platform is chosen to maximise the operator's ability to direct it well, not to maximise its commercial appeal.
 
+## The demonstration's scope
+
+The platform's substrate (Phase 1, packages P1 through P12) supports a Gem-on-top product surface that demonstrates methodology embedding across four professional functions. The substrate is the architectural artefact; the Gem layer is where the proposition actually meets users.
+
+The four functional domains the platform demonstrates against:
+
+- **Product Management.** Strategy, prioritisation, validation methodologies embedded as defaults: Lean Value Tree, RICE, Kano, opportunity mapping, and stage-appropriate frameworks for PoC, prototyping, and enterprise-grade product work.
+- **Marketing.** Audit, content generation, launch, advocacy, and account-based marketing methodologies embedded as defaults: SOSTAC, StoryBrand, AIDA, April Dunford positioning, ITSMA tiering, and others.
+- **Learning and Development.** Design, knowledge, content, analytics, and audit methodologies embedded as defaults: ADDIE, SAM, SECI, Bloom's Taxonomy, Kirkpatrick, Brandon Hall, and others.
+- **Project and Programme Management.** Delivery methodologies embedded as defaults across planning, execution, governance, risk, and stakeholder communication: PRINCE2, Waterfall, Agile (Scrum, Kanban), SAFe.
+
+The core product commitment is that methodology runs in the background and surfaces at decision points, not as workflow gates the user is forced to traverse. Defaults encode the right thing for the chosen methodology; overrides at decision points are cheap and non-punitive. Old enterprise SaaS makes the user click through the methodology's wireframe; this platform inverts that, treating user intent as primary and methodology as the smart default.
+
+The build sequence across the four domains:
+
+1. **Product Management** first. The operator's deepest expertise sits here; senior product leaders are the primary audience; the demonstration value is highest.
+2. **Learning and Development and Marketing** next. The operator has direct user access in both domains for validation, which is the surface that exposes whether methodology embedding actually works in practice.
+3. **Project and Programme Management** last. PgM remains a live burden for enterprise customers, and an AI workflow that surfaces senior-stakeholder visibility as new issues and risks emerge is a category-shifting capability. PgM is also the hardest test of the methodology-embedded-not-gated commitment, because procedural methodologies (PRINCE2, SAFe) resist embedding without becoming gates. The order places it last so prior domains accumulate the embedding-pattern discipline before the hardest test runs.
+
+Methodology selection within each domain is a selection space at this stage, not a per-domain commitment. The specific frameworks land per domain as each domain enters package scope, with consumer evidence driving the choice. The framing is captured at `charter/product-methodology.md`.
+
 ## What success looks like at end of Phase 1
 
 - A single tenant runs locally with the full stack.
