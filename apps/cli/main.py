@@ -1,24 +1,31 @@
-"""Padhanam CLI entrypoint (S18).
+"""Padhanam CLI entrypoint (S18 / S19).
 
-Two commands at S18:
+Commands at S19:
 
-  - ``padhanam eval run`` — orchestrates replay → cost-aggregate →
-    render report end-to-end. With ``--baseline-revision-id``, also
-    runs the baseline through replay and produces a regression
-    report comparing the two.
+  - ``padhanam eval run`` (S18) — orchestrates replay →
+    cost-aggregate → render report end-to-end.
 
-  - ``padhanam eval report`` — re-renders an existing comparison
-    from stored rubric_applications without re-running replay. The
-    operator surface for inspecting prior runs.
+  - ``padhanam eval report`` (S18) — re-renders an existing
+    comparison from stored rubric_applications without re-running
+    replay.
 
-Invocation: ``python -m apps.cli eval run ...`` (Phase 1 dev). The
-CLI runs from inside the padhanam-api container so per-tenant
-Postgres hostnames resolve over the Compose network — the same
-shape ``make migrate`` and ``make seed-tenants`` use.
+  - ``padhanam ingest run <file>`` (S19) — register a source file
+    for ingestion into the tenant's data plane. Returns a source
+    id; the worker loop picks it up for parsing within seconds.
 
-The CLI calls into evaluation's existing application-layer use
-cases (replay_and_score from S17a, cost_per_successful_task from
-S17b, compare_runs and the render functions from S18 commit 1).
+  - ``padhanam ingest worker`` (S19) — long-running worker that
+    polls the tenant's pending-source queue and parses each source
+    into chunks. Exits gracefully on SIGINT / SIGTERM.
+
+Invocation: ``python -m apps.cli ingest run path/to/file.md
+--tenant-id a`` (Phase 1 dev). The CLI runs from inside the
+padhanam-api container so per-tenant Postgres hostnames resolve
+over the Compose network — the same shape ``make migrate`` and
+``make seed-tenants`` use.
+
+The CLI calls into application-layer use cases (replay_and_score,
+cost_per_successful_task, compare_runs, render functions for eval;
+register_source for ingest run; parse_source for ingest worker).
 No business logic in the CLI layer; the commands are thin
 orchestrators wiring composition.
 """
@@ -34,10 +41,11 @@ from uuid import UUID
 import typer
 
 from apps.cli._eval import run_eval, run_report
+from apps.cli._ingest import CLIIngestError, run_ingest_run
 
 app = typer.Typer(
     name="padhanam",
-    help="Padhanam CLI runner (S18 introduces eval commands).",
+    help="Padhanam CLI runner (S18 eval; S19 ingest).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -48,6 +56,13 @@ eval_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(eval_app, name="eval")
+
+ingest_app = typer.Typer(
+    name="ingest",
+    help="Source ingestion commands (S19).",
+    no_args_is_help=True,
+)
+app.add_typer(ingest_app, name="ingest")
 
 
 _OUTPUT_FORMAT_TEXT = "text"
@@ -202,6 +217,49 @@ def _emit(rendered: str, output_file: Optional[Path]) -> None:
             sys.stdout.write("\n")
         return
     output_file.write_text(rendered, encoding="utf-8")
+
+
+@ingest_app.command("run")
+def ingest_run(
+    file_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the source file (markdown or plain text per D61).",
+        ),
+    ],
+    tenant_id: Annotated[
+        str,
+        typer.Option(
+            "--tenant-id", help="Tenant short label ('a', 'b') or UUID."
+        ),
+    ],
+    user_id: Annotated[
+        str,
+        typer.Option(
+            "--user-id",
+            help="Acting user id; logged on the source row's created_by_user_id.",
+        ),
+    ] = "cli-operator",
+) -> None:
+    """Register a source file for ingestion into the tenant's data plane.
+
+    Reads the file, validates the extension is supported per D61,
+    persists a Source row in RECEIVED state, and prints the source
+    id. The worker loop (``padhanam ingest worker``) picks up the
+    row within seconds and parses it into chunks.
+    """
+    try:
+        source_id = asyncio.run(
+            run_ingest_run(
+                tenant_id=tenant_id,
+                file_path=file_path,
+                user_id=user_id,
+            )
+        )
+    except CLIIngestError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    sys.stdout.write(f"{source_id}\n")
 
 
 if __name__ == "__main__":
