@@ -403,3 +403,30 @@ metrics:
   corrected_by:
 ```
 
+## P6-open strategic block
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing the P6 epic note at `charter/packages/p6-epic.md` (v1 draft preserved per D43, reconciliation deferred to package archive at P6 close), D60 in `charter/decisions.md` capturing the framing-level commitments (asynchronous pipeline shape, single `contexts/ingestion/` bounded context, two-track coordination across pgvector and Neo4j with topology TBD per deferred entry, CLI surface at `apps/cli/`), a new section in `charter/deferred-decisions.md` for per-tenant topology for Neo4j, and a `charter/current-package.md` transition from between-packages state to active-P6 state with three-to-four-session forecast S19-S21/S22.
+
+- Decisions: D60 (P6 source-ingestion framing). Per-tenant Neo4j topology lands as new section in `deferred-decisions.md`, activating at the session that first writes to Neo4j.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: Two architectural pullbacks during framing kept the commitments narrow. First, the within-tenant segmentation primitive (use case, business unit, tagged overlap) was scoped out entirely after exploring a three-layer scope model (platform / tenant-wide / segment) in conversation. The model was coherent but uncommitted because no real consumer at Phase 1 drives the choice; pre-committing schema room would have been announcement-level adoption rather than validated architecture. Second, Neo4j topology choice (per-tenant containers vs shared with property scoping) was scoped out of framing after surfacing that no Phase 1 evidence pressure-tests either choice. Both pullbacks match the methodology's commitment-needs-evidence posture, and both were operator-driven challenges rather than self-correction during framing — worth surfacing because the framing conversation's value emerged from the pullbacks, not from the recommendations they pushed back against. The framing-prompt-as-recommendation pattern (observed four times across P5) extends to framing-altitude decisions: framing names options and the strongest recommendation, the implementing session commits with whatever refinements the implementation surfaces. P6 framing therefore commits to the architectural floor (asynchronous pipeline, one bounded context, tenant isolation non-negotiable) and explicitly leaves Neo4j topology and within-tenant segmentation to be settled by sessions with evidence in hand.
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-07
+  session_started: 2026-05-07
+  session_closed: 2026-05-07
+  merged: 2026-05-07
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
