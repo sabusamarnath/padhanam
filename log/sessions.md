@@ -467,3 +467,30 @@ metrics:
   corrected_by:
 ```
 
+## P6 mid-package strategic commit — external reference absorption
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing three artefacts: a methodology discipline entry "Start simple; refactor at the structural-promotion threshold" in `charter/methodology.md`, a deferred-decisions entry "Personalization as a runtime concern" in `charter/deferred-decisions.md`, and a captures entry for an enterprise multi-agent QA system case study in `charter/captures.md`. Two scheduled future strategic-mode commitments noted: data-retrieval design session after P6 closes (possible roadmap v4 insertion if scope warrants); hierarchical multi-agent topology design session paired with P8 framing or as pre-P8 strategic block.
+
+- Decisions: None new. The methodology discipline references the existing structural-promotion threshold rather than introducing a new architectural commitment; the deferred-decisions entry forecasts a future D-entry rather than landing one.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: External-reference absorption tested as a charter surface for the first time at significant scope. The case study surfaced four observations worth landing as charter commitments and three worth queueing as future strategic-mode work. The shape of the absorption — small commit landing methodology and deferred-decisions content immediately, two design sessions queued for their natural triggers — kept the build-mode S19 work uninterrupted while preserving the strategic-mode value before context decayed in chat history. The operator's pullback on data retrieval ("Data retrieval needs its own session. It is not trivial. It is full design package or phase.") was the discipline-correct response: what was framed as three deferred-decision candidates was actually one design-session candidate (data retrieval), one design-session candidate (hierarchical topology), and two genuine deferred-decisions entries (memory, runtime reflection). The categorisation matters because deferred-decisions entries imply "the architecture commits in advance, the implementation lands later" while design-session candidates imply "the architecture itself needs designing." The two are different scopes and should not be conflated. Two further operator pullbacks during drafting kept the artefacts disciplined: dropping named attributions (company, product, speakers) from charter content because external-reference value lives in the architectural observation not the brand association; and dropping specific architectural-stage enumerations from the methodology and captures entries because Padhanam's architecture may end up looking different from the reference and pre-anchoring on the reference's specific choices imports their playbook into our charter. Worth carrying as a discipline observation at next phase audit: external-reference observations need triage by category (methodology / deferred-decisions / design-session / package candidate / phase candidate) and by abstraction level (observation versus implementation specifics) before they can land on the right surface.
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-07
+  session_started: 2026-05-07
+  session_closed: 2026-05-07
+  merged: 2026-05-07
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
