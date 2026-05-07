@@ -297,6 +297,10 @@ The reverse-Kano list is permanent; the rejected items will look attractive agai
 
 The principle names the trap explicitly: capacity pressure is the operator hitting scope ceiling, and the response is scope reduction. Capacity pressure is not the methodology's bug; it is its information channel. Every capacity-pressure moment is signal that the package is overscoped, the session is overscoped, or the phase is overscoped, and the response that preserves the bet is to land less rather than to land the same amount through a bypass. The principle is what prevents Padhanam from drifting into the methodologies it explicitly rejects, one comfortable shortcut at a time.
 
+## Start simple; refactor at the structural-promotion threshold
+
+Build sessions ship the simplest working version that meets the session's acceptance criteria. Architectural ambition is paid down through refactoring at package boundaries or where a recurring pattern fires the structural-promotion threshold (third instance), not absorbed into single-session scope. The first occurrence of a pattern is implementation; the second is suspicion; the third is the lift to shared abstraction. The discipline keeps individual sessions tractable, lets architectural shape emerge from real-code evidence rather than pre-commitment, and makes refactoring a normal practice between sessions rather than a separate "tech debt" project. Externally corroborated by an enterprise multi-agent system case study at the 2025 LangChain interrupt conference, where the architecture evolved through incremental states with each step preserving working state from the prior step.
+
 ---
 
 ## Version log

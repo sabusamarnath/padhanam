@@ -133,3 +133,15 @@ D1 commits database-per-tenant. D32 settled the Postgres topology as separate in
 **Tenant isolation is non-negotiable however the topology lands.** Whichever option is chosen, contract tests in the existing `tests/contract/tenant_isolation/` harness per D24 verify cross-tenant graph access fails. The discipline holds at the integration layer regardless of physical topology choice.
 
 **The specific D-entry lands at the session that first writes to Neo4j during P6.** Phase 1 has two test tenants and toy corpus data; framing-altitude commitment is reasoning into a position rather than validating one. The implementing session names the option space, picks one with reasoning, and lands the D-entry alongside the Compose topology change, the migration approach, and the isolation tests.
+
+## Personalization as a runtime concern
+
+Activates at P8 agent runtime or whichever predecessor orchestration session demands it.
+
+**Personalization is runtime presentation logic conditioned on user context, not retrieval scope or agent reasoning.** The same retrieved data and the same agent reasoning render differently based on who is asking. A specialist user with deep domain context receives a detailed answer; a generalist user receives a summary version. The shape is presentation conditioned on identity, not different paths through retrieval or different agent decisions.
+
+**The user context object carries the conditioning attributes.** Tenant, jurisdiction, and cost_attribution_id are already present in `TenantContext` per D50. Role and possibly user-preference fields extend the context object when personalization enters. The orchestration layer carries the context through to the personalization point.
+
+**Personalization architecturally separates from retrieval and from agent reasoning.** Retrieval scope (what data is accessible) is a separate concern from presentation (how accessible data is rendered). Agent reasoning (what the answer should be) is separate from presentation (how the answer is shown). Conflating any of the three produces logic that is hard to evaluate independently and hard to extend without refactor.
+
+**The specific D-entry lands at P8 framing or the orchestration session that introduces a personalization consumer.** The architectural shape commits in advance; the implementation choice (separate orchestration node, parameter on response template, dedicated personalization port) settles when the consumer arrives.
