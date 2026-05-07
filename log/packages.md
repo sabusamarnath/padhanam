@@ -334,3 +334,221 @@ discipline stayed tight as P5's design space widened beyond
 P4's; whether a senior product leader at scale can sustain
 this performance is a phase-level question that requires data
 the methodology has not yet generated.
+
+---
+
+## P6: Source ingestion
+
+- Closed: 2026-05-07
+- Sessions: S19 (bounded-context skeleton, parser port,
+  markdown + plain-text adapters, parse-source worker, queue via
+  SKIP LOCKED, OTel TracerProvider helper promotion), S20
+  (embedding through LiteLLM via Ollama, chunks pgvector column +
+  HNSW index, embed-source worker stage), S21 (Neo4j shared
+  topology with property-based scoping, EntityExtractor port,
+  Qwen 2.5 7B JSON-mode extraction, GraphRepository adapter,
+  extract-source worker stage), S22 (RetrievalClient port,
+  pgvector vector adapter, Neo4j graph traversal adapter,
+  ChunkEmbedder task-hint refinement, retrieval CLI commands,
+  cross-track readiness semantics)
+- Mid-package strategic commits: external reference absorption
+  (Ask David enterprise multi-agent QA case study;
+  start-simple-refactor-at-threshold methodology principle, the
+  personalization deferred-decisions entry, the data-retrieval
+  design-session queue), product reframe absorption (four-domain
+  demonstration scope in `charter/bet.md`, methodology-embedded
+  principle in `charter/principles.md`, new
+  `charter/product-methodology.md`)
+- Archive: [docs/archive/packages/p6.md](../docs/archive/packages/p6.md)
+
+### Measured outcomes
+
+**Deployment frequency (merged-to-main proxy).** Four sessions
+across the P6 window, all merging on 2026-05-07. Single-day
+cadence for all four, including the four-stage pipeline
+(S19 → S20 → S21 → S22) shipping both vendor surfaces (Neo4j
+joining LiteLLM in P6) and the retrieval surface end-to-end. The
+merge-event count of four reflects P6's wider RICE-effort score
+than P5; the same-day cadence held under the wider effort with
+the briefs/ convention reducing context-switch cost across
+strategic-to-build mode boundaries. P6's two mid-package
+strategic commits (Ask David external reference absorption;
+product reframe) are not counted in build-session totals because
+they belong to strategic-mode work between sessions per D47's
+commit convention; both produced their own session-log entries
+under the strategic-block convention.
+
+**Lead time for changes.** Per-session brief-to-merge
+timestamps: S19 brief written 2026-05-07, merged same day; S20
+brief written 2026-05-07, merged same day; S21 brief written
+2026-05-07, merged same day; S22 brief written 2026-05-07,
+merged same day. Effective lead time same-day across all four
+sessions. As at P4 and P5 close the single-day cadence at this
+scale is consistent with the small-package shape; reading
+lead-time as a methodology signal at this granularity remains
+small-sample noise.
+
+**Change failure rate.** Zero sessions in P6 have a non-empty
+`corrected_by` field as of P6 close. The S19 follow-on commit
+`67ff457 fix(p6/s19): preserve _provider binding in lifted e2e
+setup scripts` is in-session refinement to the OTel-helper-
+promotion landing in the same session, not a corrective session
+against earlier P6 build work. The mid-package strategic commits
+are methodology refinements, not corrective sessions. Change
+failure rate for P6 = 0/4 = 0%. Combined with P4's 0/2 and P5's
+0/4, the running Phase-1 number is 0/10 across the P4-P5-P6
+window; small enough to remain non-trend-bearing but honestly
+reportable.
+
+**Mean time to restoration.** Vacuous: no failures introduced
+by P6 sessions, no corrective sessions exist. Reportable as
+N/A; the distribution shape requires data the methodology has
+not yet generated.
+
+**Reliability (clean close rate).** All four P6 sessions closed
+clean: tests passing, principles intact, charter touch-points
+updated. Reliability = 4/4 = 100%. Combined with P4's 2/2 and
+P5's 4/4, the running Phase-1 reliability is 10/10 = 100%; the
+discipline is holding under the small-sample window. The P6
+sample is the first to include both a new vendor service (Neo4j)
+and a cross-store coordination shape (vector + graph indexed
+under the same source-state lifecycle); both were absorbed
+without breaking the clean-close discipline.
+
+**Developer experience (CORE4 dimensions, qualitative).** Flow
+state held across all four sessions. Feedback loops were tight
+at every commit boundary: `make lint`, `uv run pytest`, `make
+migrate` (where schema work landed), `make scan` (at image
+rebuilds), and end-to-end live verification through the CLI
+surface against the live Compose stack. Cognitive load was
+concentrated at three moments: S21's Neo4j topology decision
+(operator's risk-3 guidance landing as the wrapper-plus-import-
+linter shape), S21's tool-calling-vs-JSON-mode reconciliation
+(structural-honesty refinement of D64's framing), and S22's
+two-method ChunkEmbedderPort shape (build-time refinement
+avoiding the synthetic-Chunk-as-query antipattern). All three
+were resolved through the framing-prompt-as-recommendation
+discipline at build time; no methodology-level refinement was
+required during the session because the discipline already
+existed (and is now promoted to a top-level prescriptive
+principle at this commit).
+
+**Contribution effectiveness (substantive vs cleanup
+proportion).** S19: 8 substantive commits (skeleton + domain +
+parser + use case + worker + helper-promotion + brief
+preservation + session log). S20: 6 substantive commits
+(framing + migration + adapter + worker + cost capture e2e +
+session log). S21: 7 substantive commits (framing + Compose +
+adapter + extractor + worker + cost capture e2e + session log).
+S22: 7 substantive commits (framing + port-and-results + task-
+hint refinement + pgvector adapter + neo4j adapter + CLI + e2e
++ session log). All commits are forward-progress on P6's stated
+goal; zero commits in P6 corrective against earlier sessions in
+the same phase. Contribution effectiveness ≈ 100% within P6.
+The two mid-package strategic commits and their session-log
+entries are not counted in P6's build-session totals because
+they belong to strategic-mode work between sessions per D47.
+
+### Bet-native metrics
+
+**Discipline-adherence.** Charter touch-points updated in-commit
+at every required boundary across P6: `charter/schema.md`
+updated in the same commit as per-tenant migrations
+`0005_create_sources_and_chunks` (S19), `0006_add_chunk_embedding`
+(S20), and `0007_extend_state_for_extraction` (S21); plus the
+graph-store section landed at S21 alongside Neo4j migration
+`0001_base_constraints`; D-entries appended within the session
+that produced the implementation (D60 at P6-open framing; D61
+at S19; D62 at S20; D63 + D64 at S21; D65 at S22);
+`charter/current-package.md` transitioned at P6-open
+(P6-active), at S19 close, at S22 close (between-packages, this
+commit). AST enforcement tests passed at every commit
+(8 enforcement tests at P6 close, +1 from P5's 7: the new
+no-raw-neo4j-session AST test landed at S21 alongside the
+TenantScopedNeo4jSession wrapper). Decision-to-code
+translation: every D-entry produced its corresponding code or
+charter change within the session it was decided in; no
+D-entry carried forward without its implementation in P6.
+
+**Architectural-durability.** Import-linter contract count:
+16 (P5 close) → 19 (P6 close). Three new contracts:
+`litellm-confined-apps` extension at S20 (the pre-existing
+contract refactored to also forbid direct litellm imports in
+apps), `neo4j-confined` and `neo4j-confined-apps` at S21
+(neo4j SDK confined to `contexts.ingestion.adapters.outbound.
+neo4j`, parallel to the litellm-confined shape). The litellm-
+confined contract also extends across P6 to admit the embedding
+and extraction outbound directories (S20, S21) and to forbid
+neo4j-adapter access (S21); these are contract-internal source-
+list refinements without count change. Drift findings: six
+named entries surfaced and recorded in the P6 archive's "Drift
+surfaced" section (markdown-it-py version drift at S19, parser-
+dispatch responsibility split at S19, worker shape architectural-
+cost at S19, Ollama tool-calling fidelity gap resolved by JSON
+mode at S21, two-method ChunkEmbedderPort shape at S22, cross-
+store readiness query in `neo4j_traverse` at S22). Test
+density: +152 tests over P5-close baseline of 235, bringing the
+codebase to 387 passing + 7 skipped = 394 collected at P6
+close. Per-session contributions: S19 +59, S20 +28, S21 +30,
+S22 +35. Supply-chain check cadence: no new entries in
+`ops/scheduled_checks.yaml` during P6 (the pricing-table
+monthly review from S14 stands; the Neo4j 5 Community image
+digest pinned at S21 from the official Docker Hub registry is
+operator-scanned at the next cadence pass per the precedent
+established at S4).
+
+**Bet-direction integrity.** Roadmap reasoning-category
+changes: zero new roadmap versions during P6 build. The
+operator's data-retrieval design-session elevation at the Ask
+David absorption is queued for between-package strategic-mode
+work (possible roadmap v5 if the design surfaces package-shaped
+scope); the product reframe absorption updated `charter/bet.md`
+with the four-domain demonstration scope and the methodology-
+embedded principle but did not produce a new roadmap version.
+PRD delta size: not yet reportable at the package level
+(Phase 1 PRD is reviewed at the Phase 1 close audit per D43).
+PRFAQ coherence: not refreshed during P6; the v2 PRFAQ from
+the P4-post carryover-cleanup strategic session stands until
+the Phase 1 close audit per D45. Role-function activity
+distribution across P6: every build session exercised analyst,
+architect, engineer, technical writer; the PM function was
+exercised at the P5→P6 boundary (P6 framing), at the Ask David
+absorption, at the product reframe absorption, and is exercised
+again at this P6 close strategic block. Five of five role-
+functions exercised across the P6 window when the strategic-
+mode commits are counted; the build-session-only distribution
+shows the same four-of-five pattern P4 and P5 produced
+(analyst, architect, engineer, technical writer at every build
+session; PM at strategic-mode boundaries), reflecting that
+build sessions implement architecture decided at framing rather
+than re-prioritising.
+
+### What the numbers do not say
+
+The four-session sample is too small to read as a methodology
+trend on its own; the running P4-P5-P6 window (ten sessions
+across three packages) approaches the threshold where small-
+sample noise starts to give way to credible trend signal but
+remains short of the Phase 1 close audit's full sample. P6 is
+the largest single-package contribution to the running window
+in test-density terms (+152 tests against P5's +80 and P4's
++29), and the first to ship two new vendor services (Neo4j +
+the Ollama-served embedding model integration) plus a cross-
+store coordination shape, against which all four sessions
+closed clean — the discipline-adherence and architectural-
+durability metrics give the strongest reading yet that the
+methodology sustains under wider design space. The three
+methodology promotions at this P6-close commit (framing-prompt-
+as-recommendation, pre-write reconciliation, user-driven course-
+correction) are the substantive Phase 1 audit material on the
+methodology side: each promoted from descriptive Patterns-
+observed candidate to either a top-level prescriptive principle
+(the first two, fourteen-plus and four load-bearing instances
+respectively) or a Patterns-observed entry (the third, two
+named instances), making the methodology document's
+prescriptive surface measurably denser at P6 close. Whether a
+senior product leader at scale can sustain this performance
+remains a phase-level question that requires the Phase 1 close
+audit's sample to answer credibly; the running window suggests
+the answer trends positive but treats trend-claims as still
+provisional.
