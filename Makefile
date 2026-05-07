@@ -53,9 +53,12 @@ psql: derive-env
 # change, not a Makefile edit. Idempotent: `ollama pull` on a model that
 # is already current is a no-op.
 pull-model: derive-env
-	@model=$$(uv run python -c "from padhanam.config import InferenceSettings; print(InferenceSettings().default_model)") && \
-	echo "Pulling $$model into the ollama_data volume (idempotent)..." && \
-	$(COMPOSE) exec ollama ollama pull "$$model"
+	@chat_model=$$(uv run python -c "from padhanam.config import InferenceSettings; print(InferenceSettings().default_model)") && \
+	embed_model=$$(uv run python -c "from padhanam.config import InferenceSettings; print(InferenceSettings().default_embedding_model)") && \
+	echo "Pulling chat model $$chat_model into the ollama_data volume (idempotent)..." && \
+	$(COMPOSE) exec ollama ollama pull "$$chat_model" && \
+	echo "Pulling embedding model $$embed_model into the ollama_data volume (idempotent)..." && \
+	$(COMPOSE) exec ollama ollama pull "$$embed_model"
 
 # End-to-end smoke through LiteLLM. Resolves the master key, model, and
 # endpoint through padhanam/config/ (D19), then sends a real chat

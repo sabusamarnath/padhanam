@@ -1317,14 +1317,22 @@ version = "0.0.0"
 source = { virtual = "contexts/ingestion" }
 dependencies = [
     { name = "asyncpg" },
+    { name = "litellm" },
     { name = "markdown-it-py" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "opentelemetry-semantic-conventions" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "litellm", specifier = ">=1.83.7,<2" },
     { name = "markdown-it-py", specifier = ">=3.0" },
+    { name = "opentelemetry-api", specifier = ">=1.27" },
+    { name = "opentelemetry-sdk", specifier = ">=1.27" },
+    { name = "opentelemetry-semantic-conventions", specifier = ">=0.48b0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 

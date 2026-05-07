@@ -18,6 +18,21 @@ model_list:
     litellm_params:
       model: ollama_chat/qwen2.5:7b
       api_base: http://ollama:11434
+  # S20 / D62: nomic-embed-text:v1.5 embedding model served via
+  # Ollama. The model_info.mode flag tells the proxy this entry
+  # routes to the embeddings API rather than the chat API; client
+  # callers (the LiteLLM SDK in the ingestion embedder adapter) hit
+  # /v1/embeddings against the gateway and receive 768-dim vectors.
+  # The :v1.5 tag is pinned explicitly rather than relying on
+  # ``latest`` so the model card requirements (search_document:
+  # corpus prefix, 768-dim native output) hold under Ollama tag
+  # drift.
+  - model_name: nomic-embed-text:v1.5
+    litellm_params:
+      model: ollama/nomic-embed-text:v1.5
+      api_base: http://ollama:11434
+    model_info:
+      mode: embedding
 
 litellm_settings:
   callbacks: ["otel"]

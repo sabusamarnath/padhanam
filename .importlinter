@@ -212,7 +212,7 @@ allow_indirect_imports = false
 # ---------------------------------------------------------------------------
 
 [importlinter:contract:litellm-confined]
-name = litellm SDK confined to inference outbound adapter
+name = litellm SDK confined to inference and ingestion outbound adapters
 type = forbidden
 source_modules =
     padhanam
@@ -225,7 +225,12 @@ source_modules =
     contexts.audit
     contexts.tenancy
     contexts.evaluation
-    contexts.ingestion
+    contexts.ingestion.domain
+    contexts.ingestion.application
+    contexts.ingestion.ports
+    contexts.ingestion.adapters.inbound
+    contexts.ingestion.adapters.outbound.parsers
+    contexts.ingestion.adapters.outbound.postgres
 forbidden_modules =
     litellm
 allow_indirect_imports = false

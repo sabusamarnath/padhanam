@@ -30,6 +30,13 @@ class InferenceSettings(PadhanamSettings):
     litellm_endpoint: str = "http://litellm:4000"
     litellm_master_key: str
     default_model: str = "qwen2.5:7b"
+    # S20 / D62: default embedding model. nomic-embed-text:v1.5 served
+    # via Ollama, accessed through the LiteLLM gateway at the same
+    # endpoint as the chat path. The :v1.5 tag is pinned explicitly
+    # rather than ``latest`` so the model card requirements
+    # (search_document: corpus prefix, search_query: query prefix,
+    # 768-dim native output) hold under upstream Ollama tag drift.
+    default_embedding_model: str = "nomic-embed-text:v1.5"
     tls_mode: TLSMode = TLSMode.PLAINTEXT
 
     @model_validator(mode="after")
@@ -95,6 +102,16 @@ PRICING_TABLE: dict[str, ModelPricing] = {
     "gpt-4o-mini": ModelPricing(
         input_usd_per_1m_tokens=Decimal("0.150"),
         output_usd_per_1m_tokens=Decimal("0.600"),
+    ),
+    # S20 / D62: nomic-embed-text:v1.5 served via Ollama. Embedding
+    # models have only an input dimension (output_tokens=0 by
+    # construction), so output_usd_per_1m_tokens stays zero. The dev
+    # cost is honest at zero — the call carries no per-call vendor
+    # cost. A hosted-embedding row would land here when a hosted
+    # default lands; the monthly review (D41) catches drift.
+    "nomic-embed-text:v1.5": ModelPricing(
+        input_usd_per_1m_tokens=Decimal("0"),
+        output_usd_per_1m_tokens=Decimal("0"),
     ),
 }
 
