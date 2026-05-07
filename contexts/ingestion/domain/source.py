@@ -39,3 +39,7 @@ class Source:
     created_by_user_id: str
     created_at: datetime
     updated_at: datetime
+    # S20 / D62: embedding-stage error surface, mirroring
+    # parsing_error_text. Defaulted to None so existing call sites
+    # (S19 register_source) continue to construct without churn.
+    embedding_error_text: str | None = None

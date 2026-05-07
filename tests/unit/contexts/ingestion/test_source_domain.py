@@ -25,15 +25,20 @@ def _utcnow() -> datetime:
 
 
 def test_source_state_values_match_schema_check_constraint() -> None:
-    """SourceState values mirror the CHECK constraint on sources.state
-    landed in revision 0005. If the values diverge the worker will
-    write strings the schema rejects; the test pins the contract.
+    """SourceState values mirror the CHECK constraint on sources.state.
+    Landed in revision 0005 (parsing-stage values per D60/D61),
+    extended in revision 0006 with the embedding-stage values per
+    D62. If the enum and the CHECK diverge the worker will write
+    strings the schema rejects; the test pins the contract.
     """
     assert {s.value for s in SourceState} == {
         "received",
         "parsing",
         "parsed",
         "failed",
+        "embedding",
+        "embedded",
+        "embedding_failed",
     }
 
 

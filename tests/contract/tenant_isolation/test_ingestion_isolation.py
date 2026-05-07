@@ -223,3 +223,117 @@ def test_chunks_unique_source_chunk_index_present(
         f"chunks_source_chunk_index_unique missing on {service}; "
         f"psql reported {found!r}"
     )
+
+
+@pytest.mark.parametrize(
+    "service,user_env,db_env",
+    [
+        ("postgres-tenant-a", "POSTGRES_TENANT_A_USER", "POSTGRES_TENANT_A_DB"),
+        ("postgres-tenant-b", "POSTGRES_TENANT_B_USER", "POSTGRES_TENANT_B_DB"),
+    ],
+)
+def test_pgvector_extension_enabled(
+    compose_running: None,
+    service: str,
+    user_env: str,
+    db_env: str,
+) -> None:
+    """Per D62: revision 0006 enables the pgvector extension on each
+    tenant database so the chunks.embedding vector(768) column and
+    the HNSW index over vector_cosine_ops resolve. The pgvector
+    Docker image makes the extension available; the extension itself
+    needs explicit CREATE per database.
+    """
+    user = _env(user_env)
+    db = _env(db_env)
+    query = "SELECT extname FROM pg_extension WHERE extname='vector'"
+    found = _exec_psql(service, user, db, query)
+    assert found == "vector", (
+        f"pgvector extension not enabled on {service}; psql reported "
+        f"{found!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "service,user_env,db_env",
+    [
+        ("postgres-tenant-a", "POSTGRES_TENANT_A_USER", "POSTGRES_TENANT_A_DB"),
+        ("postgres-tenant-b", "POSTGRES_TENANT_B_USER", "POSTGRES_TENANT_B_DB"),
+    ],
+)
+def test_chunks_embedding_column_present(
+    compose_running: None,
+    service: str,
+    user_env: str,
+    db_env: str,
+) -> None:
+    """Per D62: chunks gets a single ``embedding vector(768)`` column
+    on each tenant DB via revision 0006. The column is per-tenant per
+    D32; the control-plane DB does not carry chunks at all (asserted
+    elsewhere in this module).
+    """
+    user = _env(user_env)
+    db = _env(db_env)
+    query = (
+        "SELECT column_name || ':' || udt_name "
+        "FROM information_schema.columns "
+        "WHERE table_schema='public' AND table_name='chunks' "
+        "AND column_name='embedding'"
+    )
+    found = _exec_psql(service, user, db, query)
+    assert found == "embedding:vector", (
+        f"chunks.embedding column missing or wrong type on {service}; "
+        f"psql reported {found!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "service,user_env,db_env",
+    [
+        ("postgres-tenant-a", "POSTGRES_TENANT_A_USER", "POSTGRES_TENANT_A_DB"),
+        ("postgres-tenant-b", "POSTGRES_TENANT_B_USER", "POSTGRES_TENANT_B_DB"),
+    ],
+)
+def test_chunks_embedding_hnsw_index_present(
+    compose_running: None,
+    service: str,
+    user_env: str,
+    db_env: str,
+) -> None:
+    """Per D62: an HNSW index over (embedding vector_cosine_ops) lands
+    in revision 0006 alongside the column. Without the index, vector
+    search degrades to sequential scan; the structural test pins the
+    architectural commitment to the HNSW + cosine choice.
+    """
+    user = _env(user_env)
+    db = _env(db_env)
+    query = (
+        "SELECT indexname FROM pg_indexes "
+        "WHERE tablename='chunks' "
+        "AND indexname='chunks_embedding_hnsw_idx'"
+    )
+    found = _exec_psql(service, user, db, query)
+    assert found == "chunks_embedding_hnsw_idx", (
+        f"chunks_embedding_hnsw_idx missing on {service}; "
+        f"psql reported {found!r}"
+    )
+
+
+def test_control_plane_db_has_no_pgvector_extension(
+    compose_running: None,
+) -> None:
+    """The control-plane DB has no embedding columns and no HNSW
+    indices, so the pgvector extension does not need to be enabled
+    there. This is a positive signal that revision 0006 ran on
+    tenants-only per D32, not on control plane.
+    """
+    user = _env("POSTGRES_CONTROL_PLANE_USER")
+    db = _env("POSTGRES_CONTROL_PLANE_DB")
+    query = "SELECT extname FROM pg_extension WHERE extname='vector'"
+    found = _exec_psql(
+        "postgres-control-plane", user, db, query
+    )
+    assert found == "", (
+        f"control-plane DB unexpectedly has pgvector enabled; "
+        f"psql reported {found!r}"
+    )
