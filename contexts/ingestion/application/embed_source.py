@@ -43,6 +43,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from contexts.ingestion.domain.source import Source
 from contexts.ingestion.domain.state import SourceState
 from contexts.ingestion.ports.chunk_embedder_port import (
@@ -99,7 +100,13 @@ async def embed_source(
         )
 
     try:
-        embeddings = await embedder.embed(chunks, tenant_context)
+        # D65: ingestion-time embedding always passes DOCUMENT so the
+        # nomic-embed-text v1.5 ``search_document:`` prefix lands at
+        # the corpus side. Retrieval-side embedding (S22 vector
+        # adapter) passes QUERY for the corresponding query prefix.
+        embeddings = await embedder.embed(
+            chunks, tenant_context, EmbeddingTask.DOCUMENT
+        )
     except (EmbedderError, EmbedderConfigurationError) as exc:
         await repository.update_source_state(
             source_id=source.id,

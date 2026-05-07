@@ -20,6 +20,7 @@ from contexts.ingestion.application.embed_source import (
 )
 from contexts.ingestion.domain.chunk import Chunk
 from contexts.ingestion.domain.embedding import Embedding
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from contexts.ingestion.domain.source import Source
 from contexts.ingestion.domain.state import SourceState
 from contexts.ingestion.ports.chunk_embedder_port import (
@@ -102,12 +103,17 @@ class _FakeRepository:
 class _FakeEmbedder:
     def __init__(self, vectors_per_chunk: list[list[float]]) -> None:
         self._vectors = vectors_per_chunk
-        self.calls: list[tuple[Sequence[Chunk], TenantContext]] = []
+        self.calls: list[
+            tuple[Sequence[Chunk], TenantContext, EmbeddingTask]
+        ] = []
 
     async def embed(
-        self, chunks: Sequence[Chunk], tenant_context: TenantContext
+        self,
+        chunks: Sequence[Chunk],
+        tenant_context: TenantContext,
+        task: EmbeddingTask,
     ) -> Sequence[Embedding]:
-        self.calls.append((chunks, tenant_context))
+        self.calls.append((chunks, tenant_context, task))
         return [
             Embedding(
                 chunk_id=chunks[i].id,
@@ -117,14 +123,35 @@ class _FakeEmbedder:
             for i in range(len(chunks))
         ]
 
+    async def embed_query(
+        self,
+        query: str,
+        tenant_context: TenantContext,
+        task: EmbeddingTask,
+    ) -> Sequence[float]:
+        # Not exercised by embed_source tests; included for protocol
+        # conformance with ChunkEmbedderPort.
+        raise NotImplementedError
+
 
 class _RaisingEmbedder:
     def __init__(self, exc: Exception) -> None:
         self._exc = exc
 
     async def embed(
-        self, chunks: Sequence[Chunk], tenant_context: TenantContext
+        self,
+        chunks: Sequence[Chunk],
+        tenant_context: TenantContext,
+        task: EmbeddingTask,
     ) -> Sequence[Embedding]:
+        raise self._exc
+
+    async def embed_query(
+        self,
+        query: str,
+        tenant_context: TenantContext,
+        task: EmbeddingTask,
+    ) -> Sequence[float]:
         raise self._exc
 
 
@@ -174,9 +201,12 @@ def test_embed_source_calls_embedder_with_loaded_chunks_and_tenant_context() -> 
     )
 
     assert len(embedder.calls) == 1
-    called_chunks, called_ctx = embedder.calls[0]
+    called_chunks, called_ctx, called_task = embedder.calls[0]
     assert list(called_chunks) == chunks
     assert called_ctx == _TENANT_A
+    # D65: ingestion-time call always passes DOCUMENT so the
+    # nomic-embed-text v1.5 ``search_document:`` prefix lands.
+    assert called_task == EmbeddingTask.DOCUMENT
 
 
 def test_embed_source_zero_chunks_transitions_to_embedded_without_calling_embedder() -> None:

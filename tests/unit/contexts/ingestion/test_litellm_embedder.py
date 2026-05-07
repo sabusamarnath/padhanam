@@ -29,6 +29,7 @@ from contexts.ingestion.adapters.outbound.embedding import (
     LiteLLMChunkEmbedder,
 )
 from contexts.ingestion.domain.chunk import Chunk
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from contexts.ingestion.ports.chunk_embedder_port import (
     EmbedderConfigurationError,
     EmbedderError,
@@ -95,7 +96,7 @@ def test_embedder_returns_one_embedding_per_chunk_in_order() -> None:
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        result = asyncio.run(embedder.embed(chunks, _TENANT_A))
+        result = asyncio.run(embedder.embed(chunks, _TENANT_A, EmbeddingTask.DOCUMENT))
 
     assert len(result) == 3
     assert [list(e.vector) for e in result] == vectors
@@ -121,12 +122,105 @@ def test_embedder_applies_search_document_prefix_to_each_chunk() -> None:
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        asyncio.run(embedder.embed(chunks, _TENANT_A))
+        asyncio.run(embedder.embed(chunks, _TENANT_A, EmbeddingTask.DOCUMENT))
 
     assert captured["input"] == [
         "search_document: hello world",
         "search_document: second chunk",
     ]
+
+
+def test_embedder_applies_search_query_prefix_when_task_is_query() -> None:
+    """Per D65: passing ``EmbeddingTask.QUERY`` switches the prefix
+    to ``search_query:``. The retrieval adapter at S22 uses this
+    task value for query-side embedding so the model produces
+    embeddings that match cosine geometry against the document-
+    prefixed corpus side.
+    """
+    embedder = LiteLLMChunkEmbedder(settings=_settings())
+    chunks = [_chunk("what is acme")]
+    captured: dict[str, object] = {}
+
+    async def fake_aembedding(**kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return _ok_response([[0.1] * 768])
+
+    with patch(
+        "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
+        side_effect=fake_aembedding,
+    ):
+        asyncio.run(embedder.embed(chunks, _TENANT_A, EmbeddingTask.QUERY))
+
+    assert captured["input"] == ["search_query: what is acme"]
+
+
+def test_embed_query_applies_search_query_prefix() -> None:
+    """``embed_query`` is the single-string retrieval-side path. With
+    ``EmbeddingTask.QUERY`` the adapter prepends ``search_query:`` to
+    the query string and returns the single embedding vector.
+    """
+    embedder = LiteLLMChunkEmbedder(settings=_settings())
+    captured: dict[str, object] = {}
+
+    async def fake_aembedding(**kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return _ok_response([[0.5] * 768])
+
+    with patch(
+        "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
+        side_effect=fake_aembedding,
+    ):
+        vector = asyncio.run(
+            embedder.embed_query(
+                "find ACME documents", _TENANT_A, EmbeddingTask.QUERY
+            )
+        )
+
+    assert captured["input"] == ["search_query: find ACME documents"]
+    assert list(vector) == [0.5] * 768
+
+
+def test_embed_query_emits_cost_attributes_on_span(captured_spans) -> None:
+    """``embed_query`` emits the same cost-attribution shape as the
+    chunk-batch ``embed`` so retrieval-side embedding rolls up on the
+    same per-tenant cost queries as ingestion-side embedding.
+    """
+    embedder = LiteLLMChunkEmbedder(settings=_settings())
+
+    async def fake_aembedding(**kwargs: object) -> SimpleNamespace:
+        return _ok_response([[0.1] * 768], input_tokens=7)
+
+    with patch(
+        "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
+        side_effect=fake_aembedding,
+    ):
+        asyncio.run(
+            embedder.embed_query("hello", _TENANT_A, EmbeddingTask.QUERY)
+        )
+
+    attrs = dict(captured_spans.get_finished_spans()[0].attributes)
+    assert attrs["gen_ai.operation.name"] == "embeddings"
+    assert attrs["padhanam.embedding.task"] == "query"
+    assert attrs["padhanam.embedding.batch_size"] == 1
+    assert attrs["tenant.id"] == _TENANT_A.tenant_id
+    assert attrs["gen_ai.usage.input_tokens"] == 7
+    assert attrs["gen_ai.cost.pricing_status"] == "table_hit"
+
+
+def test_embed_query_translates_timeout_to_embedder_error() -> None:
+    embedder = LiteLLMChunkEmbedder(settings=_settings())
+
+    async def raise_timeout(**kwargs: object) -> SimpleNamespace:
+        raise Timeout("boom", "litellm", "nomic")
+
+    with patch(
+        "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
+        side_effect=raise_timeout,
+    ):
+        with pytest.raises(EmbedderError):
+            asyncio.run(
+                embedder.embed_query("x", _TENANT_A, EmbeddingTask.QUERY)
+            )
 
 
 def test_embedder_passes_endpoint_master_key_and_resolved_model() -> None:
@@ -141,7 +235,7 @@ def test_embedder_passes_endpoint_master_key_and_resolved_model() -> None:
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
     # The adapter prefixes with "openai/" so the LiteLLM SDK routes
     # the call through the gateway as an OpenAI-compatible proxy.
@@ -162,7 +256,7 @@ def test_embedder_returns_empty_for_empty_input_without_calling_litellm() -> Non
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        result = asyncio.run(embedder.embed([], _TENANT_A))
+        result = asyncio.run(embedder.embed([], _TENANT_A, EmbeddingTask.DOCUMENT))
 
     assert result == []
     assert called["count"] == 0
@@ -185,7 +279,7 @@ def test_embedder_emits_cost_attributes_on_span(
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
     spans = captured_spans.get_finished_spans()
     span = spans[0]
@@ -230,7 +324,7 @@ def test_embedder_emits_embedding_no_token_count_when_usage_absent(
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
     attrs = dict(captured_spans.get_finished_spans()[0].attributes)
     assert attrs["gen_ai.cost.pricing_status"] == "embedding_no_token_count"
@@ -267,7 +361,7 @@ def test_embedder_unknown_model_emits_unknown_model_pricing_status(
         "contexts.ingestion.adapters.outbound.embedding.litellm_embedder.litellm.aembedding",
         side_effect=fake_aembedding,
     ):
-        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+        asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
     attrs = dict(captured_spans.get_finished_spans()[0].attributes)
     assert attrs["gen_ai.cost.pricing_status"] == "unknown_model"
@@ -287,7 +381,9 @@ def test_embedder_response_length_mismatch_raises_embedder_error() -> None:
     ):
         with pytest.raises(EmbedderError, match="length mismatch"):
             asyncio.run(
-                embedder.embed([_chunk("a"), _chunk("b")], _TENANT_A)
+                embedder.embed(
+                    [_chunk("a"), _chunk("b")], _TENANT_A, EmbeddingTask.DOCUMENT
+                )
             )
 
 
@@ -302,7 +398,7 @@ def test_timeout_maps_to_embedder_error() -> None:
         side_effect=raise_timeout,
     ):
         with pytest.raises(EmbedderError):
-            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
 
 def test_rate_limit_maps_to_embedder_error() -> None:
@@ -316,7 +412,7 @@ def test_rate_limit_maps_to_embedder_error() -> None:
         side_effect=raise_rate_limit,
     ):
         with pytest.raises(EmbedderError):
-            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
 
 def test_auth_error_maps_to_embedder_configuration_error() -> None:
@@ -330,7 +426,7 @@ def test_auth_error_maps_to_embedder_configuration_error() -> None:
         side_effect=raise_auth,
     ):
         with pytest.raises(EmbedderConfigurationError):
-            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
 
 def test_bad_request_maps_to_embedder_configuration_error() -> None:
@@ -344,7 +440,7 @@ def test_bad_request_maps_to_embedder_configuration_error() -> None:
         side_effect=raise_bad_request,
     ):
         with pytest.raises(EmbedderConfigurationError):
-            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A))
+            asyncio.run(embedder.embed([_chunk("x")], _TENANT_A, EmbeddingTask.DOCUMENT))
 
 
 @pytest.fixture

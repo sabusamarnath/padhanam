@@ -28,11 +28,16 @@ captures whether LiteLLM's local tokenizer reliably populates
 input_tokens for embedding paths against Ollama or whether bridging
 work lands at a future cost-attribution session.
 
-Task-prefix per D62: ``nomic-embed-text:v1.5`` requires a
+Task-prefix per D62 / D65: ``nomic-embed-text:v1.5`` requires a
 ``search_document:`` prefix on corpus-side inputs and
-``search_query:`` on query-side. The adapter prepends
-``search_document:`` to each chunk content at embed time. Query-
-side prefixing lands at S22 when the retrieval adapter ships.
+``search_query:`` on query-side. The adapter dispatches on the
+``EmbeddingTask`` parameter: ``DOCUMENT`` prepends the corpus
+prefix, ``QUERY`` prepends the query prefix. The two-method shape
+on the port (``embed`` for batch chunks, ``embed_query`` for a
+single query string) matches the two access patterns the worker
+and the retrieval adapter exercise; both methods route to the
+same underlying SDK call (``litellm.aembedding``) with the same
+trace-attribution shape.
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from contexts.ingestion.domain.chunk import Chunk
 from contexts.ingestion.domain.embedding import Embedding
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from contexts.ingestion.ports.chunk_embedder_port import (
     EmbedderConfigurationError,
     EmbedderError,
@@ -66,10 +72,13 @@ from padhanam.config import InferenceSettings, UnknownModelError, cost_for
 _tracer = trace.get_tracer("padhanam.ingestion.litellm_embedder")
 
 
-# nomic-embed-text v1.5 task-prefix tokens per the model card. The
-# corpus-side prefix is what the embedding worker uses; the
-# query-side prefix lands at the retrieval adapter (S22).
-_CORPUS_PREFIX = "search_document: "
+# nomic-embed-text v1.5 task-prefix tokens per the model card.
+# DOCUMENT lands at corpus-side embedding (the S20 worker);
+# QUERY lands at retrieval-side embedding (the S22 vector adapter).
+_TASK_PREFIXES: dict[EmbeddingTask, str] = {
+    EmbeddingTask.DOCUMENT: "search_document: ",
+    EmbeddingTask.QUERY: "search_query: ",
+}
 
 
 class LiteLLMChunkEmbedder:
@@ -90,6 +99,7 @@ class LiteLLMChunkEmbedder:
         self,
         chunks: Sequence[Chunk],
         tenant_context: TenantContext,
+        task: EmbeddingTask,
     ) -> Sequence[Embedding]:
         if not chunks:
             return []
@@ -97,6 +107,7 @@ class LiteLLMChunkEmbedder:
         resolved_model = self._settings.default_embedding_model
         endpoint = self._settings.litellm_endpoint
         master_key = self._settings.litellm_master_key
+        prefix = _TASK_PREFIXES[task]
 
         # GenAI semantic conventions per D27. Span name follows the
         # OTel GenAI guidance ("embeddings {model}") so Langfuse
@@ -115,9 +126,10 @@ class LiteLLMChunkEmbedder:
                 "tenant.jurisdiction": tenant_context.jurisdiction,
                 "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
                 "padhanam.embedding.batch_size": len(chunks),
+                "padhanam.embedding.task": task.value,
             },
         ) as span:
-            inputs = [_CORPUS_PREFIX + chunk.content for chunk in chunks]
+            inputs = [prefix + chunk.content for chunk in chunks]
             try:
                 # Call the LiteLLM gateway via the OpenAI-compatible
                 # /v1/embeddings route. Same `openai/` prefix
@@ -201,6 +213,122 @@ class LiteLLMChunkEmbedder:
             span.set_attribute("gen_ai.cost.pricing_status", pricing_status)
 
             return embeddings
+
+    async def embed_query(
+        self,
+        query: str,
+        tenant_context: TenantContext,
+        task: EmbeddingTask,
+    ) -> Sequence[float]:
+        """Single-query embedding for the retrieval adapter (D65).
+
+        Same gateway path and cost-attribution shape as ``embed``;
+        the input is a single string with the task-specific prefix
+        and the return is a single vector. Cost flows through the
+        same trace surface so retrieval-side embedding rolls up on
+        the same per-tenant cost queries as ingestion-side
+        embedding.
+        """
+        resolved_model = self._settings.default_embedding_model
+        endpoint = self._settings.litellm_endpoint
+        master_key = self._settings.litellm_master_key
+        prefix = _TASK_PREFIXES[task]
+
+        with _tracer.start_as_current_span(
+            f"embeddings {resolved_model}",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "gen_ai.system": "litellm",
+                "gen_ai.request.model": resolved_model,
+                "gen_ai.operation.name": "embeddings",
+                "tenant.id": tenant_context.tenant_id,
+                "tenant.jurisdiction": tenant_context.jurisdiction,
+                "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
+                "padhanam.embedding.batch_size": 1,
+                "padhanam.embedding.task": task.value,
+            },
+        ) as span:
+            try:
+                response = await litellm.aembedding(
+                    model=f"openai/{resolved_model}",
+                    input=[prefix + query],
+                    api_base=endpoint,
+                    api_key=master_key,
+                )
+            except (Timeout,) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise EmbedderError(str(e)) from e
+            except (
+                RateLimitError,
+                ServiceUnavailableError,
+                APIConnectionError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise EmbedderError(str(e)) from e
+            except (
+                AuthenticationError,
+                BadRequestError,
+                NotFoundError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise EmbedderConfigurationError(str(e)) from e
+            except APIError as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise EmbedderError(str(e)) from e
+
+            data = getattr(response, "data", None)
+            if data is None and isinstance(response, dict):
+                data = response.get("data")
+            if not data:
+                raise EmbedderError(
+                    "LiteLLM embedding response missing data for query"
+                )
+            if len(data) != 1:
+                raise EmbedderError(
+                    f"LiteLLM embedding response length mismatch for query: "
+                    f"got {len(data)} embeddings for 1 input"
+                )
+            vector = _vector_from_data_item(data[0])
+
+            input_tokens = _input_tokens_from_response(response)
+            response_model = _response_model(response, resolved_model)
+
+            if input_tokens is None:
+                input_usd = 0.0
+                output_usd = 0.0
+                total_usd = 0.0
+                pricing_status = "embedding_no_token_count"
+            else:
+                span.set_attribute(
+                    "gen_ai.usage.input_tokens", input_tokens
+                )
+                try:
+                    breakdown = cost_for(
+                        response_model,
+                        input_tokens,
+                        0,
+                    )
+                    input_usd = float(breakdown.input_usd)
+                    output_usd = float(breakdown.output_usd)
+                    total_usd = float(breakdown.total_usd)
+                    pricing_status = "table_hit"
+                except UnknownModelError:
+                    input_usd = 0.0
+                    output_usd = 0.0
+                    total_usd = 0.0
+                    pricing_status = "unknown_model"
+
+            span.set_attribute("gen_ai.response.model", response_model)
+            span.set_attribute("gen_ai.cost.input_usd", input_usd)
+            span.set_attribute("gen_ai.cost.output_usd", output_usd)
+            span.set_attribute("gen_ai.cost.total_usd", total_usd)
+            span.set_attribute("gen_ai.cost.pricing_status", pricing_status)
+
+            return vector
 
 
 def _embeddings_from_litellm_response(
