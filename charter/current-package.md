@@ -2,36 +2,26 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## Between packages — P6 closed, P7 not yet open
+## P7 — Agent CRUD (active)
 
-P6 closed at S22 close on 2026-05-07. The P6 retrospective lives at
-[docs/archive/packages/p6.md](../docs/archive/packages/p6.md);
-the P6 measured-outcomes paragraph at
-[log/packages.md](../log/packages.md) covers S19 through S22 plus
-the two mid-package strategic commits (Ask David external-reference
-absorption; product reframe with the four-domain demonstration
-scope).
+Opened 2026-05-08 at the P7 framing strategic block. P7 ships the agent authoring substrate; by P7 close, the platform stores agent specifications, supports CRUD on agents and methodology templates through the CLI, and exposes the abstractions P8's runtime will consume and the P5 eval harness will score against. Methodology embedding lands as platform-managed templates on the control plane that tenants clone into independent agent instances on per-tenant Postgres. See [packages/p7-epic.md](packages/p7-epic.md) for goal, scope, and session forecast; the v1 epic note will be reconciled against `docs/archive/packages/p7.md` at P7 close per D43.
 
-The next strategic-mode conversation frames P7 (Agent CRUD per
-[charter/roadmap.md](roadmap.md) and [charter/packages.md](packages.md)).
-The data-retrieval design session held 2026-05-07 between P6 close and
-P7 framing produced D66 (hybrid composition architecture) and D67
-(filter expression architecture); both inherit into P7's agent config
-schema (default strategy field, filter tree field) and P8's agent
-runtime (composition orchestrator, strategy registry, three-strategy
-starter catalogue, filter tree translator). No package elevation
-needed; no roadmap v5. P7 (Agent CRUD) inherits the
-agent-with-embedded-methodology pattern from the product reframe and
-the agent-config schema commitments from D66 and D67; the
-methodology-embedding shape established in
-[charter/product-methodology.md](product-methodology.md) plus the
-retrieval-config shape established in D66 and D67 are P7 framing
-inputs. The retrieval-evaluation design session is queued as a
-separate strategic-mode commitment ahead of P11; see the carryovers
-section.
+## Sessions
+
+- **S23: Methodology bounded context skeleton, methodology aggregate, methodology CRUD.** Methodology context with full hexagonal layout; methodology aggregate (revision-shaped per D31, hash-chain audit per D26); control-plane Postgres migration; methodology repository; CRUD use cases; CLI commands at `padhanam methodology ...`.
+- **S24: Agent bounded context skeleton, agent aggregate, agent CRUD.** Agent context with full hexagonal layout; agent aggregate (revision-shaped, hash-chain audit, methodology lineage fields, retrieval-config fields per D66 and D67); per-tenant Postgres migration; agent repository; CRUD use cases (excluding cross-context create-from-methodology); CLI commands at `padhanam agent ...`.
+- **S25: Cross-context create-from-methodology flow plus LVT template plus first agent.** `create_agent_from_methodology` use case reading the methodology context's API; LVT methodology template authored on control plane; one agent cloned from LVT in operator's tenant with operator-uploaded sources attached; e2e test covering the full clone-and-edit flow with revision and hash-chain verification.
+- **S26 (if needed): P7 close.** Archive at `docs/archive/packages/p7.md`, `log/packages.md` measured-outcomes paragraph, `current-package.md` transition to between-packages state.
 
 ## Carryovers active across the P6→P7 boundary
 
+- **Hierarchical multi-agent topology design session.** Queued
+  strategic-mode conversation paired with P8 framing or as
+  pre-P8 strategic block per the Ask David capture. P8 (Agent
+  runtime) inherits the composition orchestrator (D66), filter
+  tree translator (D67), and tool registry surface (deferred
+  from P7 per D68); the hierarchical-topology design adds the
+  multi-agent shape on top of the runtime substrate.
 - **Retrieval-evaluation design session.** Queued strategic-mode
   conversation ahead of P11 (recommendation engine). The audience
   is the existing eval harness from P5 and the optimisation layer
@@ -43,11 +33,13 @@ section.
   failures from reasoning failures; deferred at the data-retrieval
   design session on Kano-versus-RICE asymmetry grounds (must-have
   on Kano, high effort on RICE relative to its on-runtime impact).
-- **Product methodology selection-space.** P7 (Agent CRUD)
-  inherits the methodology-embedded-not-gated principle from the
-  product reframe absorption; per-domain methodology selection
-  per [charter/product-methodology.md](product-methodology.md)
-  surfaces at the framing of each domain-bearing package.
+- **Product methodology selection-space.** P7 commits to LVT as
+  the first methodology per D68; the LVT methodology template
+  lands at S25. Other methodologies in
+  [charter/product-methodology.md](product-methodology.md)
+  activate as evidence pulls them in (operator authors as needed);
+  per-domain methodology selection surfaces at the framing of each
+  domain-bearing package.
 - **Production CLI tenant resolution via the registry.** Phase 2
   shape; `apps/cli/_runtime.py`'s hardcoded test-set mapping is
   honest about its dev-only scope. Activates when production
