@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -26,6 +26,8 @@ help:
 	@echo "  scheduled-check  Run scheduled supply-chain check; writes report to docs/security/scheduled-check-reports/"
 	@echo "  eval-run     Run the eval CLI's 'eval run' command inside padhanam-api; pass ARGS=\"--tenant-id a --interaction-set-id <uuid> ...\""
 	@echo "  eval-report  Run the eval CLI's 'eval report' command inside padhanam-api; pass ARGS=\"--tenant-id a --baseline-revision-id <uuid> ...\""
+	@echo "  ingest-run   Register a source file via the ingest CLI inside padhanam-api; pass ARGS=\"<path-inside-container> --tenant-id a\""
+	@echo "  ingest-worker  Run the long-running ingest worker for a tenant inside padhanam-api; pass ARGS=\"--tenant-id a [--max-iterations N]\""
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -137,3 +139,18 @@ eval-run: derive-env
 
 eval-report: derive-env
 	$(COMPOSE) exec padhanam-api python -m apps.cli eval report $(ARGS)
+
+# S19 ingest CLI. Same in-container invocation pattern as the eval
+# commands: per-tenant Postgres hostnames resolve over the Compose
+# network. ingest-run registers a source file (the file path is
+# inside the container — usually a /tmp/... path the test fixture
+# wrote, or /app/... for source-tree files). ingest-worker drains
+# the tenant's pending-source queue. Pass the CLI arguments via ARGS,
+# e.g.
+#   make ingest-run ARGS="/tmp/sample.md --tenant-id a"
+#   make ingest-worker ARGS="--tenant-id a --max-iterations 5"
+ingest-run: derive-env
+	$(COMPOSE) exec padhanam-api python -m apps.cli ingest run $(ARGS)
+
+ingest-worker: derive-env
+	$(COMPOSE) exec padhanam-api python -m apps.cli ingest worker $(ARGS)

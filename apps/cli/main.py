@@ -41,7 +41,7 @@ from uuid import UUID
 import typer
 
 from apps.cli._eval import run_eval, run_report
-from apps.cli._ingest import CLIIngestError, run_ingest_run
+from apps.cli._ingest import CLIIngestError, run_ingest_run, run_ingest_worker
 
 app = typer.Typer(
     name="padhanam",
@@ -217,6 +217,55 @@ def _emit(rendered: str, output_file: Optional[Path]) -> None:
             sys.stdout.write("\n")
         return
     output_file.write_text(rendered, encoding="utf-8")
+
+
+@ingest_app.command("worker")
+def ingest_worker(
+    tenant_id: Annotated[
+        str,
+        typer.Option(
+            "--tenant-id",
+            help="Tenant short label ('a', 'b') or UUID. The worker drains "
+            "this tenant's pending-source queue.",
+        ),
+    ],
+    poll_interval_seconds: Annotated[
+        float,
+        typer.Option(
+            "--poll-interval-seconds",
+            help="Seconds to wait between empty-queue polls.",
+        ),
+    ] = 1.0,
+    max_iterations: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-iterations",
+            help="Bounded run for tests; production omits this.",
+        ),
+    ] = None,
+) -> None:
+    """Drain the tenant's pending-source queue.
+
+    Long-running by default — exits gracefully on SIGINT or
+    SIGTERM with the in-flight claim completing first. Pass
+    ``--max-iterations N`` for bounded test runs that exit
+    after N empty polls or N successful claims.
+    """
+    import logging as _logging
+
+    _logging.basicConfig(
+        level=_logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        stream=sys.stdout,
+    )
+    processed = asyncio.run(
+        run_ingest_worker(
+            tenant_id=tenant_id,
+            poll_interval_seconds=poll_interval_seconds,
+            max_iterations=max_iterations,
+        )
+    )
+    sys.stdout.write(f"worker: processed {processed} source(s)\n")
 
 
 @ingest_app.command("run")

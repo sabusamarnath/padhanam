@@ -10,7 +10,8 @@ Two top-level coroutines:
     tenant's pending-source queue via SourceRepositoryPort.
     claim_pending_for_parse, dispatches to the right parser via
     the adapter registry, writes chunks atomically with the state
-    transition. Lands at S19 commit 6.
+    transition. Exits gracefully on SIGINT / SIGTERM via
+    asyncio's signal-handler integration.
 
 run_ingest_run flow:
   1. Resolve tenant + session factory via build_tenant_wiring.
@@ -24,23 +25,42 @@ run_ingest_run flow:
   5. Call register_source. Surface UnsupportedFileTypeError as a
      clear validation error.
 
+run_ingest_worker flow:
+  1. Resolve tenant + session factory via build_tenant_wiring.
+  2. Construct the Postgres source repository plus the parser
+     resolver from the adapter registry.
+  3. Loop:
+       - claim_pending_for_parse(tenant_id) — atomic claim via
+         SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1.
+       - if no row claimed: sleep for poll_interval_seconds.
+       - if a row claimed: parse_source(...) and continue.
+     The loop exits cleanly when the shutdown event fires (set by
+     the SIGINT/SIGTERM handler) — pending claims complete, then
+     the loop returns.
+
 The file-reading logic and tenant_context plumbing sit in this
 module rather than the application layer because both are
-composition concerns. The application use case takes raw bytes
-and a tenant_id; the CLI is responsible for reading and resolving.
+composition concerns. The application use cases take raw bytes,
+domain types, and ports; the CLI is responsible for reading and
+resolving.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import signal
 from pathlib import Path
 from uuid import UUID
 
+from contexts.ingestion.adapters.outbound.parsers import get_parser
 from contexts.ingestion.adapters.outbound.postgres.source_repository import (
     PostgresSourceRepository,
 )
 from contexts.ingestion.application.parser_dispatch import (
     file_type_for_extension,
 )
+from contexts.ingestion.application.parse_source import parse_source
 from contexts.ingestion.application.register_source import (
     UnsupportedFileTypeError,
     register_source,
@@ -50,6 +70,10 @@ from apps.cli._runtime import build_tenant_wiring
 
 
 _DEFAULT_USER_ID = "cli-operator"
+_DEFAULT_POLL_INTERVAL_SECONDS = 1.0
+
+
+_log = logging.getLogger("apps.cli.ingest")
 
 
 class CLIIngestError(Exception):
@@ -101,3 +125,94 @@ async def run_ingest_run(
             raise CLIIngestError(str(exc)) from exc
     finally:
         await wiring.engine.dispose()
+
+
+async def run_ingest_worker(
+    *,
+    tenant_id: str,
+    poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS,
+    max_iterations: int | None = None,
+) -> int:
+    """Long-running worker that drains the tenant's pending sources.
+
+    Returns the number of sources processed (parsed or failed).
+    ``max_iterations`` is for tests only — production invocations
+    leave it None and let the SIGINT/SIGTERM handler drive shutdown.
+    """
+    wiring = build_tenant_wiring(tenant_id)
+    repository = PostgresSourceRepository(wiring.session_factory)
+
+    shutdown_event = asyncio.Event()
+
+    def _on_signal(signum: int, _frame=None) -> None:
+        _log.info("worker: received signal %s, draining and exiting", signum)
+        shutdown_event.set()
+
+    loop = asyncio.get_running_loop()
+    handlers_installed: list[int] = []
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _on_signal, sig)
+            handlers_installed.append(sig)
+        except NotImplementedError:
+            # Windows / some test environments. Fall through; the
+            # max_iterations escape valve handles those callers.
+            pass
+
+    processed = 0
+    iteration = 0
+    try:
+        while not shutdown_event.is_set():
+            if max_iterations is not None and iteration >= max_iterations:
+                break
+            iteration += 1
+
+            claimed = await repository.claim_pending_for_parse(
+                str(wiring.tenant_context.tenant_id)
+            )
+            if claimed is None:
+                if max_iterations is not None:
+                    # In bounded test runs, no rows means we're done.
+                    break
+                try:
+                    await asyncio.wait_for(
+                        shutdown_event.wait(),
+                        timeout=poll_interval_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                continue
+
+            _log.info(
+                "worker: claimed source %s (file_name=%s, file_type=%s)",
+                claimed.id,
+                claimed.file_name,
+                claimed.file_type,
+            )
+            result = await parse_source(
+                source=claimed,
+                repository=repository,
+                parser_resolver=get_parser,
+            )
+            processed += 1
+            if result.final_state.value == "failed":
+                _log.warning(
+                    "worker: source %s parse failed: %s",
+                    result.source_id,
+                    result.parsing_error_text,
+                )
+            else:
+                _log.info(
+                    "worker: source %s parsed (%d chunks)",
+                    result.source_id,
+                    result.chunks_written,
+                )
+    finally:
+        for sig in handlers_installed:
+            try:
+                loop.remove_signal_handler(sig)
+            except NotImplementedError:
+                pass
+        await wiring.engine.dispose()
+
+    return processed
