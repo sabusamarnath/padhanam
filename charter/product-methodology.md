@@ -2,7 +2,7 @@
 
 What the Padhanam platform encodes for its users.
 
-This document is distinct from `charter/methodology.md`. The methodology document covers how Padhanam itself is built (start simple, refactor often; framing-prompt-as-recommendation; structural-promotion threshold). This document covers what the platform's Gem-on-top product surface encodes for the professional functions it demonstrates against.
+This document is distinct from `charter/methodology.md`. The methodology document covers how Padhanam itself is built (start simple, refactor often; framing-prompt-as-recommendation; structural-promotion threshold). This document covers what the platform's agent layer encodes for the professional functions it demonstrates against.
 
 ## The core commitment
 
@@ -56,7 +56,7 @@ Sub-workflows that inherit the chosen methodology: planning and scoping, executi
 
 ## Methodology shape diversity
 
-The methodologies in the lists above are not all the same architectural shape, and the diversity is intentional. Stage-Gate is a process methodology with gates and phase reviews; ADDIE is a sequence; Kano is a classification model; AIDA is a copywriting structure; SECI is a knowledge-creation cycle; April Dunford positioning is a worksheet shape; ABM tiering is a customer-segmentation rubric. These embed differently in the product. A Gem that defaults to Lean Value Tree shapes the agent's planning. A Gem that defaults to AIDA shapes the agent's outputs. The implementation pattern per methodology shape is part of what the demonstration surfaces and is settled per domain as the domain enters package scope.
+The methodologies in the lists above are not all the same architectural shape, and the diversity is intentional. Stage-Gate is a process methodology with gates and phase reviews; ADDIE is a sequence; Kano is a classification model; AIDA is a copywriting structure; SECI is a knowledge-creation cycle; April Dunford positioning is a worksheet shape; ABM tiering is a customer-segmentation rubric. These embed differently in the product. An agent that defaults to Lean Value Tree shapes its planning. An agent that defaults to AIDA shapes its outputs. The implementation pattern per methodology shape is part of what the demonstration surfaces and is settled per domain as the domain enters package scope.
 
 ## Build sequence
 

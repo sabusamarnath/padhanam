@@ -22,7 +22,7 @@ The operator's working domain is agentic systems. Building toward an agentic wor
 
 ## The demonstration's scope
 
-The platform's substrate (Phase 1, packages P1 through P12) supports a Gem-on-top product surface that demonstrates methodology embedding across four professional functions. The substrate is the architectural artefact; the Gem layer is where the proposition actually meets users.
+The platform's substrate (Phase 1, packages P1 through P12) supports an agent layer that demonstrates methodology embedding across four professional functions. The substrate is the architectural artefact; the agent layer is where the proposition actually meets users.
 
 The four functional domains the platform demonstrates against:
 

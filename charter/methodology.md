@@ -1,6 +1,6 @@
 # The Padhanam Methodology
 
-This document covers the build methodology: how Padhanam itself is built. It is distinct from `charter/product-methodology.md`, which covers what the platform encodes for its users (the Gem-on-top product surface and the methodologies embedded as defaults across the four professional functions Padhanam demonstrates against). When charter content describes operator discipline, build process, framing-prompt patterns, refactoring conventions, mechanical enforcement upgrades, or session-shape commitments, it lives here. When charter content describes per-domain methodology embedding for the product surface, it lives in `charter/product-methodology.md`.
+This document covers the build methodology: how Padhanam itself is built. It is distinct from `charter/product-methodology.md`, which covers what the platform encodes for its users (the agent layer and the methodologies embedded as defaults across the four professional functions Padhanam demonstrates against). When charter content describes operator discipline, build process, framing-prompt patterns, refactoring conventions, mechanical enforcement upgrades, or session-shape commitments, it lives here. When charter content describes per-domain methodology embedding for the product surface, it lives in `charter/product-methodology.md`.
 
 The articulation of how Padhanam works. Read at strategic sessions; revised at phase audits with the version log appended at the end. Per D39.
 

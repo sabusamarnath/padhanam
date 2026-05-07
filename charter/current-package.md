@@ -21,7 +21,7 @@ schema (default strategy field, filter tree field) and P8's agent
 runtime (composition orchestrator, strategy registry, three-strategy
 starter catalogue, filter tree translator). No package elevation
 needed; no roadmap v5. P7 (Agent CRUD) inherits the
-Gem-with-embedded-methodology pattern from the product reframe and
+agent-with-embedded-methodology pattern from the product reframe and
 the agent-config schema commitments from D66 and D67; the
 methodology-embedding shape established in
 [charter/product-methodology.md](product-methodology.md) plus the
