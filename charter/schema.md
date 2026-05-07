@@ -264,7 +264,12 @@ embedding vector). The `state` column on `sources` is the per-stage
 status field D60 commits to as the worker reentrancy seam; S19
 tracked the parsing stage (`{received, parsing, parsed, failed}`),
 S20 extends with the embedding stage (`{embedding, embedded,
-embedding_failed}`); S21 extends with the extraction stage.
+embedding_failed}`); S21 extends with the extraction stage. S22
+adds retrieval methods (vector cosine search via pgvector and
+graph traversal via Neo4j) that read the existing schema without
+schema changes — the per-source state filter at retrieval time is
+a `state = 'indexed'` predicate against `sources` per D65, not a
+new column.
 
 ### `sources`
 
