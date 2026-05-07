@@ -10,6 +10,7 @@ members = [
     "padhanam-cli",
     "padhanam-evaluation",
     "padhanam-inference",
+    "padhanam-ingestion",
     "padhanam-observability",
     "padhanam-tenancy",
 ]
@@ -1170,6 +1171,7 @@ dependencies = [
     { name = "padhanam-cli" },
     { name = "padhanam-evaluation" },
     { name = "padhanam-inference" },
+    { name = "padhanam-ingestion" },
     { name = "padhanam-observability" },
     { name = "padhanam-tenancy" },
     { name = "psycopg", extra = ["binary"] },
@@ -1196,6 +1198,7 @@ requires-dist = [
     { name = "padhanam-cli", virtual = "apps/cli" },
     { name = "padhanam-evaluation", virtual = "contexts/evaluation" },
     { name = "padhanam-inference", virtual = "contexts/inference" },
+    { name = "padhanam-ingestion", virtual = "contexts/ingestion" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
     { name = "padhanam-tenancy", virtual = "contexts/tenancy" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -1306,6 +1309,23 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-httpx", specifier = ">=0.48b0" },
     { name = "opentelemetry-sdk", specifier = ">=1.27" },
     { name = "opentelemetry-semantic-conventions", specifier = ">=0.48b0" },
+]
+
+[[package]]
+name = "padhanam-ingestion"
+version = "0.0.0"
+source = { virtual = "contexts/ingestion" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "markdown-it-py" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "markdown-it-py", specifier = ">=3.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 
 [[package]]

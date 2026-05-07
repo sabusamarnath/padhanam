@@ -68,6 +68,15 @@ layers =
     contexts.evaluation.ports
     contexts.evaluation.domain
 
+[importlinter:contract:layers-ingestion]
+name = Ingestion layers (hexagonal)
+type = layers
+layers =
+    contexts.ingestion.adapters
+    contexts.ingestion.application
+    contexts.ingestion.ports
+    contexts.ingestion.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -90,6 +99,7 @@ modules =
     contexts.audit.domain
     contexts.tenancy.domain
     contexts.evaluation.domain
+    contexts.ingestion.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -104,6 +114,7 @@ modules =
     contexts.audit.application
     contexts.tenancy.application
     contexts.evaluation.application
+    contexts.ingestion.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -118,6 +129,7 @@ modules =
     contexts.audit.adapters
     contexts.tenancy.adapters
     contexts.evaluation.adapters
+    contexts.ingestion.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -147,6 +159,7 @@ source_modules =
     contexts.audit.domain
     contexts.tenancy.domain
     contexts.evaluation.domain
+    contexts.ingestion.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -212,6 +225,7 @@ source_modules =
     contexts.audit
     contexts.tenancy
     contexts.evaluation
+    contexts.ingestion
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -235,6 +249,7 @@ source_modules =
     contexts.audit
     contexts.tenancy
     contexts.evaluation
+    contexts.ingestion
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
