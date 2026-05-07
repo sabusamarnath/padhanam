@@ -256,14 +256,15 @@ speculatively.
 ## Source ingestion tables
 
 Per-tenant track, lands at S19 via Alembic revision
-`0005_create_sources_and_chunks` per D60 / D61. Two tables comprise
-the S19 surface: `sources` (the upload primitive plus pipeline-state
-column) and `chunks` (the parsed-content rows that pgvector
-embeddings will reference at S20). The `state` column on `sources`
-is the per-stage status field D60 commits to as the worker
-reentrancy seam; at S19 it tracks only the parsing stage
-(`{received, parsing, parsed, failed}`). S20 extends the state
-space with the embedding stage and S21 with the extraction stage.
+`0005_create_sources_and_chunks` per D60 / D61, extended at S20 via
+revision `0006_add_chunk_embedding` per D62. Two tables comprise
+the surface: `sources` (the upload primitive plus pipeline-state
+column) and `chunks` (the parsed-content rows plus per-chunk
+embedding vector). The `state` column on `sources` is the per-stage
+status field D60 commits to as the worker reentrancy seam; S19
+tracked the parsing stage (`{received, parsing, parsed, failed}`),
+S20 extends with the embedding stage (`{embedding, embedded,
+embedding_failed}`); S21 extends with the extraction stage.
 
 ### `sources`
 
@@ -276,8 +277,9 @@ space with the embedding stage and S21 with the extraction stage.
 | `file_type`           | `text`          | not null; CHECK ∈ {`markdown`, `text`} per D61 (extends incrementally as parsers ship)                                                             |
 | `file_size_bytes`     | `bigint`        | not null                                                                                                                                          |
 | `raw_content`         | `bytea`         | not null at S19; the dev shape stores raw bytes on the row. Production object-store URI deferred until production deployment context arrives      |
-| `state`               | `text`          | not null; CHECK ∈ {`received`, `parsing`, `parsed`, `failed`}; default `'received'`                                                               |
+| `state`               | `text`          | not null; CHECK ∈ {`received`, `parsing`, `parsed`, `failed`, `embedding`, `embedded`, `embedding_failed`}; default `'received'`. S19 lands the parsing-stage values; S20 extends with the embedding-stage values per D62 via revision `0006_add_chunk_embedding` |
 | `parsing_error_text`  | `text`          | nullable; populated when `state = 'failed'` so the operator can see why parsing failed without trawling logs                                      |
+| `embedding_error_text` | `text`         | nullable; populated when `state = 'embedding_failed'` so the operator can see why embedding failed without trawling logs. Lands at S20 per D62    |
 | `created_by_user_id`  | `text`          | not null                                                                                                                                          |
 | `created_at`          | `timestamptz`   | not null; default `now()`                                                                                                                         |
 | `updated_at`          | `timestamptz`   | not null; default `now()`; the worker bumps this on each state transition                                                                         |
@@ -290,12 +292,16 @@ scan).
 The state column drives reentrancy per D60: `received` rows are
 claimed by the worker via `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1`,
 transitioned to `parsing` while the parser runs, and transitioned to
-`parsed` on success or `failed` on parser exception. Re-running the
-worker against an already-`parsed` source is a no-op (the claim
-query returns no rows for that source). Re-running against a
-`failed` source by manually transitioning back to `received` is the
-operator surface for retry at S19; richer retry semantics defer to
-production-deployment context.
+`parsed` on success or `failed` on parser exception. The S20
+embedding stage extends the same pattern: `parsed` rows are claimed
+by `claim_pending_for_embed`, transitioned to `embedding` while the
+embedder runs, and transitioned to `embedded` on success or
+`embedding_failed` on embedder exception. Re-running the worker
+against an already-`embedded` source is a no-op (the claim query
+returns no rows for that source). Re-running against a `failed` or
+`embedding_failed` source by manually transitioning back to
+`received` or `parsed` is the operator surface for retry at S19/S20;
+richer retry semantics defer to production-deployment context.
 
 ### `chunks`
 
@@ -308,6 +314,7 @@ production-deployment context.
 | `chunk_index`           | `integer`       | not null; ordering within the source                                                                                       |
 | `content`               | `text`          | not null                                                                                                                   |
 | `structural_metadata`   | `jsonb`         | not null; default `'{}'::jsonb`; carries parser-emitted structure (e.g., heading hierarchy for markdown, paragraph index for plain text) |
+| `embedding`             | `vector(768)`   | nullable; populated by the S20 embedding worker stage per D62. Dimension matches `nomic-embed-text:v1.5` native output. Lands at S20 via revision `0006_add_chunk_embedding` |
 | `created_at`            | `timestamptz`   | not null; default `now()`                                                                                                  |
 
 Indices: `ix_chunks_source_id` on `source_id`; UNIQUE
@@ -315,17 +322,24 @@ Indices: `ix_chunks_source_id` on `source_id`; UNIQUE
 already-parsed source produces an integrity violation rather than
 duplicate rows (the worker's idempotency contract per D60 means
 the parser write only happens once per source-index pair; the
-constraint is the structural backstop).
-
-S19 lands no embedding columns on `chunks`. The embedding column
-lands at S20 via the next per-tenant migration alongside the
-embedding adapter; the column name and type settle at S20 framing
-per the framing-prompt-as-recommendation pattern.
+constraint is the structural backstop). `chunks_embedding_hnsw_idx`
+on `(embedding vector_cosine_ops)` `USING hnsw` with pgvector
+defaults `(m=16, ef_construction=64)` per D62; lands at S20 via
+revision `0006_add_chunk_embedding`. Cosine matches
+`nomic-embed-text:v1.5`'s recommended distance metric.
 
 ## Vector store
 
-(Empty until S20 ships the embedding column on `chunks` and the
-pgvector index.)
+The S20 embedding column on `chunks` plus the
+`chunks_embedding_hnsw_idx` HNSW index over `vector_cosine_ops` is
+the vector store at P6. Per-tenant per D32 — each tenant's
+embeddings live on the tenant's own data plane; cross-tenant
+retrieval is structurally prevented by the per-tenant Postgres
+instance topology. The embedding worker writes via UPSERT on
+`chunks.id` for idempotent re-embed per D62 (re-running the
+embedding stage against the same chunk replaces the vector rather
+than producing a duplicate row; the column nullability lets the
+embedded vs not-yet-embedded shape stay observable on the row).
 
 ## Graph store
 
