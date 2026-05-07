@@ -671,3 +671,34 @@ metrics:
   corrected_by:
 ```
 
+## Data-retrieval design session
+roles: analyst, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing four artefacts: D66 (hybrid composition architecture) and D67 (filter expression architecture) appended to `charter/decisions.md`; resolution note appended to the data-retrieval item under the Ask David capture in `charter/captures.md`; `charter/current-package.md` updated to remove the data-retrieval design session from carryovers, add the retrieval-evaluation design session as a queued strategic-mode commitment ahead of P11, and update the next-strategic-mode-conversation paragraph to point at P7 framing.
+
+- Decisions: D66 (hybrid composition architecture; agent-runtime-executed composition; layered strategy selection per-agent default plus per-query override; three-strategy starter catalogue [vector_only, graph_only, parallel_rrf]; chunks as unit of composition; free-text query input with internal seed extraction; deferred shapes [cascade variants, parallel_weighted, routed, subgraph-as-output] named with explicit activation triggers; twelve rejected alternatives weighed; Kano: must-have on the architectural commitments, performance on the specific catalogue size). D67 (filter expression architecture; typed Boolean tree with AND/OR/NOT composers and Predicate leaves; bounded leaf operator vocabulary at P8 [eq, in, gt, gte, lt, lte]; scope-filters-pre-composition / cut-off-filters-post-composition pipeline split; cut-off as separate fields top_k and min_score on the retrieval spec rather than as predicates inside the filter tree; deferred operators [contains, exists/is_null, regex/like] with explicit triggers; eleven rejected alternatives weighed including the conjunctive-only-typed-object position which was the recommendation before operator pushback; Kano: must-have on the architectural commitments, performance on the specific field set).
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: The session held to the focused scope agreed at the open: hybrid composition and filter expressions only, with retrieval-evaluation deferred to its own session and query-rewriting-and-decomposition deferred to the P8 hierarchical-topology design session per the Ask David capture's queueing. The Kano classification of nine candidate surfaces (hybrid composition, filter expressions, retrieval evaluation, query rewriting, re-ranking, pagination, projection patterns, structured-data port, analytics-agent shape) at the prioritisation step caught the must-have/performance/delighter distribution honestly; the Kano-versus-RICE asymmetry on retrieval evaluation (must-have on Kano, high effort on RICE relative to on-runtime impact) was the structural argument for splitting it out, which is the design-session output that earns its own strategic-mode commitment ahead of P11. No package elevation needed; the design-session output is two D-entries inheriting into P7 (agent config schema) and P8 (runtime orchestrator and translator), which is the right shape for architectural commitments that the carryover note ("possible roadmap v5 if scope warrants package elevation") flagged as conditional on scope. Scope held at design-session size; no roadmap change.
+
+  One observation worth carrying forward as a Patterns-observed candidate: the start-simple-versus-structural-completeness distinction. The framing-prompt-as-recommendation pattern's three-class taxonomy (mechanical / structural-honesty / architectural-cost) names the kinds of refinement build absorbs from briefs; this observation names a related but distinct kind of refinement strategic-mode work absorbs from operator pushback. The pattern: when a foundational contract is being designed, start-simple applies to scope (which fields, operators, strategies are in v1) but not to structural completeness of the language those things compose into (Boolean composition, leaf operator bounds, pipeline split). Conflating the two produces under-designed primitives that force v2 to break v1, which contradicts procurement-defensibility. The OR/NOT pushback at the filter-expression sub-question was the first instance: the original recommendation deferred OR and NOT under start-simple framing; the operator pushback ("you will come across OR or NOT in real life") surfaced the misapplication; the revised recommendation accepted the combined Boolean-tree-with-bounded-leaves shape. Single instance at this session; not yet a Patterns-observed entry per the recurrence threshold; recorded here so the next strategic conversation that touches a foundational contract surface can decide whether to promote.
+
+  Method-wise, the conversation followed the same shape as the Ask David and product-reframe absorptions: the user-driven course-correction pattern fired once (the OR/NOT pushback) and was absorbed before it accumulated drift, which is a third named instance of the user-driven course-correction Patterns-observed entry from P6 close. The pattern continues to do load-bearing work across strategic-mode conversations.
+
+```
+metrics:
+  classification: new_work
+  brief_started: 2026-05-07
+  session_started: 2026-05-07
+  session_closed: 2026-05-07
+  merged: 2026-05-07
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
