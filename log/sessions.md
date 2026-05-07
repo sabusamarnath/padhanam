@@ -702,3 +702,34 @@ metrics:
   corrected_by:
 ```
 
+## P7 framing strategic block
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing three artefacts: D68 (P7 agent-CRUD framing) appended to `charter/decisions.md`; new file `charter/packages/p7-epic.md` holding the v1 epic note per D43; `charter/current-package.md` transitioned from between-packages state to active-P7 state with session breakdown, carryovers list refreshed (Product methodology selection-space updated to note P7's LVT commitment; Hierarchical multi-agent topology design session added as a P6→P7 carryover queued for P8 framing). One precursor commit landed earlier in the conversation: `docs(charter): drop Gem terminology, agent throughout`, replacing "Gem" terminology introduced at the product reframe absorption with "agent" across current-state charter files.
+
+- Decisions: D68 (P7 agent-CRUD framing; two bounded contexts (`contexts/methodology/` and `contexts/agent/`) with revision-shaped hash-chain audit per D31 and D26; methodology templates on control plane and platform-managed; agents on per-tenant with full independence after cloning; methodology lineage as immutable audit fields on revision 1 inherited downstream; tool allowlist as opaque strings at P7 with registry deferring to P8; one LVT methodology template plus one cloned PM agent at P7 close; CLI namespaces `padhanam methodology ...` and `padhanam agent ...`; eleven rejected alternatives weighed; Kano: must-have).
+
+- Tests: None. Documentation-only changes.
+
+- Reflection: P7 framing surfaced two course-corrections worth recording. First, the operator caught the "Gem" terminology choice from the product reframe ("Gem is very much a Gemini thing") and reverted to "agent" throughout. The Gem term landed at the product reframe absorption two days earlier; the cleanup commit replacing it across charter files preceded this framing. Fourth named instance of the user-driven course-correction Patterns-observed entry from P6 close. Second, the operator caught the framing's initial seeding-source recommendation (code constants for methodology templates) and reframed methodology as a platform-managed product offering rather than per-tenant tooling ("doesn't work when clients are dependent on you to manage the methodology"). This reframe expanded P7's bounded-context count from one to two, brought methodology-template CRUD into P7 scope, and committed methodology templates to control-plane storage. Fifth named instance of user-driven course-correction. The pattern continues to do load-bearing work across strategic-mode conversations and is now the most frequently-firing methodology pattern of the run.
+
+  Method-wise, the framing followed the Q1→Q2→Q3→Q4 priority order from the framing open. Q1 (methodology-embedding mechanism) and Q2 (versioning and audit posture) folded together because the platform-managed-methodology framing surfaced versioning as structural inside Q1's discussion. The remaining questions resolved cleanly: Q3 settled at one methodology (LVT) plus one agent at P7 close per start-simple; Q4 settled at tool allowlist as opaque strings deferring registry to P8.
+
+  Forward-affordance: P8 (Agent runtime) inherits the agent runtime concerns (composition orchestrator per D66, filter tree translator per D67, tool registry surfacing as the consumer for the tool allowlist field), the hierarchical-topology design session paired with P8 framing per the Ask David capture, and the within-tenant segmentation primitive question deferred since P6. Phase 1 progress: 6 of 12 packages closed at P6 close; P7 opens with framing committed; roughly 50% by RICE-effort weight remaining for Phase 1 close.
+
+```
+metrics:
+  classification: new_work
+  brief_started: 2026-05-08
+  session_started: 2026-05-08
+  session_closed: 2026-05-08
+  merged: 2026-05-08
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+
