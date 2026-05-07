@@ -1,4 +1,4 @@
-"""Async ingest orchestration for the CLI (S19).
+"""Async ingest orchestration for the CLI (S19, S20).
 
 Two top-level coroutines:
 
@@ -6,11 +6,16 @@ Two top-level coroutines:
     extension, derive the file_type, and call register_source.
     Returns the persisted source id.
 
-  - ``run_ingest_worker``: long-running worker loop that polls the
-    tenant's pending-source queue via SourceRepositoryPort.
-    claim_pending_for_parse, dispatches to the right parser via
-    the adapter registry, writes chunks atomically with the state
-    transition. Exits gracefully on SIGINT / SIGTERM via
+  - ``run_ingest_worker``: long-running worker loop that drains
+    the tenant's pipeline. Per iteration the worker first tries to
+    claim a ``received`` row (parse stage) via
+    ``claim_pending_for_parse``; if none, it tries to claim a
+    ``parsed`` row (embed stage per D62) via
+    ``claim_pending_for_embed``; if neither, it sleeps for the
+    poll interval. The two-stage shape is the worker-loop
+    extension D62 commits to: a single worker process drains both
+    stages, transitioning sources received → parsing → parsed →
+    embedding → embedded. Exits gracefully on SIGINT / SIGTERM via
     asyncio's signal-handler integration.
 
 run_ingest_run flow:
@@ -53,10 +58,14 @@ import signal
 from pathlib import Path
 from uuid import UUID
 
+from contexts.ingestion.adapters.outbound.embedding import (
+    LiteLLMChunkEmbedder,
+)
 from contexts.ingestion.adapters.outbound.parsers import get_parser
 from contexts.ingestion.adapters.outbound.postgres.source_repository import (
     PostgresSourceRepository,
 )
+from contexts.ingestion.application.embed_source import embed_source
 from contexts.ingestion.application.parser_dispatch import (
     file_type_for_extension,
 )
@@ -141,12 +150,14 @@ async def run_ingest_worker(
     leave it None and let the SIGINT/SIGTERM handler drive shutdown.
     """
     # Wire OTel TracerProvider so worker-emitted spans (parse stage,
-    # chunk-write stage) flow to Langfuse. The worker is the fourth
-    # caller of init_tracing per the S18 reflection's promotion-
-    # threshold note; helper lives at padhanam/observability/init_tracing.
+    # chunk-write stage, embed stage) flow to Langfuse. The worker
+    # is the fourth caller of init_tracing per the S18 reflection's
+    # promotion-threshold note; helper lives at
+    # padhanam/observability/init_tracing.
     provider = init_tracing("padhanam-ingestion-worker")
     wiring = build_tenant_wiring(tenant_id)
     repository = PostgresSourceRepository(wiring.session_factory)
+    embedder = LiteLLMChunkEmbedder()
 
     shutdown_event = asyncio.Event()
 
@@ -165,6 +176,7 @@ async def run_ingest_worker(
             # max_iterations escape valve handles those callers.
             pass
 
+    tenant_id_str = str(wiring.tenant_context.tenant_id)
     processed = 0
     iteration = 0
     try:
@@ -173,46 +185,83 @@ async def run_ingest_worker(
                 break
             iteration += 1
 
-            claimed = await repository.claim_pending_for_parse(
-                str(wiring.tenant_context.tenant_id)
+            # S20 / D62: drain the parse stage first, then the
+            # embed stage. Each iteration tries to claim from the
+            # earlier stage before the later one so a single worker
+            # process keeps both stages flowing without one starving
+            # the other.
+            parse_claimed = await repository.claim_pending_for_parse(
+                tenant_id_str
             )
-            if claimed is None:
-                if max_iterations is not None:
-                    # In bounded test runs, no rows means we're done.
-                    break
-                try:
-                    await asyncio.wait_for(
-                        shutdown_event.wait(),
-                        timeout=poll_interval_seconds,
+            if parse_claimed is not None:
+                _log.info(
+                    "worker: claimed source %s for parse (file_name=%s, "
+                    "file_type=%s)",
+                    parse_claimed.id,
+                    parse_claimed.file_name,
+                    parse_claimed.file_type,
+                )
+                parse_result = await parse_source(
+                    source=parse_claimed,
+                    repository=repository,
+                    parser_resolver=get_parser,
+                )
+                processed += 1
+                if parse_result.final_state.value == "failed":
+                    _log.warning(
+                        "worker: source %s parse failed: %s",
+                        parse_result.source_id,
+                        parse_result.parsing_error_text,
                     )
-                except asyncio.TimeoutError:
-                    pass
+                else:
+                    _log.info(
+                        "worker: source %s parsed (%d chunks)",
+                        parse_result.source_id,
+                        parse_result.chunks_written,
+                    )
                 continue
 
-            _log.info(
-                "worker: claimed source %s (file_name=%s, file_type=%s)",
-                claimed.id,
-                claimed.file_name,
-                claimed.file_type,
+            embed_claimed = await repository.claim_pending_for_embed(
+                tenant_id_str
             )
-            result = await parse_source(
-                source=claimed,
-                repository=repository,
-                parser_resolver=get_parser,
-            )
-            processed += 1
-            if result.final_state.value == "failed":
-                _log.warning(
-                    "worker: source %s parse failed: %s",
-                    result.source_id,
-                    result.parsing_error_text,
-                )
-            else:
+            if embed_claimed is not None:
                 _log.info(
-                    "worker: source %s parsed (%d chunks)",
-                    result.source_id,
-                    result.chunks_written,
+                    "worker: claimed source %s for embed (file_name=%s)",
+                    embed_claimed.id,
+                    embed_claimed.file_name,
                 )
+                embed_result = await embed_source(
+                    source=embed_claimed,
+                    repository=repository,
+                    embedder=embedder,
+                    tenant_context=wiring.tenant_context,
+                )
+                processed += 1
+                if embed_result.final_state.value == "embedding_failed":
+                    _log.warning(
+                        "worker: source %s embed failed: %s",
+                        embed_result.source_id,
+                        embed_result.embedding_error_text,
+                    )
+                else:
+                    _log.info(
+                        "worker: source %s embedded (%d embeddings)",
+                        embed_result.source_id,
+                        embed_result.embeddings_written,
+                    )
+                continue
+
+            # No claimable rows in either stage.
+            if max_iterations is not None:
+                # In bounded test runs, no rows means we're done.
+                break
+            try:
+                await asyncio.wait_for(
+                    shutdown_event.wait(),
+                    timeout=poll_interval_seconds,
+                )
+            except asyncio.TimeoutError:
+                pass
     finally:
         for sig in handlers_installed:
             try:

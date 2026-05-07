@@ -1,39 +1,39 @@
 """SourceRepositoryPort — read/write access for sources and chunks.
 
-The upload-side use case (``register_source``) and the worker-side
-use case (``parse_source``) call through here. Per-tenant routing
-is the adapter's responsibility: the Postgres adapter holds an
+The upload-side use case (``register_source``), the parse worker
+use case (``parse_source``), and the embed worker use case
+(``embed_source``) all call through here. Per-tenant routing is
+the adapter's responsibility: the Postgres adapter holds an
 ``async_sessionmaker`` resolved against the tenant's data plane via
 the tenancy context's session-factory cache (D36) — the same
 pattern S16's evaluation repositories established.
 
-Methods at S19:
+Methods at S20:
 
   - ``save_source``: persist a new Source row in ``received`` state.
-    Used by ``register_source``. Returns the persisted source id
-    (UUID).
-
-  - ``get_source``: read a single Source by id. Used by both the
-    register-side use case (idempotency check; not exercised at
-    S19's create-only flow) and the parse-side use case (after
-    claim, to load the row for the parser).
-
+  - ``get_source``: read a single Source by id, tenant-scoped.
   - ``claim_pending_for_parse``: atomic claim of a single pending
-    source via ``SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1`` per
-    D60's queue commitment. Returns the claimed Source with its
-    state already transitioned to ``parsing`` and the row updated
-    in the same transaction; concurrent workers get None for that
-    row. Tenant-scoped: only rows for the given tenant are
-    candidates.
-
-  - ``update_source_state``: transition a source to ``parsed`` or
-    ``failed``. Bumps ``updated_at``; sets ``parsing_error_text``
-    when transitioning to failed.
-
-  - ``save_chunks``: persist the chunks produced by the parser. The
-    UNIQUE(source_id, chunk_index) constraint per D61 is the
-    structural backstop; the worker's idempotency contract per D60
-    means the parser write only happens once per source-index pair.
+    source via SKIP LOCKED against ``received`` rows; transitions
+    to ``parsing``.
+  - ``claim_pending_for_embed``: same shape against ``parsed`` rows
+    per D62; transitions to ``embedding``. Two per-stage methods
+    rather than one parameterised method per the D62 reasoning —
+    each stage's claim has its own state-transition target and
+    keeps the SQL legible at the call site.
+  - ``update_source_state``: transition a source state; populate
+    ``parsing_error_text`` when transitioning to ``failed`` or
+    ``embedding_error_text`` when transitioning to
+    ``embedding_failed``.
+  - ``save_chunks``: persist the chunks produced by the parser.
+  - ``get_chunks_for_source``: load all chunks for a source so the
+    embed use case can hand them to the embedder.
+  - ``upsert_chunk_embeddings``: write per-chunk embedding vectors
+    via UPDATE on ``chunks.id`` per D62's idempotent re-embed
+    commitment. Re-running the embedding stage replaces the vector
+    rather than producing a duplicate row.
+  - ``count_embedded_chunks``: structural assertion helper for the
+    integration test; counts chunks with non-null ``embedding`` for
+    a source, tenant-scoped.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ from typing import Protocol, Sequence
 from uuid import UUID
 
 from contexts.ingestion.domain.chunk import Chunk
+from contexts.ingestion.domain.embedding import Embedding
 from contexts.ingestion.domain.source import Source
 from contexts.ingestion.domain.state import SourceState
 
@@ -67,23 +68,70 @@ class SourceRepositoryPort(Protocol):
         """
         ...
 
+    async def claim_pending_for_embed(
+        self, tenant_id: str
+    ) -> Source | None:
+        """Atomically claim one parsed source for embedding (D62).
+
+        Same SKIP LOCKED shape as the parse claim; selects rows in
+        ``parsed`` state and transitions them to ``embedding``
+        within the same transaction.
+        """
+        ...
+
     async def update_source_state(
         self,
         source_id: UUID,
         tenant_id: str,
         new_state: SourceState,
         parsing_error_text: str | None = None,
+        embedding_error_text: str | None = None,
     ) -> None:
-        """Transition a source's state; populate parsing_error_text
-        when transitioning to ``failed``.
+        """Transition a source's state.
+
+        Sets ``parsing_error_text`` only when transitioning to
+        ``failed``; sets ``embedding_error_text`` only when
+        transitioning to ``embedding_failed``. Other transitions
+        leave both error fields untouched.
         """
         ...
 
     async def save_chunks(self, chunks: Sequence[Chunk]) -> None:
-        """Persist the chunks produced by the parser.
+        """Persist the chunks produced by the parser."""
+        ...
 
-        Atomic per source: the worker invokes this within the same
-        transaction as the state transition to ``parsed`` so that a
-        partial chunk-write does not leave the row marked parsed.
+    async def get_chunks_for_source(
+        self, source_id: UUID, tenant_id: str
+    ) -> Sequence[Chunk]:
+        """Load all chunks for a source in chunk_index order.
+
+        Tenant-scoped: only chunks for the given tenant are
+        returned, preserving D24's tenant-isolation invariant on
+        the read path. Used by ``embed_source`` to fetch the
+        parsed chunks the embedder operates on.
+        """
+        ...
+
+    async def upsert_chunk_embeddings(
+        self,
+        embeddings: Sequence[Embedding],
+        tenant_id: str,
+    ) -> None:
+        """Write per-chunk embedding vectors via UPDATE on chunks.id.
+
+        Idempotent per D62: re-running the embed stage replaces the
+        vector for each chunk_id rather than producing a duplicate
+        row. Tenant-scoped: the WHERE clause includes tenant_id so
+        cross-tenant writes raise a structural mismatch rather than
+        silently updating the wrong row.
+        """
+        ...
+
+    async def count_embedded_chunks(
+        self, source_id: UUID, tenant_id: str
+    ) -> int:
+        """Return the count of chunks with a non-null embedding for
+        the source. Tenant-scoped. Helper for integration-test
+        assertions about the worker's embedding-write effect.
         """
         ...

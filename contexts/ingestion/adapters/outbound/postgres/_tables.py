@@ -33,6 +33,9 @@ sources = sa.Table(
     sa.Column("created_by_user_id", sa.Text, nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    # S20 / D62: embedding-stage error surface, mirroring
+    # parsing_error_text. Lands at revision 0006_add_chunk_embedding.
+    sa.Column("embedding_error_text", sa.Text, nullable=True),
 )
 
 chunks = sa.Table(

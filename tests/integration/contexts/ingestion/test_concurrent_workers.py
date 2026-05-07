@@ -1,17 +1,22 @@
-"""Concurrent-workers test for the SKIP LOCKED claim semantics (D60).
+"""Concurrent-workers test for the SKIP LOCKED claim semantics
+(D60 / D62).
 
 Two worker processes run concurrently against tenant_a; a single
-source is registered. Exactly one worker must claim it; the other
-must report 0 sources processed. The contract under test is that
-``SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1`` plus the in-
-transaction state transition prevents two workers from racing on
-the same row.
+source is registered. The S20 worker drains both the parse and
+embed stages per D62, so the test now asserts the full-pipeline
+no-double-processing invariant: exactly one chunk landed (no
+double-parse), exactly one embedding landed (no double-embed),
+and the source ends up ``embedded``. The per-worker counts may
+distribute either way (one worker doing the full pipeline, or one
+worker per stage) — the structural correctness invariants are
+what the SKIP LOCKED contract gates.
 
 This is the worker-loop counterpart of the structural tenant-
 isolation contract test: that one verifies the schema-level
 isolation; this one verifies the runtime-level concurrency
 isolation. Together they cover the "is the SKIP LOCKED pattern
-honest under load" question the brief's reflection prompt 2 asks.
+honest under load across both stages" question the S20 brief's
+reflection prompt extends from S19.
 
 Skips cleanly when Compose is not reachable.
 """
@@ -157,11 +162,24 @@ def _run_worker_thread(out: list[Tuple[int, str]], idx: int) -> None:
     out[idx] = (result.returncode, result.stdout)
 
 
-def test_two_concurrent_workers_claim_one_source_each(
+def test_two_concurrent_workers_no_double_processing_full_pipeline(
     compose_running: None,
 ) -> None:
-    """Single source registered; two workers race; total processed
-    across both = 1. SKIP LOCKED ensures no double-processing.
+    """Single source registered; two workers race the full pipeline
+    (parse + embed per D62). Asserts the structural-correctness
+    invariants the SKIP LOCKED contract gates:
+
+      - exactly one chunk landed (no double-parse)
+      - exactly one embedding landed (no double-embed)
+      - source ends up ``embedded`` (full pipeline ran)
+      - both workers exited cleanly
+
+    Per-worker processed counts may distribute either way: one
+    worker may do parse+embed (count=2) while the other does
+    nothing (count=0); or one worker does parse and the other
+    does embed (count=1 each). Both distributions satisfy the
+    no-doubling invariant; the invariant under test is the
+    structural correctness, not the per-worker distribution.
     """
     _exec_psql_tenant_a("TRUNCATE TABLE chunks, sources;")
     _write_file(
@@ -169,7 +187,7 @@ def test_two_concurrent_workers_claim_one_source_each(
         textwrap.dedent(
             """\
             # Race
-            One source, two workers, one winner.
+            One source, two workers, one final chunk and embedding.
             """
         ),
     )
@@ -186,8 +204,8 @@ def test_two_concurrent_workers_claim_one_source_each(
     # contention path explicitly.
     time.sleep(0.05)
     t2.start()
-    t1.join(timeout=90)
-    t2.join(timeout=90)
+    t1.join(timeout=120)
+    t2.join(timeout=120)
 
     # Both invocations completed cleanly.
     assert out[0][0] == 0, f"worker 1 stdout={out[0][1]!r}"
@@ -198,16 +216,24 @@ def test_two_concurrent_workers_claim_one_source_each(
         for line in stdout.splitlines():
             line = line.strip()
             if line.startswith("worker: processed "):
-                # "worker: processed N source(s)"
                 count = int(line.split()[2])
                 processed_each.append(count)
                 break
     assert len(processed_each) == 2
-    # Exactly one worker claimed the row; the other claimed nothing.
-    assert sorted(processed_each) == [0, 1], processed_each
+    # Total processed across both workers = 2 (one parse claim +
+    # one embed claim). No worker processed more than 2; no double-
+    # processing landed.
+    assert sum(processed_each) == 2, processed_each
+    assert all(c <= 2 for c in processed_each)
 
-    # Source ended up parsed exactly once with one chunk row.
+    # Source ended up embedded with exactly one chunk and one
+    # embedding. No double-parse (chunks=1) and no double-embed
+    # (embedded count=1).
     state = _exec_psql_tenant_a("SELECT state FROM sources")
-    assert state == "parsed"
+    assert state == "embedded"
     chunk_count = _exec_psql_tenant_a("SELECT count(*) FROM chunks")
     assert chunk_count == "1"
+    embedded_count = _exec_psql_tenant_a(
+        "SELECT count(*) FROM chunks WHERE embedding IS NOT NULL"
+    )
+    assert embedded_count == "1"

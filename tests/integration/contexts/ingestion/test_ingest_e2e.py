@@ -229,7 +229,12 @@ def _clean_tenant_a(compose_running: None) -> None:
     _truncate_ingestion_tables(_TENANT_B_LABEL)
 
 
-def test_register_and_parse_markdown() -> None:
+def test_register_parse_and_embed_markdown() -> None:
+    """S19/S20: worker drains both stages per D62. Markdown source
+    parses to heading-bounded chunks, then chunks are embedded.
+    Source state ends up ``embedded``; structural metadata from the
+    parse stage is preserved alongside the embedding column.
+    """
     markdown = textwrap.dedent(
         """\
         # Top Heading
@@ -249,15 +254,19 @@ def test_register_and_parse_markdown() -> None:
     source_id = _ingest_run(_TENANT_A_LABEL, "/tmp/e2e_test.md")
     assert len(source_id) == 36  # uuid4 string
 
-    worker_output = _ingest_worker(_TENANT_A_LABEL, max_iterations=3)
-    assert "processed 1 source" in worker_output
+    # max_iterations=5 lets the worker drain both stages (parse +
+    # embed) for the single registered source.
+    worker_output = _ingest_worker(_TENANT_A_LABEL, max_iterations=5)
+    # Parse stage processes the source, then embed stage processes
+    # it; total processed across both stages = 2.
+    assert "processed 2 source" in worker_output
 
-    # Source row state.
+    # Source row state — parse + embed pipeline complete.
     state = _exec_psql_tenant(
         _TENANT_A_LABEL,
         f"SELECT state FROM sources WHERE id='{source_id}'",
     )
-    assert state == "parsed"
+    assert state == "embedded"
 
     # Chunks: 3 expected (Top Heading, Section A, Section B).
     count = _exec_psql_tenant(
@@ -265,6 +274,14 @@ def test_register_and_parse_markdown() -> None:
         f"SELECT count(*) FROM chunks WHERE source_id='{source_id}'",
     )
     assert count == "3"
+
+    # All chunks carry an embedding after the embed stage.
+    embedded_count = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT count(*) FROM chunks "
+        f"WHERE source_id='{source_id}' AND embedding IS NOT NULL",
+    )
+    assert embedded_count == "3"
 
     # Structural metadata on the second chunk should record Section A.
     metadata = _exec_psql_tenant(
@@ -276,25 +293,32 @@ def test_register_and_parse_markdown() -> None:
     assert md == {"heading_text": "Section A", "heading_level": 2}
 
 
-def test_register_and_parse_plain_text() -> None:
+def test_register_parse_and_embed_plain_text() -> None:
     text = "para one\n\npara two\n\npara three\n"
     _write_file_in_container("/tmp/e2e_test.txt", text)
     source_id = _ingest_run(_TENANT_A_LABEL, "/tmp/e2e_test.txt")
 
-    worker_output = _ingest_worker(_TENANT_A_LABEL, max_iterations=3)
-    assert "processed 1 source" in worker_output
+    worker_output = _ingest_worker(_TENANT_A_LABEL, max_iterations=5)
+    assert "processed 2 source" in worker_output
 
     state = _exec_psql_tenant(
         _TENANT_A_LABEL,
         f"SELECT state FROM sources WHERE id='{source_id}'",
     )
-    assert state == "parsed"
+    assert state == "embedded"
 
     count = _exec_psql_tenant(
         _TENANT_A_LABEL,
         f"SELECT count(*) FROM chunks WHERE source_id='{source_id}'",
     )
     assert count == "3"
+
+    embedded_count = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT count(*) FROM chunks "
+        f"WHERE source_id='{source_id}' AND embedding IS NOT NULL",
+    )
+    assert embedded_count == "3"
 
     # paragraph_index on the third chunk should be 2 (0-indexed).
     metadata = _exec_psql_tenant(
@@ -367,6 +391,75 @@ def test_worker_marks_source_failed_on_parser_error() -> None:
         f"SELECT count(*) FROM chunks WHERE source_id='{source_id}'",
     )
     assert count == "0"
+
+
+def test_register_parse_and_embed_markdown_end_to_end() -> None:
+    """S20 / D62: full pipeline through embed.
+
+    Register a markdown source, run the worker (which drains parse
+    then embed), assert the source state transitions to ``embedded``,
+    every chunk has a non-null 768-dim embedding, and a vector-
+    distance query against the HNSW index returns the expected row.
+    """
+    markdown = textwrap.dedent(
+        """\
+        # Top
+        body for top
+
+        ## Section
+        body for section
+        """
+    )
+    _write_file_in_container("/tmp/e2e_embed.md", markdown)
+    source_id = _ingest_run(_TENANT_A_LABEL, "/tmp/e2e_embed.md")
+
+    # max_iterations=5 lets the worker drain both stages (parse +
+    # embed) for the single registered source.
+    worker_output = _ingest_worker(_TENANT_A_LABEL, max_iterations=5)
+    # Two stage transitions per source: parse + embed = 2 processed.
+    assert "processed 2 source" in worker_output
+
+    state = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT state FROM sources WHERE id='{source_id}'",
+    )
+    assert state == "embedded"
+
+    embedded_count = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT count(*) FROM chunks "
+        f"WHERE source_id='{source_id}' AND embedding IS NOT NULL",
+    )
+    total_count = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT count(*) FROM chunks WHERE source_id='{source_id}'",
+    )
+    assert embedded_count == total_count
+    assert int(embedded_count) >= 1
+
+    # Vector dimension matches D62 / nomic-embed-text:v1.5 native
+    # output. vector_dims is pgvector's accessor for vector length.
+    dim = _exec_psql_tenant(
+        _TENANT_A_LABEL,
+        f"SELECT vector_dims(embedding) FROM chunks "
+        f"WHERE source_id='{source_id}' LIMIT 1",
+    )
+    assert dim == "768"
+
+
+def test_worker_idempotent_on_already_embedded_source() -> None:
+    """Re-running the worker against an already-embedded source
+    claims no new rows. Per D62 the embed stage is idempotent the
+    same way the parse stage is — claim_pending_for_embed filters
+    on state='parsed' and an embedded source is excluded."""
+    markdown = "# Idempotent embed\n\nbody\n"
+    _write_file_in_container("/tmp/e2e_embed_idem.md", markdown)
+    _ingest_run(_TENANT_A_LABEL, "/tmp/e2e_embed_idem.md")
+    _ingest_worker(_TENANT_A_LABEL, max_iterations=5)
+
+    # Second worker run claims nothing.
+    second = _ingest_worker(_TENANT_A_LABEL, max_iterations=5)
+    assert "processed 0 source" in second
 
 
 def test_cross_tenant_access_returns_no_rows() -> None:
