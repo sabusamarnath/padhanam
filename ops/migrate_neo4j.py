@@ -89,14 +89,13 @@ def _is_applied(driver, version: str) -> bool:
 
 def _record_applied(driver, version: str) -> None:
     with driver.session() as session:
-        session.execute_write(
-            lambda tx: tx.run(
-                "MERGE (m:_Migration {version: $version}) "
-                "ON CREATE SET m.applied_at = datetime() "
-                "RETURN m",
-                version=version,
-            ).consume()
+        result = session.run(
+            "MERGE (m:_Migration {version: $version}) "
+            "ON CREATE SET m.applied_at = datetime() "
+            "RETURN m",
+            version=version,
         )
+        result.consume()
 
 
 def _apply_migration(driver, file: Path) -> None:
@@ -108,7 +107,8 @@ def _apply_migration(driver, file: Path) -> None:
     statements = _split_statements(file.read_text(encoding="utf-8"))
     with driver.session() as session:
         for stmt in statements:
-            session.run(stmt).consume()
+            result = session.run(stmt)
+            result.consume()
     _record_applied(driver, version)
     log.info("phase 3: %s applied", version)
 
