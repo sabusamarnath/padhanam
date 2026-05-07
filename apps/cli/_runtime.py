@@ -34,15 +34,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from padhanam.config import ObservabilitySettings, TenantPostgresSettings
+from padhanam.config import TenantPostgresSettings
+from padhanam.observability import init_tracing as _init_tracing_helper
 from shared_kernel import TenantContext
 
 
@@ -113,33 +108,13 @@ def session_factory_for_tenant(
 
 
 def init_tracing(service_name: str = "padhanam-cli") -> TracerProvider:
-    """Wire the OTel TracerProvider for bare-script trace emission.
-
-    Returns the configured TracerProvider so the caller can invoke
-    ``force_flush`` before the CLI exits, ensuring the BatchSpanProcessor
-    flushes pending spans to the Langfuse OTLP receiver. Mirrors
-    apps/api/main.py's ``_configure_tracing`` shape.
-
-    The provider is set globally via ``trace.set_tracer_provider``;
-    repeat calls within the same Python process update the global
-    provider, which is fine for a CLI invocation but would be a
-    threading-vs-state hazard in a long-lived app. The CLI process
-    is ephemeral so the global-state shape is honest.
+    """Thin wrapper around the shared init_tracing helper (S19
+    promotion). Re-exported here so existing callers
+    (apps.cli._eval.run_eval, apps.cli._eval.run_report) keep
+    working without churn; the body now defers to
+    padhanam.observability.init_tracing.
     """
-    obs = ObservabilitySettings()
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": service_name})
-    )
-    provider.add_span_processor(
-        BatchSpanProcessor(
-            OTLPSpanExporter(
-                endpoint=obs.otlp_endpoint,
-                headers={"Authorization": obs.otlp_basic_auth_header},
-            )
-        )
-    )
-    trace.set_tracer_provider(provider)
-    return provider
+    return _init_tracing_helper(service_name)
 
 
 @dataclass(frozen=True)

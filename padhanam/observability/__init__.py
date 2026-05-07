@@ -2,6 +2,7 @@ from padhanam.observability.credential_scrub import (
     CredentialScrubFilter,
     install_credential_scrub,
 )
+from padhanam.observability.init_tracing import init_tracing
 from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
@@ -15,5 +16,6 @@ __all__ = [
     "SecurityEventCategory",
     "SecurityEventLogger",
     "file_security_event_logger",
+    "init_tracing",
     "install_credential_scrub",
 ]

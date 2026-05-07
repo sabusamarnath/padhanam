@@ -123,36 +123,16 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
 
-# Initialise the OTel SDK so the LiteLLMAdapter's span carries a
-# real trace_id. The FastAPI app does this at startup; the bare
-# script driver here mirrors that. Without it, the SDK's default
-# no-op provider produces trace_id=0 and Completion.trace_id=None.
-from padhanam.config import ObservabilitySettings as _Obs
-_obs = _Obs()
-_provider = TracerProvider(
-    resource=Resource.create({"service.name": "padhanam-eval-e2e"})
-)
-_provider.add_span_processor(
-    BatchSpanProcessor(
-        OTLPSpanExporter(
-            endpoint=_obs.otlp_endpoint,
-            headers={"Authorization": _obs.otlp_basic_auth_header},
-        )
-    )
-)
-trace.set_tracer_provider(_provider)
+# S19: bare-script TracerProvider setup lifts to the shared helper.
+# Without it the SDK's default no-op provider produces trace_id=0
+# and Completion.trace_id=None.
+from padhanam.observability import init_tracing
+init_tracing("padhanam-eval-e2e")
 
 from contexts.evaluation.adapters.outbound.inference_adapter import (
     InferenceAdapter,

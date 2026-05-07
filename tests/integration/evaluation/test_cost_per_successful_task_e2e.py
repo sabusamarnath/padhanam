@@ -124,36 +124,17 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
 
-# OTel SDK initialisation (S17a-established pattern: bare-script
-# drivers must mirror the FastAPI app's startup setup; without it
-# trace_id is zero and Completion.trace_id is None, so the cost-
-# rollup path would have nothing to query).
-from padhanam.config import ObservabilitySettings as _Obs
-_obs = _Obs()
-_provider = TracerProvider(
-    resource=Resource.create({"service.name": "padhanam-eval-cost-e2e"})
-)
-_provider.add_span_processor(
-    BatchSpanProcessor(
-        OTLPSpanExporter(
-            endpoint=_obs.otlp_endpoint,
-            headers={"Authorization": _obs.otlp_basic_auth_header},
-        )
-    )
-)
-trace.set_tracer_provider(_provider)
+# S19: bare-script TracerProvider setup lifts to the shared helper.
+# Pattern: bare-script drivers must mirror the FastAPI app's startup
+# setup; without it trace_id is zero and Completion.trace_id is None,
+# so the cost-rollup path has nothing to query.
+from padhanam.observability import init_tracing
+init_tracing("padhanam-eval-cost-e2e")
 
 from contexts.evaluation.adapters.outbound.cost_query_adapter import (
     CostQueryAdapter,

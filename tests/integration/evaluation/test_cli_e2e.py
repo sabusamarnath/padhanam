@@ -137,32 +137,14 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import sqlalchemy as sa
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
 
-from padhanam.config import ObservabilitySettings as _Obs
-_obs = _Obs()
-_provider = TracerProvider(
-    resource=Resource.create({"service.name": "padhanam-cli-e2e-setup"})
-)
-_provider.add_span_processor(
-    BatchSpanProcessor(
-        OTLPSpanExporter(
-            endpoint=_obs.otlp_endpoint,
-            headers={"Authorization": _obs.otlp_basic_auth_header},
-        )
-    )
-)
-trace.set_tracer_provider(_provider)
+# S19: bare-script TracerProvider setup lifts to the shared helper.
+from padhanam.observability import init_tracing
+init_tracing("padhanam-cli-e2e-setup")
 
 from contexts.evaluation.adapters.outbound.inference_adapter import (
     InferenceAdapter,

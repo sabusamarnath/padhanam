@@ -65,6 +65,7 @@ from contexts.ingestion.application.register_source import (
     UnsupportedFileTypeError,
     register_source,
 )
+from padhanam.observability import init_tracing
 
 from apps.cli._runtime import build_tenant_wiring
 
@@ -139,6 +140,11 @@ async def run_ingest_worker(
     ``max_iterations`` is for tests only — production invocations
     leave it None and let the SIGINT/SIGTERM handler drive shutdown.
     """
+    # Wire OTel TracerProvider so worker-emitted spans (parse stage,
+    # chunk-write stage) flow to Langfuse. The worker is the fourth
+    # caller of init_tracing per the S18 reflection's promotion-
+    # threshold note; helper lives at padhanam/observability/init_tracing.
+    provider = init_tracing("padhanam-ingestion-worker")
     wiring = build_tenant_wiring(tenant_id)
     repository = PostgresSourceRepository(wiring.session_factory)
 
@@ -213,6 +219,10 @@ async def run_ingest_worker(
                 loop.remove_signal_handler(sig)
             except NotImplementedError:
                 pass
+        # Flush pending spans before the process exits — the
+        # BatchSpanProcessor batches and a short-lived worker run
+        # otherwise loses the tail.
+        provider.force_flush(timeout_millis=5_000)
         await wiring.engine.dispose()
 
     return processed

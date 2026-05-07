@@ -26,12 +26,7 @@ from dataclasses import dataclass
 from typing import AsyncIterator
 
 from fastapi import FastAPI
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from apps.api.middleware import AuthenticationMiddleware
 from apps.api.routers import health as health_router
@@ -53,10 +48,9 @@ from shared_kernel import TenantId as SharedTenantId
 from padhanam.config import (
     ControlPlaneSettings,
     InferenceSettings,
-    ObservabilitySettings,
 )
 from padhanam.events import DomainEvent, SynchronousEventBus
-from padhanam.observability import install_credential_scrub
+from padhanam.observability import init_tracing, install_credential_scrub
 from padhanam.observability.security_events import file_security_event_logger
 from padhanam.security import Principal
 
@@ -144,22 +138,12 @@ def _build_default_compositions() -> AppCompositions:
 
 
 def _configure_tracing(service_name: str = "padhanam-api") -> None:
-    """Wire OTel SDK with OTLP/HTTP export to the Langfuse endpoint.
-
-    The endpoint comes from ObservabilitySettings (D19). The exporter
-    uses HTTP/protobuf because that's the protocol Langfuse 3 ingests;
-    gRPC is not supported (S6 reconciliation finding).
+    """Thin wrapper around the shared init_tracing helper (S19
+    promotion). Kept as a one-liner so tests that patch
+    _configure_tracing keep working without churn; new callers
+    import init_tracing directly per S19 commit 7.
     """
-    observability = ObservabilitySettings()
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": service_name})
-    )
-    exporter = OTLPSpanExporter(
-        endpoint=observability.otlp_endpoint,
-        headers={"Authorization": observability.otlp_basic_auth_header},
-    )
-    provider.add_span_processor(BatchSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
+    init_tracing(service_name)
 
 
 def create_app(
