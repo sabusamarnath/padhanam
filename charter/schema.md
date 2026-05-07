@@ -341,6 +341,60 @@ embedding stage against the same chunk replaces the vector rather
 than producing a duplicate row; the column nullability lets the
 embedded vs not-yet-embedded shape stay observable on the row).
 
-## Graph store
+## Graph store (Neo4j 5, shared instance, tenant-property scoping)
 
-(Empty until S21 ships Neo4j writes per the deferred-decisions entry.)
+Lands at S21 per D63 and D64 via Cypher migration
+`migrations/neo4j/0001_base_constraints.cypher`. Single Neo4j 5
+Community instance (`padhanam-neo4j` Compose service, pinned per
+D10) shared across all tenants. Tenant isolation is enforced at
+the property level on both nodes and relationships, structurally
+gated by the `TenantScopedNeo4jSession` wrapper at
+`contexts/ingestion/adapters/outbound/neo4j/` per D63 (raw
+`neo4j` driver imports forbidden outside the wrapper module by the
+`neo4j-confined` import-linter contract and by AST enforcement
+test `tests/_enforcement/test_no_raw_neo4j_session.py`). Contract
+tests under `tests/contract/tenant_isolation/` verify cross-tenant
+read and write access fails on both directions.
+
+### `:Entity` nodes
+
+| Property            | Type             | Notes                                                                                            |
+|---------------------|------------------|--------------------------------------------------------------------------------------------------|
+| `tenant_id`         | `String`         | not empty; constrained by tenant-isolation predicate at every Cypher query                       |
+| `jurisdiction`      | `String`         | first-class per D12; matches the source's jurisdiction                                           |
+| `name`              | `String`         | extracted from chunks; the human-readable label of the entity                                    |
+| `entity_type`       | `String`         | free-form per D64; no taxonomy commitment at S21                                                 |
+| `source_chunk_ids`  | `List<String>`   | provenance back to per-tenant Postgres `chunks.id` rows; appended on re-extraction MERGE         |
+| `created_at`        | `DateTime`       | set on initial MERGE; not updated on subsequent MERGEs against the same composite key            |
+
+Uniqueness constraint: `entity_unique_per_tenant` on
+`(tenant_id, name, entity_type)`. The constraint doubles as the
+composite-key index for tenant-scoped entity lookup. Cypher
+MERGE on this composite key produces idempotent re-extraction:
+the second MERGE with the same `(tenant_id, name, entity_type)`
+matches the existing node and updates the mutable
+`source_chunk_ids` array additively.
+
+### Relationships
+
+Typed Neo4j edges. The relationship type comes from the
+extraction prompt at runtime; no taxonomy commitment per D64.
+Properties on every relationship:
+
+| Property            | Type        | Notes                                                                                            |
+|---------------------|-------------|--------------------------------------------------------------------------------------------------|
+| `tenant_id`         | `String`    | not empty; matches both endpoint nodes' `tenant_id`                                              |
+| `jurisdiction`      | `String`    | matches both endpoint nodes' `jurisdiction`                                                      |
+| `source_chunk_id`   | `String`    | provenance to the per-tenant Postgres `chunks.id` row that produced the relationship             |
+| `created_at`        | `DateTime`  | set on initial MERGE                                                                             |
+
+Uniqueness: composite key
+`(tenant_id, source_id, target_id, relationship_type, source_chunk_id)`.
+Neo4j Community Edition does not support relationship-property
+uniqueness constraints declaratively; uniqueness is enforced
+through the MERGE pattern in the GraphRepository adapter (Cypher
+`MERGE (a)-[r:RELTYPE {tenant_id: ..., source_chunk_id: ...}]->(b)`
+keyed on the five-component composite). The same chunk re-extracted
+produces no duplicate edges; different chunks producing the same
+endpoint pair and relationship type produce distinct edges keyed
+on `source_chunk_id`, preserving provenance.

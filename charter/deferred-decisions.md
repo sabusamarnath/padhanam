@@ -126,13 +126,11 @@ These are performance-category improvements: each scales the bet linearly by red
 
 ## Per-tenant topology for Neo4j
 
-Activates at the session that first writes to Neo4j during P6.
+Activated at S21 per D63 with the choice of a shared Neo4j 5 Community instance and property-based tenant scoping enforced through a `TenantScopedNeo4jSession` wrapper at the adapter boundary (raw `neo4j` driver imports forbidden outside the wrapper by the `neo4j-confined` import-linter contract plus AST enforcement test) plus tenant-isolation contract tests on both reads and writes. The entry remains as the activation marker for the production-deployment revisit, when per-tenant Neo4j containers may earn back their roughly 1GB-RAM-per-tenant local-dev cost against production isolation, residency, or operational requirements that Phase 1 does not yet exercise.
 
-D1 commits database-per-tenant. D32 settled the Postgres topology as separate instances per tenant. Neo4j Community Edition does not support multiple databases the way Postgres instances do, so the equivalent commitment for graph storage needs to land explicitly rather than be assumed. Options span per-tenant Neo4j containers (extends D32's posture; meaningful local dev cost in RAM), a shared Neo4j instance with property-based tenant scoping enforced through the routing layer and tenant-isolation contract tests (cheaper; explicit deviation from D32 with reasoning recorded), and a deferred-to-production shape that ships shared at P6 and revisits when production deployment context arrives.
+**Tenant isolation is non-negotiable however the topology lands.** Property-based scoping at Phase 1 is structurally gated by the wrapper plus contract tests; per-tenant containers at production-deployment context would shift the structural gate from the wrapper to the connection-resolution layer (one bolt URL per tenant, mirroring D36's per-tenant Postgres engine cache) without changing the discipline at the integration test layer.
 
-**Tenant isolation is non-negotiable however the topology lands.** Whichever option is chosen, contract tests in the existing `tests/contract/tenant_isolation/` harness per D24 verify cross-tenant graph access fails. The discipline holds at the integration layer regardless of physical topology choice.
-
-**The specific D-entry lands at the session that first writes to Neo4j during P6.** Phase 1 has two test tenants and toy corpus data; framing-altitude commitment is reasoning into a position rather than validating one. The implementing session names the option space, picks one with reasoning, and lands the D-entry alongside the Compose topology change, the migration approach, and the isolation tests.
+**Revisit triggers.** Production-deployment context with one or more of: (1) a tenant whose data-residency requirements forbid co-location of graph data even under property scoping; (2) measured operational pressure where a single shared Neo4j instance's blast radius (one tenant's runaway extraction job degrading every other tenant's read latency) becomes a real production concern; (3) a security-review finding that property-based scoping is insufficient against a specific threat model the production deployment must defend. None of the three apply at Phase 1 scope; all three are credible at production scale.
 
 ## Personalization as a runtime concern
 
