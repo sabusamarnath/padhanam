@@ -283,3 +283,49 @@ forbidden_modules =
     fastapi
     starlette
 allow_indirect_imports = false
+
+# ---------------------------------------------------------------------------
+# S21 / D63 — neo4j SDK confined to the ingestion outbound adapter.
+# The single Cypher-execution surface lives at
+# ``contexts.ingestion.adapters.outbound.neo4j``; the Phase 3 Cypher
+# migration runner at ``ops.migrate_neo4j`` is the only other allowed
+# importer (``ops`` is not an import-linter root, so it is invisible
+# to these contracts and does not require an exemption clause).
+# Together with the AST enforcement test at
+# ``tests/_enforcement/test_no_raw_neo4j_session.py``, the contract
+# makes property-based tenant scoping defensible at audit: missing-
+# predicate Cypher cannot exist in callable code because every
+# Cypher path goes through the wrapper that auto-binds the
+# tenant_id predicate.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:neo4j-confined]
+name = neo4j SDK confined to the ingestion neo4j outbound adapter
+type = forbidden
+source_modules =
+    padhanam
+    shared_kernel
+    contexts.inference
+    contexts.observability
+    contexts.audit
+    contexts.tenancy
+    contexts.evaluation
+    contexts.ingestion.domain
+    contexts.ingestion.application
+    contexts.ingestion.ports
+    contexts.ingestion.adapters.inbound
+    contexts.ingestion.adapters.outbound.parsers
+    contexts.ingestion.adapters.outbound.postgres
+    contexts.ingestion.adapters.outbound.embedding
+forbidden_modules =
+    neo4j
+allow_indirect_imports = false
+
+[importlinter:contract:neo4j-confined-apps]
+name = neo4j direct import forbidden in apps
+type = forbidden
+source_modules =
+    apps
+forbidden_modules =
+    neo4j
+allow_indirect_imports = true

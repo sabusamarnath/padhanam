@@ -21,6 +21,15 @@ dependencies = [
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
     "opentelemetry-semantic-conventions>=0.48b0",
+    # S21 / D63: the Neo4j Python async driver enters the ingestion
+    # context only through ``adapters/outbound/neo4j/``; the
+    # ``neo4j-confined`` import-linter contract plus the AST
+    # enforcement test at ``tests/_enforcement/test_no_raw_neo4j_session.py``
+    # fence the boundary mechanically. The dep is also declared at
+    # the root pyproject for the ``ops.migrate_neo4j`` Cypher
+    # migration runner; declaring per-context here keeps D30's
+    # per-context dep-scoping invariant honest.
+    "neo4j>=5.26,<6",
 ]
 
 [tool.uv]

@@ -1,0 +1,136 @@
+"""Neo4j implementation of GraphRepositoryPort (D63 / D64).
+
+Long-lived adapter constructed once per process; wraps the shared
+``AsyncDriver`` plus the Neo4jSettings credentials. Each
+GraphRepositoryPort method opens a fresh
+``TenantScopedNeo4jSession`` for the duration of the call so the
+bound tenant_id predicate is auto-applied to every Cypher
+template the wrapper executes.
+
+The adapter translates Neo4j driver exceptions into the port's
+two error categories: retryable infra failures
+(``ServiceUnavailable``, ``SessionExpired``, ``TransientError``,
+``IncompleteCommit``) become ``GraphRepositoryError``; everything
+else (auth, schema mismatch, malformed Cypher, value errors from
+the wrapper's tenant-id validation) becomes
+``GraphRepositoryConfigurationError``.
+
+Construction: pass ``Neo4jSettings`` and a connection lifecycle
+hook (``close()``) that the application's shutdown path calls so
+the driver disposes cleanly.
+"""
+
+from __future__ import annotations
+
+from typing import Sequence
+from uuid import UUID
+
+from neo4j import AsyncDriver, AsyncGraphDatabase
+from neo4j.exceptions import (
+    AuthError,
+    ConfigurationError,
+    Neo4jError,
+    ServiceUnavailable,
+    SessionExpired,
+    TransientError,
+)
+
+from contexts.ingestion.adapters.outbound.neo4j.session import (
+    TenantScopedNeo4jSession,
+)
+from contexts.ingestion.domain.entity import Entity
+from contexts.ingestion.domain.relationship import Relationship
+from contexts.ingestion.ports.graph_repository_port import (
+    GraphRepositoryConfigurationError,
+    GraphRepositoryError,
+)
+from padhanam.config import Neo4jSettings
+from shared_kernel import TenantContext
+
+
+_RETRYABLE_DRIVER_EXC = (ServiceUnavailable, SessionExpired, TransientError)
+_NON_RETRYABLE_DRIVER_EXC = (AuthError, ConfigurationError)
+
+
+class Neo4jGraphRepository:
+    """Concrete GraphRepositoryPort against the shared Neo4j 5
+    Community instance per D63.
+    """
+
+    def __init__(self, driver: AsyncDriver) -> None:
+        self._driver = driver
+
+    @classmethod
+    def from_settings(cls, settings: Neo4jSettings) -> "Neo4jGraphRepository":
+        driver = AsyncGraphDatabase.driver(
+            settings.bolt_uri,
+            auth=(settings.user, settings.password),
+        )
+        return cls(driver)
+
+    async def close(self) -> None:
+        await self._driver.close()
+
+    async def merge_entities(
+        self,
+        entities: Sequence[Entity],
+        tenant_context: TenantContext,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_entities(entities)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except ValueError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def merge_relationships(
+        self,
+        relationships: Sequence[Relationship],
+        tenant_context: TenantContext,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_relationships(relationships)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except ValueError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def get_entities_by_chunk_ids(
+        self,
+        chunk_ids: Sequence[UUID],
+        tenant_context: TenantContext,
+    ) -> Sequence[Entity]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.get_entities_by_chunk_ids(chunk_ids)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def get_relationships_by_chunk_ids(
+        self,
+        chunk_ids: Sequence[UUID],
+        tenant_context: TenantContext,
+    ) -> Sequence[Relationship]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.get_relationships_by_chunk_ids(chunk_ids)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
