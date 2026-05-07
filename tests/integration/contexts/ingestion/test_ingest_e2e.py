@@ -200,10 +200,20 @@ def _ingest_run_expect_error(
     )
 
 
-def _ingest_worker(label: str, max_iterations: int = 5) -> str:
+def _ingest_worker(
+    label: str,
+    max_iterations: int = 5,
+    stages: str = "parse,embed",
+) -> str:
     """Invoke the worker for ``label`` for a bounded number of
     iterations; return the stdout (so the caller can assert the
     "processed N source(s)" line).
+
+    S21: the helper defaults to ``parse,embed`` stages so existing
+    parse-and-embed-shaped tests keep their original scope without
+    invoking the S21 extraction LLM call. The full-pipeline e2e
+    test in commit 6 passes ``parse,embed,extract`` to exercise
+    the indexed terminal state.
     """
     result = _exec(
         "padhanam-api",
@@ -216,6 +226,8 @@ def _ingest_worker(label: str, max_iterations: int = 5) -> str:
         label,
         "--max-iterations",
         str(max_iterations),
+        "--stages",
+        stages,
     )
     return result.stdout
 

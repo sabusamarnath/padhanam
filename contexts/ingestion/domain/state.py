@@ -1,11 +1,11 @@
-"""Source pipeline state (D60 / D61 / D62).
+"""Source pipeline state (D60 / D61 / D62 / D64).
 
 The per-stage status field that drives D60's worker reentrancy
-seam. S19 covered the parsing stage; S20 extends with the embedding
-stage per D62; S21 extends with extraction-stage values; the
-str-enum shape stays stable as new values land.
+seam. S19 covered the parsing stage; S20 extended with the
+embedding stage per D62; S21 extends with the extraction stage
+per D64; the str-enum shape stays stable as new values land.
 
-A source row's lifecycle at S20:
+A source row's lifecycle at S21:
 
     received  -- the upload-side use case writes this on register;
                   workers claim rows in this state for parsing.
@@ -30,13 +30,36 @@ A source row's lifecycle at S20:
         |          |              per D62).
         |          |
         |          +--> embedding_failed  -- worker transitions on
-        |                                  embedder exception;
-        |                                  embedding_error_text on
-        |                                  the row carries the
-        |                                  reason. Operator surface
-        |                                  for retry at S20 is
-        |                                  manual transition back
-        |                                  to parsed.
+        |          |                       embedder exception;
+        |          |                       embedding_error_text on
+        |          |                       the row carries the
+        |          |                       reason. Operator surface
+        |          |                       for retry at S20 is
+        |          |                       manual transition back
+        |          |                       to parsed.
+        |          |
+        |          +--> embedded  (continued)
+        |                  |
+        |                  v
+        |              extracting  -- the extraction worker
+        |                  |       transitions on claim, before
+        |                  |       invoking the EntityExtractor.
+        |                  |
+        |                  +--> indexed  -- worker transitions on
+        |                  |              extraction success after
+        |                  |              writing entities and
+        |                  |              relationships into Neo4j
+        |                  |              via Cypher MERGE per D64.
+        |                  |              `indexed` is the terminal-
+        |                  |              success state for P6 close.
+        |                  |
+        |                  +--> extraction_failed  -- worker
+        |                                          transitions on
+        |                                          extractor or
+        |                                          graph-repository
+        |                                          exception;
+        |                                          extraction_error_text
+        |                                          carries the reason.
         |
         +--> failed  -- worker transitions on parser exception;
                         parsing_error_text on the row carries the
@@ -63,3 +86,8 @@ class SourceState(StrEnum):
     EMBEDDING = "embedding"
     EMBEDDED = "embedded"
     EMBEDDING_FAILED = "embedding_failed"
+    # S21 / D64: extraction-stage values. ``indexed`` is the
+    # terminal-success state for P6 close.
+    EXTRACTING = "extracting"
+    INDEXED = "indexed"
+    EXTRACTION_FAILED = "extraction_failed"

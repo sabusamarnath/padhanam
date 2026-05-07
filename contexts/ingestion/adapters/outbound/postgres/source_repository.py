@@ -129,6 +129,58 @@ class PostgresSourceRepository:
             updated_at=now,
         )
 
+    async def claim_pending_for_extract(
+        self, tenant_id: str
+    ) -> Source | None:
+        """Atomic claim of one embedded source for extraction (D64).
+
+        Same shape as ``claim_pending_for_parse`` and ``..._embed``
+        but selects rows in ``embedded`` state and transitions them
+        to ``extracting``.
+        """
+        select_stmt = (
+            sa.select(sources_table)
+            .where(
+                (sources_table.c.tenant_id == tenant_id)
+                & (sources_table.c.state == SourceState.EMBEDDED.value)
+            )
+            .order_by(sources_table.c.created_at.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        async with self._session_factory() as session:
+            async with session.begin():
+                result = await session.execute(select_stmt)
+                row = result.mappings().first()
+                if row is None:
+                    return None
+                source = _row_to_source(row)
+                now = datetime.now(timezone.utc)
+                await session.execute(
+                    sa.update(sources_table)
+                    .where(sources_table.c.id == str(source.id))
+                    .values(
+                        state=SourceState.EXTRACTING.value,
+                        updated_at=now,
+                    )
+                )
+        return Source(
+            id=source.id,
+            tenant_id=source.tenant_id,
+            jurisdiction=source.jurisdiction,
+            file_name=source.file_name,
+            file_type=source.file_type,
+            file_size_bytes=source.file_size_bytes,
+            raw_content=source.raw_content,
+            state=SourceState.EXTRACTING,
+            parsing_error_text=source.parsing_error_text,
+            created_by_user_id=source.created_by_user_id,
+            created_at=source.created_at,
+            updated_at=now,
+            embedding_error_text=source.embedding_error_text,
+            extraction_error_text=source.extraction_error_text,
+        )
+
     async def claim_pending_for_embed(
         self, tenant_id: str
     ) -> Source | None:
@@ -187,24 +239,27 @@ class PostgresSourceRepository:
         new_state: SourceState,
         parsing_error_text: str | None = None,
         embedding_error_text: str | None = None,
+        extraction_error_text: str | None = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         values: dict[str, object] = {
             "state": new_state.value,
             "updated_at": now,
         }
-        # Only overwrite parsing_error_text when transitioning to
-        # failed; only overwrite embedding_error_text when
-        # transitioning to embedding_failed. Transitions to parsed
-        # / embedded clear nothing — leaving the error fields as-is
-        # preserves the operator's record of what failed if a row
-        # was ever in a failed state. The create-only flow at S19/S20
-        # means rows do not re-enter failed-then-parsed, but the
-        # discipline holds for future-state tolerance.
+        # Only overwrite an error_text field when transitioning to
+        # the corresponding failed state. Transitions through the
+        # success path (parsed → embedded → indexed) clear nothing
+        # — leaving the error fields as-is preserves the operator's
+        # record of what failed if a row was ever in a failed state.
+        # The create-only flow at S19/S20/S21 means rows do not
+        # re-enter failed-then-success, but the discipline holds
+        # for future-state tolerance.
         if new_state == SourceState.FAILED:
             values["parsing_error_text"] = parsing_error_text
         if new_state == SourceState.EMBEDDING_FAILED:
             values["embedding_error_text"] = embedding_error_text
+        if new_state == SourceState.EXTRACTION_FAILED:
+            values["extraction_error_text"] = extraction_error_text
         async with self._session_factory() as session:
             await session.execute(
                 sa.update(sources_table)
@@ -347,4 +402,5 @@ def _row_to_source(row) -> Source:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         embedding_error_text=row.get("embedding_error_text"),
+        extraction_error_text=row.get("extraction_error_text"),
     )

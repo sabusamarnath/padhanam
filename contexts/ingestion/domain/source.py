@@ -43,3 +43,8 @@ class Source:
     # parsing_error_text. Defaulted to None so existing call sites
     # (S19 register_source) continue to construct without churn.
     embedding_error_text: str | None = None
+    # S21 / D64: extraction-stage error surface, mirroring the
+    # earlier-stage error fields. Defaulted to None for the same
+    # reason — register_source and embed_source sites continue to
+    # construct without churn.
+    extraction_error_text: str | None = None

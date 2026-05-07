@@ -136,6 +136,11 @@ def _ingest_run(file_path: str) -> str:
 def _run_worker_thread(out: list[Tuple[int, str]], idx: int) -> None:
     """Run a single bounded-iteration worker invocation; record
     (exit_code, stdout) into the shared list at the given index.
+
+    S21: scopes to ``parse,embed`` so the test runtime stays tight
+    (extraction is an LLM call). The S21 extraction-stage SKIP
+    LOCKED concurrency is exercised by the dedicated full-pipeline
+    e2e test in commit 6.
     """
     result = subprocess.run(
         [
@@ -153,6 +158,8 @@ def _run_worker_thread(out: list[Tuple[int, str]], idx: int) -> None:
             "a",
             "--max-iterations",
             "3",
+            "--stages",
+            "parse,embed",
         ],
         capture_output=True,
         text=True,

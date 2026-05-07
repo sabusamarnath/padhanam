@@ -36,6 +36,9 @@ sources = sa.Table(
     # S20 / D62: embedding-stage error surface, mirroring
     # parsing_error_text. Lands at revision 0006_add_chunk_embedding.
     sa.Column("embedding_error_text", sa.Text, nullable=True),
+    # S21 / D64: extraction-stage error surface, mirroring the
+    # earlier two. Lands at revision 0007_extend_state_for_extraction.
+    sa.Column("extraction_error_text", sa.Text, nullable=True),
 )
 
 chunks = sa.Table(

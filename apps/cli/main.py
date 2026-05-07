@@ -41,7 +41,12 @@ from uuid import UUID
 import typer
 
 from apps.cli._eval import run_eval, run_report
-from apps.cli._ingest import CLIIngestError, run_ingest_run, run_ingest_worker
+from apps.cli._ingest import (
+    ALL_STAGES,
+    CLIIngestError,
+    run_ingest_run,
+    run_ingest_worker,
+)
 
 app = typer.Typer(
     name="padhanam",
@@ -243,6 +248,20 @@ def ingest_worker(
             help="Bounded run for tests; production omits this.",
         ),
     ] = None,
+    stages: Annotated[
+        str,
+        typer.Option(
+            "--stages",
+            help=(
+                "Comma-separated stages to drain. Default: all "
+                "(parse,embed,extract). Pass a subset for tests "
+                "that scope the worker to specific stages — e.g. "
+                "`--stages parse,embed` keeps the worker at S20 "
+                "semantics without invoking the S21 extraction "
+                "LLM call."
+            ),
+        ),
+    ] = "parse,embed,extract",
 ) -> None:
     """Drain the tenant's pending-source queue.
 
@@ -258,11 +277,18 @@ def ingest_worker(
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         stream=sys.stdout,
     )
+    parsed_stages = frozenset(s.strip() for s in stages.split(",") if s.strip())
+    if not parsed_stages.issubset(ALL_STAGES):
+        unknown = parsed_stages - ALL_STAGES
+        raise typer.BadParameter(
+            f"unknown stage(s): {sorted(unknown)}; valid: {sorted(ALL_STAGES)}"
+        )
     processed = asyncio.run(
         run_ingest_worker(
             tenant_id=tenant_id,
             poll_interval_seconds=poll_interval_seconds,
             max_iterations=max_iterations,
+            stages=parsed_stages,
         )
     )
     sys.stdout.write(f"worker: processed {processed} source(s)\n")

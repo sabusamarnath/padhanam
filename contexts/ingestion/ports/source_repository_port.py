@@ -20,10 +20,14 @@ Methods at S20:
     rather than one parameterised method per the D62 reasoning —
     each stage's claim has its own state-transition target and
     keeps the SQL legible at the call site.
+  - ``claim_pending_for_extract``: same shape against ``embedded``
+    rows per D64; transitions to ``extracting``. The extraction
+    stage's claim follows the established per-stage method pattern.
   - ``update_source_state``: transition a source state; populate
-    ``parsing_error_text`` when transitioning to ``failed`` or
+    ``parsing_error_text`` when transitioning to ``failed``,
     ``embedding_error_text`` when transitioning to
-    ``embedding_failed``.
+    ``embedding_failed``, or ``extraction_error_text`` when
+    transitioning to ``extraction_failed``.
   - ``save_chunks``: persist the chunks produced by the parser.
   - ``get_chunks_for_source``: load all chunks for a source so the
     embed use case can hand them to the embedder.
@@ -79,6 +83,17 @@ class SourceRepositoryPort(Protocol):
         """
         ...
 
+    async def claim_pending_for_extract(
+        self, tenant_id: str
+    ) -> Source | None:
+        """Atomically claim one embedded source for extraction (D64).
+
+        Same SKIP LOCKED shape as the parse and embed claims;
+        selects rows in ``embedded`` state and transitions them to
+        ``extracting`` within the same transaction.
+        """
+        ...
+
     async def update_source_state(
         self,
         source_id: UUID,
@@ -86,13 +101,16 @@ class SourceRepositoryPort(Protocol):
         new_state: SourceState,
         parsing_error_text: str | None = None,
         embedding_error_text: str | None = None,
+        extraction_error_text: str | None = None,
     ) -> None:
         """Transition a source's state.
 
         Sets ``parsing_error_text`` only when transitioning to
         ``failed``; sets ``embedding_error_text`` only when
-        transitioning to ``embedding_failed``. Other transitions
-        leave both error fields untouched.
+        transitioning to ``embedding_failed``; sets
+        ``extraction_error_text`` only when transitioning to
+        ``extraction_failed``. Other transitions leave the error
+        fields untouched.
         """
         ...
 

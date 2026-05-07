@@ -1,4 +1,4 @@
-"""Async ingest orchestration for the CLI (S19, S20).
+"""Async ingest orchestration for the CLI (S19, S20, S21).
 
 Two top-level coroutines:
 
@@ -11,12 +11,15 @@ Two top-level coroutines:
     claim a ``received`` row (parse stage) via
     ``claim_pending_for_parse``; if none, it tries to claim a
     ``parsed`` row (embed stage per D62) via
-    ``claim_pending_for_embed``; if neither, it sleeps for the
-    poll interval. The two-stage shape is the worker-loop
-    extension D62 commits to: a single worker process drains both
-    stages, transitioning sources received → parsing → parsed →
-    embedding → embedded. Exits gracefully on SIGINT / SIGTERM via
-    asyncio's signal-handler integration.
+    ``claim_pending_for_embed``; if neither, it tries to claim an
+    ``embedded`` row (extract stage per D64) via
+    ``claim_pending_for_extract``; if none of the three, it sleeps
+    for the poll interval. The three-stage shape is the worker-
+    loop extension D64 commits to: a single worker process drains
+    all three stages, transitioning sources received → parsing →
+    parsed → embedding → embedded → extracting → indexed. Exits
+    gracefully on SIGINT / SIGTERM via asyncio's signal-handler
+    integration.
 
 run_ingest_run flow:
   1. Resolve tenant + session factory via build_tenant_wiring.
@@ -61,11 +64,16 @@ from uuid import UUID
 from contexts.ingestion.adapters.outbound.embedding import (
     LiteLLMChunkEmbedder,
 )
+from contexts.ingestion.adapters.outbound.extraction import (
+    LiteLLMEntityExtractor,
+)
+from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
 from contexts.ingestion.adapters.outbound.parsers import get_parser
 from contexts.ingestion.adapters.outbound.postgres.source_repository import (
     PostgresSourceRepository,
 )
 from contexts.ingestion.application.embed_source import embed_source
+from contexts.ingestion.application.extract_source import extract_source
 from contexts.ingestion.application.parser_dispatch import (
     file_type_for_extension,
 )
@@ -74,6 +82,7 @@ from contexts.ingestion.application.register_source import (
     UnsupportedFileTypeError,
     register_source,
 )
+from padhanam.config import Neo4jSettings
 from padhanam.observability import init_tracing
 
 from apps.cli._runtime import build_tenant_wiring
@@ -81,6 +90,14 @@ from apps.cli._runtime import build_tenant_wiring
 
 _DEFAULT_USER_ID = "cli-operator"
 _DEFAULT_POLL_INTERVAL_SECONDS = 1.0
+
+# S21: stage filter for the worker. The default is "all three stages
+# enabled"; tests that want to exercise only the parse + embed
+# pipeline (i.e. preserve S20 semantics) pass the subset explicitly.
+STAGE_PARSE = "parse"
+STAGE_EMBED = "embed"
+STAGE_EXTRACT = "extract"
+ALL_STAGES = frozenset({STAGE_PARSE, STAGE_EMBED, STAGE_EXTRACT})
 
 
 _log = logging.getLogger("apps.cli.ingest")
@@ -142,13 +159,23 @@ async def run_ingest_worker(
     tenant_id: str,
     poll_interval_seconds: float = _DEFAULT_POLL_INTERVAL_SECONDS,
     max_iterations: int | None = None,
+    stages: frozenset[str] = ALL_STAGES,
 ) -> int:
     """Long-running worker that drains the tenant's pending sources.
 
     Returns the number of sources processed (parsed or failed).
     ``max_iterations`` is for tests only — production invocations
     leave it None and let the SIGINT/SIGTERM handler drive shutdown.
+    ``stages`` filters which stages the worker drains; the default
+    is all three (parse, embed, extract) per D64. Passing a subset
+    is useful for tests that want to scope the worker to specific
+    stages without exercising downstream LLM-heavy paths.
     """
+    if not stages.issubset(ALL_STAGES):
+        unknown = stages - ALL_STAGES
+        raise ValueError(
+            f"unknown stages: {sorted(unknown)}; valid: {sorted(ALL_STAGES)}"
+        )
     # Wire OTel TracerProvider so worker-emitted spans (parse stage,
     # chunk-write stage, embed stage) flow to Langfuse. The worker
     # is the fourth caller of init_tracing per the S18 reflection's
@@ -158,6 +185,8 @@ async def run_ingest_worker(
     wiring = build_tenant_wiring(tenant_id)
     repository = PostgresSourceRepository(wiring.session_factory)
     embedder = LiteLLMChunkEmbedder()
+    extractor = LiteLLMEntityExtractor()
+    graph_repository = Neo4jGraphRepository.from_settings(Neo4jSettings())
 
     shutdown_event = asyncio.Event()
 
@@ -185,13 +214,16 @@ async def run_ingest_worker(
                 break
             iteration += 1
 
-            # S20 / D62: drain the parse stage first, then the
-            # embed stage. Each iteration tries to claim from the
-            # earlier stage before the later one so a single worker
-            # process keeps both stages flowing without one starving
-            # the other.
-            parse_claimed = await repository.claim_pending_for_parse(
-                tenant_id_str
+            # S21 / D64: drain stages in pipeline order — parse,
+            # embed, extract — so a single worker process keeps the
+            # earlier stages from starving downstream stages. Each
+            # iteration tries to claim from the earliest enabled
+            # stage first; the per-stage gate respects the `stages`
+            # filter so callers can scope which stages to drain.
+            parse_claimed = (
+                await repository.claim_pending_for_parse(tenant_id_str)
+                if STAGE_PARSE in stages
+                else None
             )
             if parse_claimed is not None:
                 _log.info(
@@ -221,8 +253,10 @@ async def run_ingest_worker(
                     )
                 continue
 
-            embed_claimed = await repository.claim_pending_for_embed(
-                tenant_id_str
+            embed_claimed = (
+                await repository.claim_pending_for_embed(tenant_id_str)
+                if STAGE_EMBED in stages
+                else None
             )
             if embed_claimed is not None:
                 _log.info(
@@ -251,7 +285,41 @@ async def run_ingest_worker(
                     )
                 continue
 
-            # No claimable rows in either stage.
+            extract_claimed = (
+                await repository.claim_pending_for_extract(tenant_id_str)
+                if STAGE_EXTRACT in stages
+                else None
+            )
+            if extract_claimed is not None:
+                _log.info(
+                    "worker: claimed source %s for extract (file_name=%s)",
+                    extract_claimed.id,
+                    extract_claimed.file_name,
+                )
+                extract_result = await extract_source(
+                    source=extract_claimed,
+                    repository=repository,
+                    extractor=extractor,
+                    graph_repository=graph_repository,
+                    tenant_context=wiring.tenant_context,
+                )
+                processed += 1
+                if extract_result.final_state.value == "extraction_failed":
+                    _log.warning(
+                        "worker: source %s extract failed: %s",
+                        extract_result.source_id,
+                        extract_result.extraction_error_text,
+                    )
+                else:
+                    _log.info(
+                        "worker: source %s indexed (%d entities, %d relationships)",
+                        extract_result.source_id,
+                        extract_result.entities_written,
+                        extract_result.relationships_written,
+                    )
+                continue
+
+            # No claimable rows in any stage.
             if max_iterations is not None:
                 # In bounded test runs, no rows means we're done.
                 break
@@ -272,6 +340,7 @@ async def run_ingest_worker(
         # BatchSpanProcessor batches and a short-lived worker run
         # otherwise loses the tail.
         provider.force_flush(timeout_millis=5_000)
+        await graph_repository.close()
         await wiring.engine.dispose()
 
     return processed
