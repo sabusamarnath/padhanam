@@ -143,8 +143,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # S19: bare-script TracerProvider setup lifts to the shared helper.
+# The script keeps its own _provider name so the later force_flush
+# call still resolves; init_tracing returns the configured
+# TracerProvider for exactly this kind of explicit-flush use case.
 from padhanam.observability import init_tracing
-init_tracing("padhanam-cli-e2e-setup")
+_provider = init_tracing("padhanam-cli-e2e-setup")
 
 from contexts.evaluation.adapters.outbound.inference_adapter import (
     InferenceAdapter,

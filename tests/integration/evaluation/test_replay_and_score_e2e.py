@@ -130,9 +130,12 @@ from sqlalchemy.ext.asyncio import (
 
 # S19: bare-script TracerProvider setup lifts to the shared helper.
 # Without it the SDK's default no-op provider produces trace_id=0
-# and Completion.trace_id=None.
+# and Completion.trace_id=None. The script keeps its own _provider
+# name so any later force_flush calls resolve; init_tracing returns
+# the configured TracerProvider for exactly this kind of
+# explicit-flush use case.
 from padhanam.observability import init_tracing
-init_tracing("padhanam-eval-e2e")
+_provider = init_tracing("padhanam-eval-e2e")
 
 from contexts.evaluation.adapters.outbound.inference_adapter import (
     InferenceAdapter,

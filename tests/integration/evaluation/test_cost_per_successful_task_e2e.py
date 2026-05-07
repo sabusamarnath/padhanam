@@ -132,9 +132,12 @@ from sqlalchemy.ext.asyncio import (
 # S19: bare-script TracerProvider setup lifts to the shared helper.
 # Pattern: bare-script drivers must mirror the FastAPI app's startup
 # setup; without it trace_id is zero and Completion.trace_id is None,
-# so the cost-rollup path has nothing to query.
+# so the cost-rollup path has nothing to query. The script keeps its
+# own _provider name so the later force_flush call still resolves;
+# init_tracing returns the configured TracerProvider for exactly this
+# kind of explicit-flush use case.
 from padhanam.observability import init_tracing
-init_tracing("padhanam-eval-cost-e2e")
+_provider = init_tracing("padhanam-eval-cost-e2e")
 
 from contexts.evaluation.adapters.outbound.cost_query_adapter import (
     CostQueryAdapter,
