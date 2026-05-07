@@ -14,6 +14,15 @@ dependencies = [
     # duplicate the dep without scoping benefit.
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
+    # Neo4j driver lands at root-pyproject scope (S21, D63) for the
+    # same reason as alembic: it is operator tooling that the
+    # `ops/migrate_neo4j.py` Cypher migration runner uses, and the
+    # contexts/ingestion adapter wrapper imports it as a workspace
+    # member. The `neo4j-confined` import-linter contract restricts
+    # the import surface to `contexts/ingestion/adapters/outbound/neo4j/`
+    # plus `ops/migrate_neo4j` so the dep declaration here does not
+    # widen the architectural surface.
+    "neo4j>=5.26,<6",
     # PyYAML for the scheduled-checks runner (D25); keeps ops tooling
     # at the platform layer rather than dragging YAML into a context.
     "pyyaml>=6",

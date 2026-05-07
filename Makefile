@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -9,7 +9,7 @@ COMPOSE := docker compose --env-file .env --env-file .env.derived
 
 help:
 	@echo "Padhanam — available targets:"
-	@echo "  up          Start the Compose stack (14 services) in the background"
+	@echo "  up          Start the Compose stack (15 services) in the background"
 	@echo "  down        Stop the Compose stack"
 	@echo "  derive-env  Recompute .env.derived from padhanam/config/ (idempotent)"
 	@echo "  logs        Follow logs from all services"
@@ -28,6 +28,10 @@ help:
 	@echo "  eval-report  Run the eval CLI's 'eval report' command inside padhanam-api; pass ARGS=\"--tenant-id a --baseline-revision-id <uuid> ...\""
 	@echo "  ingest-run   Register a source file via the ingest CLI inside padhanam-api; pass ARGS=\"<path-inside-container> --tenant-id a\""
 	@echo "  ingest-worker  Run the long-running ingest worker for a tenant inside padhanam-api; pass ARGS=\"--tenant-id a [--max-iterations N]\""
+	@echo "  neo4j-up    Start just the padhanam-neo4j service"
+	@echo "  neo4j-down  Stop the padhanam-neo4j service (preserves the volume)"
+	@echo "  neo4j-reset DESTRUCTIVE — stop padhanam-neo4j and wipe its data volume"
+	@echo "  neo4j-shell Open an interactive cypher-shell against padhanam-neo4j"
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -157,3 +161,27 @@ ingest-run: derive-env
 
 ingest-worker: derive-env
 	$(COMPOSE) exec padhanam-api python -m apps.cli ingest worker $(ARGS)
+
+# S21 Neo4j convenience targets (D63). The shared Neo4j 5 Community
+# instance is part of the standard `make up` flow; these targets are
+# for the operator who wants to bring just the graph store up/down or
+# wipe its data volume during dev iteration.
+neo4j-up: derive-env
+	$(COMPOSE) up -d padhanam-neo4j
+
+neo4j-down: derive-env
+	$(COMPOSE) stop padhanam-neo4j
+
+# DESTRUCTIVE: wipes the named volume. Use only when the dev graph
+# state is actually wrong; operator-affirmative-action target.
+neo4j-reset: derive-env
+	$(COMPOSE) stop padhanam-neo4j
+	$(COMPOSE) rm -f padhanam-neo4j
+	docker volume rm $$(docker compose --env-file .env --env-file .env.derived ls --format json | python -c "import json,sys; sys.stdout.write(json.load(sys.stdin)[0]['Name'])")_neo4j_data || true
+	$(COMPOSE) up -d padhanam-neo4j
+
+# Interactive cypher-shell against the running padhanam-neo4j
+# container. The credentials resolve from the host .env (loaded into
+# the shell via the existing Compose env-file plumbing on COMPOSE).
+neo4j-shell: derive-env
+	$(COMPOSE) exec padhanam-neo4j cypher-shell -u $${NEO4J_USER:-neo4j} -p $${NEO4J_PASSWORD}

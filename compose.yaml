@@ -85,6 +85,41 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Shared Neo4j 5 Community (P6/S21, D63). One instance for all
+  # tenants; isolation is property-based (every :Entity node and every
+  # relationship carries `tenant_id`) and structurally gated by the
+  # TenantScopedNeo4jSession wrapper at
+  # contexts/ingestion/adapters/outbound/neo4j/. Explicit deviation
+  # from D32's per-instance Postgres posture, with reasoning in D63;
+  # production-deployment context may revisit per the deferred-
+  # decisions entry.
+  #
+  # No host port binding (S5 rule); the GraphRepository adapter and
+  # the ops.migrate_neo4j runner reach bolt at neo4j://padhanam-neo4j:7687
+  # over the Compose network. Operator Cypher access via
+  # `make neo4j-shell` (cypher-shell exec inside the container).
+  padhanam-neo4j:
+    image: neo4j:5-community@sha256:b357872da95a164c5243ca8d9060601130717ff43cee3c829402fab46209a412
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      # Conservative dev memory profile. Defaults are Neo4j-tuned
+      # but explicit values keep the dev footprint predictable
+      # alongside the existing Postgres + ClickHouse + Ollama
+      # services. Production deployments retune via configuration.
+      NEO4J_server_memory_pagecache_size: 256m
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:7474/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
     volumes:
@@ -342,11 +377,13 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: padhanam-api:dev@sha256:866a9d4df844428f02a61471f0ae7055f448c10170ac2ce523b728cd3f7dac3f
+    image: padhanam-api:dev@sha256:155f19df9dd6e08b2b47c17c8066fbc246801bffc1f764d68f611dc9aa0af60d
     depends_on:
       litellm:
         condition: service_healthy
       langfuse-web:
+        condition: service_healthy
+      padhanam-neo4j:
         condition: service_healthy
     environment:
       PADHANAM_PROFILE: dev
@@ -371,6 +408,12 @@ services:
       POSTGRES_TENANT_B_USER: ${POSTGRES_TENANT_B_USER}
       POSTGRES_TENANT_B_PASSWORD: ${POSTGRES_TENANT_B_PASSWORD}
       POSTGRES_TENANT_B_DB: ${POSTGRES_TENANT_B_DB}
+      # Shared Neo4j connection (S21, D63). Read by Neo4jSettings in
+      # padhanam/config/graph.py for the GraphRepository adapter, the
+      # tenant-scoped session wrapper, and the ops.migrate_neo4j Cypher
+      # migration runner.
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
@@ -392,3 +435,5 @@ volumes:
   clickhouse_logs:
   minio_data:
   ollama_data:
+  neo4j_data:
+  neo4j_logs:

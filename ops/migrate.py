@@ -1,13 +1,19 @@
-"""Two-phase migration runner (D36).
+"""Three-phase migration runner (D36, D63).
 
 Phase 1: control-plane migrations via the existing
 `alembic --name control_plane upgrade head` invocation against the
 dedicated `postgres-control-plane` instance (D33).
 
-Phase 2: per-tenant migrations. Iterates over registered tenants in
-the registry, resolves each tenant's connection string via
-`reveal_connection_config` as an operator-context system actor, and
-runs the per-tenant Alembic track against each database.
+Phase 2: per-tenant Postgres migrations. Iterates over registered
+tenants in the registry, resolves each tenant's connection string
+via `reveal_connection_config` as an operator-context system actor,
+and runs the per-tenant Alembic track against each database.
+
+Phase 3: shared-Neo4j Cypher migrations (S21, D63). Delegates to
+`ops.migrate_neo4j.main()`, which applies `migrations/neo4j/*.cypher`
+files in order and records applied versions via `:_Migration` nodes
+on the shared instance. Runs after Phase 2 so cross-store consumers
+see both stores at their target heads on a successful run.
 
 Per-tenant transactional (D36): failure on tenant B leaves tenant A
 migrated and tenant B at its prior version; the runner raises and
@@ -18,7 +24,8 @@ independence which forecloses two-phase commit or distributed
 transactions.
 
 Idempotency: re-running after no schema changes is a no-op via
-Alembic's `alembic_version` table.
+Alembic's `alembic_version` table (Phases 1 and 2) and the
+`:_Migration` node check (Phase 3).
 
 Security events: emits a `privileged_action` event per tenant
 migration completion with `action=tenant.migrate` so operator-driven
@@ -40,6 +47,7 @@ from contexts.tenancy.adapters.outbound.postgres.registry import (
 )
 from contexts.tenancy.application import OPERATOR_ROLE, list_tenants, reveal_connection_config
 from contexts.tenancy.domain.tenant_connection_config import TenantConnectionConfig
+from ops import migrate_neo4j
 from shared_kernel import TenantId as SharedTenantId
 from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
@@ -146,6 +154,7 @@ def main() -> int:
     log.setLevel(logging.INFO)
     _run_control_plane_phase()
     asyncio.run(_run_per_tenant_phase())
+    migrate_neo4j.main()
     return 0
 
 

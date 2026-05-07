@@ -48,10 +48,13 @@ COPY apps ./apps
 # rule). S11 grows the per-tenant track here too (D36).
 COPY alembic.ini ./
 COPY alembic ./alembic
+# Cypher migrations (S21, D63). `ops.migrate_neo4j` reads these
+# files at runtime when `make migrate` runs Phase 3.
+COPY migrations ./migrations
 # ops/ scripts. S11 (D36) introduces ops.seed_tenants and ops.migrate
 # which `make seed-tenants` and `make migrate` invoke as `python -m
 # ops.<name>` inside this container so per-tenant Compose hostnames
-# resolve.
+# resolve. S21 adds ops.migrate_neo4j as Phase 3.
 COPY ops ./ops
 RUN uv sync --frozen --no-dev
 

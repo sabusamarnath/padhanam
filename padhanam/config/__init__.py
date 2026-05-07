@@ -1,4 +1,5 @@
 from padhanam.config.base import PadhanamSettings, SecretManagerSource
+from padhanam.config.graph import Neo4jSettings
 from padhanam.config.inference import (
     PRICING_TABLE,
     CostBreakdown,
@@ -19,6 +20,7 @@ __all__ = [
     "CostBreakdown",
     "InferenceSettings",
     "ModelPricing",
+    "Neo4jSettings",
     "PadhanamSettings",
     "ObservabilitySettings",
     "PRICING_TABLE",
