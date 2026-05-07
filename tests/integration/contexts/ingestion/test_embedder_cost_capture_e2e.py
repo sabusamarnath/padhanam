@@ -37,6 +37,7 @@ from contexts.ingestion.adapters.outbound.embedding import (
     LiteLLMChunkEmbedder,
 )
 from contexts.ingestion.domain.chunk import Chunk
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from shared_kernel import TenantContext
 from padhanam.config import InferenceSettings
 
@@ -171,6 +172,7 @@ from contexts.ingestion.adapters.outbound.embedding import (
     LiteLLMChunkEmbedder,
 )
 from contexts.ingestion.domain.chunk import Chunk
+from contexts.ingestion.domain.embedding_task import EmbeddingTask
 from shared_kernel import TenantContext
 
 # Replace the embedder module's tracer with the in-memory one.
@@ -203,7 +205,7 @@ chunk = Chunk(
 embedder = LiteLLMChunkEmbedder()
 
 async def run():
-    embeddings = await embedder.embed([chunk], tenant)
+    embeddings = await embedder.embed([chunk], tenant, EmbeddingTask.DOCUMENT)
     return len(embeddings), len(embeddings[0].vector)
 
 count, dim = asyncio.run(run())

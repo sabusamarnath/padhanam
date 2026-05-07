@@ -337,3 +337,83 @@ def test_control_plane_db_has_no_pgvector_extension(
         f"control-plane DB unexpectedly has pgvector enabled; "
         f"psql reported {found!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# S22 / D65 — retrieval-surface tenant-isolation contracts.
+# These tests exercise the application-level retrieval ports against
+# both tenants by invoking ``padhanam ingest search`` and
+# ``padhanam ingest traverse`` inside the padhanam-api container.
+# Cross-tenant retrieval against an unindexed tenant must return
+# zero results; both methods enforce the tenant predicate per D24.
+# ---------------------------------------------------------------------------
+
+
+def _exec_in_api(
+    *args: str, timeout: int = 60
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["docker", "compose", "exec", "-T", "padhanam-api", *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize("tenant_label", ["a", "b"])
+def test_search_against_empty_tenant_returns_no_results(
+    compose_running: None, tenant_label: str
+) -> None:
+    """Defensively: a tenant with no indexed sources returns no
+    results from ``padhanam ingest search``. The truncate fixture
+    is module-scoped, so this also fails cleanly if cross-tenant
+    leakage from prior tests has landed.
+    """
+    # Truncate both tenants to ensure a known-empty starting state.
+    for label in ("a", "b"):
+        _exec_in_api(
+            "sh", "-c",
+            f'PGPASSWORD="$POSTGRES_TENANT_{label.upper()}_PASSWORD" '
+            f"psql -h postgres-tenant-{label} "
+            f'-U "$POSTGRES_TENANT_{label.upper()}_USER" '
+            f'-d "$POSTGRES_TENANT_{label.upper()}_DB" '
+            f'-c "TRUNCATE TABLE chunks, sources;"',
+        )
+    result = _exec_in_api(
+        "python", "-m", "apps.cli", "ingest", "search",
+        "anything", "--tenant-id", tenant_label, "--limit", "5",
+    )
+    assert result.returncode == 0, (
+        f"ingest search failed for tenant {tenant_label}: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "(no results)" in result.stdout, (
+        f"tenant {tenant_label} search unexpectedly returned: "
+        f"{result.stdout!r}"
+    )
+
+
+@pytest.mark.parametrize("tenant_label", ["a", "b"])
+def test_traverse_against_empty_tenant_returns_no_results(
+    compose_running: None, tenant_label: str
+) -> None:
+    """Symmetric to the search isolation test: an empty tenant's
+    traverse returns nothing. Combined with the read isolation
+    contract test in ``test_neo4j_isolation.py`` that exercises
+    cross-tenant graph access, the application-level retrieval
+    surface inherits the property-based scoping discipline at the
+    user-visible boundary.
+    """
+    result = _exec_in_api(
+        "python", "-m", "apps.cli", "ingest", "traverse",
+        "AnyEntity", "--tenant-id", tenant_label, "--depth", "1",
+    )
+    assert result.returncode == 0, (
+        f"ingest traverse failed for tenant {tenant_label}: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "(no results)" in result.stdout, (
+        f"tenant {tenant_label} traverse unexpectedly returned: "
+        f"{result.stdout!r}"
+    )

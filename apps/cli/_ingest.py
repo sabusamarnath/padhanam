@@ -67,10 +67,17 @@ from contexts.ingestion.adapters.outbound.embedding import (
 from contexts.ingestion.adapters.outbound.extraction import (
     LiteLLMEntityExtractor,
 )
-from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
+from contexts.ingestion.adapters.outbound.neo4j import (
+    Neo4jGraphRepository,
+    make_async_driver,
+)
 from contexts.ingestion.adapters.outbound.parsers import get_parser
 from contexts.ingestion.adapters.outbound.postgres.source_repository import (
     PostgresSourceRepository,
+)
+from contexts.ingestion.adapters.outbound.retrieval import (
+    Neo4jTraverse,
+    PgVectorSearch,
 )
 from contexts.ingestion.application.embed_source import embed_source
 from contexts.ingestion.application.extract_source import extract_source
@@ -82,6 +89,8 @@ from contexts.ingestion.application.register_source import (
     UnsupportedFileTypeError,
     register_source,
 )
+from contexts.ingestion.domain.chunk_result import ChunkResult
+from contexts.ingestion.domain.entity_result import EntityResult
 from padhanam.config import Neo4jSettings
 from padhanam.observability import init_tracing
 
@@ -344,3 +353,69 @@ async def run_ingest_worker(
         await wiring.engine.dispose()
 
     return processed
+
+
+async def run_ingest_search(
+    *,
+    tenant_id: str,
+    query: str,
+    limit: int,
+) -> list[ChunkResult]:
+    """Vector retrieval against the tenant's chunks (S22 / D65).
+
+    Embeds the query with EmbeddingTask.QUERY (via the LiteLLM
+    embedder) and runs cosine-distance search against the HNSW
+    index, scoped to chunks whose source has reached the indexed
+    state. Returns the top-``limit`` ChunkResults ranked by
+    similarity. The OTel TracerProvider is initialised so the
+    embedding span flows to Langfuse with the tenant.* attributes.
+    """
+    provider = init_tracing("padhanam-ingestion-search")
+    wiring = build_tenant_wiring(tenant_id)
+    embedder = LiteLLMChunkEmbedder()
+    adapter = PgVectorSearch(
+        session_factory=wiring.session_factory,
+        embedder=embedder,
+    )
+    try:
+        results = await adapter.search_vector(
+            query=query, scope=wiring.tenant_context, limit=limit
+        )
+    finally:
+        provider.force_flush(timeout_millis=5_000)
+        await wiring.engine.dispose()
+    return list(results)
+
+
+async def run_ingest_traverse(
+    *,
+    tenant_id: str,
+    seed: str,
+    depth: int,
+) -> list[EntityResult]:
+    """Graph traversal from a seed entity (S22 / D65).
+
+    Reads the set of indexed chunk_ids from the tenant's Postgres,
+    then traverses the shared Neo4j instance from the named seed
+    via the TenantScopedNeo4jSession wrapper. Returns one
+    EntityResult per reachable entity within ``depth`` hops, each
+    carrying the relationship-type sequence along the shortest
+    path from the seed. The seed itself surfaces with an empty
+    path when its source chunks meet the readiness predicate.
+    """
+    provider = init_tracing("padhanam-ingestion-traverse")
+    wiring = build_tenant_wiring(tenant_id)
+    driver = make_async_driver(Neo4jSettings())
+    adapter = Neo4jTraverse(
+        driver=driver,
+        pg_session_factory=wiring.session_factory,
+    )
+    try:
+        results = await adapter.traverse_graph(
+            seed=seed, scope=wiring.tenant_context, depth=depth
+        )
+    finally:
+        provider.force_flush(timeout_millis=5_000)
+        await driver.close()
+        await wiring.engine.dispose()
+    return list(results)

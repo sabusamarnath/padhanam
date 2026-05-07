@@ -45,6 +45,8 @@ from apps.cli._ingest import (
     ALL_STAGES,
     CLIIngestError,
     run_ingest_run,
+    run_ingest_search,
+    run_ingest_traverse,
     run_ingest_worker,
 )
 
@@ -335,6 +337,94 @@ def ingest_run(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
     sys.stdout.write(f"{source_id}\n")
+
+
+@ingest_app.command("search")
+def ingest_search(
+    query: Annotated[
+        str,
+        typer.Argument(help="The query string to search for."),
+    ],
+    tenant_id: Annotated[
+        str,
+        typer.Option(
+            "--tenant-id", help="Tenant short label ('a', 'b') or UUID."
+        ),
+    ],
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Maximum number of chunks to return."),
+    ] = 5,
+) -> None:
+    """Vector cosine search against the tenant's indexed chunks (S22).
+
+    Embeds the query via the configured embedding model with the
+    nomic-embed-text v1.5 ``search_query:`` prefix per D65, then
+    performs HNSW-indexed cosine search. Only chunks whose source
+    pipeline has reached ``indexed`` state surface — half-ingested
+    sources stay invisible until both tracks complete.
+    """
+    if limit <= 0:
+        raise typer.BadParameter("--limit must be positive")
+    results = asyncio.run(
+        run_ingest_search(tenant_id=tenant_id, query=query, limit=limit)
+    )
+    if not results:
+        sys.stdout.write("(no results)\n")
+        return
+    for rank, r in enumerate(results, start=1):
+        preview = r.content.replace("\n", " ")
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        sys.stdout.write(
+            f"{rank}. similarity={r.similarity_score:.4f} "
+            f"chunk_id={r.chunk_id} source_id={r.source_id}\n"
+            f"   {preview}\n"
+        )
+
+
+@ingest_app.command("traverse")
+def ingest_traverse(
+    seed: Annotated[
+        str,
+        typer.Argument(
+            help="Seed entity name to traverse from (matches Entity.name)."
+        ),
+    ],
+    tenant_id: Annotated[
+        str,
+        typer.Option(
+            "--tenant-id", help="Tenant short label ('a', 'b') or UUID."
+        ),
+    ],
+    depth: Annotated[
+        int,
+        typer.Option("--depth", help="Maximum hop count of the traversal."),
+    ] = 2,
+) -> None:
+    """Graph traversal from a seed entity (S22).
+
+    Variable-length path traversal in Neo4j from the seed entity,
+    returning entities reachable within ``depth`` hops. Only
+    entities whose source chunks come from indexed sources surface
+    per D65's cross-track readiness commitment. The seed itself
+    surfaces with an empty relationship path when its own source
+    chunks meet the readiness predicate.
+    """
+    if depth < 0:
+        raise typer.BadParameter("--depth must be non-negative")
+    results = asyncio.run(
+        run_ingest_traverse(tenant_id=tenant_id, seed=seed, depth=depth)
+    )
+    if not results:
+        sys.stdout.write("(no results)\n")
+        return
+    for r in results:
+        path = " -> ".join(r.relationship_path) if r.relationship_path else "(seed)"
+        sys.stdout.write(
+            f"{r.name} [{r.entity_type}] path={path} "
+            f"source_chunks={len(r.source_chunk_ids)}\n"
+        )
 
 
 if __name__ == "__main__":

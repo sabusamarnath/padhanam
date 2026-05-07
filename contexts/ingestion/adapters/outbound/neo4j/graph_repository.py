@@ -52,6 +52,22 @@ _RETRYABLE_DRIVER_EXC = (ServiceUnavailable, SessionExpired, TransientError)
 _NON_RETRYABLE_DRIVER_EXC = (AuthError, ConfigurationError)
 
 
+def make_async_driver(settings: Neo4jSettings) -> AsyncDriver:
+    """Construct a Neo4j AsyncDriver from Neo4jSettings.
+
+    The neo4j wrapper module is the single import surface for the
+    bolt driver per D63; consumers outside this module that need a
+    driver (e.g. the retrieval adapter at S22) call this helper
+    rather than importing ``neo4j.AsyncGraphDatabase`` directly.
+    Callers own the returned driver's lifecycle and must call
+    ``await driver.close()`` at shutdown.
+    """
+    return AsyncGraphDatabase.driver(
+        settings.bolt_uri,
+        auth=(settings.user, settings.password),
+    )
+
+
 class Neo4jGraphRepository:
     """Concrete GraphRepositoryPort against the shared Neo4j 5
     Community instance per D63.

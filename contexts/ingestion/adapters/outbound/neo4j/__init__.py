@@ -21,9 +21,14 @@ Public surface:
 
 from contexts.ingestion.adapters.outbound.neo4j.graph_repository import (
     Neo4jGraphRepository,
+    make_async_driver,
 )
 from contexts.ingestion.adapters.outbound.neo4j.session import (
     TenantScopedNeo4jSession,
 )
 
-__all__ = ["Neo4jGraphRepository", "TenantScopedNeo4jSession"]
+__all__ = [
+    "Neo4jGraphRepository",
+    "TenantScopedNeo4jSession",
+    "make_async_driver",
+]
