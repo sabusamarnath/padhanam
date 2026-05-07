@@ -253,10 +253,80 @@ forward-affordance discipline held — the column landed at the
 session that introduced its proximate consumer rather than at S16
 speculatively.
 
+## Source ingestion tables
+
+Per-tenant track, lands at S19 via Alembic revision
+`0005_create_sources_and_chunks` per D60 / D61. Two tables comprise
+the S19 surface: `sources` (the upload primitive plus pipeline-state
+column) and `chunks` (the parsed-content rows that pgvector
+embeddings will reference at S20). The `state` column on `sources`
+is the per-stage status field D60 commits to as the worker
+reentrancy seam; at S19 it tracks only the parsing stage
+(`{received, parsing, parsed, failed}`). S20 extends the state
+space with the embedding stage and S21 with the extraction stage.
+
+### `sources`
+
+| Column                | Type            | Constraints                                                                                                                                       |
+|-----------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`                                                                                                          |
+| `tenant_id`           | `text`          | not null; CHECK `tenant_id <> ''` (denormalised on the row for self-describing audit per D22)                                                     |
+| `jurisdiction`        | `text`          | not null                                                                                                                                          |
+| `file_name`           | `text`          | not null                                                                                                                                          |
+| `file_type`           | `text`          | not null; CHECK ∈ {`markdown`, `text`} per D61 (extends incrementally as parsers ship)                                                             |
+| `file_size_bytes`     | `bigint`        | not null                                                                                                                                          |
+| `raw_content`         | `bytea`         | not null at S19; the dev shape stores raw bytes on the row. Production object-store URI deferred until production deployment context arrives      |
+| `state`               | `text`          | not null; CHECK ∈ {`received`, `parsing`, `parsed`, `failed`}; default `'received'`                                                               |
+| `parsing_error_text`  | `text`          | nullable; populated when `state = 'failed'` so the operator can see why parsing failed without trawling logs                                      |
+| `created_by_user_id`  | `text`          | not null                                                                                                                                          |
+| `created_at`          | `timestamptz`   | not null; default `now()`                                                                                                                         |
+| `updated_at`          | `timestamptz`   | not null; default `now()`; the worker bumps this on each state transition                                                                         |
+
+Indices: `ix_sources_tenant_state` on `(tenant_id, state)` for the
+worker poll (the `claim_pending_for_parse` query filters by
+`state = 'received'` and the index keeps the planner from a full
+scan).
+
+The state column drives reentrancy per D60: `received` rows are
+claimed by the worker via `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1`,
+transitioned to `parsing` while the parser runs, and transitioned to
+`parsed` on success or `failed` on parser exception. Re-running the
+worker against an already-`parsed` source is a no-op (the claim
+query returns no rows for that source). Re-running against a
+`failed` source by manually transitioning back to `received` is the
+operator surface for retry at S19; richer retry semantics defer to
+production-deployment context.
+
+### `chunks`
+
+| Column                  | Type            | Constraints                                                                                                                |
+|-------------------------|-----------------|----------------------------------------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`          | primary key; default `gen_random_uuid()`                                                                                   |
+| `source_id`             | `uuid`          | not null; FK → `sources.id`                                                                                                |
+| `tenant_id`             | `text`          | not null; CHECK `tenant_id <> ''`                                                                                          |
+| `jurisdiction`          | `text`          | not null                                                                                                                   |
+| `chunk_index`           | `integer`       | not null; ordering within the source                                                                                       |
+| `content`               | `text`          | not null                                                                                                                   |
+| `structural_metadata`   | `jsonb`         | not null; default `'{}'::jsonb`; carries parser-emitted structure (e.g., heading hierarchy for markdown, paragraph index for plain text) |
+| `created_at`            | `timestamptz`   | not null; default `now()`                                                                                                  |
+
+Indices: `ix_chunks_source_id` on `source_id`; UNIQUE
+`(source_id, chunk_index)` so re-running the parser against an
+already-parsed source produces an integrity violation rather than
+duplicate rows (the worker's idempotency contract per D60 means
+the parser write only happens once per source-index pair; the
+constraint is the structural backstop).
+
+S19 lands no embedding columns on `chunks`. The embedding column
+lands at S20 via the next per-tenant migration alongside the
+embedding adapter; the column name and type settle at S20 framing
+per the framing-prompt-as-recommendation pattern.
+
 ## Vector store
 
-(Empty until P6 ships.)
+(Empty until S20 ships the embedding column on `chunks` and the
+pgvector index.)
 
 ## Graph store
 
-(Empty until P6 ships.)
+(Empty until S21 ships Neo4j writes per the deferred-decisions entry.)
