@@ -239,3 +239,96 @@ def test_session_used_outside_context_manager_raises() -> None:
 
     with pytest.raises(RuntimeError, match="used outside `async with` block"):
         asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# S22 / D65: traverse_from_seed wrapper-level tests.
+# ---------------------------------------------------------------------------
+
+
+def _mock_driver_with_traversal_records(records: list[dict]) -> tuple[MagicMock, MagicMock]:
+    """Build a driver whose run() returns a result whose .data() yields
+    the supplied records (the shape Cypher Result.data() returns).
+    """
+    session = MagicMock()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=records)
+    session.run = AsyncMock(return_value=result)
+    session.close = AsyncMock()
+    driver = MagicMock()
+    driver.session = MagicMock(return_value=session)
+    return driver, session
+
+
+def test_traverse_from_seed_binds_bound_tenant_id_and_indexed_chunk_ids() -> None:
+    chunk_id = uuid4()
+    driver, session = _mock_driver_with_traversal_records([])
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT_A) as s:
+            await s.traverse_from_seed(
+                seed_name="ACME Corp",
+                depth=2,
+                indexed_chunk_ids=[chunk_id],
+            )
+
+    asyncio.run(run())
+
+    assert session.run.call_count == 1
+    call = session.run.call_args
+    cypher = call.args[0]
+    params = call.args[1]
+    assert "$tenant_id" in cypher
+    assert "$indexed_chunk_ids" in cypher
+    assert "[*0..2]" in cypher  # depth interpolated literally
+    assert params["tenant_id"] == _TENANT_A.tenant_id
+    assert params["seed_name"] == "ACME Corp"
+    assert params["indexed_chunk_ids"] == [str(chunk_id)]
+
+
+def test_traverse_from_seed_returns_empty_for_empty_indexed_chunk_ids() -> None:
+    """The readiness predicate excludes everything when no source has
+    reached indexed state; the wrapper short-circuits without
+    issuing a Cypher query.
+    """
+    driver, session = _mock_driver_with_traversal_records([])
+
+    async def run() -> list:
+        async with TenantScopedNeo4jSession(driver, _TENANT_A) as s:
+            return list(
+                await s.traverse_from_seed(
+                    seed_name="anything",
+                    depth=1,
+                    indexed_chunk_ids=[],
+                )
+            )
+
+    rows = asyncio.run(run())
+    assert rows == []
+    assert session.run.call_count == 0
+
+
+def test_traverse_from_seed_rejects_negative_depth() -> None:
+    driver, _ = _mock_driver_with_traversal_records([])
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT_A) as s:
+            await s.traverse_from_seed(
+                seed_name="x", depth=-1, indexed_chunk_ids=[uuid4()]
+            )
+
+    with pytest.raises(ValueError, match="non-negative"):
+        asyncio.run(run())
+
+
+def test_traverse_from_seed_rejects_depth_above_max() -> None:
+    driver, _ = _mock_driver_with_traversal_records([])
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT_A) as s:
+            await s.traverse_from_seed(
+                seed_name="x", depth=999, indexed_chunk_ids=[uuid4()]
+            )
+
+    with pytest.raises(ValueError, match="exceeds maximum"):
+        asyncio.run(run())

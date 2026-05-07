@@ -14,8 +14,11 @@ source's pipeline state is ``indexed`` — half-ingested sources do
 not surface in retrieval until both tracks complete.
 """
 
+from contexts.ingestion.adapters.outbound.retrieval.neo4j_traverse import (
+    Neo4jTraverse,
+)
 from contexts.ingestion.adapters.outbound.retrieval.pgvector_search import (
     PgVectorSearch,
 )
 
-__all__ = ["PgVectorSearch"]
+__all__ = ["Neo4jTraverse", "PgVectorSearch"]

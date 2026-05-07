@@ -80,6 +80,35 @@ RETURN e.tenant_id AS tenant_id,
        e.created_at AS created_at
 """
 
+# Variable-length traversal from a named seed entity. The depth
+# bound is interpolated into the path-pattern at format-time
+# (Cypher does not parameterise path-length integers); the bound
+# is validated by ``_validate_depth`` before substitution. The
+# ``ANY(cid IN reachable.source_chunk_ids WHERE cid IN
+# $indexed_chunk_ids)`` predicate carries the cross-track readiness
+# filter D65 commits to: an entity surfaces only if at least one of
+# its source chunks comes from a source whose pipeline reached
+# ``indexed`` state. The set of indexed chunk_ids is computed by
+# the adapter's pre-query against per-tenant Postgres and passed
+# in as a parameter.
+_TRAVERSE_FROM_SEED = """
+MATCH path = (seed:Entity {{tenant_id: $tenant_id, name: $seed_name}})-[*0..{depth}]-(reachable:Entity)
+WHERE reachable.tenant_id = $tenant_id
+  AND ANY(cid IN reachable.source_chunk_ids WHERE cid IN $indexed_chunk_ids)
+WITH reachable, length(path) AS plen, [r IN relationships(path) | type(r)] AS rel_path
+ORDER BY plen ASC, reachable.name ASC
+WITH reachable, head(collect({{plen: plen, rel_path: rel_path}})) AS shortest
+RETURN reachable.tenant_id AS tenant_id,
+       reachable.jurisdiction AS jurisdiction,
+       reachable.name AS name,
+       reachable.entity_type AS entity_type,
+       reachable.source_chunk_ids AS source_chunk_ids,
+       shortest.rel_path AS relationship_path,
+       reachable.created_at AS created_at
+ORDER BY size(shortest.rel_path) ASC, reachable.name ASC
+"""
+
+
 _GET_RELATIONSHIPS_BY_CHUNK_IDS = """
 MATCH (s:Entity)-[r]->(t:Entity)
 WHERE r.tenant_id = $tenant_id
@@ -105,6 +134,13 @@ RETURN r.tenant_id AS tenant_id,
 _RELATIONSHIP_TYPE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+# Variable-length path segments (e.g. ``[*0..3]``) require literal
+# integers in Cypher; the wrapper interpolates the depth into the
+# query template after validating it as a small non-negative
+# integer. Arbitrary inputs cannot land in the format-substitution.
+_MAX_TRAVERSE_DEPTH = 8
+
+
 def _validate_relationship_type(relationship_type: str) -> None:
     if not _RELATIONSHIP_TYPE_RE.match(relationship_type):
         raise ValueError(
@@ -113,6 +149,18 @@ def _validate_relationship_type(relationship_type: str) -> None:
             "The extraction prompt should produce identifier-shaped "
             "relationship types; the LiteLLM extractor adapter "
             "enforces this on output."
+        )
+
+
+def _validate_depth(depth: int) -> None:
+    if not isinstance(depth, int) or isinstance(depth, bool):
+        raise ValueError(f"depth must be int, got {type(depth).__name__}")
+    if depth < 0:
+        raise ValueError(f"depth must be non-negative, got {depth}")
+    if depth > _MAX_TRAVERSE_DEPTH:
+        raise ValueError(
+            f"depth {depth} exceeds maximum {_MAX_TRAVERSE_DEPTH}; "
+            "deeper traversals are out of Phase 1 scope"
         )
 
 
@@ -232,6 +280,44 @@ class TenantScopedNeo4jSession:
             )
             for row in records
         ]
+
+    async def traverse_from_seed(
+        self,
+        seed_name: str,
+        depth: int,
+        indexed_chunk_ids: Sequence[UUID],
+    ) -> Sequence[dict[str, object]]:
+        """Variable-length traversal from a seed entity (D65).
+
+        Returns one row per reachable entity within ``depth`` hops,
+        deduplicated to the shortest path. The cross-track readiness
+        filter is enforced via the ``indexed_chunk_ids`` parameter:
+        an entity surfaces only if at least one of its
+        ``source_chunk_ids`` is in the set. The seed itself surfaces
+        with an empty relationship_path when its own source chunks
+        meet the readiness predicate.
+
+        Returns raw Cypher row dicts (not ``EntityResult`` value
+        objects) because the wrapper's job is the Cypher boundary,
+        not the domain shape — the adapter at
+        ``Neo4jTraverse.traverse_graph`` does the domain mapping.
+        """
+        _validate_depth(depth)
+        if not indexed_chunk_ids:
+            # No indexed sources for this tenant ⇒ the readiness
+            # predicate excludes everything; short-circuit before
+            # the Cypher query.
+            return []
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "seed_name": seed_name,
+            "indexed_chunk_ids": [str(cid) for cid in indexed_chunk_ids],
+        }
+        cypher = _TRAVERSE_FROM_SEED.format(depth=depth)
+        result = await session.run(cypher, params)
+        records = await result.data()
+        return list(records)
 
     async def get_relationships_by_chunk_ids(
         self, chunk_ids: Sequence[UUID]
