@@ -231,6 +231,7 @@ source_modules =
     contexts.ingestion.adapters.inbound
     contexts.ingestion.adapters.outbound.parsers
     contexts.ingestion.adapters.outbound.postgres
+    contexts.ingestion.adapters.outbound.neo4j
 forbidden_modules =
     litellm
 allow_indirect_imports = false
