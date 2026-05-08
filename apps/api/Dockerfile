@@ -33,6 +33,7 @@ COPY contexts/tenancy/pyproject.toml ./contexts/tenancy/
 COPY contexts/evaluation/pyproject.toml ./contexts/evaluation/
 COPY contexts/ingestion/pyproject.toml ./contexts/ingestion/
 COPY contexts/methodology/pyproject.toml ./contexts/methodology/
+COPY contexts/agent/pyproject.toml ./contexts/agent/
 
 RUN uv sync --frozen --no-dev --no-install-project
 

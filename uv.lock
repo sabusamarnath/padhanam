@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "padhanam",
+    "padhanam-agent",
     "padhanam-api",
     "padhanam-audit",
     "padhanam-cli",
@@ -1180,6 +1181,7 @@ dependencies = [
     { name = "alembic" },
     { name = "cryptography" },
     { name = "neo4j" },
+    { name = "padhanam-agent" },
     { name = "padhanam-api" },
     { name = "padhanam-audit" },
     { name = "padhanam-cli" },
@@ -1209,6 +1211,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "cryptography", specifier = ">=43" },
     { name = "neo4j", specifier = ">=5.26,<6" },
+    { name = "padhanam-agent", virtual = "contexts/agent" },
     { name = "padhanam-api", virtual = "apps/api" },
     { name = "padhanam-audit", virtual = "contexts/audit" },
     { name = "padhanam-cli", virtual = "apps/cli" },
@@ -1231,6 +1234,21 @@ dev = [
     { name = "import-linter", specifier = ">=2.1" },
     { name = "pip-audit", specifier = ">=2.7" },
     { name = "pytest", specifier = ">=8" },
+]
+
+[[package]]
+name = "padhanam-agent"
+version = "0.0.0"
+source = { virtual = "contexts/agent" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 
 [[package]]
