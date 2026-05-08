@@ -1,6 +1,6 @@
 """create methodology_templates and methodology_revisions
 
-Revision ID: 0004_create_methodology_templates
+Revision ID: 0004_methodology_tables
 Revises: 0003_add_cost_columns
 Create Date: 2026-05-08
 
@@ -40,7 +40,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as pg
 
 
-revision: str = "0004_create_methodology_templates"
+revision: str = "0004_methodology_tables"
 down_revision: Union[str, None] = "0003_add_cost_columns"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

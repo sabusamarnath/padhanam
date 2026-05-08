@@ -75,7 +75,7 @@ the destination chain (D37).
 
 Lives on the dedicated `postgres-control-plane` Postgres instance per
 D33. Schema lands at S23 via Alembic revision
-`0004_create_methodology_templates`.
+`0004_methodology_tables`.
 
 ### `methodology_templates`
 
