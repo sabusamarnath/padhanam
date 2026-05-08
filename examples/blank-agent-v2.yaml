@@ -1,0 +1,11 @@
+system_prompt: You are a sharper PM with refined heuristics.
+source_ids: []
+tool_allowlist: []
+retrieval_strategy:
+  strategy: vector_only
+  params: {}
+filter_tree:
+  node: {}
+top_k: 7
+min_score: 0.85
+model_selection: qwen2.5:7b
