@@ -22,6 +22,13 @@ Opened 2026-05-08 at the P7 framing strategic block. P7 ships the agent authorin
   tree translator (D67), and tool registry surface (deferred
   from P7 per D68); the hierarchical-topology design adds the
   multi-agent shape on top of the runtime substrate.
+- **Layer A policy authoring.** Follow-on strategic block authoring
+  the ten policy scaffolds at `charter/compliance/` per the
+  compliance-as-shared-responsibility principle. Scheduled at
+  operator discretion between P7 build sessions or after P7 close;
+  does not block any P7 build session because the substrate (D-entries
+  D69-D73, the principle, the scaffold structure) is in place. Authoring
+  effort estimated at one strategic block session.
 - **Retrieval-evaluation design session.** Queued strategic-mode
   conversation ahead of P11 (recommendation engine). The audience
   is the existing eval harness from P5 and the optimisation layer

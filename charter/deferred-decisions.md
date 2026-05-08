@@ -143,3 +143,23 @@ Activates at P8 agent runtime or whichever predecessor orchestration session dem
 **Personalization architecturally separates from retrieval and from agent reasoning.** Retrieval scope (what data is accessible) is a separate concern from presentation (how accessible data is rendered). Agent reasoning (what the answer should be) is separate from presentation (how the answer is shown). Conflating any of the three produces logic that is hard to evaluate independently and hard to extend without refactor.
 
 **The specific D-entry lands at P8 framing or the orchestration session that introduces a personalization consumer.** The architectural shape commits in advance; the implementation choice (separate orchestration node, parameter on response template, dedicated personalization port) settles when the consumer arrives.
+
+## Per-tenant compliance evidence aggregation (Layer B)
+
+Activates when a real tenant compliance use case demands it, or at Phase 2 framing as a candidate package, whichever surfaces first.
+
+**The substrate already exists.** Audit chain per D26 and D35 records every state change with actor, jurisdiction, before/after state, and correlation ID. Supply-chain scanning per D25 produces dated scan output via `make scan` and `ops/scheduled_checks.yaml`. Tenant isolation contract tests per D24 produce pass-rate evidence via `make test`. Conventional commits referencing package and session number per the Engineering practice principle constitute change-management evidence. Package retrospectives in `log/packages.md` per D40 constitute operation-of-controls evidence over time.
+
+**What defers is the report-shaping pipeline.** Audit-chain queries scoped per tenant; evidence aggregation use cases composing the substrate above into auditor-consumable reports; the auditor-export format (PDF, structured JSON, or specific GRC-platform import shape); the tenant-facing CLI or UI surface for evidence retrieval.
+
+**The specific D-entry lands when the package frames.** Premature commitment to specific report shapes ahead of a real tenant audit consumer is paper architecture. Estimated package size when activated: medium. Sized similar to P10 audit log viewer.
+
+## Workflow compliance frames (Layer C)
+
+Activates when three prerequisites all hold: (1) Padhanam's own SOC 2 Type II or ISO 27001 audit has completed (Phase 2 production deployment work; the inheritance map cannot reference controls in a report that does not yet exist); (2) the workflow taxonomy has stabilised across multiple methodologies (post-P7 with at least three methodology templates in production, so the frame structure is not authored against a single workflow's idiosyncrasies); (3) tenant demand for tenant-product attestation has surfaced as a real procurement requirement rather than a hypothetical one (real-consumer prerequisite mirroring the S15 classification deferral pattern).
+
+**Frame structure when authored.** Each workflow compliance frame carries: data-flow defaults, sensitivity classification defaults, retention defaults, incident shape defaults (the C1 data-protection scaffolds); control objective mappings naming SOC 2 Trust Services Criteria and ISO 27001 Annex A controls applicable to applications built with this workflow; CUEC inheritance map showing which Padhanam controls cover which tenant control objectives, with residual control objectives flagged as tenant-operated; control activity scaffolds describing typical implementations for tenant-operated controls in this workflow class (the C2 framework-attestation inheritance maps).
+
+**Methodology aggregate field extension.** When Layer C activates, the methodology aggregate at `contexts/methodology/domain/methodology.py` extends with a compliance-frame field. Per D31's revision-shape, this lands as a future revision rather than a schema migration; existing methodology templates inherit a default empty frame until populated.
+
+**The specific D-entry lands when the package frames.** Premature commitment to specific frame structures ahead of the audit-completion prerequisite is paper architecture. Estimated package size when activated: large. Sized as a multi-session package given the per-workflow content authoring effort.
