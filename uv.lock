@@ -11,6 +11,7 @@ members = [
     "padhanam-evaluation",
     "padhanam-inference",
     "padhanam-ingestion",
+    "padhanam-methodology",
     "padhanam-observability",
     "padhanam-tenancy",
 ]
@@ -1185,6 +1186,7 @@ dependencies = [
     { name = "padhanam-evaluation" },
     { name = "padhanam-inference" },
     { name = "padhanam-ingestion" },
+    { name = "padhanam-methodology" },
     { name = "padhanam-observability" },
     { name = "padhanam-tenancy" },
     { name = "psycopg", extra = ["binary"] },
@@ -1213,6 +1215,7 @@ requires-dist = [
     { name = "padhanam-evaluation", virtual = "contexts/evaluation" },
     { name = "padhanam-inference", virtual = "contexts/inference" },
     { name = "padhanam-ingestion", virtual = "contexts/ingestion" },
+    { name = "padhanam-methodology", virtual = "contexts/methodology" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
     { name = "padhanam-tenancy", virtual = "contexts/tenancy" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -1351,6 +1354,11 @@ requires-dist = [
     { name = "opentelemetry-semantic-conventions", specifier = ">=0.48b0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
+
+[[package]]
+name = "padhanam-methodology"
+version = "0.0.0"
+source = { virtual = "contexts/methodology" }
 
 [[package]]
 name = "padhanam-observability"

@@ -36,6 +36,7 @@ dependencies = [
     "padhanam-tenancy",
     "padhanam-evaluation",
     "padhanam-ingestion",
+    "padhanam-methodology",
     "padhanam-api",
     "padhanam-cli",
 ]
@@ -59,6 +60,7 @@ members = [
     "contexts/tenancy",
     "contexts/evaluation",
     "contexts/ingestion",
+    "contexts/methodology",
     "apps/api",
     "apps/cli",
 ]
@@ -70,6 +72,7 @@ padhanam-audit = {workspace = true}
 padhanam-tenancy = {workspace = true}
 padhanam-evaluation = {workspace = true}
 padhanam-ingestion = {workspace = true}
+padhanam-methodology = {workspace = true}
 padhanam-api = {workspace = true}
 padhanam-cli = {workspace = true}
 

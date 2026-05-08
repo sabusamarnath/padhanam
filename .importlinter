@@ -77,6 +77,15 @@ layers =
     contexts.ingestion.ports
     contexts.ingestion.domain
 
+[importlinter:contract:layers-methodology]
+name = Methodology layers (hexagonal)
+type = layers
+layers =
+    contexts.methodology.adapters
+    contexts.methodology.application
+    contexts.methodology.ports
+    contexts.methodology.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -100,6 +109,7 @@ modules =
     contexts.tenancy.domain
     contexts.evaluation.domain
     contexts.ingestion.domain
+    contexts.methodology.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -115,6 +125,7 @@ modules =
     contexts.tenancy.application
     contexts.evaluation.application
     contexts.ingestion.application
+    contexts.methodology.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -130,6 +141,7 @@ modules =
     contexts.tenancy.adapters
     contexts.evaluation.adapters
     contexts.ingestion.adapters
+    contexts.methodology.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -160,6 +172,7 @@ source_modules =
     contexts.tenancy.domain
     contexts.evaluation.domain
     contexts.ingestion.domain
+    contexts.methodology.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -232,6 +245,7 @@ source_modules =
     contexts.ingestion.adapters.outbound.parsers
     contexts.ingestion.adapters.outbound.postgres
     contexts.ingestion.adapters.outbound.neo4j
+    contexts.methodology
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -256,6 +270,7 @@ source_modules =
     contexts.tenancy
     contexts.evaluation
     contexts.ingestion
+    contexts.methodology
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -318,6 +333,7 @@ source_modules =
     contexts.ingestion.adapters.outbound.parsers
     contexts.ingestion.adapters.outbound.postgres
     contexts.ingestion.adapters.outbound.embedding
+    contexts.methodology
 forbidden_modules =
     neo4j
 allow_indirect_imports = false
