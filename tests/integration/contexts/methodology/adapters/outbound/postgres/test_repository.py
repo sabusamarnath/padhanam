@@ -29,7 +29,7 @@ from contexts.methodology.adapters.outbound.postgres import (
     methodology_revisions,
     methodology_templates,
 )
-from contexts.methodology.domain.hash_chain import (
+from padhanam.security.hash_chain import (
     GENESIS_REVISION_HASH,
     compute_revision_hash,
 )

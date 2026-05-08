@@ -29,7 +29,7 @@ from contexts.methodology.application import (
     retire_methodology_template,
     update_methodology_template,
 )
-from contexts.methodology.domain.hash_chain import GENESIS_REVISION_HASH
+from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,

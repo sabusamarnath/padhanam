@@ -42,10 +42,6 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
-from contexts.methodology.domain.hash_chain import (
-    GENESIS_REVISION_HASH,
-    compute_revision_hash,
-)
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
@@ -60,6 +56,10 @@ from padhanam.security import (
     AuthorizationError,
     Principal,
     is_operator,
+)
+from padhanam.security.hash_chain import (
+    GENESIS_REVISION_HASH,
+    compute_revision_hash,
 )
 
 
@@ -104,16 +104,20 @@ def _content_payload(
     The description's null is normalised to the empty string so the
     canonical-JSON encoding is identical for ``description=None`` and
     ``description=""`` (both are absence-of-description and should
-    not produce hash divergence). All list-shaped fields convert to
-    plain Python lists; the hash helper applies the canonical sort
-    inside ``compute_revision_hash``.
+    not produce hash divergence).
+
+    Per D75's field-set-agnostic helper API, list-shaped field
+    sorting is the use case's responsibility (no longer baked into
+    the helper). ``source_ids`` and ``tool_allowlist`` are sorted
+    lexically here so callers cannot accidentally produce hash drift
+    through list-order variation.
     """
     return {
         "name": name,
         "description": description or "",
         "system_prompt": system_prompt,
-        "source_ids": [str(s) for s in source_ids],
-        "tool_allowlist": list(tool_allowlist),
+        "source_ids": sorted(str(s) for s in source_ids),
+        "tool_allowlist": sorted(str(t) for t in tool_allowlist),
         "retrieval_strategy": dict(retrieval_strategy),
         "filter_tree": dict(filter_tree),
         "top_k": top_k,

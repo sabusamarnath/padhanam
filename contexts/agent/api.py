@@ -13,7 +13,22 @@ carries a ``TenantContext`` parameter, mirroring the per-tenant
 adapters at ``contexts/audit/``, ``contexts/evaluation/``,
 ``contexts/ingestion/`` and inverting the methodology context's
 control-plane-scoped facade per D75.
-
-Use cases land at S24 commit 8; this file gains the re-export
-bindings at that commit.
 """
+
+from __future__ import annotations
+
+from contexts.agent.application import (
+    archive_agent,
+    create_blank_agent,
+    get_agent,
+    list_agents,
+    update_agent,
+)
+
+__all__ = [
+    "archive_agent",
+    "create_blank_agent",
+    "get_agent",
+    "list_agents",
+    "update_agent",
+]

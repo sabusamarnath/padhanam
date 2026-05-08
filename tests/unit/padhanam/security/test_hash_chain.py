@@ -1,20 +1,24 @@
-"""Unit tests for the methodology revision hash-chain helpers (D26, D74)."""
+"""Unit tests for padhanam.security.hash_chain (D26, D75).
+
+Promoted from contexts/methodology/domain/hash_chain.py at S24
+commit 8 with field-set-agnostic API per D75. Tests of the
+field-set-agnostic primitives stay here; tests that exercised the
+removed methodology-specific helpers (filter_content_fields and
+the implicit list-sort behaviour) relocate to the methodology /
+agent use case test suites where list-sort responsibility now
+lives.
+"""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from decimal import Decimal
 from uuid import UUID
 
-import pytest
-
-from contexts.methodology.domain.hash_chain import (
-    CONTENT_FIELDS,
+from padhanam.security.hash_chain import (
     GENESIS_REVISION_HASH,
     canonical_json,
     compute_revision_hash,
-    filter_content_fields,
 )
 
 
@@ -129,63 +133,6 @@ def test_canonical_json_uuid_serialises_as_string() -> None:
     assert canonical_json({"v": u}) == b'{"v":"00000000-0000-4000-8000-000000000001"}'
 
 
-def test_filter_content_fields_excludes_chain_metadata() -> None:
-    """Defensive whitelist: chain metadata is filtered out of hash payload."""
-    superset = _content_payload()
-    superset.update({
-        "methodology_template_id": "ignored",
-        "version": 99,
-        "created_by_user_id": "ignored",
-        "created_at": "ignored",
-        "this_revision_hash": "ignored",
-        "previous_revision_hash": "ignored",
-    })
-    filtered = filter_content_fields(superset)
-    assert "methodology_template_id" not in filtered
-    assert "version" not in filtered
-    assert "created_by_user_id" not in filtered
-    assert "created_at" not in filtered
-    assert "this_revision_hash" not in filtered
-    assert "previous_revision_hash" not in filtered
-    assert set(filtered.keys()) == CONTENT_FIELDS
-
-
-def test_filter_content_fields_keeps_content_only() -> None:
-    superset = {
-        "name": "LVT",
-        "system_prompt": "prompt",
-        "stray_field": "should not appear",
-    }
-    filtered = filter_content_fields(superset)
-    assert filtered == {"name": "LVT", "system_prompt": "prompt"}
-
-
-def test_compute_revision_hash_normalises_source_ids() -> None:
-    """source_ids canonical sort applied inside compute_revision_hash."""
-    payload_unsorted = _content_payload(source_ids=["c", "a", "b"])
-    payload_sorted = _content_payload(source_ids=["a", "b", "c"])
-    h_unsorted = compute_revision_hash(
-        content_payload=payload_unsorted, previous_hash=GENESIS_REVISION_HASH
-    )
-    h_sorted = compute_revision_hash(
-        content_payload=payload_sorted, previous_hash=GENESIS_REVISION_HASH
-    )
-    assert h_unsorted == h_sorted
-
-
-def test_compute_revision_hash_normalises_tool_allowlist() -> None:
-    """tool_allowlist canonical sort applied inside compute_revision_hash."""
-    h_unsorted = compute_revision_hash(
-        content_payload=_content_payload(tool_allowlist=["b", "a", "c"]),
-        previous_hash=GENESIS_REVISION_HASH,
-    )
-    h_sorted = compute_revision_hash(
-        content_payload=_content_payload(tool_allowlist=["a", "b", "c"]),
-        previous_hash=GENESIS_REVISION_HASH,
-    )
-    assert h_unsorted == h_sorted
-
-
 def test_compute_revision_hash_chain_of_revisions_integrity() -> None:
     """Multi-revision chain: each binds to its predecessor; tampering breaks the chain."""
     payload_v1 = _content_payload()
@@ -210,20 +157,22 @@ def test_compute_revision_hash_chain_of_revisions_integrity() -> None:
 
 
 def test_compute_revision_hash_audit_chain_structural_equivalence() -> None:
-    """Methodology hash mirrors audit-chain shape: SHA-256 of canonical-JSON of content + previous_hash key.
+    """Hash mirrors audit-chain shape: SHA-256 of canonical-JSON of content + previous_hash key.
 
     Reconstruct the same hash by hand using the same primitive,
     confirm equivalence — pins that compute_revision_hash is
-    structurally the audit_chain_hash applied to the methodology
-    content payload, not a divergent variant.
+    structurally the audit_chain_hash applied to the content
+    payload, not a divergent variant. This is the field-set-
+    agnostic primitive shape per D75: any caller's payload plus a
+    previous_hash key produces a SHA-256 of the canonical-JSON form.
     """
     payload = _content_payload(source_ids=["a", "b"], tool_allowlist=["t1", "t2"])
-    methodology_hash = compute_revision_hash(
+    revision_hash = compute_revision_hash(
         content_payload=payload, previous_hash=GENESIS_REVISION_HASH
     )
     expected_payload = {**payload, "previous_revision_hash": GENESIS_REVISION_HASH}
     expected_hash = hashlib.sha256(canonical_json(expected_payload)).hexdigest()
-    assert methodology_hash == expected_hash
+    assert revision_hash == expected_hash
 
 
 def test_compute_revision_hash_content_changes_change_hash() -> None:
@@ -237,3 +186,21 @@ def test_compute_revision_hash_content_changes_change_hash() -> None:
             content_payload=flipped, previous_hash=GENESIS_REVISION_HASH
         )
         assert h_flipped != h_base, f"hash unchanged when {field} flipped"
+
+
+def test_field_set_agnostic_hash_payload_does_not_sort_lists() -> None:
+    """D75 contract: list-sort responsibility lives in the use case layer.
+
+    The promoted helper does NOT sort list-shaped fields. Two payloads
+    differing only in list ordering produce different hashes.
+    Use cases must apply canonical sort before passing the payload.
+    """
+    h_abc = compute_revision_hash(
+        content_payload={"items": ["a", "b", "c"]},
+        previous_hash=GENESIS_REVISION_HASH,
+    )
+    h_cba = compute_revision_hash(
+        content_payload={"items": ["c", "b", "a"]},
+        previous_hash=GENESIS_REVISION_HASH,
+    )
+    assert h_abc != h_cba

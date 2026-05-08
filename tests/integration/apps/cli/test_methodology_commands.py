@@ -29,7 +29,7 @@ from contexts.methodology.adapters.outbound.postgres import (
     methodology_revisions,
     methodology_templates,
 )
-from contexts.methodology.domain.hash_chain import GENESIS_REVISION_HASH
+from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import file_security_event_logger
 
