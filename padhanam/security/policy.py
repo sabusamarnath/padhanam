@@ -20,6 +20,27 @@ from padhanam.security.auth import Principal
 from shared_kernel import TenantId
 
 
+# Platform-level operator role per D34. Promoted from
+# ``contexts/tenancy/application/use_cases.py`` at S23 commit 8 so the
+# methodology context can consume the predicate without a cross-context
+# application-to-application import (D17). The role string is stable;
+# the constant is the authoritative location.
+OPERATOR_ROLE = "padhanam.operator"
+
+
+def is_operator(principal: Principal) -> bool:
+    """Operator-context predicate (D34).
+
+    A principal is operator-context iff it carries the operator role.
+    Tenant-context callers carry their own roles (e.g. ``"audit.read"``)
+    but not this one. Use cases that mutate control-plane state guard
+    on this predicate and raise ``AuthorizationError`` on
+    tenant-context callers (mirroring ``reveal_connection_config``'s
+    rejection path).
+    """
+    return OPERATOR_ROLE in principal.roles
+
+
 class Decision(StrEnum):
     ALLOW = "allow"
     DENY = "deny"

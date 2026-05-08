@@ -43,18 +43,19 @@ from padhanam.observability.security_events import (
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from padhanam.security import AuthorizationError, Principal
+from padhanam.security import (
+    OPERATOR_ROLE,
+    AuthorizationError,
+    Principal,
+    is_operator,
+)
 
-OPERATOR_ROLE = "padhanam.operator"
-
-
-def is_operator(principal: Principal) -> bool:
-    """Operator-context predicate.
-
-    A principal is operator-context iff it carries the operator role.
-    Tenant-context callers carry their own roles but not this one.
-    """
-    return OPERATOR_ROLE in principal.roles
+# OPERATOR_ROLE and is_operator promoted to ``padhanam.security.policy``
+# at S23 commit 8 so the methodology context can consume the predicate
+# without a cross-context application-to-application import (D17).
+# Re-imported here to preserve the existing ``from
+# contexts.tenancy.application import OPERATOR_ROLE, is_operator``
+# import chain used by tests and the connection-resolution layer.
 
 
 class _AsyncRegistryPort(Protocol):

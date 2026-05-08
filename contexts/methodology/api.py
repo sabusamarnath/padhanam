@@ -11,7 +11,22 @@ The methodology context is control-plane-scoped per D33; the API
 surface carries no TenantContext parameter because methodology data
 is platform-managed and visible across tenants by design (the inverse
 of agent isolation per the P7 epic note).
-
-Use cases land at S23 commit 8; this file gains the re-export bindings
-at that commit.
 """
+
+from __future__ import annotations
+
+from contexts.methodology.application import (
+    create_methodology_template,
+    get_methodology_template,
+    list_methodology_templates,
+    retire_methodology_template,
+    update_methodology_template,
+)
+
+__all__ = [
+    "create_methodology_template",
+    "get_methodology_template",
+    "list_methodology_templates",
+    "retire_methodology_template",
+    "update_methodology_template",
+]
