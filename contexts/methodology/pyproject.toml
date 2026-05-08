@@ -3,10 +3,15 @@ name = "padhanam-methodology"
 version = "0.0.0"
 description = "Methodology bounded context (D31, D33, D74). MethodologyTemplate plus MethodologyRevision aggregates with hash-chain integrity per D26; control-plane Postgres persistence per D33; operator-context CRUD use cases per D34. Substrate for the agent context at S24 and the create_agent_from_methodology flow at S25."
 requires-python = ">=3.14"
-# S23 commit 3: skeleton-only with zero third-party deps. The Postgres
-# adapter at S23 commit 7 extends this manifest with sqlalchemy[asyncio]
-# and asyncpg matching the tenancy precedent at D34.
-dependencies = []
+# Postgres adapter scope (S23 commit 7). Mirrors the tenancy precedent
+# at D34: sqlalchemy[asyncio] for the AsyncEngine + Core query surface,
+# asyncpg as the driver. Domain code is pure per D16; the deps live
+# here because the adapter declares them per D30's per-context dep-
+# scoping invariant.
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+]
 
 [tool.uv]
 package = false
