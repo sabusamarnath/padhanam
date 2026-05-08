@@ -1,0 +1,13 @@
+name: TestMethodology
+description: Smoke-test methodology fixture (S23 / D74)
+system_prompt: You are a careful analyst.
+source_ids: []
+tool_allowlist: []
+retrieval_strategy:
+  strategy: vector_only
+  params: {}
+filter_tree:
+  node: {}
+top_k: 5
+min_score: 0.7
+model_selection: qwen2.5:7b

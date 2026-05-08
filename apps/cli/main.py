@@ -49,10 +49,11 @@ from apps.cli._ingest import (
     run_ingest_traverse,
     run_ingest_worker,
 )
+from apps.cli._methodology import methodology_app
 
 app = typer.Typer(
     name="padhanam",
-    help="Padhanam CLI runner (S18 eval; S19 ingest).",
+    help="Padhanam CLI runner (S18 eval; S19 ingest; S23 methodology).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -70,6 +71,9 @@ ingest_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(ingest_app, name="ingest")
+
+# S23 methodology authoring commands (D74).
+app.add_typer(methodology_app, name="methodology")
 
 
 _OUTPUT_FORMAT_TEXT = "text"

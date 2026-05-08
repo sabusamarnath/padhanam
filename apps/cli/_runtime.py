@@ -38,7 +38,8 @@ from opentelemetry.sdk.trace import TracerProvider
 
 from padhanam.config import TenantPostgresSettings
 from padhanam.observability import init_tracing as _init_tracing_helper
-from shared_kernel import TenantContext
+from padhanam.security import OPERATOR_ROLE, Principal
+from shared_kernel import TenantContext, TenantId
 
 
 _TENANT_UUID_BY_LABEL: dict[str, str] = {
@@ -136,4 +137,25 @@ def build_tenant_wiring(tenant_id: str) -> TenantWiring:
         label=label,
         engine=engine,
         session_factory=factory,
+    )
+
+
+def build_operator_principal() -> Principal:
+    """Construct an operator-context Principal for control-plane CLI ops (D74).
+
+    Phase 1 dev shape: a static operator principal carrying
+    ``OPERATOR_ROLE``. The methodology CLI commands (S23) and any
+    future control-plane CLI surface use this principal to satisfy
+    the operator-context predicate at the use case layer per D34.
+
+    Production CLI auth lands at Phase 2 alongside the production
+    tenant resolution carryover from P5; the production swap replaces
+    this static principal with a token-resolved one without changing
+    the use case shapes.
+    """
+    return Principal(
+        subject="cli-operator",
+        tenant_id=TenantId("operator"),
+        roles=frozenset({OPERATOR_ROLE}),
+        credential_ref="cli-dev-token",
     )
