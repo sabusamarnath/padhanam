@@ -26,6 +26,29 @@ ships only the no-op audit adapter and its example test; P3 adds real
 adapters (audit Postgres, tenant registry, retrieval clients) and the
 isolation tests that go with them.
 
+## Control-plane-shape inversion (D74)
+
+Some bounded contexts are control-plane-scoped, not per-tenant: the tenant
+registry (D33) and the methodology context (D74) live on
+`postgres-control-plane` rather than per-tenant data planes. Their data
+is platform-managed and visible across tenants by design (the inverse of
+agent isolation per the P7 epic note). Their isolation tests exercise the
+inversion pattern:
+
+- Tenant-context callers can **read** templates and revisions across
+  tenants (no policy gating; the read facade accepts any authenticated
+  context).
+- Tenant-context callers are **rejected at write paths** with
+  `AuthorizationError` — only operator-context callers can mutate
+  control-plane state.
+- Operator-context callers can read and write.
+- `tenant_id` has no semantic role in the data; the FK or scoping
+  predicate that exists on per-tenant tables is absent here.
+
+`test_methodology_isolation.py` is the second instance of this inversion
+pattern (after the tenant registry's `test_registry_isolation.py`); future
+control-plane contexts inherit the same shape.
+
 ## Why "contract" tests, not "integration"
 
 Each test in this directory is a contract that an adapter must satisfy
