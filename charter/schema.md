@@ -71,6 +71,57 @@ table's CHECK (non-empty `tenant_id`). Accidental cross-destination
 writes raise constraint violations rather than silently corrupting
 the destination chain (D37).
 
+## Methodology templates (control plane)
+
+Lives on the dedicated `postgres-control-plane` Postgres instance per
+D33. Schema lands at S23 via Alembic revision
+`0004_create_methodology_templates`.
+
+### `methodology_templates`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                | `text`          | not null; UNIQUE among non-archived templates per partial index `ix_methodology_templates_name_unique_active` |
+| `description`         | `text`          | nullable                                       |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+| `archived_at`         | `timestamptz`   | nullable                                       |
+
+The partial-unique-index on `name` where `archived_at IS NULL` enforces
+unique active template names across the platform; archived templates
+retain their name without conflict for audit purposes per D31's
+append-only-at-version-level discipline.
+
+### `methodology_revisions`
+
+| Column                    | Type            | Constraints                                    |
+|---------------------------|-----------------|------------------------------------------------|
+| `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `methodology_template_id` | `uuid`          | not null; FK → `methodology_templates.id`      |
+| `version`                 | `integer`       | not null                                       |
+| `system_prompt`           | `text`          | not null                                       |
+| `source_ids`              | `jsonb`         | not null; array of UUID strings; typically empty for platform-managed templates per D68 |
+| `tool_allowlist`          | `jsonb`         | not null; array of opaque strings per D68      |
+| `retrieval_strategy`      | `jsonb`         | not null; strategy-name-plus-params shape per D66 |
+| `filter_tree`             | `jsonb`         | not null; typed Boolean tree per D67           |
+| `top_k`                   | `integer`       | not null                                       |
+| `min_score`               | `numeric`       | not null                                       |
+| `model_selection`         | `text`          | not null                                       |
+| `created_by_user_id`      | `text`          | not null                                       |
+| `created_at`              | `timestamptz`   | not null; default `now()`                      |
+| `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
+| `this_revision_hash`      | `text`          | not null; SHA-256 of canonical JSON of content fields plus previous hash per D74 |
+
+`UNIQUE(methodology_template_id, version)` —
+`methodology_revisions_template_version_unique`. Revisions are immutable
+per D31; updates create new revision rows. The hash-chain spans content
+fields per D74's content surface specification; chain metadata
+(template_id, version, timestamps, chain pointers) is excluded from the
+hash. Each template has its own chain rooted at the genesis sentinel;
+chains are independent per template, mirroring the `scoring_sheet_revisions`
+per-sheet revision pattern.
+
 ## Per-tenant tables
 
 Live on each tenant's dedicated Postgres instance per D32. Schema is
