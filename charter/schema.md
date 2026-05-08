@@ -454,3 +454,48 @@ keyed on the five-component composite). The same chunk re-extracted
 produces no duplicate edges; different chunks producing the same
 endpoint pair and relationship type produce distinct edges keyed
 on `source_chunk_id`, preserving provenance.
+
+## Agent tables (per-tenant)
+
+Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`.
+
+### `agent_templates`
+
+| Column                              | Type            | Constraints                                    |
+|-------------------------------------|-----------------|------------------------------------------------|
+| `id`                                | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                              | `text`          | not null; UNIQUE among non-archived templates per partial index `ix_agent_templates_name_unique_active` |
+| `description`                       | `text`          | nullable; immutable after creation per D75     |
+| `source_methodology_template_id`    | `uuid`          | nullable for blank-created agents; immutable after construction per D75 |
+| `source_methodology_template_version` | `integer`     | nullable for blank-created agents; immutable after construction per D75 |
+| `created_by_user_id`                | `text`          | not null                                       |
+| `created_at`                        | `timestamptz`   | not null; default `now()`                      |
+| `archived_at`                       | `timestamptz`   | nullable                                       |
+
+Methodology lineage fields are nullable together: either both NULL (blank-created agent) or both populated (created from methodology template at S25's cross-context flow). A CHECK constraint `agent_templates_lineage_paired_null` enforces this invariant: `CHECK ((source_methodology_template_id IS NULL) = (source_methodology_template_version IS NULL))`.
+
+The partial-unique-index on `name` where `archived_at IS NULL` enforces unique active agent names per tenant.
+
+### `agent_revisions`
+
+| Column                    | Type            | Constraints                                    |
+|---------------------------|-----------------|------------------------------------------------|
+| `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `agent_template_id`       | `uuid`          | not null; FK → `agent_templates.id`            |
+| `version`                 | `integer`       | not null                                       |
+| `system_prompt`           | `text`          | not null                                       |
+| `source_ids`              | `jsonb`         | not null; array of UUID strings                |
+| `tool_allowlist`          | `jsonb`         | not null; array of opaque strings              |
+| `retrieval_strategy`      | `jsonb`         | not null; strategy-name-plus-params per D66    |
+| `filter_tree`             | `jsonb`         | not null; typed Boolean tree per D67           |
+| `top_k`                   | `integer`       | not null                                       |
+| `min_score`               | `numeric`       | not null                                       |
+| `model_selection`         | `text`          | not null                                       |
+| `created_by_user_id`      | `text`          | not null                                       |
+| `created_at`              | `timestamptz`   | not null; default `now()`                      |
+| `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for chain head |
+| `this_revision_hash`      | `text`          | not null; SHA-256 per D75's content surface specification |
+
+Name and description are read from the parent `agent_templates` row at hash-compute time per D75 and are not persisted as columns on `agent_revisions`; the canonical-JSON payload pulls them from the template, mirroring the methodology context's actual implementation from S23.
+
+`UNIQUE(agent_template_id, version)` — `agent_revisions_template_version_unique`. Revisions are immutable per D31; updates create new revision rows. Hash chain is per template; chains are independent per agent template, mirroring the methodology revision pattern from D74.
