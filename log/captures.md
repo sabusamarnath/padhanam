@@ -74,3 +74,44 @@ The pattern continues to do load-bearing work at strategic-mode conversations an
 
   - triaged: methodology-recurrence note on 2026-05-09
   - resolution: surfaced at the strategic block's reflection section as continuing pattern. Phase audit promotion candidate.
+
+## 2026-05-10 — Consumer-direction architectural exploration (historical context for D77's alternatives-considered)
+
+Source: OpenClaw analysis triggered post-S23/S24 brief drafting; multi-day strategic exploration spanning 2026-05-09 to 2026-05-10. The exploration considered a separate-consumer-build path before the strategic block landed D77; D77 superseded that path by placing the consumer-direction thread within D14's customer-deployment model rather than as a separate build (commit 1fb7712, P7 mid-package strategic block on consumer-direction placement). The architectural details below are recorded as historical context for the alternatives D77's alternatives-considered section names — specifically alternative (a) "Separate consumer build (Padhanam-lite as standalone product)" and alternative (c) "Bet expansion to second methodology demonstration." Not load-bearing for public Padhanam.
+
+### Architectural shape (rejected separate-consumer-build path)
+
+The separate-consumer-build path would have shaped as M3 hybrid (on-device plus hosted), three-tier with deterministic core dominant:
+
+- **Architecture:** Tier 0 deterministic core (scheduler, integrations, templates, structured logging) handling the majority of routine interactions; Tier 1 local LLM (Apple Intelligence on capable iPhones, Gemini Nano on capable Androids) augmenting where available; Tier 2 hosted LLM for complex reasoning. Device-fragmentation constraint dissolves at Tier 0 in this shape; the product would have addressed the full mobile install base.
+- **Mobile:** design constraint not initial scope. Architecture would have supported eventual mobile clients without retrofit.
+- **Push:** Shape M2 server-side scheduler with FCM. Phone-triggered local LLM for routine proactive cases (no platform push infrastructure required); FCM-mediated server-push for hosted-LLM cases.
+- **Privacy:** user-controlled tier. Closed mode (no LLM outside container; local LLM only), Sandboxed mode (hosted LLM with confidential-computing guarantees), Standard mode (hosted LLM with opt-in feedback). Default-candidate from the exploration: Sandboxed where device and provider supported confidential-computing guarantees; Standard otherwise.
+- **LLM economics:** tiered approach was the resolution to the consumer adoption problem. Most interactions would invoke no LLM; Tier 2 would justify cost when invoked. Pricing candidate: freemium with premium tier for T2-heavy use cases.
+- **Iteration loop:** methodology-as-iteration-unit with local replay against user history. Structured failure signals (decision-points tagged, inputs typed, outputs scored on dimensions, failures classified) would aggregate to platform without exposing user content. LLM-augmented operator analytics would propose specific changes with rationale and projected impact.
+- **Distribution:** standalone app primary; MCP secondary surface for Claude users (a possible fourth distribution channel).
+- **Design philosophy:** default-quiet, escalate-gracefully, do-not-over-prompt. "Staying human" as constraint on all agent behaviour, not a separate feature.
+
+### Use case portfolio (rejected separate-consumer-build path)
+
+Eleven real-life use cases stress-tested the rejected architecture across goal-driven, habit-driven, relational, reflective, and operational personas (reading a book a week, learning a new language, learning work-related, applying for a new role, managing family life, assisting friends, day-to-day job, meds, health, catching up with friends, staying human):
+
+- T0-dominant (7 of 11): reading, meds, health, social catch-up, day-to-day job, family life, assisting friends.
+- T2-weighted (2 of 11): language conversation practice, work-learning curriculum design.
+- T2-heavy outlier (1 of 11): job applications. Would have implied a separate pricing tier or BYOK.
+- Boundary case (1 of 11): staying human. Treated as design constraint rather than feature.
+
+Pattern observed: agent-persona spectrum implies N agents per user sharing substrate, methodology-driven differentiation, cross-agent context as second-order value driver. The pattern is recorded as historical context only; it is not load-bearing for public Padhanam under D77.
+
+### Strategic placement outcome
+
+Placement landed as personal-use deployment of public Padhanam per D77 and D78. The four options framed during the strategic exploration (adjacent exploration, second methodology demonstration, pivot to consumer, MCP-layer agent platform) plus the separate-consumer-build path that this capture records were each weighed against the bet's load-bearing claims. D77 records the rationale for each rejection and the structurally honest answer (placement within D14's customer-deployment architecture).
+
+### Methodology observations
+
+- **Pre-build review with code-reading verification and deliberate-silence-detection** fired its third instance, this time against operator-uploaded OpenClaw documents containing fabricated specifics (founder status, infostealer targeting framing, valuation claims). The first two instances landed in build-session brief reviews (S23, S24); this third instance fires in a strategic-mode context against external source documents, suggesting the pattern's load-bearing scope extends beyond brief review to any source-document review where load-bearing technical or factual commitments are present. Recurrence test positive across two distinct contexts; recommend promotion to a methodology-document Patterns-observed entry at the next phase audit (P7 close).
+- **Polished-AI-output-as-failure-mode**: progressive hallucination under pressure for "comprehensive" output without source-verification discipline. Distinct from the 2026-05-06 fabrication-class-drift Failure modes entry (which covered model-drafted vendor-voice content) because the new pattern is about polish-pressure-driven fabrication during multi-turn exploration rather than vendor-voice path-of-least-resistance fabrication during artefact drafting. New pattern; first observation; awaiting recurrence before phase-audit promotion.
+- **Strategic-placement-deferred-to-allow-architectural-settlement**: sequencing pattern. Separate "what is true" from "what should we do" when reversibility differs sharply across options. Held during the strategic exploration that produced this capture: architectural outcomes settled across multiple turns before the placement question converged on D77 and D78 in the parallel placement-strategic block. New sequencing-pattern candidate; first observation; awaiting recurrence before phase-audit promotion.
+
+  - triaged: historical-context note on 2026-05-10
+  - resolution: architectural details preserved as historical context for D77's alternatives-considered section, specifically the separate-consumer-build alternative; not load-bearing for public Padhanam under D77's placement; no deferred-decisions entries land for the consumer-direction architectural questions because they would re-elevate architectural details that D77 superseded.

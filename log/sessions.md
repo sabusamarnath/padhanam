@@ -885,3 +885,37 @@ metrics:
   corrected_by:
 ```
 
+
+## Consumer-direction architectural-exploration capture — historical context for D77
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One commit, no code touched. One new entry appended to `log/captures.md` recording the consumer-direction strategic exploration's architectural details as historical context for D77's alternatives-considered section, specifically the separate-consumer-build alternative D77 rejected. The architectural details (three-tier T0/T1/T2 hybrid, mobile-as-design-constraint, M2 server-side scheduler with FCM, privacy modes Closed/Sandboxed/Standard, LLM economics, methodology-as-iteration-unit with local replay, distribution shape, design philosophy, eleven-use-case stress-test, agent-persona spectrum, three methodology observations) are recorded as historical context only; they are not load-bearing for public Padhanam under D77's placement. No `charter/decisions.md` entries; no `charter/deferred-decisions.md` entries; no `charter/principles.md` edit; no `charter/current-package.md` edit; no `charter/methodology.md` edit. PRFAQ refresh remains queued for the next phase audit per D45.
+
+- Decisions: None. Strategic placement landed at the prior commit (D77, D78). This block records architectural-exploration history that did not fit D77's or D78's own alternatives-considered surfaces in the level of detail the exploration produced. The historical context here is for audit-trail purposes only; it does not commit the platform to any architectural shape and does not create deferred-decisions for future activation.
+
+- Tests: n/a. Documentation-only commit.
+
+- Reflection: Two-pass brief reconciliation. The original brief framed strategic placement as still open with four options (adjacent exploration, second methodology demonstration, pivot, MCP-layer agent platform). Pre-write reconciliation surfaced that D77 had landed placement at the immediately-prior commit (1fb7712), explicitly rejecting all four. The operator's first response was to keep D77 and trim the brief to land architectural-outcomes capture plus two contingent deferred-decisions entries (privacy posture default mode; first-portfolio of use cases) framed as forward-looking for a future Phase 2 consumer-direction framing. Mid-execution, the operator reframed further: the architectural details belong as historical context for D77's alternatives-considered section, not as forward-looking deferred-decisions. The two contingent deferred-decisions entries were therefore removed from the working tree before commit, and the captures entry was rewritten from "preserved for future Phase 2 reference" framing to "historical context for D77's alternatives-considered" framing. The final commit lands a single captures entry; no charter changes to decisions, deferred-decisions, principles, current-package, or methodology.
+
+  Sequencing observation: when multiple strategic conversations converge on the same thread within a tight time window, the brief that arrives second can be obsoleted by intervening commits, and pre-write reconciliation has to re-read the prior commit's actual scope rather than the brief's assumed scope. The two-pass reconciliation here did exactly that: first pass caught the placement conflict (D77 settled placement, brief said deferred); second pass caught the framing conflict (forward-looking deferred-decisions versus historical alternatives-record). Both passes were operator-driven rather than model-initiated; the operator's seventh and eighth named instances of user-driven course-correction (the sixth instance landed in captures.md at commit 1fb7712 within the prior strategic block).
+
+- methodology: Three methodology observations land in the captures entry as candidates for future phase-audit promotion. (1) Pre-build review with code-reading verification and deliberate-silence-detection fires its third instance (after S23 and S24), now firing against operator-uploaded external documents during strategic exploration; recurrence test positive across two distinct contexts (build-brief review and source-document review). (2) Polished-AI-output-as-failure-mode is a new failure-mode candidate awaiting recurrence. (3) Strategic-placement-deferred-to-allow-architectural-settlement is a new sequencing-pattern candidate awaiting recurrence. The forward-affordance-without-consumer pattern from S22's gap-closure block did not fire at this strategic block.
+
+  User-driven course-correction continues its phase-audit-promotion candidacy from the prior commit's sixth instance: this commit logs the seventh and eighth instances (placement-conflict catch; historical-context reframe). The pattern's load-bearing weight increases.
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-09
+  session_started: 2026-05-09
+  session_closed: 2026-05-10
+  merged: 2026-05-10
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: n/a
+  corrects: empty
+  corrected_by:
+```
+
