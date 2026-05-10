@@ -115,3 +115,12 @@ Placement landed as personal-use deployment of public Padhanam per D77 and D78. 
 
   - triaged: historical-context note on 2026-05-10
   - resolution: architectural details preserved as historical context for D77's alternatives-considered section, specifically the separate-consumer-build alternative; not load-bearing for public Padhanam under D77's placement; no deferred-decisions entries land for the consumer-direction architectural questions because they would re-elevate architectural details that D77 superseded.
+
+## 2026-05-10 — Claude.ai conversation surface as lead-up to D77
+
+Source: Claude.ai conversation "P7 active-build state and strategic-mode surface" (be66aaed-9918-4a4d-8a97-9df0be9ea7ba), 2026-05-09 to 2026-05-10. The conversation opened on S23 brief-drafting framing and accumulated consumer-direction architectural exploration mid-thread when OpenClaw analysis surfaced post-S24 close. The exploration's architectural details (M3 hybrid three-tier with deterministic core dominant, M2 server-side scheduler with FCM, privacy-as-user-controlled-tier with local replay, eleven use-case stress test, MCP as fourth distribution surface) are recorded at the prior 2026-05-10 captures entry "Consumer-direction architectural exploration (historical context for D77's alternatives-considered)" and not duplicated here.
+
+This entry adds a single traceability link: the architectural reasoning that fed D77's alternatives-considered section (a) "Separate consumer build (Padhanam-lite as standalone product)" was developed across this Claude.ai conversation's mid-thread; the D77 commit itself (1fb7712) was prompted from a separate Claude.ai conversation that absorbed the exploration and reframed it within D14's customer-deployment model. Pre-write reconciliation against decisions.md within this conversation surfaced the placement conflict and superseded the conversation's own drafted prompt; the conversation closed with deferral to D77 rather than producing a competing commitment.
+
+  - triaged: traceability note on 2026-05-10
+  - resolution: trail recorded for audit-trail completeness; the prior architectural-details captures entry remains the substantive record; no charter commitments altered.
