@@ -43,3 +43,34 @@ Observations and where each lands:
 - **Evaluation-driven development with sub-agent independent evaluation.** Corroborates Padhanam's eval-before-agent sequencing (P5 closed before P8 ships); no new commitment.
 
 Bet corroboration: an enterprise of the kind Padhanam's bet names as the procurement test condition shipping this shape publicly is signal that the procurement-grade orchestration posture Padhanam architects toward is what enterprise teams actually deploy in 2025-2026. Worth citing at the Phase 1 close audit as enterprise reference architecture. Padhanam's own architecture may end up looking different; the corroboration value is in the procurement-grade posture, not in the specific implementation choices.
+
+## 2026-05-09 — P7 mid-package strategic block — Architectural-mapping exercise for customer customisation
+
+Source: P7 mid-package strategic block on consumer-direction placement.
+
+Architectural exercise surfaced for any future customer customisation conversation. Classify each customisation requirement:
+
+- **Configuration** (changes a tenant registry value or methodology template content) → no code change anywhere
+- **Tool** (calls an external service to do something Padhanam doesn't natively do) → tool service lives outside Padhanam in its own codebase, configuration points to it
+- **Extension** (logic running inside Padhanam at one of the named interfaces per D14) → bounded extension, sandboxed, per-tenant
+- **Platform change** (none of the above fit) → upstream contribution to public Padhanam, no forking
+
+Most things should fit in #1 or #2. Few in #3. Almost nothing should fit in #4 if the platform is well-designed; if many things fit in #4, the platform's customisation surface has gaps requiring architectural attention.
+
+  - triaged: methodology-pattern candidate on 2026-05-09
+  - resolution: noted at the strategic block's reflection section as a reusable architectural exercise; not promoted to methodology document at this commit because single-instance observation. Recurrence test continues at the next strategic block touching customer customisation; promotion threshold is two further instances per the existing methodology-promotion convention.
+
+## 2026-05-09 — P7 mid-package strategic block — User-driven course-correction sixth instance
+
+Source: P7 mid-package strategic block on consumer-direction placement.
+
+Sixth named instance of the user-driven course-correction Patterns-observed entry from P6 close. Two course-corrections fired during this strategic block:
+
+1. Operator caught the "Padhanam-lite as separate consumer build" framing accumulating across early conversation turns and pulled the framing back to "personal use as own instance of public Padhanam," reconnecting the conversation to D14's customer-deployment model. Without the catch, the strategic block would have produced a separate-build commitment despite the substrate-mismatch and attention-split concerns.
+
+2. Operator caught the "private fork" recommendation surfaced mid-conversation and pulled it back to D14's no-fork architectural commitment by asking the broader client-customisation question. The catch surfaced the principle's overclaim ("forbidden" as performative rather than enforceable), triggered the principle revision now landing as D76, and clarified that the personal-use case is fully covered by the configuration + tools + bounded-extensions model without any need to fork.
+
+The pattern continues to do load-bearing work at strategic-mode conversations and remains the most frequently-firing methodology pattern of the run. Recommend formal promotion to a methodology document entry at the next phase audit (P7 close), with the recurrence-test now satisfied at six instances across distinct strategic moments.
+
+  - triaged: methodology-recurrence note on 2026-05-09
+  - resolution: surfaced at the strategic block's reflection section as continuing pattern. Phase audit promotion candidate.

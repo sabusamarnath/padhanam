@@ -847,3 +847,41 @@ metrics:
   corrected_by:
 ```
 
+
+## P7 mid-package strategic block — consumer-direction placement
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+- Produced: One charter commit landing seven artefacts, no code touched. `charter/principles.md` "Customer-specific behaviour is configuration" bullet refined: "Forking the platform codebase is forbidden" replaced with "The platform is designed so forking is unnecessary; observed forks signal extension surface failure to be addressed upstream." Three new D-entries appended to `charter/decisions.md` (D76 principle refinement on forking; D77 consumer-direction placement discharging through personal-use deployment with no pivot, no expansion, no separate consumer build; D78 personal-use deployment as evidence of D14's customer-deployment scenario). Five new entries appended to `charter/deferred-decisions.md` (forkable-vs-non-forkable architecture for commercial deployment, calendar tool service as platform capability, email tool service as platform capability, scheduled-runs primitive, generic personal-productivity methodology templates as public reference content). Two new entries appended to `log/captures.md` (architectural-mapping exercise as methodology candidate; user-driven course-correction sixth instance). `charter/current-package.md` carryovers refreshed with four new entries (D78 personal-use deployment Phase C; calendar tool service activation; email tool service activation; scheduled-runs primitive activation) plus the PRFAQ phase-audit refresh entry extended to absorb the dogfooding-scenario acknowledgment. The forkable-vs-non-forkable commercial deployment deferred entry and the generic-personal-productivity-reference-templates deferred entry deliberately do not surface as current-package carryovers: the commercial-deployment entry defers to Phase 2 framing which is not Phase 1's surface, and the reference-templates entry depends on operator's discretion at Phase C with no current activation condition. The bet is unchanged. The roadmap is unchanged. PRFAQ refresh is queued for the next phase audit per D45 (no edit at this commit).
+
+- Decisions: D76 (principle refinement on forking, in supersession of the prior "forbidden" phrasing; three rejected alternatives weighed; Kano: must-have because the principle either matches what is enforceable or is performative). D77 (consumer-direction thread discharges through personal-use deployment; no separate consumer build, no bet expansion, no bet pivot; five rejected alternatives weighed including the private fork pattern that was surfaced and corrected during the strategic block; Kano: must-have because the thread either lands in a structurally-honest charter placement or accumulates as drift). D78 (personal-use deployment of public Padhanam as evidence of D14's customer-deployment scenario; four rejected alternatives weighed; Kano: performance for the bet's customer-deployment claim and delighter for case-study credibility).
+
+- Tests: n/a. Documentation-only commit; `make lint` and `uv run pytest` not required.
+
+- Reflection: Reflection prompt 1 (decision rationale) — The consumer-direction thread originated from OpenClaw analysis, surfaced incremental commitment shape across earlier conversation turns (a pattern the strategy session agenda explicitly worried about), and converged at structural placement within D14's customer-deployment model after the operator's two course-corrections. The rationale rests on the bet's load-bearing claim (fitness-to-procurement-grade), the substrate-mismatch between consumer and enterprise complexity (~30% mapping), and the cost asymmetry between deferred-decisions capture (low cost, high reversibility) and bet revision (high cost, low reversibility). The personal-use deployment is the structurally-honest answer because it discharges the operator's curiosity through the architecture the platform already commits to rather than through a separate build or a bet revision.
+
+  Reflection prompt 2 (methodology observations from the strategic block's shape) — Two patterns fired and warrant capture (both landed as captures.md entries this commit). The user-driven course-correction pattern fired at sixth instance (catching the Padhanam-lite framing and the private-fork recommendation), and is now eligible for formal methodology-document promotion at the next phase audit (P7 close) with the recurrence-test satisfied at six distinct strategic moments. The architectural-mapping exercise (configure / tool / extend / platform-change classification) surfaced as a reusable customisation conversation pattern; awaits two more instances per the existing recurrence-test convention before methodology promotion.
+
+  Reflection prompt 3 (forward affordance) — Phase C of the personal-use deployment plan activates after P8 close (agent runtime ships). Preparatory work (tool services, methodology template authoring) can start after P7 close in parallel with P8 build, subject to operator capacity per the all-or-nothing posture. The Phase 1 close audit's PRFAQ refresh per D45 absorbs the dogfooding scenario acknowledgment. The forkable-vs-non-forkable commercial architecture deferred entry surfaces at Phase 2 framing if the bet shifts toward commercial direction.
+
+  Reflection prompt 4 (Phase 1 progress note) — P7 in flight at S24 close; S25 and possibly S26 remain to close P7. After P7: P8 (agent runtime), P9 (sources), P10 (eval), P11 (recommendation), P12 (active testing) per the existing roadmap. Phase 1 trajectory unchanged by this strategic block; the consumer-direction question is settled, and the public Padhanam roadmap continues per existing plan.
+
+  Brief reconciliation: pre-write reconciliation surfaced one format divergence between the brief and the current charter convention. The brief specified D76, D77, D78 in the bulleted `- **D<N>: ...**` template that was used through D68; D69 onward (six consecutive entries D69–D75) use a `## D<N>: Title` heading style with bolded `**Decision.** / **Reasoning.** / **Alternatives considered.** / **Kano.**` paragraphs. The new entries adopt the heading style for adjacency-consistency with D69–D75 rather than literal-fidelity to the brief's older template; substantive content (choice text, reasoning, alternatives, Kano category) is preserved verbatim from the brief. The principle-text reconciliation passed: `charter/principles.md:15` matched the brief's expected "Forking the platform codebase is forbidden." sentence verbatim before the edit landed. Date reconciliation: the brief specified all metrics dates as 2026-05-09; the strategic conversation that drafted the brief happened 2026-05-09 (brief_started, session_started) and the execution-and-merge slipped one day to 2026-05-10 (session_closed, merged), reflected honestly in the metrics block below.
+
+- methodology: Two methodology candidates surface from this strategic block. (1) User-driven course-correction now satisfies the methodology-promotion recurrence threshold at six distinct instances (the original two during P6, the P6 close instance, the two at P7 framing — Gem terminology revert and platform-managed methodology reframe — and this block's two corrections counted as one firing-event); recommended for formal promotion to a Patterns-observed entry in `charter/methodology.md` at the Phase 1 close audit. (2) Architectural-mapping exercise (configure / tool / extend / platform-change classification) surfaces as a reusable customisation-conversation pattern; first observation at this block, awaiting two further instances per the existing recurrence-test convention. The forward-affordance-without-consumer pattern from S22's gap-closure block did not fire at this strategic block (the deferred-decisions entries here are consumer-condition-named rather than substrate-already-exists-pipeline-defers in shape, which is a slightly different pattern and worth distinguishing if the consumer-condition-named shape recurs).
+
+```
+metrics:
+  classification: planning
+  brief_started: 2026-05-09
+  session_started: 2026-05-09
+  session_closed: 2026-05-10
+  merged: 2026-05-10
+  close_state: clean
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects: empty
+  corrected_by:
+```
+

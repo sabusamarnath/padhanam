@@ -163,3 +163,45 @@ Activates when three prerequisites all hold: (1) Padhanam's own SOC 2 Type II or
 **Methodology aggregate field extension.** When Layer C activates, the methodology aggregate at `contexts/methodology/domain/methodology.py` extends with a compliance-frame field. Per D31's revision-shape, this lands as a future revision rather than a schema migration; existing methodology templates inherit a default empty frame until populated.
 
 **The specific D-entry lands when the package frames.** Premature commitment to specific frame structures ahead of the audit-completion prerequisite is paper architecture. Estimated package size when activated: large. Sized as a multi-session package given the per-workflow content authoring effort.
+
+## Forkable-vs-non-forkable architecture for commercial deployment
+
+Activates if Phase 2 takes commercial direction.
+
+**Candidate separation lines.** Open-and-forkable (core platform, generic methodology templates, generic tool implementations) versus hosted services (recommendation engine, optimisation surfaces, multi-tenant administrative dashboard) versus licensed content (premium methodology library, sector-specific compliance scaffolds, expert-authored agent templates). The separation is not architectural until Phase 2 frames commercial direction; the candidate lines are surfaced here to seed the future commitment rather than to fix it now.
+
+**Relationship to D14 and D76.** D14 commits the customer-deployment scenario (configuration + tools + bounded extensions, no fork) and D76 refines the principle to "designed so forking is unnecessary." Both hold for the open Phase 1 codebase. Commercial direction at Phase 2 introduces the licensing-and-trademark question that D76 explicitly excluded from its scope: which mechanisms (open licence terms, hosted-service exclusives, trademark-protected branding, premium licensed content) actually enforce the platform's commercial commitments without retreating to "forking is forbidden" wording the open-source community sees through.
+
+**The specific D-entry lands when Phase 2 commercial framing is committed.** Premature commitment to specific separation lines ahead of Phase 2 framing context is paper architecture per the project's deferred-decisions discipline. If Phase 2 does not take commercial direction, this entry is closed without a numbered D-entry landing.
+
+## Calendar tool service as platform capability
+
+Activates when public Padhanam needs a calendar integration for any package work (potentially P9 source ingestion, P10 active testing, or P11 recommendation surfaces) or when the operator's personal-use deployment Phase C activates (post-P8 close per D78), whichever comes first.
+
+**Calendar tool is a generic capability with broad applicability.** Implementation lives as a separate service per D14's tools-as-configuration commitment; the platform calls the calendar tool through whatever protocol the tool exposes (HTTP or MCP) without absorbing calendar logic into Padhanam's codebase. The service handles OAuth, scope management, and the calendar provider's API; Padhanam's tool registry stores the configuration that points to it.
+
+**The specific D-entry lands when implementation begins**, capturing protocol choice (HTTP versus MCP), authentication shape, and integration scope. Premature commitment to a specific calendar provider, protocol, or authentication mechanism ahead of integration is paper architecture.
+
+## Email tool service as platform capability
+
+Activates when public Padhanam needs an email integration for any package work (potentially P9 source ingestion, P10 active testing, or P11 recommendation surfaces) or when the operator's personal-use deployment Phase C activates (post-P8 close per D78), whichever comes first.
+
+**Email tool is a generic capability with broad applicability.** Same architectural shape as the calendar tool entry: separate-service implementation per D14, tool-registry configuration points to it, protocol-and-auth choice deferred to the implementation moment.
+
+**The specific D-entry lands when implementation begins**, capturing protocol choice, authentication shape, and integration scope. Premature commitment ahead of integration is paper architecture.
+
+## Scheduled-runs primitive
+
+Activates when public Padhanam needs scheduled agent execution (potentially P11 recommendation engine or P12 active testing for periodic regression checks) or when the operator's personal-use deployment Phase C activates and needs daily-review-style triggers (per D78), whichever comes first.
+
+**Two implementation candidates.** Platform primitive (Padhanam supports cron-shaped agent triggers internally) versus external trigger (cron job or scheduled task calling Padhanam's API on schedule). The platform-primitive shape would live under `padhanam/orchestration/` as a scheduling concern coordinated with the agent runtime; the external-trigger shape would live as a documented operational pattern with the API as the integration boundary.
+
+**The specific D-entry lands when implementation begins**, capturing the choice with reasoning about operator-deployment ergonomics, multi-tenant fairness under shared scheduling load, and the failure-mode boundary (a scheduled run that fails: who notices, who retries, where the audit lands). Premature commitment ahead of a real consumer is paper architecture.
+
+## Generic personal-productivity methodology templates as public reference content
+
+Activates if the operator finds during Phase C of the personal-use deployment (post-P8 close per D78) that generic methodology templates (GTD, Eisenhower matrix, time blocking) authored for the operator's personal deployment have value as reference implementations for future tenants of the public Padhanam codebase.
+
+**Public versus private template distinction.** The operator's privately-iterated working version stays in the operator's personal control plane regardless of any public-reference decision. The candidate is a separate generic template authored on the public Padhanam control plane that surfaces personal-productivity methodology in the same shape as LVT, RICE, Kano, and other professional methodologies will: as platform-managed templates that any tenant can clone into their own agent.
+
+**The specific D-entry lands at the moment the operator decides to author a public reference template**, capturing scope and the public/private template distinction. The activation is operator-discretion at Phase C; this entry exists to surface the option, not to commit to it.

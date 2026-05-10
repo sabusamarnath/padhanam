@@ -56,7 +56,34 @@ Opened 2026-05-08 at the P7 framing strategic block. P7 ships the agent authorin
   engine when run-history infrastructure exists from P9.
 - **PRFAQ phase-audit refresh.** Cadence per D45 (every phase
   audit). The v2 PRFAQ from the P4-post carryover-cleanup
-  strategic session stands until the Phase 1 close audit.
+  strategic session stands until the Phase 1 close audit. The
+  Phase 1 close audit refresh additionally absorbs the dogfooding
+  scenario acknowledgment per D77 and D78 (operator runs a private
+  deployment for personal use as evidence of D14's customer-
+  deployment scenario).
+- **Personal-use deployment of public Padhanam (Phase C).**
+  Operator-controlled deployment of public Padhanam as a real
+  instance of the customer-deployment scenario per D78, exercising
+  D14's configuration + tools + bounded-extensions model. Phase C
+  activates concretely after P8 close (when agent runtime exists);
+  preparatory work (operator-authored tool services and methodology
+  template authoring) can start after P7 close in parallel with P8
+  build, subject to operator capacity per the all-or-nothing
+  posture. PRFAQ acknowledgment lands at the next phase audit.
+- **Calendar tool service as platform capability.** Deferred-
+  decisions entry per the P7 mid-package strategic block on
+  consumer-direction placement; activation when public Padhanam
+  needs a calendar integration for any package work or when the
+  personal-use deployment Phase C activates per D78, whichever
+  comes first.
+- **Email tool service as platform capability.** Deferred-decisions
+  entry, same activation shape as the calendar tool entry.
+- **Scheduled-runs primitive.** Deferred-decisions entry; activates
+  when public Padhanam needs scheduled agent execution (likely P11
+  or P12 territory) or when personal-use deployment Phase C needs
+  daily-review-style triggers, whichever comes first. Two
+  implementation candidates (platform primitive versus external
+  trigger); choice settles when implementation begins.
 
 ## Deferred items remaining visible
 
