@@ -549,7 +549,7 @@ on `source_chunk_id`, preserving provenance.
 
 ## Agent tables (per-tenant)
 
-Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`.
+Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
 
 ### `agent_templates`
 
@@ -560,11 +560,21 @@ Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 v
 | `description`                       | `text`          | nullable; immutable after creation per D75     |
 | `source_methodology_template_id`    | `uuid`          | nullable for blank-created agents; immutable after construction per D75 |
 | `source_methodology_template_version` | `integer`     | nullable for blank-created agents; immutable after construction per D75 |
+| `source_role_id`                    | `uuid`          | nullable for blank-created agents; immutable after construction per D86 |
+| `source_role_version`               | `integer`       | nullable for blank-created agents; immutable after construction per D86 |
 | `created_by_user_id`                | `text`          | not null                                       |
 | `created_at`                        | `timestamptz`   | not null; default `now()`                      |
 | `archived_at`                       | `timestamptz`   | nullable                                       |
 
-Methodology lineage fields are nullable together: either both NULL (blank-created agent) or both populated (created from methodology template at S25's cross-context flow). A CHECK constraint `agent_templates_lineage_paired_null` enforces this invariant: `CHECK ((source_methodology_template_id IS NULL) = (source_methodology_template_version IS NULL))`.
+Lineage fields move as paired-NULL pairs: D75's paired-null invariant on `(source_methodology_template_id, source_methodology_template_version)` is enforced by CHECK constraint `agent_templates_lineage_paired_null`; D86's paired-null invariant on `(source_role_id, source_role_version)` is enforced independently by CHECK constraint `agent_templates_role_lineage_paired_null` (`CHECK ((source_role_id IS NULL) = (source_role_version IS NULL))`).
+
+The two pairs are independent. Three valid combinations:
+
+- Both pairs NULL — blank-created agent at S24's `create_blank_agent`.
+- Both pairs populated — methodology-created agent at S25's `create_agent_from_methodology` flow per D79; the methodology lineage pair carries the methodology origin and the role lineage pair carries the resolved first `role_ref` from the methodology's revision, persisted at agent creation time so the role-aware constraint stack from D86 has its origin attribution available.
+- Only the role pair populated, methodology pair NULL — role-created agent at S26a-2's `create_agent_from_role` flow; an agent occupies a role directly without a methodology playbook above it, per D86's first-class-role posture.
+
+The fourth combination (methodology populated, role NULL) is structurally invalid because methodology-based creation always resolves at least one role per D86; it is not separately CHECK-constrained because the role-pair invariant alone is sufficient to keep the schema honest about populated-role agents.
 
 The partial-unique-index on `name` where `archived_at IS NULL` enforces unique active agent names per tenant.
 
