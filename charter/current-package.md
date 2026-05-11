@@ -2,18 +2,33 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P7 — Agent CRUD (active)
+## Between packages — P7 closed, P8 not yet open
 
-Opened 2026-05-08 at the P7 framing strategic block. P7 ships the agent authoring substrate; by P7 close, the platform stores agent specifications, supports CRUD on agents and methodology templates through the CLI, and exposes the abstractions P8's runtime will consume and the P5 eval harness will score against. Methodology embedding lands as platform-managed templates on the control plane that tenants clone into independent agent instances on per-tenant Postgres. See [packages/p7-epic.md](packages/p7-epic.md) for goal, scope, and session forecast; the v1 epic note will be reconciled against `docs/archive/packages/p7.md` at P7 close per D43.
+P7 closed at S25 close on 2026-05-11. The P7 retrospective lives at
+[docs/archive/packages/p7.md](../docs/archive/packages/p7.md);
+the P7 measured-outcomes paragraph at
+[log/packages.md](../log/packages.md) covers S23 through S25 plus
+the three mid-package strategic commits (security-readiness gap
+closure with D69-D73; consumer-direction placement with D76-D78
+plus five new deferred-decisions entries; architectural-exploration
+historical-context capture for D77's alternatives-considered).
 
-## Sessions
+The next strategic-mode conversation frames P8 (Agent runtime per
+[charter/roadmap.md](roadmap.md)) and absorbs whichever
+preliminary strategic blocks the operator chooses to spin first:
+the hierarchical multi-agent topology design session (queued per
+the Ask David capture), the Layer A policy authoring strategic
+block (queued from the P7 mid-package security-readiness gap
+closure), or a fresh P8-framing block directly. P8's runtime
+inherits the composition orchestrator (D66), filter tree translator
+(D67), and tool registry surface (deferred from P7 per D68); P7
+ships the agent specifications P8 will invoke against. The LVT
+methodology template is authored on the control plane and the
+LVT PM Agent persists in tenant a with the deferred-action note
+on synthetic sources triggering before P8's first runtime test
+against the PM agent.
 
-- **S23: Methodology bounded context skeleton, methodology aggregate, methodology CRUD.** Shipped. Methodology context with full hexagonal layout; `MethodologyTemplate` and `MethodologyRevision` aggregates revision-shaped per D31 with hash-chain integrity per D26 per D74; control-plane Postgres migration `0004_methodology_tables`; `MethodologyPostgresRepository` implementing `MethodologyRepositoryPort` with operator-context enforcement at the use case layer per D34; five CRUD use cases; CLI commands at `padhanam methodology ...`.
-- **S24: Agent bounded context skeleton, agent aggregate, agent CRUD.** Shipped. Agent context with full hexagonal layout; `AgentTemplate` and `AgentRevision` aggregates revision-shaped per D31 with hash-chain integrity per D75 inheriting D74's audit-mirror shape; methodology lineage as template-level immutable fields with paired-NULL invariant enforced at both domain (`__post_init__`) and schema (CHECK constraint) layers; per-tenant Alembic migration `0008_agent_tables`; `AgentPostgresRepository` implementing `AgentRepositoryPort` with TenantContext threading via per-tenant sessionmaker resolver; five CRUD use cases (`create_blank_agent`, `get_agent`, `list_agents`, `update_agent`, `archive_agent`) with tenant-context-or-operator-context auth; CLI commands at `padhanam agent ...`. Hash-chain helper promoted from `contexts/methodology/domain/hash_chain.py` to `padhanam/security/hash_chain.py` at commit 8 with field-set-agnostic API; list-sort responsibility moved to the use case layer in both contexts.
-- **S25: Cross-context create-from-methodology flow plus LVT template plus first agent.** In flight per D79. `create_agent_from_methodology` use case at `contexts/agent/application/use_cases.py` consuming two callable Protocol ports (`MethodologyLookup`, `SourceLookup`) defined at `contexts/agent/application/ports/`; `MethodologyView` frozen-dataclass DTO in agent's application layer per D79's consumer-side-DTO commitment; methodology lookup adapter at `apps/cli/_runtime.py` closes over the methodology repository and translates `(MethodologyTemplate, MethodologyRevision)` to `MethodologyView`; source lookup adapter wraps the new application-layer `get_source` use case shipped as the S25 reconciliation-2 sub-commit at `contexts/ingestion/application/`; CLI sixth subcommand `padhanam agent create-from-methodology --tenant <label> --config <path>` at `apps/cli/_agent.py`; cross-context independence import-linter contracts extended for agent→methodology and agent→ingestion isolation (21 → 23). LVT methodology template authored on control plane via `padhanam methodology create` against the live stack; one PM agent named "LVT PM Agent" cloned from LVT in tenant alpha with operator-uploaded sources attached; e2e test at `tests/e2e/agent/test_create_from_methodology_flow.py` covering the full clone-and-edit flow with revision and hash-chain verification.
-- **S26 (if needed): P7 close.** Archive at `docs/archive/packages/p7.md`, `log/packages.md` measured-outcomes paragraph, `current-package.md` transition to between-packages state.
-
-## Carryovers active across the P6→P7 boundary
+## Carryovers active across the P7→P8 boundary
 
 - **Hierarchical multi-agent topology design session.** Queued
   strategic-mode conversation paired with P8 framing or as

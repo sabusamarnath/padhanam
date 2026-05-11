@@ -552,3 +552,243 @@ remains a phase-level question that requires the Phase 1 close
 audit's sample to answer credibly; the running window suggests
 the answer trends positive but treats trend-claims as still
 provisional.
+
+## P7: Agent CRUD
+
+- Closed: 2026-05-11
+- Sessions: S23 (methodology bounded context skeleton,
+  methodology aggregate, methodology CRUD; CLI at `padhanam
+  methodology ...`; `OPERATOR_ROLE` promotion to
+  `padhanam.security.policy`), S24 (agent bounded context
+  skeleton, agent aggregate, agent CRUD; per-tenant Alembic
+  `0008_agent_tables`; CLI at `padhanam agent ...`; hash-chain
+  helper promotion from `contexts/methodology/domain/hash_chain.py`
+  to `padhanam/security/hash_chain.py` with field-set-agnostic
+  API; second-consumer-promotes pattern's helper-API-settles
+  refinement), S25 (cross-context create-from-methodology flow
+  per D79; ingestion `get_source` application-layer use case as
+  the reconciliation-2 sub-commit; MethodologyView DTO and
+  MethodologyLookup + SourceLookup Protocol ports at
+  `contexts/agent/application/ports/`; apps/cli cross-context
+  adapters; CLI sixth subcommand `padhanam agent
+  create-from-methodology`; import-linter contracts 21 → 23 with
+  AST-level backstop test; e2e test against the live stack;
+  LVT methodology + LVT PM Agent persisted on the live stack)
+- Mid-package strategic commits: security-readiness gap closure
+  between S23 and S24 (five new D-entries D69-D73 plus the
+  compliance-as-shared-responsibility principle and the Layer A
+  scaffold at `charter/compliance/`); consumer-direction
+  placement between S24 and S25 (D76 principle refinement on
+  forking, D77 placement discharge through personal-use
+  deployment, D78 personal-use deployment as evidence of D14;
+  five deferred-decisions entries); architectural-exploration
+  capture and Claude.ai lead-up trail as documentation-only
+  commits preserving the consumer-direction exploration as
+  historical context for D77's alternatives-considered section.
+- Archive: [docs/archive/packages/p7.md](../docs/archive/packages/p7.md)
+
+### Measured outcomes
+
+**Deployment frequency (merged-to-main proxy).** Three build
+sessions across the P7 window (S23 on 2026-05-08; S24 on
+2026-05-09; S25 on 2026-05-11). Three same-day-merge sessions
+plus three mid-package strategic commits (security-readiness on
+2026-05-08; consumer-direction on 2026-05-10; architectural-
+exploration trail commit on 2026-05-10). The build-session merge
+count of three reflects P7's narrower RICE-effort score than P6
+because P7 ships two new contexts but no new vendor services,
+and the cross-context flow at S25 absorbed the wider design
+space cleanly without spinning S26. Strategic-mode commits land
+under `docs(charter): ...` or `docs(pN/<boundary-name>): ...`
+per D47's commit convention; they are not counted in build-
+session totals.
+
+**Lead time for changes.** Per-session brief-to-merge timestamps:
+S23 brief written and merged on 2026-05-08 (same day); S24
+brief written 2026-05-08, merged 2026-05-09 (one-day slip
+absorbing the docker-down state at S23 close that S24 open
+resolved via the `fix(p7/s23)` sub-commit shortening the
+Alembic revision ID); S25 brief written 2026-05-10, merged
+2026-05-11 (one-day cadence). Effective lead time same-day to
+one-day across the three sessions; the one-day-slip pattern is
+consistent with structural-honesty-at-session-open behaviours
+rather than scope-overflow drift.
+
+**Change failure rate.** Zero sessions in P7 have a non-empty
+`corrected_by` field as of P7 close. The S25 `fix(p7/s25):
+correct ingest worker flag name in e2e test` commit (24aec51)
+is in-session refinement against the e2e test in the same
+session, not a corrective session against earlier P7 build
+work. The S24 `fix(p7/s23)` commit (bc969a9) is a true
+corrective commit against S23's deferred AC 13 — a structural-
+honesty correction that landed at S24 open before S24's
+substantive work began. Reading the strict CFR definition (a
+session is a failure if a subsequent session within the same
+phase is tagged corrective and points back to it), S23 carries
+a `corrected_by: S24-fix-commit` retrospective annotation;
+change failure rate for P7 = 1/3 = 33%. Combined with P4's
+0/2, P5's 0/4, and P6's 0/4, the running Phase-1 number is
+1/13 = 7.7% across the P4-P5-P6-P7 window. Surfacing the
+correction honestly per the methodology's "report even when
+the trend does not flatter the bet" discipline; the small-
+sample window remains the cautionary frame for trend reading.
+
+**Mean time to restoration.** S23's deferred AC 13 closed at
+S24 open via the `bc969a9` fix commit (Alembic version_num
+truncation). Time from S23 close to S24 fix commit: ~24 hours.
+Reportable as a single data point, consistent with same-day
+cadence. The distribution shape across the running window
+remains too small to be load-bearing.
+
+**Reliability (clean close rate).** All three P7 sessions
+closed clean: tests passing, principles intact, charter touch-
+points updated. Reliability = 3/3 = 100% on the strict
+within-session clean-close criterion; the S23-deferred AC 13
+landed at S24 open without breaking the clean-close discipline
+because the deferral was named at S23 close rather than hidden.
+Combined with P4's 2/2, P5's 4/4, and P6's 4/4, the running
+Phase-1 reliability is 13/13 = 100% on the clean-close metric;
+the discipline is holding under the small-sample window.
+
+**Developer experience (CORE4 dimensions, qualitative).** Flow
+state held across all three P7 sessions. Feedback loops were
+tight at every commit boundary: `make lint`, `uv run pytest`,
+`make migrate` (where schema work landed at S23 and S24),
+image rebuilds at session close, and end-to-end CLI verification
+against the live Compose stack. Cognitive load was concentrated
+at three moments: S23's name-and-description placement
+reconciliation (caught at pre-build review; D74's text
+diverging from S23's actual conceptual-denormalisation pattern),
+S24's hash-chain helper promotion shape (settled at the
+second-consumer moment with field-set-agnostic API), and S25's
+three-engine resource-management pattern at commit 8's
+`_run_create_from_methodology` coroutine (control-plane
+methodology + per-tenant source + per-tenant agent engines
+disposing in a single `finally` block). All three were resolved
+through the framing-prompt-as-recommendation discipline at
+build time; no methodology-level refinement was required during
+the sessions because the discipline already operates as a
+top-level prescriptive principle from P6 close.
+
+**Contribution effectiveness (substantive vs cleanup
+proportion).** S23: 11 substantive commits (brief + framing +
+schema + skeleton + domain + port + migration + adapter + use
+cases + CLI + isolation tests + session log). S24: 11
+substantive commits including the S23-fix commit (brief +
+framing + skeleton + domain + port + migration + adapter +
+hash-chain-promotion + agent-use-cases + isolation tests + CLI
++ session log; plus the fix(p7/s23) commit at the front).
+S25: 11 substantive commits plus the fix commit (brief + D79
+framing + ingestion get_source + methodology-lookup port +
+source-lookup port + create-from-methodology use case +
+apps/cli adapters + CLI + import-linter contracts + e2e test +
+session log + P7 close artefacts; plus the fix(p7/s25) commit
+for the ingest worker flag). All commits forward-progress on
+P7's stated goal; the two fix commits (bc969a9, 24aec51) are
+in-package within-session corrections rather than corrective
+sessions against earlier work. Contribution effectiveness ≈
+100% within P7 with the single one-day-MTTR correction trail
+documented above.
+
+### Bet-native metrics
+
+**Discipline-adherence.** Charter touch-points updated in-commit
+at every required boundary across P7: `charter/schema.md`
+updated in the same commit as the control-plane migration
+`0004_methodology_tables` (S23) and the per-tenant migration
+`0008_agent_tables` (S24); D74 in `charter/decisions.md`
+landed at S23 commit 2 ahead of the methodology use case build;
+D75 landed at S24 commit 2 ahead of the agent build; D79 landed
+at S25 commit 2 ahead of the cross-context build. The
+brief-preservation discipline held at all three sessions
+(`briefs/p7/{s23,s24,s25}.md`), structurally honest at first
+commit per the methodology candidate now promoted at this P7
+close (recurrence threshold satisfied at four named instances
+across three distinct contexts). Five mid-package-strategic
+D-entries (D69-D78) landed under the strategic-mode commit
+convention. AST tests at `tests/_enforcement/` continued to
+pass through the package; the agent-context-specific AST
+isolation test at `tests/unit/contexts/agent/test_import_
+isolation.py` adds a tenth file-level guard at the
+contexts/agent/{domain,application,ports} layers.
+
+**Architectural-durability.** Import-linter contract count:
+22 at P7 open → 23 at P7 close (one new `layers-agent` contract
+at S24 commit 3 to extend hexagonal enforcement to the new
+context, plus two new explicit cross-context isolation
+contracts at S25 commit 9 — `agent-no-methodology-internal`
+and `agent-no-ingestion-internal` — though the count rose
+from 21 → 23 net at S25 because the S24 commit 3 had already
+landed before S25 began). Test density per package: +47 new
+authored tests at S25 (4 ingestion get_source unit + 7
+MethodologyView/MethodologyLookup unit + 6 SourceLookup unit +
+13 create-from-methodology unit + 6 cross-context adapter
+integration + 10 agent import-isolation AST + 1 e2e). P7-wide
+test additions: ~140 new authored tests across the three
+sessions (S23 ~55 + S24 ~55 + S25 ~47 - minor reduction from
+hash-chain test relocations at S24's commit 8). Supply-chain
+check cadence held: image rebuilds at S23 (control-plane DB
+shape), S24 (per-tenant agent migration), and S25 (CLI command
+plus cross-context wiring) each refreshed the compose digest
+pin. The S25 image rebuild caught the stale "zephyr-api"
+service naming from S24's session log via the verify-against-
+current-sources discipline applied at commit-8 altitude — a
+new methodology candidate from this session.
+
+**Bet-direction integrity.** Roadmap reasoning-category
+distribution: zero P7-era roadmap changes; the v3 roadmap
+landed at the carryover-cleanup strategic session before P5
+holds through P7 close. PRFAQ coherence: not refreshed during
+P7; the v2 PRFAQ stands until the Phase 1 close audit per D45.
+D77 and D78 absorb the dogfooding-scenario acknowledgment as
+queued for the next phase audit refresh. Role-function
+activity distribution across P7: every build session exercised
+analyst, architect, engineer, technical writer; the PM role-
+function was exercised at the security-readiness mid-package
+strategic block, the consumer-direction mid-package strategic
+block, and (lightly) at S25 (the close-or-spin decision at
+session-time). Five of five role-functions exercised across
+the P7 window when the strategic-mode commits are counted; the
+build-session-only distribution shows the same four-of-five
+pattern P4-P5-P6 produced, confirming the steady-state
+discipline that strategic-mode commits absorb PM-shaped work
+between sessions rather than collapsing it into build sessions.
+
+### What the numbers do not say
+
+The three-session sample is too small to read as a methodology
+trend on its own; the running P4-P5-P6-P7 window (thirteen
+sessions across four packages) now starts to give credible
+trend signal but remains short of the Phase 1 close audit's
+full sample. P7 is the first package to ship two new bounded
+contexts (methodology + agent) plus a cross-context flow, and
+the first to operate under the framing-prompt-as-recommendation
+principle promotion (top-level prescriptive from P6 close)
+across an entire package's worth of build sessions; all three
+sessions closed clean with mostly-mechanical build-time
+deviations (S23: two mechanical; S24: two mechanical; S25:
+three mechanical), validating the principle at the package-
+shape scale rather than only at the session-shape scale. The
+methodology-candidate trajectory at P7 close: one promotion-
+threshold-reached candidate (pre-build review with code-reading
+verification and deliberate-silence-detection — four named
+instances across three distinct contexts; recommended for
+formal phase-audit promotion at Phase 1 close); one second-
+instance candidate (structurally-adjacent-decisions inherit
+precedent shape — D79 inheriting D17/D74/D75); one new candidate
+(verify-against-current-sources at brief-time and system-
+touching-commit-time symmetrically — first instance at S25
+commit 8). The single S23-to-S24 correction trail (Alembic
+revision-ID truncation) is reportable as the running-window's
+first change-failure event; the failure mode (vendor-specific
+constraint masked by Docker-down state at session close) is
+the kind of structural-honesty-at-session-close discipline
+that the brief-preservation pattern's deferred-AC discipline
+catches and resolves at the next session's open. Whether a
+senior product leader at scale can sustain three-session
+package shape with mostly-mechanical deviations and a single
+one-day-MTTR correction trail at the next package boundary
+remains a phase-level question; the running P4-P5-P6-P7
+window suggests the trajectory holds but treats trend-claims
+as still provisional until the Phase 1 close audit's full
+sample lands.

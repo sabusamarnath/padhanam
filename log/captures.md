@@ -124,3 +124,14 @@ This entry adds a single traceability link: the architectural reasoning that fed
 
   - triaged: traceability note on 2026-05-10
   - resolution: trail recorded for audit-trail completeness; the prior architectural-details captures entry remains the substantive record; no charter commitments altered.
+
+## 2026-05-11 — S25 closed with synthetic LVT sources in tenant alpha
+
+Source: P7 S25 live-stack work; Claude Code generated synthetic LVT-shaped markdown sources for tenant alpha's PM agent rather than operator-uploaded content per the brief's goal #6 specification. Operator accepted synthetic at build-time as a deliberate sequencing decision with planned remediation.
+
+The PM agent at tenant alpha currently retrieves against two Claude-Code-generated source files (0e42829c... and 7ee7f8d9...) ingested via the standard pipeline. Architectural flow exercised end-to-end; the agent functions; only the source-content provenance differs from the brief.
+
+Remediation trigger: before P8's first runtime test against the PM agent. P8's runtime is the first consumer that exercises sources for retrieval-augmented generation; synthetic content invalidates whatever signal P8's tests produce against this agent specifically. Operator uploads real LVT-relevant source content (strategy docs, bet articulations, OKRs, or equivalent) and re-ingests before P8 runs runtime tests.
+
+  - triaged: deferred-action note on 2026-05-11
+  - resolution: deferred-action; trigger named (before P8 runtime testing of the PM agent); operator owns remediation; no charter commitment beyond this note required because the trigger is build-session-shaped not architecture-shaped.
