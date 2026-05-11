@@ -51,10 +51,11 @@ from apps.cli._ingest import (
 )
 from apps.cli._agent import agent_app
 from apps.cli._methodology import methodology_app
+from apps.cli._role import role_app
 
 app = typer.Typer(
     name="padhanam",
-    help="Padhanam CLI runner (S18 eval; S19 ingest; S23 methodology; S24 agent).",
+    help="Padhanam CLI runner (S18 eval; S19 ingest; S23 methodology; S24 agent; S26a-2 role).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -75,6 +76,10 @@ app.add_typer(ingest_app, name="ingest")
 
 # S23 methodology authoring commands (D74).
 app.add_typer(methodology_app, name="methodology")
+
+# S26a-2 role authoring commands (D86). Role is the constraint-bundle
+# aggregate methodology revisions reference via role_refs.
+app.add_typer(role_app, name="role")
 
 # S24 agent authoring commands (D75).
 app.add_typer(agent_app, name="agent")

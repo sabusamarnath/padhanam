@@ -1,20 +1,25 @@
-"""Agent CLI orchestration (S24 / D75, S25 / D79).
+"""Agent CLI orchestration (S24 / D75, S25 / D79, S26a-2 / D86).
 
-Six subcommands at the ``padhanam agent`` namespace: ``create``,
-``create-from-methodology``, ``get``, ``list``, ``update``,
-``archive``. Operator-context resolution at the command boundary
-mirrors the S23 methodology CLI pattern; production CLI auth lands
-at Phase 2.
+Seven subcommands at the ``padhanam agent`` namespace: ``create``,
+``create-from-methodology``, ``create-from-role``, ``get``,
+``list``, ``update``, ``archive``. Operator-context resolution at
+the command boundary mirrors the S23 methodology CLI pattern;
+production CLI auth lands at Phase 2.
 
 S25 adds ``create-from-methodology``, the cross-context clone flow
 per D79. The command resolves three engines — control-plane
-Postgres (methodology repository), per-tenant Postgres (source
-repository), per-tenant Postgres (agent repository) — and
-constructs the two cross-context adapters from
+Postgres (methodology + role repositories), per-tenant Postgres
+(source repository), per-tenant Postgres (agent repository) — and
+constructs the cross-context adapters from
 ``apps/cli/_cross_context.py`` to satisfy the agent use case's
-MethodologyLookup and SourceLookup ports. Both engines plus the
-methodology repository dispose in ``finally`` per the established
-resource-management pattern.
+MethodologyLookup and SourceLookup ports. All engines dispose in
+``finally`` per the established resource-management pattern.
+
+S26a-2 adds ``create-from-role`` per D86's first-class-role posture.
+The command wires the role repository (control plane) plus source
+repository (per-tenant) plus agent repository (per-tenant) and
+constructs the RoleLookupAdapter alongside SourceLookupAdapter to
+satisfy the agent use case's RoleLookup and SourceLookup ports.
 
 Per D75, agent data is per-tenant-scoped. The CLI takes a
 ``--tenant <label>`` argument resolved through the existing dev-
@@ -72,6 +77,7 @@ from contexts.agent.adapters.outbound.postgres import AgentPostgresRepository
 from contexts.agent.application import (
     archive_agent,
     create_agent_from_methodology,
+    create_agent_from_role,
     create_blank_agent,
     get_agent,
     list_agents,
@@ -94,6 +100,7 @@ from shared_kernel import TenantContext, TenantId
 
 from apps.cli._cross_context import (
     MethodologyLookupAdapter,
+    RoleLookupAdapter,
     SourceLookupAdapter,
 )
 from apps.cli._runtime import (
@@ -138,6 +145,11 @@ _UPDATE_REQUIRED_FIELDS = (
 )
 _CREATE_FROM_METHODOLOGY_REQUIRED_FIELDS = (
     "methodology_template_id",
+    "name",
+    "source_ids",
+)
+_CREATE_FROM_ROLE_REQUIRED_FIELDS = (
+    "role_id",
     "name",
     "source_ids",
 )
@@ -521,6 +533,65 @@ async def _run_create_from_methodology(
         await tenant_engine.dispose()
 
 
+async def _run_create_from_role(
+    tenant: str, config_path: Path
+) -> tuple[AgentTemplate, AgentRevision]:
+    """Resolve the three repositories (control-plane role, per-tenant
+    source, per-tenant agent), construct the cross-context adapters,
+    and invoke the role-clone use case. Disposes both engines plus the
+    role repository in ``finally`` regardless of outcome (S26a-2 /
+    D86)."""
+    config = _load_config(config_path)
+    _validate_required(config, _CREATE_FROM_ROLE_REQUIRED_FIELDS)
+
+    tenant_context, label = resolve_tenant_context(tenant)
+    tenant_engine, tenant_sessionmaker = session_factory_for_tenant(label)
+    sec = file_security_event_logger()
+
+    agent_resolver = _TenantBoundResolver(
+        bound_tenant_id=str(tenant_context.tenant_id),
+        sessionmaker=tenant_sessionmaker,
+    )
+    agent_repo = AgentPostgresRepository(
+        per_tenant_sessionmaker_resolver=agent_resolver,
+        security_events=sec,
+    )
+
+    source_repo = PostgresSourceRepository(session_factory=tenant_sessionmaker)
+    source_lookup = SourceLookupAdapter(repository=source_repo)
+
+    # Role repository: control-plane Postgres; the role-clone flow
+    # does not need the methodology repository because no methodology
+    # is referenced.
+    control_plane_settings = ControlPlaneSettings()
+    role_repo = RolePostgresRepository.from_settings(
+        settings=control_plane_settings, security_events=sec
+    )
+    role_lookup = RoleLookupAdapter(role_repository=role_repo)
+
+    try:
+        return await create_agent_from_role(
+            principal=build_operator_principal(),
+            repository=agent_repo,
+            role_lookup=role_lookup,
+            source_lookup=source_lookup,
+            security_events=sec,
+            tenant_context=tenant_context,
+            role_id=UUID(str(config["role_id"])),
+            role_version=(
+                int(config["role_version"])
+                if config.get("role_version") is not None
+                else None
+            ),
+            name=config["name"],
+            source_ids=_to_uuid_tuple(config["source_ids"]),
+            actor_user_id="cli-operator",
+        )
+    finally:
+        await role_repo.dispose()
+        await tenant_engine.dispose()
+
+
 # ---------------------------------------------------------------------
 # Typer command surface
 # ---------------------------------------------------------------------
@@ -711,6 +782,36 @@ def agent_create_from_methodology(
         f"revision_id={revision.id} version={revision.version} "
         f"source_methodology_template_id={template.source_methodology_template_id} "
         f"source_methodology_template_version={template.source_methodology_template_version} "
+        f"source_role_id={template.source_role_id} "
+        f"source_role_version={template.source_role_version}\n"
+    )
+
+
+@agent_app.command("create-from-role")
+def agent_create_from_role(
+    tenant: Annotated[
+        str,
+        typer.Option(
+            "--tenant",
+            help="Tenant short label ('a', 'b') or UUID.",
+        ),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            help=(
+                "Path to the clone config (.yaml, .yml, or .json) "
+                "with role_id, optional role_version, name, and source_ids."
+            ),
+        ),
+    ],
+) -> None:
+    """Clone a role template directly into a new agent (S26a-2 / D86)."""
+    template, revision = asyncio.run(_run_create_from_role(tenant, config))
+    sys.stdout.write(
+        f"created agent_template_id={template.id} "
+        f"revision_id={revision.id} version={revision.version} "
         f"source_role_id={template.source_role_id} "
         f"source_role_version={template.source_role_version}\n"
     )
