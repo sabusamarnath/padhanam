@@ -205,3 +205,27 @@ Activates if the operator finds during Phase C of the personal-use deployment (p
 **Public versus private template distinction.** The operator's privately-iterated working version stays in the operator's personal control plane regardless of any public-reference decision. The candidate is a separate generic template authored on the public Padhanam control plane that surfaces personal-productivity methodology in the same shape as LVT, RICE, Kano, and other professional methodologies will: as platform-managed templates that any tenant can clone into their own agent.
 
 **The specific D-entry lands at the moment the operator decides to author a public reference template**, capturing scope and the public/private template distinction. The activation is operator-discretion at Phase C; this entry exists to surface the option, not to commit to it.
+
+## Cascading-harm invariant shape
+
+Activates when multi-agent workflows or persistent agents enter the codebase.
+
+**Cascading-harm invariant captures bounded blast radius, per-invocation cost ceilings beyond per-agent limits, rate limits on outbound effects, and propagation containment.** Single-agent invocation at Phase 1 does not produce the risk surface; one agent invocation cannot amplify into many downstream consequences. Workflow execution (Phase 2 per D83) and persistent agents (the scheduled-runs primitive deferred-decisions entry) both introduce the risk surface and trigger this invariant's specific shape.
+
+**The specific D-entry lands at the package or session that activates the invariant**, capturing the shape (workflow-level rate limits, cascade-detection heuristics, abort-on-budget-exceeded semantics, audit signal shape) with reasoning about the consumer that pulled it in. Premature commitment to specific cascade-prevention mechanics is paper architecture.
+
+## Retrieval-bound hard-constraint shape on methodology roles
+
+Activates when methodology evidence shows soft-binding of retrieval fields insufficient.
+
+**Per-field hard caps on a role's retrieval surface (max_top_k, allowed_strategies, min_min_score, max_filter_complexity).** Current D81 commitment treats `retrieval_strategy`, `filter_tree`, `top_k`, `min_score` as soft-bound (methodology defaults; agent overrides freely). The captures synthesis named retrieval bounds as one of the four constraint surfaces methodology declares per role; D81 deferred the hard-constraint shape pending consumer evidence.
+
+**The specific D-entry lands at the methodology authoring session that surfaces the need**, with consumer evidence about which retrieval fields require hard caps. Premature commitment ahead of consumer evidence risks over-constraining methodology authors.
+
+## Per-role binding-mode override
+
+Activates when methodology evidence shows the platform-level binding-mode convention (three hard, six soft per D81) insufficient for a specific methodology's needs.
+
+**Methodology authors choose binding mode per role per field, overriding the platform-level default.** Current D81 commitment is a platform-level convention: methodology authors do not choose binding mode based on the field's nature; the platform decides. The override is forward affordance for compliance-shaped methodologies (a regulatory methodology might want `system_prompt` hard for control purposes, or `model_selection` hard for jurisdiction-specific reasons).
+
+**The specific D-entry lands at the methodology authoring session that surfaces the need**, with reasoning about the override mechanism (per-field annotation on the role bundle; precedence between platform default and role override). Premature commitment ahead of consumer evidence adds complexity without benefit.

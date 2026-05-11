@@ -13,7 +13,7 @@ Read every session. Kept tight on purpose.
 - Tenant onboarding is configuration, not deployment. Per-tenant decisions (jurisdiction, identity federation, classification policy, model endpoints, retention) live in the tenant registry. Adding a tenant to an existing regional stack is an idempotent workflow. Adding a region is a separate infrastructure event.
 - Jurisdiction is a first-class attribute. Tenant context carries jurisdiction from P3 onward. Every component that touches customer data (databases, object storage, identity, trace store, LLM endpoints) is built to be regionally partitionable. Phase 1 deploys a single region; the architecture does not assume a single region anywhere in code.
 - Customer-specific behaviour is configuration. Tools (external services called by the platform on the tenant's behalf) cover most customer-supplied logic. Extensions exist for the residual cases at named interfaces (RetrievalClient, scorer, pre-processor), sandboxed per tenant. The platform is designed so forking is unnecessary; observed forks signal extension surface failure to be addressed upstream.
-- Methodology is embedded as defaults, not gated as workflow steps. Defaults activate at decision points, encode the right thing for the chosen methodology, and yield to user intent at low cost. The product surface treats user intent as primary; methodology is the smart default that the user can override without friction.
+- When an agent adopts a methodology, the methodology is embedded as defaults for tuning surfaces and as envelopes for security, budget, and scope surfaces per D81. Defaults activate at decision points, encode the right thing for the chosen methodology, and yield to user intent at low cost. Envelopes bind hard and are validated at agent write time. The product surface treats user intent as primary for tuning; envelopes are non-overridable by the agent and exist to protect the tenant and the platform. Agents created without methodology lineage skip the methodology layer entirely; they remain bound by platform invariants per the User safety section.
 - Bounded contexts at the top of the codebase, hexagonal layers within. Cross-cutting concerns live in `padhanam/` (the cross-cutting implementation package per D28). The `shared_kernel/` is tiny and policed: only types that must be referentially equal across contexts, never Pydantic. Contexts communicate via published query APIs for reads and a domain event bus for state changes; direct cross-context imports are forbidden by `import-linter` in CI.
 - Architectural commitments to specific protocols or standards require demonstrated cross-vendor consolidation, not announcement-level adoption. OTel for observability is committed (consolidated). Other emerging standards (MCP for tool exposition, agent protocols, workflow definition standards) are supported via adapters where appropriate but not committed as architectural assumptions until consolidation is real. The architecture commits to abstractions; protocol choices are configuration above the abstractions.
 
@@ -44,6 +44,40 @@ Read every session. Kept tight on purpose.
 - PRD-shaped documentation surfaces (phase PRDs, package epic notes, user stories, PRFAQ) are living artefacts. Original draft is preserved alongside as-built reality; delta capture is the audit deliverable. Append-only at the version level, per D43.
 - Reflection density distinguishes session-log entries by conversation type. Strategic conversations produce shorter entries focused on what was decided. Build sessions produce longer entries with substantive reflection on what was learned. The mix of conversation types over time is signal at phase audits.
 - Each session-log entry carries a one-line `roles:` tag naming which of the five role-functions (analyst, PM, architect, engineer, technical writer) were exercised, per D46. The distribution over time surfaces functional atrophy.
+
+## User safety
+
+Padhanam treats user safety as load-bearing principle for the platform's runtime behaviour. See D82 for the underlying commitment. Six dimensions anchor the safety surface: privacy, integrity, reversibility, transparency, control, auditability. Adding a new invariant requires naming which dimensions it serves; removing an invariant requires demonstrating the dimensions are still served by other means.
+
+### Padhanam-as-intelligence-layer
+
+The platform produces recommendations, analyses, and drafts. Consequential actions on the user's behalf require user-in-the-loop authorization at appropriate granularity per the invariants and the consent-granularity principle. This positioning differentiates Padhanam from autonomous-agent platforms; it extends the existing "Optimization output is recommendation-shaped, not chart-shaped" principle from the optimisation layer to the agent layer.
+
+### Platform invariants
+
+Five danger-targeted invariants at Phase 1 close. The set is the platform's dynamic capability posture; capabilities promote in over time as guardrails strengthen.
+
+1. **No financial execution without explicit per-transaction authorization.** Tool-layer classification at P8 prevents financial-execution tools from invoking without per-transaction user confirmation. Dimensions: reversibility, control.
+
+2. **No outbound communication to third parties without explicit per-invocation authorization.** Tools that send to non-Padhanam recipients require user review and confirmation per send; user sees content and recipient before send. Dimensions: control, transparency.
+
+3. **No acceptance of legal commitments without explicit user action.** Tools accepting terms, signing agreements, agreeing to contracts require deliberate user action. Dimensions: control, integrity.
+
+4. **No auto-modification or auto-deletion of user-authored content within Padhanam's storage.** Sources, methodology templates, agent revisions, workflow templates, audit records: append-only or immutable per D26 and D31. Edits create new revisions; deletes are user-initiated only. Dimensions: reversibility, integrity.
+
+5. **No transmission of tenant data outside tenant-configured tool paths.** Tenant data flows only through tools the tenant has configured per D14. Dimensions: privacy, control.
+
+### Consent granularity is proportionate to danger
+
+Per-transaction for financial. Per-invocation for outbound communication. Explicit user action for legal commitments. Standing consent at tool configuration for routine reversible actions, optionally with per-invocation review where the tool's classification specifies.
+
+### Content framing for high-stakes domains
+
+When an agent's output relates to medical, legal, or safety matters, the framing is informational rather than actionable instruction. Information for the user to discuss with qualified professionals, not advice the user should follow directly. Distinct from the capability invariants; sits in this section as a content principle.
+
+### Evolution discipline
+
+The invariant set is versioned in this file per the existing append-only principle. Promotions in (adding capabilities) and promotions out (loosening invariants) are recorded as charter commits with the dimension-justification reasoning. An audit at a point in time captures the invariant set as it stood; future audits compare against the trajectory of evolution.
 
 ## Decision discipline
 

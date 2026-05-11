@@ -2,50 +2,23 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## Between packages — P7 closed, P8 not yet open
+## Between packages — P7 closed, topology design session committed, P8 framing complete
 
-P7 closed at S25 close on 2026-05-11. The P7 retrospective lives at
-[docs/archive/packages/p7.md](../docs/archive/packages/p7.md);
-the P7 measured-outcomes paragraph at
-[log/packages.md](../log/packages.md) covers S23 through S25 plus
-the three mid-package strategic commits (security-readiness gap
-closure with D69-D73; consumer-direction placement with D76-D78
-plus five new deferred-decisions entries; architectural-exploration
-historical-context capture for D77's alternatives-considered).
+P7 closed at S25 close on 2026-05-11. The topology design strategic block at the P7→P8 boundary committed on the same day landing D80-D85 plus the new workflow context charter file at `charter/contexts/workflow.md`, the revised P8 epic note at `charter/packages/p8-epic.md`, a new User safety section in `charter/principles.md` with a refined methodology-embedded principle, the P8 line revision in `charter/packages.md`, a roadmap v4 entry with discovery reasoning category, three new deferred-decisions entries (cascading-harm invariant shape; retrieval-bound hard-constraint shape; per-role binding-mode override), and the captures triage resolution for the 2026-05-11 P7 strategic block entry.
 
-The next strategic-mode conversation frames P8 (Agent runtime per
-[charter/roadmap.md](roadmap.md)) and absorbs whichever
-preliminary strategic blocks the operator chooses to spin first:
-the hierarchical multi-agent topology design session (queued per
-the Ask David capture), the Layer A policy authoring strategic
-block (queued from the P7 mid-package security-readiness gap
-closure), or a fresh P8-framing block directly. P8's runtime
-inherits the composition orchestrator (D66), filter tree translator
-(D67), and tool registry surface (deferred from P7 per D68); P7
-ships the agent specifications P8 will invoke against. The LVT
-methodology template is authored on the control plane and the
-LVT PM Agent persists in tenant a with the deferred-action note
-on synthetic sources triggering before P8's first runtime test
-against the PM agent.
+The next strategic-mode block authors the McKinsey 7-Step methodology template per D85 (post-topology, pre-P8 build). Layer A policy authoring remains queued per the P7 mid-package security-readiness carryover. P8 build opens at S26 with the methodology v2 migration per the p8-epic.md sessions forecast.
 
 ## Carryovers active across the P7→P8 boundary
 
-- **Hierarchical multi-agent topology design session.** Queued
-  strategic-mode conversation paired with P8 framing or as
-  pre-P8 strategic block per the Ask David capture. Original
-  scope: agent composition at runtime inheriting D66 (composition
-  orchestrator), D67 (filter-tree translator), and the deferred
-  tool registry surface per D68. Expanded scope per the
-  2026-05-11 P7 strategic block captures entry: workflow as new
-  architectural primitive (separate bounded context at
-  contexts/workflow/), methodology-as-constraint-contract
-  refinement (option d), four-layer constraint stack (platform,
-  methodology, workflow, agent), platform invariants as evolving
-  capability set with user-safety as load-bearing principle,
-  mass-market UX direction with progressive disclosure of
-  power-user features, gallery pre-population strategy for Phase
-  2 launch. Single strategic block recommended (Path A);
-  interlocking decisions risk drift if split.
+- **Hierarchical multi-agent topology design session.** Committed
+  at 2026-05-11 as the strategic block at the P7→P8 boundary.
+  Landed D80-D85, new workflow context charter file, revised P8
+  epic note, User safety principle section, methodology-embedded
+  principle refinement, P8 packages.md line revision, roadmap v4
+  entry with discovery reasoning, three deferred-decisions entries,
+  captures triage resolution. The McKinsey 7-Step methodology
+  authoring carryover replaces this entry as the next strategic
+  block per D85.
 - **Layer A policy authoring.** Follow-on strategic block authoring
   the ten policy scaffolds at `charter/compliance/` per the
   compliance-as-shared-responsibility principle. Scheduled at

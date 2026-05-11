@@ -11,7 +11,7 @@ The work breakdown for Phase 1. Order reflects dependency and learning value.
 - **P5: Evaluation harness.** Canonical interaction set storage, replay engine, deterministic and LLM-as-judge scoring, regression reporting. Cost-per-successful-task metric implementation per D8 and D41.
 - **P6: Source ingestion.** Upload, two-track pipeline (vector to pgvector, entity extraction to Neo4j), retrieval interfaces.
 - **P7: Agent CRUD.** Name, system prompt, source IDs, tool allowlist, retrieval strategy, model selection.
-- **P8: Agent runtime.** LangGraph orchestrator behind interface. SSE-streamed responses. Full instrumentation.
+- **P8: Agent runtime.** AgentLoopExecutor behind AgentExecutor interface. SSE-streamed responses. Full instrumentation. Workflow context architecture committed for Phase 2 implementation per D83.
 - **P9: Run history.** Replay UI, citation linking back to source chunks and graph entities.
 - **P10: Audit log viewer.** Tenant-owner UI for the audit log.
 - **P11: Optimization dashboard.** Trace inspection, evaluation results, active test reports. Recommendation-shaped, with cost-aware recommendations as a first-class surface per D41.
