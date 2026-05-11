@@ -1,6 +1,6 @@
-"""Agent CRUD use cases (D75).
+"""Agent CRUD use cases (D75, D79).
 
-Five policy-aware coroutines wrapping ``AgentRepositoryPort``.
+Six policy-aware coroutines wrapping ``AgentRepositoryPort``.
 Tenant-context-or-operator-context auth at the use case layer per
 D75: agents are tenant-user-owned per the P7 epic note's audience
 definition; tenant users CRUD their own agents through the tenant-
@@ -10,23 +10,33 @@ tenant; this is operator-as-platform-administrator, not operator-
 as-tenant-impersonator. Unauthenticated callers (no role at all)
 raise ``AuthorizationError``.
 
-The cross-context ``create_agent_from_methodology`` use case is
-excluded from S24 per the P7 epic note's session boundary; it lands
-at S25 alongside the LVT methodology template authoring.
+The cross-context ``create_agent_from_methodology`` use case ships
+at S25 per D79; it consumes two callable Protocol ports defined at
+``contexts/agent/application/ports/`` (MethodologyLookup,
+SourceLookup) so the agent context's application layer takes zero
+imports from contexts.methodology or contexts.ingestion. The
+apps/cli wiring layer translates each producer context's
+application-layer use cases into the consumer-shaped Protocol
+calls.
 
-Hash chain: ``create_blank_agent`` and ``update_agent`` compute the
-new revision's hash inside the use case via ``compute_revision_hash``
-imported from ``padhanam.security.hash_chain`` (promoted from the
-methodology context at S24 commit 8 per D75); the repository
-persists the precomputed hash without recomputation. List-sort
-responsibility lives in ``_content_payload`` here, not in the
-helper, per D75's field-set-agnostic API.
+Hash chain: ``create_blank_agent``, ``update_agent``, and
+``create_agent_from_methodology`` all compute the new revision's
+hash inside the use case via ``compute_revision_hash`` imported
+from ``padhanam.security.hash_chain`` (promoted from the methodology
+context at S24 commit 8 per D75); the repository persists the
+precomputed hash without recomputation. List-sort responsibility
+lives in ``_content_payload`` here, not in the helper, per D75's
+field-set-agnostic API.
 
 Per D75, ``name`` and ``description`` are read from the parent
 template at hash-compute time and included in the canonical-JSON
 payload as the ``name`` and ``description`` keys. Both are
 template-level and immutable post-creation, so their inclusion is
-deterministic across the chain.
+deterministic across the chain. The S25 clone-from-methodology
+flow preserves byte-equivalence with blank-create: a cloned
+revision 1 with the same content fields produces an identical hash,
+because both paths invoke the same ``_content_payload`` helper
+followed by the same ``compute_revision_hash`` call.
 """
 
 from __future__ import annotations
@@ -36,6 +46,10 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
+from contexts.agent.application.ports import (
+    MethodologyLookup,
+    SourceLookup,
+)
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
 from contexts.agent.ports import AgentRepositoryPort
 from padhanam.observability.security_events import (
@@ -366,3 +380,121 @@ async def archive_agent(
         )
 
     return await repository.archive_template(template_id, tenant_context)
+
+
+async def create_agent_from_methodology(
+    *,
+    principal: Principal,
+    repository: AgentRepositoryPort,
+    methodology_lookup: MethodologyLookup,
+    source_lookup: SourceLookup,
+    security_events: SecurityEventLogger,
+    tenant_context: TenantContext,
+    methodology_template_id: UUID,
+    methodology_version: int | None,
+    name: str,
+    source_ids: tuple[UUID, ...],
+    actor_user_id: str,
+) -> tuple[AgentTemplate, AgentRevision]:
+    """Clone a methodology template into a new agent (D79).
+
+    The cross-context flow: read the methodology template through the
+    consumer-side MethodologyLookup port (apps/cli adapter wraps
+    contexts.methodology.application.get_methodology_template),
+    validate every requested source id exists for the tenant through
+    the SourceLookup port (apps/cli adapter wraps the new ingestion
+    get_source use case), construct an AgentTemplate with paired-
+    populated lineage fields per D75, and construct AgentRevision
+    version 1 with content cloned verbatim from the methodology view
+    except for source_ids (which come from the request, not from the
+    methodology) and name (which comes from the request).
+
+    The resolved methodology_version returned by the lookup is what
+    persists in the lineage; the use case never records None even
+    when the caller requests version=None. version=None resolution
+    happens at the adapter, not here.
+
+    Source existence validation runs before AgentTemplate
+    construction so a missing-source error doesn't leave the use
+    case with a half-built aggregate to roll back. SourceNotFoundError
+    propagates from the adapter; the use case lets it surface to the
+    caller for precise operator-facing error rendering.
+
+    Hash chain: revision 1's previous_revision_hash is the genesis
+    sentinel; the payload's hash inputs are byte-equivalent to a
+    create_blank_agent call with the same content fields. This
+    invariant is exercised by a dedicated unit test below; preserving
+    it lets the chain integrity check at audit time treat clone-
+    created and blank-created agents uniformly.
+    """
+    if not _is_authenticated(principal):
+        raise _deny(
+            principal=principal,
+            action="agent.create_agent_from_methodology",
+            resource_ref=(
+                f"agent_template:new[from_methodology={methodology_template_id}]"
+            ),
+            security_events=security_events,
+        )
+
+    view = await methodology_lookup(
+        template_id=methodology_template_id,
+        version=methodology_version,
+        principal=principal,
+    )
+
+    await source_lookup.assert_sources_exist(
+        source_ids=source_ids,
+        tenant_context=tenant_context,
+        principal=principal,
+    )
+
+    now = datetime.now(timezone.utc)
+    template_id = uuid4()
+    template = AgentTemplate(
+        id=template_id,
+        name=name,
+        description=view.description,
+        created_by_user_id=actor_user_id,
+        created_at=now,
+        source_methodology_template_id=view.methodology_template_id,
+        source_methodology_template_version=view.methodology_version,
+    )
+
+    payload = _content_payload(
+        name=name,
+        description=view.description,
+        system_prompt=view.system_prompt,
+        source_ids=source_ids,
+        tool_allowlist=view.tool_allowlist,
+        retrieval_strategy=view.retrieval_strategy,
+        filter_tree=view.filter_tree,
+        top_k=view.top_k,
+        min_score=view.min_score,
+        model_selection=view.model_selection,
+    )
+    initial_hash = compute_revision_hash(
+        content_payload=payload,
+        previous_hash=GENESIS_REVISION_HASH,
+    )
+
+    revision = AgentRevision(
+        id=uuid4(),
+        agent_template_id=template_id,
+        version=1,
+        system_prompt=view.system_prompt,
+        source_ids=source_ids,
+        tool_allowlist=view.tool_allowlist,
+        retrieval_strategy=view.retrieval_strategy,
+        filter_tree=view.filter_tree,
+        top_k=view.top_k,
+        min_score=view.min_score,
+        model_selection=view.model_selection,
+        created_by_user_id=actor_user_id,
+        created_at=now,
+        previous_revision_hash=GENESIS_REVISION_HASH,
+        this_revision_hash=initial_hash,
+    )
+
+    await repository.create_template(template, revision, tenant_context)
+    return template, revision
