@@ -32,11 +32,20 @@ against the PM agent.
 
 - **Hierarchical multi-agent topology design session.** Queued
   strategic-mode conversation paired with P8 framing or as
-  pre-P8 strategic block per the Ask David capture. P8 (Agent
-  runtime) inherits the composition orchestrator (D66), filter
-  tree translator (D67), and tool registry surface (deferred
-  from P7 per D68); the hierarchical-topology design adds the
-  multi-agent shape on top of the runtime substrate.
+  pre-P8 strategic block per the Ask David capture. Original
+  scope: agent composition at runtime inheriting D66 (composition
+  orchestrator), D67 (filter-tree translator), and the deferred
+  tool registry surface per D68. Expanded scope per the
+  2026-05-11 P7 strategic block captures entry: workflow as new
+  architectural primitive (separate bounded context at
+  contexts/workflow/), methodology-as-constraint-contract
+  refinement (option d), four-layer constraint stack (platform,
+  methodology, workflow, agent), platform invariants as evolving
+  capability set with user-safety as load-bearing principle,
+  mass-market UX direction with progressive disclosure of
+  power-user features, gallery pre-population strategy for Phase
+  2 launch. Single strategic block recommended (Path A);
+  interlocking decisions risk drift if split.
 - **Layer A policy authoring.** Follow-on strategic block authoring
   the ten policy scaffolds at `charter/compliance/` per the
   compliance-as-shared-responsibility principle. Scheduled at

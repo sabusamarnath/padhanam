@@ -135,3 +135,36 @@ Remediation trigger: before P8's first runtime test against the PM agent. P8's r
 
   - triaged: deferred-action note on 2026-05-11
   - resolution: deferred-action; trigger named (before P8 runtime testing of the PM agent); operator owns remediation; no charter commitment beyond this note required because the trigger is build-session-shaped not architecture-shaped.
+
+## 2026-05-11 — P7 strategic block — architecture and product direction synthesis ahead of topology design session
+
+Source: Claude.ai strategic conversation during P7 build (post-S24, S25 build pauses, S25 close). Multi-thread exploration covering methodology-as-constraint-contract, workflow as new architectural primitive, four-layer constraint stack, mass-market UX direction, gallery pre-population strategy, and capability-evolution framing for platform invariants. Output is preparatory material for the hierarchical multi-agent topology design session at the P7-to-P8 boundary, which now has materially expanded scope.
+
+Architecture refinements explored.
+
+Methodology refined to agent-level constraint contract (option d from the altitude framing): methodology declares roles agents can occupy and constraints attached to each role (tools, sources, retrieval bounds, cost ceilings). Tightens D68's methodology-as-platform-service framing without breaking it.
+
+Workflow surfaces as new architectural primitive distinct from methodology and agent. Workflow composes agents (potentially across methodologies), declares routing topology (sequential, conditional, reflective), termination criteria, version pinning, and aggregate budgets. Workflow lands as its own bounded context at contexts/workflow/ per D16, tenant-managed per D32, revision-shaped per D31. Composition orchestrator (D66) and filter-tree translator (D67) get a clearer home here.
+
+Four-layer constraint stack: platform invariants (non-overridable by user-authored content), methodology (per methodology, constrains agents), workflow (per workflow, constrains topology), agent (per instance). Each layer constrains layers below.
+
+Platform invariants treated as dynamic state of platform's safety posture rather than fixed list. Starting set is conservative (no-STP for personal work, no financial execution, no auto-delete). Capabilities promote in over time as guardrails strengthen. User safety as the load-bearing principle (privacy, integrity, reversibility, transparency, control, auditability).
+
+Product direction.
+
+Mass-market UX as Phase 2 commitment with Phase 1 architectural implications. Phase 1 ships the substrate; Phase 2 ships the consumer-grade authoring surface. Reframes the bet positioning from "procurement-grade enterprise demonstration" toward "procurement-grade architecture with consumer-grade UX" (Notion precedent: enterprise architecture, consumer UX). Mass-market-first acts as architectural forcing function for safe-path-equals-easy-path.
+
+Gallery pre-population as validation strategy. Solves blank-slate friction (users see options not prompts), source credibility (authoritative-source attribution), and partial validation (well-known methodology shapes test platform substrate even without consumer users). Seven seed categories suggested: physical activity (Southridge Video), mental health (Southridge Video or NICE), sleep hygiene (Southridge Video or CDC), cooking and nutrition (Southridge Video Eatwell), habit formation (Charles Duhigg, James Clear), home projects, learning a skill. Restricted to authoritative sources and non-controversial domains.
+
+Padhanam positioning explored as intelligence layer rather than action layer. Platform produces recommendations and analyses; user executes consequential actions in their own systems. Product differentiator against autonomous-agent platforms.
+
+Three gaps surfaced for forward resolution.
+
+Gap 1: Bet articulation has not caught up to consumer-UX-plus-enterprise-architecture refinement. Resolution surface: Phase 1 close audit per D45's living-artefact discipline.
+
+Gap 2: Validation strategy for mass-market UX is partial; gallery handles blank-slate and credibility but not UX itself. Resolution surface: Phase 2 framing.
+
+Gap 3: D78's "operator deploys public Padhanam personally" scope grows if operator becomes a real consumer of the gallery rather than staying in PM-tooling mode. Resolution surface: next phase audit alongside Gap 1.
+
+  - triaged: strategic-input note on 2026-05-11
+  - resolution: expanded architectural scope absorbed at the hierarchical multi-agent topology design session queued as P7-to-P8 carryover; three gaps land at named future surfaces (Gap 1 at Phase 1 close audit, Gap 2 at Phase 2 framing, Gap 3 at next phase audit alongside Gap 1); preparatory material preserved here for the topology session to consume.
