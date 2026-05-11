@@ -696,3 +696,41 @@ P8's `charter/packages.md` text revises from "P8: Agent runtime. LangGraph orche
 **Alternatives considered.** (a) Author 7-Step before topology design session as forcing example; rejected because authoring against an undecided architecture risks rework, and the topology session uses 7-Step as a thought experiment for the role-shape decision without committing template content. (b) Author 7-Step during topology design session; rejected because it doubles session scope and dilutes architectural focus. (c) Author 7-Step after P8 build complete; rejected because it misses the opportunity to exercise the methodology aggregate v2 shape early. (d) Defer 7-Step authoring to Phase 2 alongside workflow context implementation; rejected because 7-Step is methodology-template work not workflow work; the coupling is only at the workflow-uses-methodology level which the captures' cross-methodology framing handles cleanly.
 
 **Kano.** Performance. The placement choice preserves the architectural commitment to one methodology at P7 close per D68 while adding a second template at a structurally cheap moment.
+
+## D86: Role-first architectural model — roles as primary first-class aggregates; methodologies as playbooks composing roles with workflow specification; skills as Phase 2 orthogonal capability concept (Strategic-mode, P8 pre-build, 2026-05-11)
+
+**Decision.** The agentic platform commits to a role-first model. Roles are first-class primary aggregates with independent identity (Y2 sub-choice: live within `contexts/methodology/` at Phase 1 with their own aggregate; full bounded-context separation to `contexts/roles/` deferred to Phase 2 if evidence demands). Methodologies are first-class aggregates that compose multiple role references plus workflow specification plus per-role overrides plus (Phase 2) recommended skills. The four-layer constraint stack from D80 extends to a five-concept stack: platform invariants, role envelope, methodology overlay (situational), workflow orchestration, agent instance. Skills are Phase 2 granular procedural capabilities orthogonal to roles, modelled on the Claude Skills pattern with Claude Skills as one adapter per D17.
+
+Five sub-commitments.
+
+(a) **Roles are independently authored and identified by `role_id`.** A role contains its constraint bundle: system_prompt focused on function (what the role does, what inputs and outputs, what responsibilities), tool_allowlist, source_filter, retrieval_strategy, filter_tree, top_k, min_score, model_selection, cost_ceiling. An agent can clone from a role directly (without methodology context) producing a methodology-unbound agent, or from a methodology-plus-role pair producing a methodology-bound agent with methodology's per-role overrides applied.
+
+(b) **Methodologies are playbooks for a problem class.** A methodology contains `role_refs` (list of role IDs plus optional per-role overrides), workflow specification (sequence, conditional, or reflective per D83's topology categories), per-role overrides for the methodology's context (hard fields tighten only; soft fields replace), and Phase 2-deferred recommended skills per role.
+
+(c) **Methodology adoption gives the workflow a structured composition of roles.** Standalone role adoption gives the agent its job without methodology framing. An agent participates in workflows (zero or more); the workflow may be methodology-governed (executing a playbook) or ad-hoc (orchestrating agents without methodology framing). The agent itself does not "apply" methodologies; workflows do.
+
+(d) **Skills deferred to Phase 2 as a separate bounded context.** Skills are agent-acquired procedural capability artifacts modelled on the Claude Skills pattern (folder with SKILL.md plus resources, context-activated at runtime). The methodology aggregate's schema reserves a `recommended_skills` field (soft) per role-reference at Phase 1; the field is structurally always soft. No `required_skills` field exists in the schema, preventing methodology authors from making skill recommendations hard.
+
+(e) **Structural enforcement of authoring discipline.** The methodology aggregate's schema deliberately lacks fields that would invite the role-versus-skill conflation: no `required_skills` field (only `recommended_skills`); role aggregate's system prompt field is documented as function-focused; procedural content "lives in skill aggregate" by architectural placement. Authoring templates at Phase 2 scaffold role authoring with separate fields (description, inputs, outputs, responsibilities) guiding toward function. A Phase 2 optional authoring linter flags procedural patterns in role free-text fields as advisory warnings.
+
+**Reasoning.** The prior framing per D81 (methodology v2 with roles JSONB on methodology) made methodology the framework that defined roles. The operator's mental model surfaced the gap during the McKinsey 7-Step authoring conversation: in real practice, roles are the primary identity (the job you do), methodologies are playbooks you apply, skills are tools you use. Job descriptions list role responsibilities and required skills as separate fields; methodologies (Scrum, McKinsey 7-Step, ADDIE) define roles structurally; skills sit on the person. The role-first model maps to how people actually work and to the mass-consumer Phase 2 UX direction per D77 and D78: the gallery surfaces both roles and methodologies as browsable units; users adopt roles standalone or methodologies with curated role composition.
+
+The structural enforcement commitments align with the platform's existing mechanical-discipline posture per D24 (red-team contract tests), D27 (adapter-confinement import-linter contracts), and the AST enforcement tests. Authoring discipline is supported by the architecture's existing strengths, not loaded onto authors.
+
+**Revisions to prior decisions.**
+
+D80 (four-layer constraint stack) extends to a five-concept stack: platform invariants, role envelope, methodology overlay (situational), workflow orchestration, agent instance. Role becomes the unit methodology composes; not an additional constraint layer. The original four-layer framing stays accurate for the constraint hierarchy; D86 makes explicit that role is the unit within the methodology layer.
+
+D81 (methodology v2 with roles JSONB) revises to methodology v3 (separate role aggregate plus methodology references via `role_refs`). The S26 migration shifts to land methodology v3 directly rather than methodology v2 followed by v3 later. LVT methodology's existing single-role content splits into: LVT methodology aggregate (the playbook content plus `role_refs`); LVTGuide role aggregate (the role content with constraint bundle). PM agent at tenant alpha gains explicit role lineage (`source_role_id` pointing at LVTGuide) plus existing methodology lineage (`source_methodology_template_id` per D79).
+
+**Alternatives considered.** Four rejected paths weighed.
+
+(a) Path A: Skills supplant roles. Methodology declares required skills; agents have skill sets. Rejected because it eliminates the role concept and puts structural composition entirely in workflow context; loses the methodology's role-position semantics; contradicts D81's recent commitment without forcing evidence.
+
+(b) Path Y intermediate: Roles as first-class with methodology curation but maintaining methodology-defines-roles framing. Rejected when the operator's mental model surfaced that methodology is a tool/playbook the role applies, not the framework that defines the role.
+
+(c) Option Z: Standalone agent templates in the gallery as a separate concept; D81 stands unchanged. Rejected because it addresses the gap (mass-consumer use without full methodology commitment) by adding a parallel concept rather than fixing the structural framing; complexity grows without addressing the root issue.
+
+(d) Option W: No gap to fill at Phase 1. Rejected because deferring forces a larger refactor when consumer UX scenarios force the question at Phase 2 with more data to migrate.
+
+**Kano.** Must-have for the mass-consumer Phase 2 direction per D77 and D78 (gallery surfaces roles and methodologies as separate browsable units); performance for architectural alignment with how methodologies and roles work in real practice; delighter for the structural enforcement of authoring discipline.

@@ -2,11 +2,11 @@
 
 ## Goal
 
-P8 ships the agent runtime that invokes agents authored at P7 against the methodology v2 shape from D81. By P8 close, the platform runs one agent (the PM agent at tenant alpha cloned from the LVTGuide role of the LVT methodology) with full instrumentation: SSE-streamed responses, trace capture extending D49 and D57, audit hooks per D26, and platform invariant enforcement at the tool layer per D82. The five-invariant user-safety set lands in code at the tool invocation boundary; the AgentLoopExecutor adapter from D84 is the orchestration shape.
+P8 ships the agent runtime that invokes agents authored at P7 against the methodology v3 shape from D86 (revising D81's v2 framing to separate role aggregate plus methodology referencing via `role_refs`). By P8 close, the platform runs one agent (the PM agent at tenant alpha cloned from the LVTGuide role of the LVT methodology) with full instrumentation: SSE-streamed responses, trace capture extending D49 and D57, audit hooks per D26, and platform invariant enforcement at the tool layer per D82. The five-invariant user-safety set lands in code at the tool invocation boundary; the AgentLoopExecutor adapter from D84 is the orchestration shape.
 
 ## Scope at P8 close
 
-The methodology aggregate migrates to the v2 shape per D81 (multi-role with per-field binding mode) as the first P8 session. The agent runtime ships behind the AgentExecutor port. Tool registry context lands per D68's deferred surface. Platform invariant enforcement at the tool invocation boundary implements the five danger-targeted invariants from D82. SSE streaming and trace capture extend the existing observability substrate. End-to-end test runs the PM agent against operator-uploaded LVT-relevant sources, remediating the deferred-action note on synthetic sources from the 2026-05-11 captures entry.
+The methodology aggregate migrates to the v3 shape per D86 (separate role aggregate; methodology references roles via `role_refs`; per-field binding-mode platform-level convention from D81 preserved) as the first P8 session (S26a). McKinsey 7-Step methodology authoring against the role-first model lands at S26b. The agent runtime ships behind the AgentExecutor port. Tool registry context lands per D68's deferred surface. Platform invariant enforcement at the tool invocation boundary implements the five danger-targeted invariants from D82. SSE streaming and trace capture extend the existing observability substrate. End-to-end test runs the PM agent against operator-uploaded LVT-relevant sources, remediating the deferred-action note on synthetic sources from the 2026-05-11 captures entry.
 
 The agent runtime invokes a single agent per request. No workflow composition at P8; workflow context architecture committed at D83 and `charter/contexts/workflow.md`, implementation Phase 2.
 
@@ -23,19 +23,48 @@ Tenant isolation contract tests extend `tests/contract/tenant_isolation/` per D2
 
 ## Sessions forecast
 
-Five sessions.
+Six sessions (S26 split into S26a and S26b per D86; subsequent sessions renumbered S27b-S30b).
 
-**S26: Methodology v2 migration** (D81 commitments). Alembic migration for `methodology_revision.roles` JSONB. LVT template migration from single-role-implicit to single-role-array form. `AgentTemplate.source_methodology_role_name` field. PM agent backfill (`source_methodology_role_name = "LVTGuide"`). Tenant-isolation contract tests update for the new role-bundle shape. End-to-end test verifies the migrated LVT methodology and PM agent function unchanged.
+### S26a: Methodology v3 migration (roles as separate aggregate)
 
-**S27: AgentExecutor port plus AgentLoopExecutor adapter plus agent runtime use case.** Port definition. Hand-rolled LLM-with-tool-loop adapter against LiteLLM per D4 and retrieval per D60, D66. `invoke_agent` use case. Cost capture per D49 and D57 extending to per-agent-invocation cost. Audit events per D26. Tenant-isolation contract tests extension.
+**Goal at session close.** Methodology v3 migration runs in tenant a. Methodology aggregate refactored to reference roles via `role_refs` rather than embedding role bundles in JSONB. Roles aggregate created as a separate aggregate within `contexts/methodology/` per D86's Y2 sub-choice. LVT methodology splits into:
 
-**S28: Tool registry context plus tool classification plus invariant enforcement.** New bounded context at `contexts/tools/`. Tool aggregate with revision shape per D31 and hash-chain audit per D26. Tool classification taxonomy. Tool invocation port. Platform invariant enforcement at the invocation boundary per D82's five invariants. CLI: `padhanam tool create | get | list`. Tenant-isolation contract tests.
+- LVT methodology aggregate carrying playbook content plus `role_refs` (one entry pointing at LVTGuide).
+- LVTGuide role aggregate carrying the role's constraint bundle (system_prompt focused on function, tool_allowlist, source_filter, retrieval_strategy, filter_tree, top_k, min_score, model_selection, cost_ceiling).
 
-**S29: SSE streaming plus trace capture for agent runtime.** FastAPI SSE endpoint for agent invocation. OTel span attributes extending D49 and D57. Streaming-aware trace capture. Per-invocation cost roll-up.
+PM agent at tenant alpha gains `source_role_id` lineage pointing at LVTGuide; existing `source_methodology_template_id` per D79 remains. Agent's content fields stay flat per D75; lineage extends per D86.
 
-**S30: CLI plus end-to-end test plus P8 close.** `padhanam agent run --tenant <tenant> --agent <id> --input <message>`. End-to-end test against PM agent with operator-uploaded LVT-relevant sources (remediates the deferred-action note on synthetic sources from the 2026-05-11 captures entry). P8 close archive at `docs/archive/packages/p8.md`. `log/packages.md` measured-outcomes paragraph. `current-package.md` transition.
+**Acceptance criteria.**
 
-Lower-end overlap (S29 folding into S27 or S30) is possible if the operator decides at S27 reflection. Session boundaries settle at the session-by-session framing per the established discipline.
+1. Migration script runs against tenant a; methodology v3 lands.
+2. LVT methodology aggregate exists with `role_refs` containing one entry pointing at LVTGuide.
+3. LVTGuide role aggregate exists with the constraint bundle copied from LVT's prior single-role content.
+4. PM agent at tenant alpha gains `source_role_id` lineage; existing methodology lineage intact.
+5. Cross-context independence import-linter contracts updated to cover the new role aggregate's relationships.
+6. Tenant isolation contract tests cover the roles aggregate.
+7. Hash-chain semantics inherited from methodology v2 (per D31 revisions pattern); the role aggregate's revision hash spans the constraint bundle.
+
+### S26b: McKinsey 7-Step methodology authoring (against role-first model)
+
+**Goal at session close.** McKinsey 7-Step methodology and its seven roles land in the platform-managed methodology surface (control plane). Authored against the brief at `briefs/p8/mckinsey-7-step.md`.
+
+**Acceptance criteria.**
+
+1. Seven role aggregates authored as standalone first-class roles: ProblemFramer, Disaggregator, Prioritiser, Planner, Analyst, Synthesiser, Communicator. Each role's content matches the brief.
+2. McKinsey 7-Step methodology aggregate authored, referencing the seven role aggregates via `role_refs` with the per-role overrides specified in the brief.
+3. The methodology's workflow specification (sequence: ProblemFramer through Communicator) lands per the brief.
+4. Hash-chain semantics inherited; methodology revision 1 and each role revision 1 land with deterministic hashes.
+5. Authoring is platform-managed (control plane); not tenant-scoped.
+
+**S27b: AgentExecutor port plus AgentLoopExecutor adapter plus agent runtime use case.** Port definition. Hand-rolled LLM-with-tool-loop adapter against LiteLLM per D4 and retrieval per D60, D66. `invoke_agent` use case. Cost capture per D49 and D57 extending to per-agent-invocation cost. Audit events per D26. Tenant-isolation contract tests extension.
+
+**S28b: Tool registry context plus tool classification plus invariant enforcement.** New bounded context at `contexts/tools/`. Tool aggregate with revision shape per D31 and hash-chain audit per D26. Tool classification taxonomy. Tool invocation port. Platform invariant enforcement at the invocation boundary per D82's five invariants. CLI: `padhanam tool create | get | list`. Tenant-isolation contract tests.
+
+**S29b: SSE streaming plus trace capture for agent runtime.** FastAPI SSE endpoint for agent invocation. OTel span attributes extending D49 and D57. Streaming-aware trace capture. Per-invocation cost roll-up.
+
+**S30b: CLI plus end-to-end test plus P8 close.** `padhanam agent run --tenant <tenant> --agent <id> --input <message>`. End-to-end test against PM agent with operator-uploaded LVT-relevant sources (remediates the deferred-action note on synthetic sources from the 2026-05-11 captures entry). P8 close archive at `docs/archive/packages/p8.md`. `log/packages.md` measured-outcomes paragraph. `current-package.md` transition.
+
+Lower-end overlap (S29b folding into S27b or S30b) is possible if the operator decides at S27b reflection. Session boundaries settle at the session-by-session framing per the established discipline.
 
 ## D-entries forecast
 

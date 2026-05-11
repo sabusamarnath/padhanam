@@ -124,6 +124,48 @@ Items absorbed from the methodology comparison process that are committed in pri
 
 These are performance-category improvements: each scales the bet linearly by reducing operator-discipline reliance in favour of mechanical enforcement. None is must-have for Phase 1 close, which is why they sit here rather than in the active package's scope. Phase audits review the activation backlog and pull items into specific packages where conditions warrant.
 
+## Learning store for accumulated knowledge
+
+Activates at Phase 2 alongside the workflow context implementation per D83.
+
+**Accumulated knowledge persists separately from any specific framework output.** As an agent works across sessions, it builds product-specific learning (what the user prefers, what's worked, what hasn't, accumulated context). This learning is separate from any specific playbook's outputs (LVT bets, RICE scores, Kano classifications). The learning store is what feeds revision-mode invocations of playbooks; the agent draws on accumulated knowledge to revise prior outputs.
+
+**Shape choice deferred.** Two candidates: a generic learning store as its own bounded context (`contexts/learning/` or similar); or accumulated knowledge as agent-state extensions per agent. Choice settles when the workflow context lands and the revision-mode mechanics are designed against real consumers.
+
+**Specific D-entry lands at Phase 2** when the data shape stabilises against real workflow context implementation.
+
+## Revision mode in playbooks
+
+Activates alongside the learning store at Phase 2.
+
+**Each playbook needs a revision mode in addition to its initial-application mode.** The LVT playbook applied for the first time decomposes from scratch (bet, initiative, epic, story). The LVT playbook applied in revision mode loads existing bets, picks up accumulated learning from the learning store, and walks the user through "which bets still hold; which should change; what's new." Same shape for RICE (re-score as evidence shifts) and Kano (reclassify as options evolve).
+
+**Playbook authoring includes both modes.** A methodology aggregate at Phase 2 contains both initial-mode and revision-mode logic per role-reference. Phase 1 playbooks (LVT, McKinsey 7-Step authored at S26b) declare the modes structurally without runtime support; Phase 2 implementation activates revision execution.
+
+**Specific D-entry lands at Phase 2** when the runtime mechanics design against real consumers.
+
+## Output aggregates for framework outputs
+
+Activates alongside the learning store and revision mode at Phase 2.
+
+**Framework outputs need structured persistence.** When an agent applying LVT produces a bet definition, the output currently lives only in the conversation. For revision-mode later, the agent needs a stored record of what it concluded. Bets, RICE scores, Kano classifications, McKinsey 7-Step intermediate artefacts all become stored outputs the agent can reference across sessions.
+
+**Aggregate shape candidates.** Three candidates: a generic output aggregate that holds typed outputs (bets, scores, classifications) with a discriminator; per-playbook output aggregates (LVTOutput, RICEScore, KanoClassification); outputs as agent-state extensions. Choice settles when revision-mode design forces the shape.
+
+**Specific D-entry lands at Phase 2** when the design stabilises.
+
+## Skills aggregate (Phase 2 capability concept)
+
+Activates at Phase 2 alongside the gallery shape per D77 and D78.
+
+**Skills are agent-acquired procedural capabilities modelled on the Claude Skills pattern.** A skill is a folder with SKILL.md plus resources, context-activated at runtime. Multiple agents can reference the same skill. Methodologies recommend skills per role (soft); agents own skill selection.
+
+**Bounded context shape deferred.** Two candidates: `contexts/skills/` as a new bounded context (sharp independence; sibling to `contexts/methodology/`); or skills within `contexts/methodology/` (smaller architectural shift; lower bounded-context-count cost). Phase 2 evidence on cross-methodology reuse patterns and gallery surfaces drives the choice.
+
+**Adapter choice.** Claude Skills is one adapter to the skills abstraction per D17 (no vendor SDKs in domain code; architecture commits to abstraction; adapter is configuration).
+
+**Specific D-entry lands at Phase 2** when consumer evidence drives the bounded-context choice and the runtime mechanics design.
+
 ## Per-tenant topology for Neo4j
 
 Activated at S21 per D63 with the choice of a shared Neo4j 5 Community instance and property-based tenant scoping enforced through a `TenantScopedNeo4jSession` wrapper at the adapter boundary (raw `neo4j` driver imports forbidden outside the wrapper by the `neo4j-confined` import-linter contract plus AST enforcement test) plus tenant-isolation contract tests on both reads and writes. The entry remains as the activation marker for the production-deployment revisit, when per-tenant Neo4j containers may earn back their roughly 1GB-RAM-per-tenant local-dev cost against production isolation, residency, or operational requirements that Phase 1 does not yet exercise.

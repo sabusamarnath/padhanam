@@ -1006,3 +1006,16 @@ metrics:
   corrected_by:
 ```
 
+
+## Strategic-mode: P8 role-first refinement and McKinsey 7-Step brief (2026-05-11)
+
+roles: PM, architect
+
+Single strategic-mode commit landing D86 (role-first refinement revising parts of D80, D81), principles additions (coach consistency, light UX, safety surface, phase-audit UX-and-safety verification), four deferred-decisions entries (learning store, revision mode, output aggregates, skills aggregate), S26 split into S26a and S26b, McKinsey 7-Step brief at briefs/p8/mckinsey-7-step.md, and current-package.md update.
+
+The role-first refinement surfaced during a McKinsey 7-Step methodology authoring conversation. The operator's pushback on early framing (methodology-first; persona-shaped roles; methodology-defines-skills) iteratively refined the architecture toward role-first, methodology-as-playbook, skills-as-orthogonal capability. The pattern observed: methodology authoring exposes architectural assumptions that initial framing did not surface; brief-first authoring before code-time commits is the right shape.
+
+The structural enforcement commitments (schema lacks the offending fields; aggregates separated to enforce concerns) align with the platform's existing mechanical-discipline posture. The risk surfaced earlier in the conversation that author discipline would be the load-bearing mechanism is replaced by architecture as the enforcement; authoring templates and a Phase 2 optional linter handle residual risk in role free-text fields.
+
+Worth noting at the next phase audit: the methodology-authoring-exposes-architecture pattern as a Patterns-observed candidate. The S25 cross-context commit and this session's role-first refinement both surfaced during methodology-related work after architectural framing had already landed.
+

@@ -16,6 +16,7 @@ Read every session. Kept tight on purpose.
 - When an agent adopts a methodology, the methodology is embedded as defaults for tuning surfaces and as envelopes for security, budget, and scope surfaces per D81. Defaults activate at decision points, encode the right thing for the chosen methodology, and yield to user intent at low cost. Envelopes bind hard and are validated at agent write time. The product surface treats user intent as primary for tuning; envelopes are non-overridable by the agent and exist to protect the tenant and the platform. Agents created without methodology lineage skip the methodology layer entirely; they remain bound by platform invariants per the User safety section.
 - Bounded contexts at the top of the codebase, hexagonal layers within. Cross-cutting concerns live in `padhanam/` (the cross-cutting implementation package per D28). The `shared_kernel/` is tiny and policed: only types that must be referentially equal across contexts, never Pydantic. Contexts communicate via published query APIs for reads and a domain event bus for state changes; direct cross-context imports are forbidden by `import-linter` in CI.
 - Architectural commitments to specific protocols or standards require demonstrated cross-vendor consolidation, not announcement-level adoption. OTel for observability is committed (consolidated). Other emerging standards (MCP for tool exposition, agent protocols, workflow definition standards) are supported via adapters where appropriate but not committed as architectural assumptions until consolidation is real. The architecture commits to abstractions; protocol choices are configuration above the abstractions.
+- Role-first agent identity. Roles are the primary identity for agents; the agent's job is the role it occupies. Methodologies are playbooks the role applies (situationally); skills are granular capabilities the agent invokes. Per D86.
 
 ## Security posture
 
@@ -44,6 +45,9 @@ Read every session. Kept tight on purpose.
 - PRD-shaped documentation surfaces (phase PRDs, package epic notes, user stories, PRFAQ) are living artefacts. Original draft is preserved alongside as-built reality; delta capture is the audit deliverable. Append-only at the version level, per D43.
 - Reflection density distinguishes session-log entries by conversation type. Strategic conversations produce shorter entries focused on what was decided. Build sessions produce longer entries with substantive reflection on what was learned. The mix of conversation types over time is signal at phase audits.
 - Each session-log entry carries a one-line `roles:` tag naming which of the five role-functions (analyst, PM, architect, engineer, technical writer) were exercised, per D46. The distribution over time surfaces functional atrophy.
+- Coach consistency is binding. The agent's voice and identity stay stable when methodologies (playbooks) switch. The user feels they are talking to the same coach whether the agent is applying LVT, RICE, Kano, or McKinsey 7-Step. Per-methodology overrides layer guidance on the agent; they do not replace the agent's identity.
+- Light UX as authoring discipline. Each playbook authored gets a "is this the lightest path to the outcome?" pass at brief time. Each agent-creation flow gets a "would a non-expert reach success without help?" pass. Phase audits review UX feel against these prompts.
+- Safety surface per playbook. Each playbook authoring includes a safety-surface pass: what can go wrong; what platform invariants per D82 need to fire; what consent the user gives at each step. Phase audits verify the safety surface against the playbooks shipped in the phase.
 
 ## User safety
 
@@ -86,6 +90,7 @@ The invariant set is versioned in this file per the existing append-only princip
 - Sequencing uses RICE (Reach, Impact, Confidence, Effort). Recorded explicitly on packages and on implementation backlog items where sequencing involves real choice. Per D42.
 - Each framework operates at its own moment of the work. Conflating them produces ceremony without reasoning value.
 - Phase audits review Kano-category distribution (too many must-haves suggests conflation with default), RICE-score defensibility (forecasts versus post-hoc rationalisations), and roadmap reasoning-category distribution per D44.
+- Phase audits review UX-and-safety verification alongside Kano-category distribution and RICE-score defensibility. The cadence inherits the phase-audit pattern; verification artefacts live in `briefs/p<n>/phase-audit.md` at audit time.
 
 ## Token discipline
 

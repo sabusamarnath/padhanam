@@ -8,17 +8,11 @@ P7 closed at S25 close on 2026-05-11. The topology design strategic block at the
 
 The next strategic-mode block authors the McKinsey 7-Step methodology template per D85 (post-topology, pre-P8 build). Layer A policy authoring remains queued per the P7 mid-package security-readiness carryover. P8 build opens at S26 with the methodology v2 migration per the p8-epic.md sessions forecast.
 
+The role-first architectural refinement (D86) landed at strategic-mode commit ahead of P8 build. The S26 session split into S26a (methodology v3 migration with roles aggregate) and S26b (McKinsey 7-Step authoring against the role-first model).
+
 ## Carryovers active across the P7→P8 boundary
 
-- **Hierarchical multi-agent topology design session.** Committed
-  at 2026-05-11 as the strategic block at the P7→P8 boundary.
-  Landed D80-D85, new workflow context charter file, revised P8
-  epic note, User safety principle section, methodology-embedded
-  principle refinement, P8 packages.md line revision, roadmap v4
-  entry with discovery reasoning, three deferred-decisions entries,
-  captures triage resolution. The McKinsey 7-Step methodology
-  authoring carryover replaces this entry as the next strategic
-  block per D85.
+- **Hierarchical multi-agent topology design.** Closed at strategic-mode commit 6f66f71 (D80 through D85). Role-first refinement (D86) closed at this commit.
 - **Layer A policy authoring.** Follow-on strategic block authoring
   the ten policy scaffolds at `charter/compliance/` per the
   compliance-as-shared-responsibility principle. Scheduled at
