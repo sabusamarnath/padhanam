@@ -1,10 +1,10 @@
-"""Agent aggregates (D75).
+"""Agent aggregates (D75, D86).
 
 Two frozen dataclasses inheriting D74's revision-shape pattern from
 the methodology context. The template carries human-stable identity
-plus methodology lineage; the revision carries per-version content
-plus the hash-chain pointers per D26. Revisions are immutable;
-updates create new revision rows.
+plus two independent lineage pairs (methodology and role); the
+revision carries per-version content plus the hash-chain pointers per
+D26. Revisions are immutable; updates create new revision rows.
 
 Per D75's chain-self-containment reasoning, the parent template's
 ``name`` and ``description`` appear in the hash content payload at
@@ -20,26 +20,34 @@ consumer moment is the cheapest moment to settle the helper API
 shape, and chain-self-containment is satisfied at the canonical-JSON
 payload-key level without column duplication.
 
-Methodology lineage fields (``source_methodology_template_id``,
-``source_methodology_template_version``) live on AgentTemplate per
-D75: lineage is template-level identity (origin), not revision-level
+Lineage fields (``source_methodology_template_id``,
+``source_methodology_template_version``, ``source_role_id``,
+``source_role_version``) live on AgentTemplate per D75 / D86:
+lineage is template-level identity (origin), not revision-level
 content (what changes between versions). Placement on the template
 structurally enforces D68's "set immutably on revision 1, preserved
 across all later revisions" because the template never changes after
 creation; the lineage cannot drift across revisions because it does
-not exist on the revision. The fields are nullable for blank-created
-agents per D68.
+not exist on the revision. The four fields form two independent
+paired-NULL pairs (methodology and role); see the paired-NULL
+invariant section below for the three valid combinations.
 
-The paired-NULL invariant on the lineage fields (both NULL for
-blank-created agents, both populated for clone-created agents at
-S25's cross-context flow; never one without the other) is enforced
-at the domain layer via ``__post_init__`` validation on the frozen
-dataclass: instantiation with exactly one of the two fields populated
-raises ``ValueError``. The same invariant is enforced at the schema
-layer via the CHECK constraint
-``agent_templates_lineage_paired_null``; the two-layer enforcement
-matches the audit-context precedent of domain-layer validation backed
-by schema-layer constraint.
+The paired-NULL invariant is enforced at the domain layer via
+``__post_init__`` validation on the frozen dataclass: instantiation
+with exactly one of a pair's two fields populated raises
+``ValueError``. The same invariant is enforced at the schema layer
+via the CHECK constraints ``agent_templates_lineage_paired_null``
+(methodology pair) and ``agent_templates_role_lineage_paired_null``
+(role pair); the two-layer enforcement matches the audit-context
+precedent of domain-layer validation backed by schema-layer
+constraint.
+
+Three valid lineage states match charter/schema.md's "Agent tables"
+section: both pairs NULL (blank-created); both pairs populated
+(methodology-cloned, with role lineage resolved from the methodology
+revision's first role_ref per S25's D79 cross-context flow extended
+at S26a-2); only role pair populated (role-cloned directly without a
+methodology playbook per S26a-2's create_agent_from_role).
 
 Domain code is framework-free per D16 — stdlib dataclasses, no
 Pydantic, no SQLAlchemy.
@@ -70,22 +78,42 @@ class AgentTemplate:
     created_at: datetime
     source_methodology_template_id: UUID | None = None
     source_methodology_template_version: int | None = None
+    source_role_id: UUID | None = None
+    source_role_version: int | None = None
     archived_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        # D75 paired-NULL invariant: lineage fields move together.
-        # Either both NULL (blank-created agent at S24) or both
-        # populated (clone-created from a methodology template at
-        # S25's cross-context flow). Never one without the other.
-        id_set = self.source_methodology_template_id is not None
-        version_set = self.source_methodology_template_version is not None
-        if id_set != version_set:
+        # D75 paired-NULL invariant: methodology lineage fields move
+        # together. Either both NULL (blank-created agent at S24 or
+        # role-created agent at S26a-2) or both populated (clone-
+        # created from a methodology template at S25's cross-context
+        # flow). Never one without the other.
+        m_id_set = self.source_methodology_template_id is not None
+        m_version_set = self.source_methodology_template_version is not None
+        if m_id_set != m_version_set:
             raise ValueError(
                 "AgentTemplate methodology lineage fields must move "
                 "together (D75 paired-NULL invariant): both NULL or "
                 "both populated; got "
                 f"source_methodology_template_id={self.source_methodology_template_id!r}, "
                 f"source_methodology_template_version={self.source_methodology_template_version!r}"
+            )
+
+        # D86 paired-NULL invariant on the role lineage pair,
+        # independent of the methodology pair. Three valid
+        # combinations across both pairs per charter/schema.md:
+        # both pairs NULL (blank-created); both pairs populated
+        # (methodology-cloned, role resolved from role_refs[0]);
+        # only role pair populated (role-cloned directly).
+        r_id_set = self.source_role_id is not None
+        r_version_set = self.source_role_version is not None
+        if r_id_set != r_version_set:
+            raise ValueError(
+                "AgentTemplate role lineage fields must move "
+                "together (D86 paired-NULL invariant): both NULL or "
+                "both populated; got "
+                f"source_role_id={self.source_role_id!r}, "
+                f"source_role_version={self.source_role_version!r}"
             )
 
 

@@ -15,6 +15,7 @@ from contexts.agent.domain.agent import AgentRevision, AgentTemplate
 _TEMPLATE_ID = UUID("00000000-0000-4000-8000-000000000001")
 _REVISION_ID = UUID("00000000-0000-4000-8000-000000000002")
 _METHODOLOGY_TEMPLATE_ID = UUID("00000000-0000-4000-8000-0000000000aa")
+_ROLE_TEMPLATE_ID = UUID("00000000-0000-4000-8000-0000000000bb")
 
 
 def _template(**overrides) -> AgentTemplate:
@@ -62,6 +63,8 @@ def test_agent_template_construction_blank() -> None:
     assert template.name == "lvt-pm-agent"
     assert template.source_methodology_template_id is None
     assert template.source_methodology_template_version is None
+    assert template.source_role_id is None
+    assert template.source_role_version is None
     assert template.archived_at is None
 
 
@@ -69,9 +72,25 @@ def test_agent_template_construction_clone_from_methodology() -> None:
     template = _template(
         source_methodology_template_id=_METHODOLOGY_TEMPLATE_ID,
         source_methodology_template_version=1,
+        source_role_id=_ROLE_TEMPLATE_ID,
+        source_role_version=1,
     )
     assert template.source_methodology_template_id == _METHODOLOGY_TEMPLATE_ID
     assert template.source_methodology_template_version == 1
+    assert template.source_role_id == _ROLE_TEMPLATE_ID
+    assert template.source_role_version == 1
+
+
+def test_agent_template_construction_clone_from_role_only() -> None:
+    """D86 role-cloned agent: role pair populated, methodology NULL."""
+    template = _template(
+        source_role_id=_ROLE_TEMPLATE_ID,
+        source_role_version=2,
+    )
+    assert template.source_methodology_template_id is None
+    assert template.source_methodology_template_version is None
+    assert template.source_role_id == _ROLE_TEMPLATE_ID
+    assert template.source_role_version == 2
 
 
 def test_agent_template_is_frozen() -> None:
@@ -80,7 +99,7 @@ def test_agent_template_is_frozen() -> None:
         template.name = "changed"  # type: ignore[misc]
 
 
-def test_agent_template_paired_null_invariant_id_only_raises() -> None:
+def test_agent_template_methodology_paired_null_id_only_raises() -> None:
     with pytest.raises(ValueError, match="paired-NULL invariant"):
         _template(
             source_methodology_template_id=_METHODOLOGY_TEMPLATE_ID,
@@ -88,11 +107,28 @@ def test_agent_template_paired_null_invariant_id_only_raises() -> None:
         )
 
 
-def test_agent_template_paired_null_invariant_version_only_raises() -> None:
+def test_agent_template_methodology_paired_null_version_only_raises() -> None:
     with pytest.raises(ValueError, match="paired-NULL invariant"):
         _template(
             source_methodology_template_id=None,
             source_methodology_template_version=2,
+        )
+
+
+def test_agent_template_role_paired_null_id_only_raises() -> None:
+    """D86 role-lineage paired-NULL invariant, independent of methodology."""
+    with pytest.raises(ValueError, match="role lineage.*paired-NULL"):
+        _template(
+            source_role_id=_ROLE_TEMPLATE_ID,
+            source_role_version=None,
+        )
+
+
+def test_agent_template_role_paired_null_version_only_raises() -> None:
+    with pytest.raises(ValueError, match="role lineage.*paired-NULL"):
+        _template(
+            source_role_id=None,
+            source_role_version=3,
         )
 
 

@@ -396,23 +396,25 @@ async def create_agent_from_methodology(
     source_ids: tuple[UUID, ...],
     actor_user_id: str,
 ) -> tuple[AgentTemplate, AgentRevision]:
-    """Clone a methodology template into a new agent (D79).
+    """Clone a methodology template into a new agent (D79, D86).
 
     The cross-context flow: read the methodology template through the
     consumer-side MethodologyLookup port (apps/cli adapter wraps
-    contexts.methodology.application.get_methodology_template),
-    validate every requested source id exists for the tenant through
-    the SourceLookup port (apps/cli adapter wraps the new ingestion
-    get_source use case), construct an AgentTemplate with paired-
-    populated lineage fields per D75, and construct AgentRevision
-    version 1 with content cloned verbatim from the methodology view
-    except for source_ids (which come from the request, not from the
-    methodology) and name (which comes from the request).
+    contexts.methodology.application.get_methodology_template and
+    get_role_template, joining methodology to its first role_ref per
+    S26a-1 / D86), validate every requested source id exists for the
+    tenant through the SourceLookup port (apps/cli adapter wraps the
+    ingestion get_source use case), construct an AgentTemplate with
+    both lineage pairs populated (methodology + role per D75 / D86),
+    and construct AgentRevision version 1 with content cloned verbatim
+    from the methodology view except for source_ids (which come from
+    the request, not from the methodology) and name (which comes from
+    the request).
 
-    The resolved methodology_version returned by the lookup is what
-    persists in the lineage; the use case never records None even
-    when the caller requests version=None. version=None resolution
-    happens at the adapter, not here.
+    The resolved methodology_version and role_version returned by the
+    lookup are what persists in the lineage; the use case never
+    records None even when the caller requests version=None.
+    version=None resolution happens at the adapter, not here.
 
     Source existence validation runs before AgentTemplate
     construction so a missing-source error doesn't leave the use
@@ -459,6 +461,8 @@ async def create_agent_from_methodology(
         created_at=now,
         source_methodology_template_id=view.methodology_template_id,
         source_methodology_template_version=view.methodology_version,
+        source_role_id=view.role_id,
+        source_role_version=view.role_version,
     )
 
     payload = _content_payload(

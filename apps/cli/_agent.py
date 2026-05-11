@@ -263,6 +263,10 @@ def _render_template_human(
         f"{template.source_methodology_template_id or '(none)'}",
         f"source_methodology_template_version: "
         f"{template.source_methodology_template_version or '(none)'}",
+        f"source_role_id:                      "
+        f"{template.source_role_id or '(none)'}",
+        f"source_role_version:                 "
+        f"{template.source_role_version or '(none)'}",
         f"created_by_user_id:  {template.created_by_user_id}",
         f"created_at:          {template.created_at.isoformat()}",
     ]
@@ -304,6 +308,12 @@ def _render_template_json(
             else None
         ),
         "source_methodology_template_version": template.source_methodology_template_version,
+        "source_role_id": (
+            str(template.source_role_id)
+            if template.source_role_id is not None
+            else None
+        ),
+        "source_role_version": template.source_role_version,
         "created_by_user_id": template.created_by_user_id,
         "created_at": template.created_at.isoformat(),
         "archived_at": (
@@ -700,5 +710,7 @@ def agent_create_from_methodology(
         f"created agent_template_id={template.id} "
         f"revision_id={revision.id} version={revision.version} "
         f"source_methodology_template_id={template.source_methodology_template_id} "
-        f"source_methodology_template_version={template.source_methodology_template_version}\n"
+        f"source_methodology_template_version={template.source_methodology_template_version} "
+        f"source_role_id={template.source_role_id} "
+        f"source_role_version={template.source_role_version}\n"
     )

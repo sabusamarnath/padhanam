@@ -309,6 +309,11 @@ def test_methodology_adapter_resolves_role_and_assembles_view(event_loop) -> Non
     assert isinstance(view, MethodologyView)
     assert view.methodology_template_id == methodology_template_id
     assert view.methodology_version == 1
+    # D86: the adapter records the resolved role's id and version on
+    # the view so create_agent_from_methodology populates both lineage
+    # pairs without a second cross-context hop.
+    assert view.role_id == role_template_id
+    assert view.role_version == 1
     assert view.description == "LVT methodology"
     assert view.system_prompt == "You are an LVT assistant."
     assert view.tool_allowlist == ()

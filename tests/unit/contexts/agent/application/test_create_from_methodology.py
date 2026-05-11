@@ -196,10 +196,17 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
         loop.close()
 
 
-def _lvt_view(*, version: int = 1) -> MethodologyView:
+def _lvt_view(
+    *,
+    version: int = 1,
+    role_id: UUID | None = None,
+    role_version: int = 1,
+) -> MethodologyView:
     return MethodologyView(
         methodology_template_id=uuid4(),
         methodology_version=version,
+        role_id=role_id if role_id is not None else uuid4(),
+        role_version=role_version,
         description="LVT methodology assistant",
         system_prompt="You are an LVT assistant.",
         tool_allowlist=(),
@@ -247,6 +254,10 @@ def test_happy_path_clones_revision_1_with_paired_lineage(event_loop) -> None:
     assert template.description == view.description
     assert template.source_methodology_template_id == view.methodology_template_id
     assert template.source_methodology_template_version == view.methodology_version == 3
+    # D86: methodology-based clone records role lineage from the
+    # methodology's resolved role_refs[0] alongside methodology lineage.
+    assert template.source_role_id == view.role_id
+    assert template.source_role_version == view.role_version
     assert template.archived_at is None
 
     assert revision.version == 1
@@ -518,6 +529,8 @@ def test_byte_equivalent_hash_versus_blank_create(event_loop) -> None:
     view = MethodologyView(
         methodology_template_id=uuid4(),
         methodology_version=1,
+        role_id=uuid4(),
+        role_version=1,
         description=description,
         system_prompt=system_prompt,
         tool_allowlist=tool_allowlist,

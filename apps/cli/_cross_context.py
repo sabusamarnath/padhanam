@@ -106,6 +106,8 @@ class MethodologyLookupAdapter:
         return MethodologyView(
             methodology_template_id=template.id,
             methodology_version=revision.version,
+            role_id=role_revision.role_template_id,
+            role_version=role_revision.version,
             description=template.description,
             system_prompt=role_revision.system_prompt,
             tool_allowlist=role_revision.tool_allowlist,

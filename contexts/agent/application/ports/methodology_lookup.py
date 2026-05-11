@@ -1,26 +1,39 @@
-"""MethodologyLookup Protocol port + MethodologyView DTO (D79).
+"""MethodologyLookup Protocol port + MethodologyView DTO (D79, D86).
 
 The agent context's create-from-methodology flow needs to read a
 methodology template's content at clone time without taking a domain
 dependency on the methodology context (D17). The port is a callable
 Protocol the wiring layer (apps/cli) implements as an adapter over
-``contexts.methodology.application.use_cases.get_methodology_template``;
-the adapter translates the producer's
-(MethodologyTemplate, MethodologyRevision) tuple into the consumer-
-shaped MethodologyView frozen dataclass defined here.
+``contexts.methodology.application.use_cases.get_methodology_template``
+plus ``get_role_template`` (per the S26a-1 / D86 v3 refactor where
+methodology composes roles via role_refs). The adapter translates the
+producer's (MethodologyTemplate, MethodologyRevision, RoleTemplate,
+RoleRevision) tuple into the consumer-shaped MethodologyView frozen
+dataclass defined here.
 
 The DTO carries exactly the fields the create-from-methodology use
-case consumes: the resolved template id and version (recorded in the
-cloned agent's lineage per D75), the description (cloned to the
-agent's envelope), and the seven revision-content fields the cloned
-revision inherits verbatim. The methodology's name is intentionally
-not on the view because the cloned agent gets its own name from the
+case consumes: the resolved methodology template id and version
+(recorded in the cloned agent's methodology lineage per D75); the
+resolved role id and version of the methodology's first role_ref
+(recorded in the cloned agent's role lineage per D86, landing at
+S26a-2); the description (cloned to the agent's envelope); and the
+seven revision-content fields the cloned revision inherits verbatim
+from the resolved role. The methodology's name is intentionally not
+on the view because the cloned agent gets its own name from the
 clone request, not from the methodology.
 
+The view's role_id and role_version come from the methodology
+revision's role_refs[0] in Phase 1 (single-role methodologies per
+D86); multi-role resolution at S26b extends the adapter without
+changing the view's shape because methodology-based cloning records
+exactly one role on the cloned agent. The role-based clone path
+landing at S26a-2 has its own RoleLookup port and RoleView DTO.
+
 The MethodologyView's fields are a subset of the methodology
-revision's columns; the producer-side aggregate exposes additional
-chain-metadata (template_id, version on the revision, timestamps,
-chain pointers) that the consumer has no business reading.
+revision and role revision columns; the producer-side aggregates
+expose additional chain-metadata (template_id, version on the
+revision, timestamps, chain pointers) that the consumer has no
+business reading.
 """
 
 from __future__ import annotations
@@ -46,6 +59,8 @@ class MethodologyView:
 
     methodology_template_id: UUID
     methodology_version: int
+    role_id: UUID
+    role_version: int
     description: str | None
     system_prompt: str
     tool_allowlist: tuple[str, ...]

@@ -63,6 +63,16 @@ agent_templates = sa.Table(
         sa.Integer,
         nullable=True,
     ),
+    sa.Column(
+        "source_role_id",
+        pg.UUID(as_uuid=False),
+        nullable=True,
+    ),
+    sa.Column(
+        "source_role_version",
+        sa.Integer,
+        nullable=True,
+    ),
     sa.Column("created_by_user_id", sa.Text, nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.Column("archived_at", sa.TIMESTAMP(timezone=True), nullable=True),
@@ -150,6 +160,12 @@ class AgentPostgresRepository:
                     source_methodology_template_version=(
                         template.source_methodology_template_version
                     ),
+                    source_role_id=(
+                        str(template.source_role_id)
+                        if template.source_role_id is not None
+                        else None
+                    ),
+                    source_role_version=template.source_role_version,
                     created_by_user_id=template.created_by_user_id,
                     created_at=template.created_at,
                     archived_at=template.archived_at,
@@ -330,17 +346,22 @@ def _revision_insert_values(rev: AgentRevision) -> dict:
 
 
 def _row_to_template(row) -> AgentTemplate:
-    source_id_raw = row["source_methodology_template_id"]
+    methodology_id_raw = row["source_methodology_template_id"]
+    role_id_raw = row["source_role_id"]
     return AgentTemplate(
         id=UUID(row["id"]),
         name=row["name"],
         description=row["description"],
         source_methodology_template_id=(
-            UUID(source_id_raw) if source_id_raw is not None else None
+            UUID(methodology_id_raw) if methodology_id_raw is not None else None
         ),
         source_methodology_template_version=row[
             "source_methodology_template_version"
         ],
+        source_role_id=(
+            UUID(role_id_raw) if role_id_raw is not None else None
+        ),
+        source_role_version=row["source_role_version"],
         created_by_user_id=row["created_by_user_id"],
         created_at=row["created_at"],
         archived_at=row["archived_at"],

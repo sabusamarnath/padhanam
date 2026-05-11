@@ -454,3 +454,44 @@ def test_chains_advance_independently_per_tenant(
     assert template_a.id not in b_ids
     assert template_b.id in b_ids
     assert template_b.id not in a_ids
+
+
+def test_role_lineage_persists_isolated_per_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """D86 role-lineage column survives the cross-tenant boundary
+    cleanly: a tenant-A template with role lineage round-trips through
+    tenant-A's DB without leaking the role pair to tenant-B's reads.
+    Mirrors the methodology lineage isolation guarantee from D75 for
+    the new column landing at S26a-2."""
+    repo, ctx_a, ctx_b, _, _ = isolation_setup
+
+    role_id = uuid4()
+    template = AgentTemplate(
+        id=uuid4(),
+        name="A-role-lineage",
+        description="role-cloned agent",
+        source_role_id=role_id,
+        source_role_version=2,
+        created_by_user_id="alice",
+        created_at=datetime.now(timezone.utc),
+    )
+    revision = _make_revision(template_id=template.id)
+    event_loop.run_until_complete(
+        repo.create_template(template, revision, ctx_a)
+    )
+
+    # Tenant A reads back the populated role pair.
+    fetched_a, _ = event_loop.run_until_complete(
+        repo.get_template(template.id, ctx_a)
+    )
+    assert fetched_a.source_role_id == role_id
+    assert fetched_a.source_role_version == 2
+    assert fetched_a.source_methodology_template_id is None
+    assert fetched_a.source_methodology_template_version is None
+
+    # Tenant B sees no such template.
+    with pytest.raises(LookupError):
+        event_loop.run_until_complete(
+            repo.get_template(template.id, ctx_b)
+        )

@@ -82,6 +82,8 @@ def _make_template(
     description: str | None = "Integration test fixture",
     source_methodology_template_id: UUID | None = None,
     source_methodology_template_version: int | None = None,
+    source_role_id: UUID | None = None,
+    source_role_version: int | None = None,
 ) -> AgentTemplate:
     return AgentTemplate(
         id=uuid4(),
@@ -89,6 +91,8 @@ def _make_template(
         description=description,
         source_methodology_template_id=source_methodology_template_id,
         source_methodology_template_version=source_methodology_template_version,
+        source_role_id=source_role_id,
+        source_role_version=source_role_version,
         created_by_user_id="alice",
         created_at=datetime.now(timezone.utc),
     )
@@ -216,6 +220,8 @@ def test_create_template_persists_template_and_initial_revision_atomically(
     assert fetched_template.name == template.name
     assert fetched_template.source_methodology_template_id is None
     assert fetched_template.source_methodology_template_version is None
+    assert fetched_template.source_role_id is None
+    assert fetched_template.source_role_version is None
     assert fetched_revision.version == 1
     assert fetched_revision.this_revision_hash == revision.this_revision_hash
 
@@ -229,9 +235,12 @@ def test_create_template_persists_template_and_initial_revision_atomically(
 def test_create_template_with_methodology_lineage_populated(event_loop, repo) -> None:
     r, _, ctx = repo
     methodology_id = uuid4()
+    role_id = uuid4()
     template = _make_template(
         source_methodology_template_id=methodology_id,
         source_methodology_template_version=2,
+        source_role_id=role_id,
+        source_role_version=1,
     )
     revision = _make_revision(template_id=template.id, version=1)
     event_loop.run_until_complete(r.create_template(template, revision, ctx))
@@ -239,6 +248,28 @@ def test_create_template_with_methodology_lineage_populated(event_loop, repo) ->
     fetched, _ = event_loop.run_until_complete(r.get_template(template.id, ctx))
     assert fetched.source_methodology_template_id == methodology_id
     assert fetched.source_methodology_template_version == 2
+    assert fetched.source_role_id == role_id
+    assert fetched.source_role_version == 1
+
+
+def test_create_template_with_role_lineage_only_populated(event_loop, repo) -> None:
+    """D86 role-cloned agent: only the role pair is populated; the
+    methodology pair stays NULL. Verifies the repository's round-trip
+    on the third valid lineage state from charter/schema.md."""
+    r, _, ctx = repo
+    role_id = uuid4()
+    template = _make_template(
+        source_role_id=role_id,
+        source_role_version=3,
+    )
+    revision = _make_revision(template_id=template.id, version=1)
+    event_loop.run_until_complete(r.create_template(template, revision, ctx))
+
+    fetched, _ = event_loop.run_until_complete(r.get_template(template.id, ctx))
+    assert fetched.source_methodology_template_id is None
+    assert fetched.source_methodology_template_version is None
+    assert fetched.source_role_id == role_id
+    assert fetched.source_role_version == 3
 
 
 def test_add_revision_increments_version_and_chains_hash(event_loop, repo) -> None:

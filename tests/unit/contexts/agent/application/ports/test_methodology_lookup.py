@@ -30,9 +30,11 @@ from padhanam.security import OPERATOR_ROLE, Principal
 from shared_kernel import TenantId
 
 
-_D79_FIELD_NAMES = {
+_D79_D86_FIELD_NAMES = {
     "methodology_template_id",
     "methodology_version",
+    "role_id",
+    "role_version",
     "description",
     "system_prompt",
     "tool_allowlist",
@@ -49,6 +51,8 @@ def test_methodology_view_is_frozen_dataclass() -> None:
     view = MethodologyView(
         methodology_template_id=uuid4(),
         methodology_version=1,
+        role_id=uuid4(),
+        role_version=1,
         description="x",
         system_prompt="x",
         tool_allowlist=(),
@@ -62,14 +66,15 @@ def test_methodology_view_is_frozen_dataclass() -> None:
         view.top_k = 6  # type: ignore[misc]
 
 
-def test_methodology_view_field_set_matches_d79() -> None:
-    """The DTO carries exactly the fields D79 names: the four metadata
-    fields the consumer needs (template_id, resolved version,
-    description, the seven content fields)."""
+def test_methodology_view_field_set_matches_d79_extended_by_d86() -> None:
+    """The DTO carries the fields D79 names plus D86's role lineage
+    pair (role_id, role_version) so create_agent_from_methodology can
+    populate both lineage pairs from a single cross-context hop."""
     actual = {f.name for f in fields(MethodologyView)}
-    assert actual == _D79_FIELD_NAMES, (
-        f"MethodologyView fields drifted from D79: "
-        f"unexpected={actual - _D79_FIELD_NAMES}, missing={_D79_FIELD_NAMES - actual}"
+    assert actual == _D79_D86_FIELD_NAMES, (
+        f"MethodologyView fields drifted from D79+D86: "
+        f"unexpected={actual - _D79_D86_FIELD_NAMES}, "
+        f"missing={_D79_D86_FIELD_NAMES - actual}"
     )
 
 
@@ -92,6 +97,8 @@ def test_methodology_lookup_is_structurally_satisfiable() -> None:
         return MethodologyView(
             methodology_template_id=template_id,
             methodology_version=version or 1,
+            role_id=uuid4(),
+            role_version=1,
             description=None,
             system_prompt="",
             tool_allowlist=(),
@@ -151,6 +158,8 @@ def test_methodology_view_carries_resolved_version_not_none() -> None:
     view = MethodologyView(
         methodology_template_id=uuid4(),
         methodology_version=3,
+        role_id=uuid4(),
+        role_version=1,
         description=None,
         system_prompt="",
         tool_allowlist=(),
@@ -162,6 +171,7 @@ def test_methodology_view_carries_resolved_version_not_none() -> None:
     )
     assert isinstance(view.methodology_version, int)
     assert view.methodology_version == 3
+    assert isinstance(view.role_version, int)
 
 
 def test_methodology_view_description_can_be_none() -> None:
@@ -172,6 +182,8 @@ def test_methodology_view_description_can_be_none() -> None:
     view = MethodologyView(
         methodology_template_id=uuid4(),
         methodology_version=1,
+        role_id=uuid4(),
+        role_version=1,
         description=None,
         system_prompt="",
         tool_allowlist=(),
