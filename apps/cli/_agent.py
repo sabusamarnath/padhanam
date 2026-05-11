@@ -83,6 +83,7 @@ from contexts.ingestion.adapters.outbound.postgres.source_repository import (
 )
 from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
+    RolePostgresRepository,
 )
 from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
@@ -469,12 +470,22 @@ async def _run_create_from_methodology(
     source_repo = PostgresSourceRepository(session_factory=tenant_sessionmaker)
     source_lookup = SourceLookupAdapter(repository=source_repo)
 
-    # Methodology repository: control-plane Postgres, owns its own
-    # engine via from_settings; dispose at the end of the command.
+    # Methodology and role repositories: control-plane Postgres, each
+    # owns its own engine via from_settings; dispose both at command
+    # exit. S26a-1 per D86: methodology resolution goes through both
+    # repos (methodology revision carries role_refs; adapter resolves
+    # to the role's content bundle for the consumer-side MethodologyView).
+    control_plane_settings = ControlPlaneSettings()
     methodology_repo = MethodologyPostgresRepository.from_settings(
-        settings=ControlPlaneSettings(), security_events=sec
+        settings=control_plane_settings, security_events=sec
     )
-    methodology_lookup = MethodologyLookupAdapter(repository=methodology_repo)
+    role_repo = RolePostgresRepository.from_settings(
+        settings=control_plane_settings, security_events=sec
+    )
+    methodology_lookup = MethodologyLookupAdapter(
+        methodology_repository=methodology_repo,
+        role_repository=role_repo,
+    )
 
     try:
         return await create_agent_from_methodology(
@@ -496,6 +507,7 @@ async def _run_create_from_methodology(
         )
     finally:
         await methodology_repo.dispose()
+        await role_repo.dispose()
         await tenant_engine.dispose()
 
 

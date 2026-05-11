@@ -58,6 +58,7 @@ from uuid import UUID, uuid4
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
+    RoleRef,
 )
 from contexts.methodology.domain.role import RoleRevision, RoleTemplate
 from contexts.methodology.ports import (
@@ -103,43 +104,45 @@ def _deny(
     )
 
 
+def _role_ref_to_canonical(ref: RoleRef) -> dict[str, Any]:
+    """Canonicalise a RoleRef for the methodology hash payload."""
+    return {
+        "role_id": str(ref.role_id),
+        "role_version": ref.role_version,
+        "overrides": (
+            None if ref.overrides is None else dict(ref.overrides)
+        ),
+    }
+
+
 def _content_payload(
     *,
     name: str,
     description: str | None,
-    system_prompt: str,
-    source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
-    retrieval_strategy: Mapping[str, Any],
-    filter_tree: Mapping[str, Any],
-    top_k: int,
-    min_score: Decimal,
-    model_selection: str,
+    role_refs: tuple[RoleRef, ...],
 ) -> dict[str, Any]:
-    """Construct the canonical hash content payload per D74.
+    """Construct the canonical hash content payload per D74 (refactored D86).
 
-    The description's null is normalised to the empty string so the
-    canonical-JSON encoding is identical for ``description=None`` and
-    ``description=""`` (both are absence-of-description and should
-    not produce hash divergence).
+    Post-D86 the methodology revision's content surface is
+    ``role_refs`` rather than the prior constraint bundle. The bundle
+    moved to the role aggregate per ``role.py``; the methodology hash
+    spans (name, description, role_refs) plus ``previous_revision_hash``
+    as the chain-binding key.
 
-    Per D75's field-set-agnostic helper API, list-shaped field
-    sorting is the use case's responsibility (no longer baked into
-    the helper). ``source_ids`` and ``tool_allowlist`` are sorted
-    lexically here so callers cannot accidentally produce hash drift
-    through list-order variation.
+    Per D75's field-set-agnostic helper API, list-sort responsibility
+    is the use case's. ``role_refs`` is sorted by ``role_id`` (lex-
+    string) for canonical determinism; methodology hash chain stays
+    stable across role_refs list-order variation.
+
+    Description's null is normalised to the empty string so the
+    canonical encoding is identical for ``None`` and ``""``.
     """
+    canonical_refs = [_role_ref_to_canonical(r) for r in role_refs]
+    canonical_refs.sort(key=lambda r: r["role_id"])
     return {
         "name": name,
         "description": description or "",
-        "system_prompt": system_prompt,
-        "source_ids": sorted(str(s) for s in source_ids),
-        "tool_allowlist": sorted(str(t) for t in tool_allowlist),
-        "retrieval_strategy": dict(retrieval_strategy),
-        "filter_tree": dict(filter_tree),
-        "top_k": top_k,
-        "min_score": min_score,
-        "model_selection": model_selection,
+        "role_refs": canonical_refs,
     }
 
 
@@ -150,22 +153,23 @@ async def create_methodology_template(
     security_events: SecurityEventLogger,
     name: str,
     description: str | None,
-    system_prompt: str,
-    source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
-    retrieval_strategy: Mapping[str, Any],
-    filter_tree: Mapping[str, Any],
-    top_k: int,
-    min_score: Decimal,
-    model_selection: str,
+    role_refs: tuple[RoleRef, ...],
     actor_user_id: str,
 ) -> tuple[MethodologyTemplate, MethodologyRevision]:
-    """Create a new methodology template with revision 1 (D74).
+    """Create a new methodology template with revision 1 (D74, refactored D86).
 
     Operator-context only. The template's id and the revision's id
     are generated server-side; both timestamps are set to
     ``datetime.now(timezone.utc)``. Revision 1's
     ``previous_revision_hash`` is the genesis sentinel.
+
+    Per D86, the methodology revision references roles via
+    ``role_refs`` rather than carrying the constraint bundle directly.
+    The use case does not validate that each ``role_id`` resolves to
+    an existing role; that validation lives at the CLI / wiring layer
+    where the role repository is available. The hash payload spans
+    ``role_refs`` so the chain detects tampering with the reference
+    set after persistence.
     """
     if not is_operator(principal):
         raise _deny(
@@ -188,14 +192,7 @@ async def create_methodology_template(
     payload = _content_payload(
         name=name,
         description=description,
-        system_prompt=system_prompt,
-        source_ids=source_ids,
-        tool_allowlist=tool_allowlist,
-        retrieval_strategy=retrieval_strategy,
-        filter_tree=filter_tree,
-        top_k=top_k,
-        min_score=min_score,
-        model_selection=model_selection,
+        role_refs=role_refs,
     )
     initial_hash = compute_revision_hash(
         content_payload=payload,
@@ -206,14 +203,7 @@ async def create_methodology_template(
         id=uuid4(),
         methodology_template_id=template_id,
         version=1,
-        system_prompt=system_prompt,
-        source_ids=source_ids,
-        tool_allowlist=tool_allowlist,
-        retrieval_strategy=retrieval_strategy,
-        filter_tree=filter_tree,
-        top_k=top_k,
-        min_score=min_score,
-        model_selection=model_selection,
+        role_refs=role_refs,
         created_by_user_id=actor_user_id,
         created_at=now,
         previous_revision_hash=GENESIS_REVISION_HASH,
@@ -259,22 +249,17 @@ async def update_methodology_template(
     repository: MethodologyRepositoryPort,
     security_events: SecurityEventLogger,
     template_id: UUID,
-    system_prompt: str,
-    source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
-    retrieval_strategy: Mapping[str, Any],
-    filter_tree: Mapping[str, Any],
-    top_k: int,
-    min_score: Decimal,
-    model_selection: str,
+    role_refs: tuple[RoleRef, ...],
     actor_user_id: str,
 ) -> MethodologyRevision:
-    """Add a new revision to an existing template (D74).
+    """Add a new revision to an existing template (D74, refactored D86).
 
     Operator-context only. Pulls the template's name and description
     (immutable per the template aggregate) plus the latest revision
     (for the chain pointer) and constructs the next revision with
-    incremented version and the chained hash.
+    incremented version and the chained hash. Post-D86 the revision-
+    level content is ``role_refs``; the previous bundle fields live
+    on the role aggregate.
     """
     if not is_operator(principal):
         raise _deny(
@@ -289,14 +274,7 @@ async def update_methodology_template(
     payload = _content_payload(
         name=template.name,
         description=template.description,
-        system_prompt=system_prompt,
-        source_ids=source_ids,
-        tool_allowlist=tool_allowlist,
-        retrieval_strategy=retrieval_strategy,
-        filter_tree=filter_tree,
-        top_k=top_k,
-        min_score=min_score,
-        model_selection=model_selection,
+        role_refs=role_refs,
     )
     new_hash = compute_revision_hash(
         content_payload=payload,
@@ -308,14 +286,7 @@ async def update_methodology_template(
         id=uuid4(),
         methodology_template_id=template_id,
         version=latest.version + 1,
-        system_prompt=system_prompt,
-        source_ids=source_ids,
-        tool_allowlist=tool_allowlist,
-        retrieval_strategy=retrieval_strategy,
-        filter_tree=filter_tree,
-        top_k=top_k,
-        min_score=min_score,
-        model_selection=model_selection,
+        role_refs=role_refs,
         created_by_user_id=actor_user_id,
         created_at=now,
         previous_revision_hash=latest.this_revision_hash,

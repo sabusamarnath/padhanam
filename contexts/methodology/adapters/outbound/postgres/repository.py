@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
+    RoleRef,
 )
 from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
@@ -65,14 +66,7 @@ methodology_revisions = sa.Table(
         nullable=False,
     ),
     sa.Column("version", sa.Integer, nullable=False),
-    sa.Column("system_prompt", sa.Text, nullable=False),
-    sa.Column("source_ids", pg.JSONB, nullable=False),
-    sa.Column("tool_allowlist", pg.JSONB, nullable=False),
-    sa.Column("retrieval_strategy", pg.JSONB, nullable=False),
-    sa.Column("filter_tree", pg.JSONB, nullable=False),
-    sa.Column("top_k", sa.Integer, nullable=False),
-    sa.Column("min_score", sa.Numeric, nullable=False),
-    sa.Column("model_selection", sa.Text, nullable=False),
+    sa.Column("role_refs", pg.JSONB, nullable=False),
     sa.Column("created_by_user_id", sa.Text, nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.Column("previous_revision_hash", sa.Text, nullable=False),
@@ -277,14 +271,16 @@ def _revision_insert_values(rev: MethodologyRevision) -> dict:
         "id": str(rev.id),
         "methodology_template_id": str(rev.methodology_template_id),
         "version": rev.version,
-        "system_prompt": rev.system_prompt,
-        "source_ids": [str(s) for s in rev.source_ids],
-        "tool_allowlist": list(rev.tool_allowlist),
-        "retrieval_strategy": dict(rev.retrieval_strategy),
-        "filter_tree": dict(rev.filter_tree),
-        "top_k": rev.top_k,
-        "min_score": rev.min_score,
-        "model_selection": rev.model_selection,
+        "role_refs": [
+            {
+                "role_id": str(r.role_id),
+                "role_version": r.role_version,
+                "overrides": (
+                    None if r.overrides is None else dict(r.overrides)
+                ),
+            }
+            for r in rev.role_refs
+        ],
         "created_by_user_id": rev.created_by_user_id,
         "created_at": rev.created_at,
         "previous_revision_hash": rev.previous_revision_hash,
@@ -308,14 +304,14 @@ def _row_to_revision(row) -> MethodologyRevision:
         id=UUID(row["id"]),
         methodology_template_id=UUID(row["methodology_template_id"]),
         version=row["version"],
-        system_prompt=row["system_prompt"],
-        source_ids=tuple(UUID(s) for s in row["source_ids"]),
-        tool_allowlist=tuple(row["tool_allowlist"]),
-        retrieval_strategy=row["retrieval_strategy"],
-        filter_tree=row["filter_tree"],
-        top_k=row["top_k"],
-        min_score=row["min_score"],
-        model_selection=row["model_selection"],
+        role_refs=tuple(
+            RoleRef(
+                role_id=UUID(r["role_id"]),
+                role_version=r["role_version"],
+                overrides=r.get("overrides"),
+            )
+            for r in row["role_refs"]
+        ),
         created_by_user_id=row["created_by_user_id"],
         created_at=row["created_at"],
         previous_revision_hash=row["previous_revision_hash"],

@@ -1,39 +1,35 @@
-"""Methodology CLI orchestration (S23 / D74).
+"""Methodology CLI orchestration (S23 / D74, S26a-1 / D86 refactor).
 
 Five subcommands at the ``padhanam methodology`` namespace: ``create``,
 ``get``, ``list``, ``update``, ``retire``. Operator-context resolution
 at the command boundary mirrors the P5 dev-shape pattern; production
 CLI auth lands at Phase 2.
 
+S26a-1 refactor per D86: the methodology aggregate becomes a playbook
+composing roles via ``role_refs`` rather than carrying the constraint
+bundle directly. The bundle moves to the role aggregate; the CLI's
+methodology surface now operates on ``role_refs`` references rather
+than the prior nine bundle fields. Methodology authoring at S26a-1
+is followed by a new ``padhanam role`` CLI namespace at S26a-2 for
+role authoring.
+
 Config file shape (YAML or JSON, auto-detected by extension):
 
-  create — full template + revision-1 payload:
+  create — methodology template + revision-1 payload:
     name: str
     description: str | null
-    system_prompt: str
-    source_ids: list[uuid-string]
-    tool_allowlist: list[str]
-    retrieval_strategy: dict (D66 strategy-name-plus-params shape)
-    filter_tree: dict (D67 typed Boolean tree)
-    top_k: int
-    min_score: number (parsed as Decimal at the use case boundary)
-    model_selection: str
+    role_refs:
+      - role_id: <uuid string>
+        role_version: int
+        overrides: optional dict (Phase 1 ignored; reserved for D86 Phase 2)
 
-  update — revision content only (name and description immutable per
-  D74's structural-honesty interpretation at S23):
-    system_prompt, source_ids, tool_allowlist, retrieval_strategy,
-    filter_tree, top_k, min_score, model_selection.
+  update — revision content only (name and description immutable):
+    role_refs: same shape as create
 
-The CLI parses the config, validates required fields, converts list
-shapes to tuples (frozen-dataclass-friendly) and ``min_score`` to
-``Decimal`` (via ``str(value)`` to avoid float→Decimal precision
-loss), then invokes the use case. Output is human-readable by
-default; ``--json`` produces machine-readable shapes.
-
-Async lifecycle: each command builds a fresh repository (control-
-plane Postgres engine + session factory + security event logger),
-runs the use case via ``asyncio.run``, disposes the engine in
-``finally``.
+The CLI parses the config, validates required fields, converts the
+``role_refs`` list into a tuple of ``RoleRef`` frozen dataclasses,
+then invokes the use case. Output is human-readable by default;
+``--json`` produces machine-readable shapes.
 """
 
 from __future__ import annotations
@@ -41,7 +37,6 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Optional
 from uuid import UUID
@@ -53,6 +48,7 @@ from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
 )
 from contexts.methodology.application import (
+    RoleRef,
     create_methodology_template,
     get_methodology_template,
     list_methodology_templates,
@@ -74,37 +70,13 @@ from apps.cli._runtime import build_operator_principal
 
 methodology_app = typer.Typer(
     name="methodology",
-    help="Methodology template authoring (S23 / D74).",
+    help="Methodology template authoring (S23 / D74; refactored at S26a-1 per D86).",
     no_args_is_help=True,
 )
 
 
-# ---------------------------------------------------------------------
-# Config-file parsing
-# ---------------------------------------------------------------------
-
-
-_CREATE_REQUIRED_FIELDS = (
-    "name",
-    "system_prompt",
-    "source_ids",
-    "tool_allowlist",
-    "retrieval_strategy",
-    "filter_tree",
-    "top_k",
-    "min_score",
-    "model_selection",
-)
-_UPDATE_REQUIRED_FIELDS = (
-    "system_prompt",
-    "source_ids",
-    "tool_allowlist",
-    "retrieval_strategy",
-    "filter_tree",
-    "top_k",
-    "min_score",
-    "model_selection",
-)
+_CREATE_REQUIRED_FIELDS = ("name", "role_refs")
+_UPDATE_REQUIRED_FIELDS = ("role_refs",)
 
 
 def _load_config(path: Path) -> dict[str, Any]:
@@ -127,28 +99,31 @@ def _validate_required(config: dict[str, Any], required: tuple[str, ...]) -> Non
         raise typer.BadParameter(f"config missing required fields: {missing}")
 
 
-def _to_uuid_tuple(values: list[Any] | None) -> tuple[UUID, ...]:
+def _to_role_refs(values: list[Any] | None) -> tuple[RoleRef, ...]:
     if not values:
-        return ()
-    return tuple(UUID(str(v)) for v in values)
-
-
-def _to_str_tuple(values: list[Any] | None) -> tuple[str, ...]:
-    if not values:
-        return ()
-    return tuple(str(v) for v in values)
-
-
-def _to_decimal(value: Any) -> Decimal:
-    """Parse a numeric value into Decimal without float-precision loss.
-
-    YAML and JSON return floats by default for non-integer numerics;
-    converting via ``str(value)`` preserves the lexical form the user
-    wrote (``0.7`` round-trips as ``Decimal("0.7")`` rather than
-    ``Decimal("0.6999999999999999...")``). Integer numerics are
-    preserved exactly.
-    """
-    return Decimal(str(value))
+        raise typer.BadParameter(
+            "role_refs cannot be empty; the methodology must compose at "
+            "least one role per D86"
+        )
+    refs: list[RoleRef] = []
+    for entry in values:
+        if not isinstance(entry, dict):
+            raise typer.BadParameter(
+                f"each role_refs entry must be an object with role_id and "
+                f"role_version keys; got {entry!r}"
+            )
+        if "role_id" not in entry or "role_version" not in entry:
+            raise typer.BadParameter(
+                f"role_refs entry missing role_id or role_version: {entry!r}"
+            )
+        refs.append(
+            RoleRef(
+                role_id=UUID(str(entry["role_id"])),
+                role_version=int(entry["role_version"]),
+                overrides=entry.get("overrides"),
+            )
+        )
+    return tuple(refs)
 
 
 # ---------------------------------------------------------------------
@@ -192,14 +167,17 @@ def _render_template_human(
                 f"## Revision {revision.version}",
                 "",
                 f"id:                       {revision.id}",
-                f"system_prompt:            {revision.system_prompt}",
-                f"source_ids:               {[str(s) for s in revision.source_ids]}",
-                f"tool_allowlist:           {list(revision.tool_allowlist)}",
-                f"retrieval_strategy:       {dict(revision.retrieval_strategy)}",
-                f"filter_tree:              {dict(revision.filter_tree)}",
-                f"top_k:                    {revision.top_k}",
-                f"min_score:                {revision.min_score}",
-                f"model_selection:          {revision.model_selection}",
+                f"role_refs:",
+            ]
+        )
+        for ref in revision.role_refs:
+            lines.append(
+                f"  - role_id={ref.role_id} "
+                f"role_version={ref.role_version} "
+                f"overrides={ref.overrides if ref.overrides is not None else '(none)'}"
+            )
+        lines.extend(
+            [
                 f"previous_revision_hash:   {revision.previous_revision_hash}",
                 f"this_revision_hash:       {revision.this_revision_hash}",
             ]
@@ -225,14 +203,16 @@ def _render_template_json(
         payload["revision"] = {
             "id": str(revision.id),
             "version": revision.version,
-            "system_prompt": revision.system_prompt,
-            "source_ids": [str(s) for s in revision.source_ids],
-            "tool_allowlist": list(revision.tool_allowlist),
-            "retrieval_strategy": dict(revision.retrieval_strategy),
-            "filter_tree": dict(revision.filter_tree),
-            "top_k": revision.top_k,
-            "min_score": str(revision.min_score),
-            "model_selection": revision.model_selection,
+            "role_refs": [
+                {
+                    "role_id": str(r.role_id),
+                    "role_version": r.role_version,
+                    "overrides": (
+                        None if r.overrides is None else dict(r.overrides)
+                    ),
+                }
+                for r in revision.role_refs
+            ],
             "created_by_user_id": revision.created_by_user_id,
             "created_at": revision.created_at.isoformat(),
             "previous_revision_hash": revision.previous_revision_hash,
@@ -257,14 +237,7 @@ async def _run_create(config_path: Path) -> tuple[MethodologyTemplate, Methodolo
             security_events=sec,
             name=config["name"],
             description=config.get("description"),
-            system_prompt=config["system_prompt"],
-            source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
-            retrieval_strategy=config["retrieval_strategy"],
-            filter_tree=config["filter_tree"],
-            top_k=int(config["top_k"]),
-            min_score=_to_decimal(config["min_score"]),
-            model_selection=config["model_selection"],
+            role_refs=_to_role_refs(config["role_refs"]),
             actor_user_id="cli-operator",
         )
     finally:
@@ -307,14 +280,7 @@ async def _run_update(template_id: UUID, config_path: Path) -> MethodologyRevisi
             repository=repo,
             security_events=sec,
             template_id=template_id,
-            system_prompt=config["system_prompt"],
-            source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
-            retrieval_strategy=config["retrieval_strategy"],
-            filter_tree=config["filter_tree"],
-            top_k=int(config["top_k"]),
-            min_score=_to_decimal(config["min_score"]),
-            model_selection=config["model_selection"],
+            role_refs=_to_role_refs(config["role_refs"]),
             actor_user_id="cli-operator",
         )
     finally:

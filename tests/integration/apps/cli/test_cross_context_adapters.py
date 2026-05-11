@@ -1,18 +1,20 @@
-"""Integration tests for the apps/cli cross-context adapters (S25 / D79).
+"""Integration tests for the apps/cli cross-context adapters (S25 / D79, refactored S26a-1 / D86).
 
 Exercises MethodologyLookupAdapter and SourceLookupAdapter through
 the real producer-side application use cases
-(``get_methodology_template`` from methodology;
+(``get_methodology_template`` + ``get_role_template`` from methodology;
 ``get_source`` from ingestion) against in-memory fake repositories.
-The integration scope here is "adapter + real producer use case +
+The integration scope here is "adapter + real producer use cases +
 in-memory repo" — the database layer is tested by the methodology
 and ingestion adapter integration suites; the e2e against the full
 live stack lands at commit 10.
 
-Six tests covering the brief's named scope: methodology adapter
-translation, version=None passthrough, principal threading, source
-adapter happy path, source adapter missing-source error path, and
-source adapter tenant-context routing.
+S26a-1 refactor per D86: the MethodologyLookupAdapter now resolves
+``role_refs`` via the role repository at lookup time and populates the
+consumer-side MethodologyView with the resolved role's content bundle.
+The tests below construct both a methodology revision (carrying a
+role_ref) and a role revision (carrying the bundle); the adapter
+joins the two at __call__ time.
 """
 
 from __future__ import annotations
@@ -38,7 +40,9 @@ from contexts.ingestion.domain.state import SourceState
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
+    RoleRef,
 )
+from contexts.methodology.domain.role import RoleRevision, RoleTemplate
 from padhanam.security import OPERATOR_ROLE, Principal
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from shared_kernel import TenantContext, TenantId
@@ -64,7 +68,7 @@ def _tenant_context() -> TenantContext:
     )
 
 
-def _make_template(*, template_id: UUID, description: str | None) -> MethodologyTemplate:
+def _make_methodology_template(*, template_id: UUID, description: str | None) -> MethodologyTemplate:
     return MethodologyTemplate(
         id=template_id,
         name="LVT",
@@ -74,15 +78,46 @@ def _make_template(*, template_id: UUID, description: str | None) -> Methodology
     )
 
 
-def _make_revision(
+def _make_methodology_revision(
     *,
     template_id: UUID,
     version: int,
-    top_k: int = 8,
+    role_id: UUID,
+    role_version: int = 1,
 ) -> MethodologyRevision:
     return MethodologyRevision(
         id=uuid4(),
         methodology_template_id=template_id,
+        version=version,
+        role_refs=(
+            RoleRef(role_id=role_id, role_version=role_version, overrides=None),
+        ),
+        created_by_user_id="cli-operator",
+        created_at=datetime.now(timezone.utc),
+        previous_revision_hash=GENESIS_REVISION_HASH,
+        this_revision_hash="a" * 64,
+    )
+
+
+def _make_role_template(*, template_id: UUID) -> RoleTemplate:
+    return RoleTemplate(
+        id=template_id,
+        name="LVTGuide",
+        description="LVT guide role",
+        created_by_user_id="cli-operator",
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _make_role_revision(
+    *,
+    template_id: UUID,
+    version: int = 1,
+    top_k: int = 8,
+) -> RoleRevision:
+    return RoleRevision(
+        id=uuid4(),
+        role_template_id=template_id,
         version=version,
         system_prompt="You are an LVT assistant.",
         source_ids=(),
@@ -95,19 +130,11 @@ def _make_revision(
         created_by_user_id="cli-operator",
         created_at=datetime.now(timezone.utc),
         previous_revision_hash=GENESIS_REVISION_HASH,
-        this_revision_hash="a" * 64,
+        this_revision_hash="b" * 64,
     )
 
 
 class _FakeMethodologyRepository:
-    """In-memory MethodologyRepositoryPort fake.
-
-    Exposes get_template returning a template plus the named or
-    latest revision; the methodology use case ``get_methodology_template``
-    calls through this directly so the real use case logic is
-    exercised end-to-end.
-    """
-
     def __init__(self) -> None:
         self.templates: dict[UUID, MethodologyTemplate] = {}
         self.revisions: dict[UUID, list[MethodologyRevision]] = {}
@@ -131,8 +158,41 @@ class _FakeMethodologyRepository:
             f"methodology template {template_id} version {version} not found"
         )
 
-    # Methods unused by the lookup but present so the type-checker is
-    # satisfied if a future test reuses this fake.
+    async def create_template(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("lookup adapter never writes")
+
+    async def list_templates(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("lookup adapter never lists")
+
+    async def add_revision(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("lookup adapter never adds revisions")
+
+    async def archive_template(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("lookup adapter never archives")
+
+
+class _FakeRoleRepository:
+    def __init__(self) -> None:
+        self.templates: dict[UUID, RoleTemplate] = {}
+        self.revisions: dict[UUID, list[RoleRevision]] = {}
+        self.calls: list[tuple[str, dict]] = []
+
+    async def get_template(
+        self,
+        template_id: UUID,
+        version: int | None = None,
+    ) -> tuple[RoleTemplate, RoleRevision]:
+        self.calls.append(("get_template", {"template_id": template_id, "version": version}))
+        if template_id not in self.templates:
+            raise LookupError(f"role template {template_id} not found")
+        revs = self.revisions[template_id]
+        if version is None:
+            return self.templates[template_id], revs[-1]
+        for r in revs:
+            if r.version == version:
+                return self.templates[template_id], r
+        raise LookupError(f"role template {template_id} version {version} not found")
+
     async def create_template(self, *args, **kwargs):  # pragma: no cover
         raise AssertionError("lookup adapter never writes")
 
@@ -147,14 +207,6 @@ class _FakeMethodologyRepository:
 
 
 class _FakeSourceRepository:
-    """In-memory SourceRepositoryPort fake.
-
-    Implements only the methods get_source touches; the adapter's
-    per-id call sequence reaches into this through the real
-    ``contexts.ingestion.application.get_source`` use case so the
-    None-to-LookupError upgrade is exercised end-to-end.
-    """
-
     def __init__(self, sources: list[Source] | None = None) -> None:
         self._sources = sources or []
         self.calls: list[tuple[UUID, str]] = []
@@ -194,37 +246,68 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
         loop.close()
 
 
-# ---------------------------------------------------------------------
-# MethodologyLookupAdapter
-# ---------------------------------------------------------------------
-
-
-def test_methodology_adapter_translates_template_and_revision_to_view(
-    event_loop,
-) -> None:
-    """Happy path: the adapter receives the (Template, Revision)
-    tuple from get_methodology_template and assembles a
-    MethodologyView with the consumer-shaped field set."""
-    repo = _FakeMethodologyRepository()
-    template_id = uuid4()
-    repo.templates[template_id] = _make_template(
-        template_id=template_id, description="LVT methodology"
+def _wire_lookup_repos(
+    *,
+    methodology_template_id: UUID,
+    methodology_versions: list[int],
+    role_template_id: UUID,
+    role_top_k: int = 8,
+    methodology_description: str | None = "LVT methodology",
+) -> tuple[_FakeMethodologyRepository, _FakeRoleRepository]:
+    methodology_repo = _FakeMethodologyRepository()
+    methodology_repo.templates[methodology_template_id] = _make_methodology_template(
+        template_id=methodology_template_id, description=methodology_description
     )
-    repo.revisions[template_id] = [
-        _make_revision(template_id=template_id, version=1, top_k=8)
+    methodology_repo.revisions[methodology_template_id] = [
+        _make_methodology_revision(
+            template_id=methodology_template_id,
+            version=v,
+            role_id=role_template_id,
+        )
+        for v in methodology_versions
     ]
-    adapter = MethodologyLookupAdapter(repository=repo)
+
+    role_repo = _FakeRoleRepository()
+    role_repo.templates[role_template_id] = _make_role_template(
+        template_id=role_template_id
+    )
+    role_repo.revisions[role_template_id] = [
+        _make_role_revision(template_id=role_template_id, version=1, top_k=role_top_k)
+    ]
+    return methodology_repo, role_repo
+
+
+# ---------------------------------------------------------------------
+# MethodologyLookupAdapter (resolves methodology + role per D86)
+# ---------------------------------------------------------------------
+
+
+def test_methodology_adapter_resolves_role_and_assembles_view(event_loop) -> None:
+    """Happy path: the adapter joins methodology revision + role revision
+    via role_refs[0] and populates MethodologyView with the role's bundle."""
+    methodology_template_id = uuid4()
+    role_template_id = uuid4()
+    methodology_repo, role_repo = _wire_lookup_repos(
+        methodology_template_id=methodology_template_id,
+        methodology_versions=[1],
+        role_template_id=role_template_id,
+        role_top_k=8,
+    )
+    adapter = MethodologyLookupAdapter(
+        methodology_repository=methodology_repo,
+        role_repository=role_repo,
+    )
 
     view = event_loop.run_until_complete(
         adapter(
-            template_id=template_id,
+            template_id=methodology_template_id,
             version=1,
             principal=_operator_principal(),
         )
     )
 
     assert isinstance(view, MethodologyView)
-    assert view.methodology_template_id == template_id
+    assert view.methodology_template_id == methodology_template_id
     assert view.methodology_version == 1
     assert view.description == "LVT methodology"
     assert view.system_prompt == "You are an LVT assistant."
@@ -235,81 +318,116 @@ def test_methodology_adapter_translates_template_and_revision_to_view(
     assert view.min_score == Decimal("0.3")
     assert view.model_selection == "qwen2.5:7b"
 
+    # Adapter called both repositories.
+    assert any(c[0] == "get_template" for c in methodology_repo.calls)
+    assert any(c[0] == "get_template" for c in role_repo.calls)
+
 
 def test_methodology_adapter_resolves_version_none_to_latest(event_loop) -> None:
-    """version=None passes through to the underlying repository which
-    returns the latest revision; the adapter records the resolved
-    integer in the returned view's methodology_version so the
-    consumer never sees None."""
-    repo = _FakeMethodologyRepository()
-    template_id = uuid4()
-    repo.templates[template_id] = _make_template(
-        template_id=template_id, description=None
+    """version=None passes through; the adapter records the resolved
+    integer in methodology_version so the consumer never sees None."""
+    methodology_template_id = uuid4()
+    role_template_id = uuid4()
+    methodology_repo, role_repo = _wire_lookup_repos(
+        methodology_template_id=methodology_template_id,
+        methodology_versions=[1, 2, 3],
+        role_template_id=role_template_id,
+        role_top_k=12,
     )
-    repo.revisions[template_id] = [
-        _make_revision(template_id=template_id, version=1, top_k=5),
-        _make_revision(template_id=template_id, version=2, top_k=7),
-        _make_revision(template_id=template_id, version=3, top_k=12),
-    ]
-    adapter = MethodologyLookupAdapter(repository=repo)
+    adapter = MethodologyLookupAdapter(
+        methodology_repository=methodology_repo,
+        role_repository=role_repo,
+    )
 
     view = event_loop.run_until_complete(
         adapter(
-            template_id=template_id,
+            template_id=methodology_template_id,
             version=None,
             principal=_operator_principal(),
         )
     )
 
     assert view.methodology_version == 3
-    assert view.top_k == 12  # latest revision's content
-    # Adapter forwarded version=None to repository.
-    assert repo.calls[0] == ("get_template", {"template_id": template_id, "version": None})
+    assert view.top_k == 12  # role's content surfaces through the view
+    assert methodology_repo.calls[0] == (
+        "get_template",
+        {"template_id": methodology_template_id, "version": None},
+    )
 
 
 def test_methodology_adapter_threads_principal_to_use_case(event_loop) -> None:
-    """The adapter passes the consumer's principal through to
-    get_methodology_template. The fake repository doesn't see the
-    principal (use case doesn't pass it to the repo for methodology
-    reads per D74), but the adapter's call into the use case has the
-    principal as a named kwarg so any future use case logic
-    referencing it works.
-
-    This test asserts that no exception is raised when a real
-    Principal flows through; the structural-typing satisfaction is
-    the load-bearing assertion."""
-    repo = _FakeMethodologyRepository()
-    template_id = uuid4()
-    repo.templates[template_id] = _make_template(
-        template_id=template_id, description=None
+    """The adapter passes the consumer's principal through to both
+    get_methodology_template and get_role_template. Structural-typing
+    satisfaction is the load-bearing assertion."""
+    methodology_template_id = uuid4()
+    role_template_id = uuid4()
+    methodology_repo, role_repo = _wire_lookup_repos(
+        methodology_template_id=methodology_template_id,
+        methodology_versions=[1],
+        role_template_id=role_template_id,
     )
-    repo.revisions[template_id] = [
-        _make_revision(template_id=template_id, version=1)
-    ]
-    adapter = MethodologyLookupAdapter(repository=repo)
+    adapter = MethodologyLookupAdapter(
+        methodology_repository=methodology_repo,
+        role_repository=role_repo,
+    )
     principal = _operator_principal()
 
     view = event_loop.run_until_complete(
         adapter(
-            template_id=template_id,
+            template_id=methodology_template_id,
             version=1,
             principal=principal,
         )
     )
 
-    assert view.methodology_template_id == template_id
+    assert view.methodology_template_id == methodology_template_id
+
+
+def test_methodology_adapter_raises_when_role_refs_empty(event_loop) -> None:
+    """The adapter must reject methodology revisions with empty
+    role_refs because the resolution target is undefined."""
+    methodology_template_id = uuid4()
+    role_template_id = uuid4()
+    methodology_repo = _FakeMethodologyRepository()
+    methodology_repo.templates[methodology_template_id] = _make_methodology_template(
+        template_id=methodology_template_id, description="empty role_refs"
+    )
+    methodology_repo.revisions[methodology_template_id] = [
+        MethodologyRevision(
+            id=uuid4(),
+            methodology_template_id=methodology_template_id,
+            version=1,
+            role_refs=(),
+            created_by_user_id="cli-operator",
+            created_at=datetime.now(timezone.utc),
+            previous_revision_hash=GENESIS_REVISION_HASH,
+            this_revision_hash="c" * 64,
+        )
+    ]
+    role_repo = _FakeRoleRepository()
+    adapter = MethodologyLookupAdapter(
+        methodology_repository=methodology_repo,
+        role_repository=role_repo,
+    )
+
+    with pytest.raises(LookupError):
+        event_loop.run_until_complete(
+            adapter(
+                template_id=methodology_template_id,
+                version=1,
+                principal=_operator_principal(),
+            )
+        )
 
 
 # ---------------------------------------------------------------------
-# SourceLookupAdapter
+# SourceLookupAdapter (unchanged at S26a-1)
 # ---------------------------------------------------------------------
 
 
 def test_source_adapter_returns_silently_when_all_sources_exist(
     event_loop,
 ) -> None:
-    """Happy path: every requested source resolves; assert_sources_exist
-    completes without raising."""
     a = uuid4()
     b = uuid4()
     c = uuid4()
@@ -330,7 +448,6 @@ def test_source_adapter_returns_silently_when_all_sources_exist(
         )
     )
 
-    # Adapter called the repo per id with the routed tenant.
     assert {sid for sid, _ in repo.calls} == {a, b, c}
     assert {tenant for _, tenant in repo.calls} == {_TENANT_A_UUID}
 
@@ -338,8 +455,6 @@ def test_source_adapter_returns_silently_when_all_sources_exist(
 def test_source_adapter_raises_source_not_found_with_offending_ids(
     event_loop,
 ) -> None:
-    """Missing-source path: the adapter accumulates offending ids
-    and surfaces a single SourceNotFoundError with all of them."""
     a = uuid4()
     b_missing = uuid4()
     c = uuid4()
@@ -365,10 +480,6 @@ def test_source_adapter_raises_source_not_found_with_offending_ids(
 
 
 def test_source_adapter_treats_cross_tenant_source_as_missing(event_loop) -> None:
-    """Tenant-context routing: a source that exists for tenant B is
-    treated as missing for tenant A. D24 tenant isolation makes
-    cross-tenant access structurally indistinguishable from missing-
-    id, which is the documented expectation in source_lookup.py."""
     sid = uuid4()
     other_tenant = "00000000-0000-4000-8000-00000000b002"
     repo = _FakeSourceRepository(
@@ -386,6 +497,4 @@ def test_source_adapter_treats_cross_tenant_source_as_missing(event_loop) -> Non
         )
 
     assert exc_info.value.missing_source_ids == (sid,)
-    # Adapter called the repo with tenant_a (the routed tenant), not
-    # the source's actual tenant.
     assert repo.calls == [(sid, _TENANT_A_UUID)]

@@ -322,6 +322,17 @@ def clean_state(compose_running):  # noqa: ARG001
     _truncate_methodology()
 
 
+@pytest.mark.skip(
+    reason=(
+        "S26a-1 (D86) refactored methodology to role_refs; methodology CLI "
+        "no longer accepts the constraint bundle directly. Restoring this "
+        "full clone-and-edit e2e against the new shape requires the "
+        "`padhanam role` CLI namespace (S26a-2) so an operator can author "
+        "a role via CLI before authoring the methodology that references it. "
+        "S26a-1 commit 4 lands a focused LVT round-trip e2e that exercises "
+        "the methodology→role resolution end-to-end via the agent flow."
+    )
+)
 def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> None:  # noqa: ARG001
     """End-to-end exercise: methodology create → sources ingest →
     sources drain to indexed → clone agent → assert lineage and

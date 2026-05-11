@@ -10,8 +10,10 @@ from contexts.methodology.application.use_cases import (
     update_methodology_template,
     update_role_template,
 )
+from contexts.methodology.domain.methodology import RoleRef
 
 __all__ = [
+    "RoleRef",
     "create_methodology_template",
     "create_role_template",
     "get_methodology_template",

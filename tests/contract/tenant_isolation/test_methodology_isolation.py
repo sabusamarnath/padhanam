@@ -15,8 +15,6 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Iterator
-from datetime import datetime, timezone
-from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -28,6 +26,7 @@ from contexts.methodology.adapters.outbound.postgres import (
     methodology_templates,
 )
 from contexts.methodology.application import (
+    RoleRef,
     create_methodology_template,
     get_methodology_template,
     list_methodology_templates,
@@ -93,14 +92,9 @@ def _create_kwargs(name: str = "PlatformMethodology", **overrides) -> dict:
     defaults = {
         "name": name,
         "description": "Platform-managed test methodology",
-        "system_prompt": "You are a careful analyst.",
-        "source_ids": (),
-        "tool_allowlist": (),
-        "retrieval_strategy": {"strategy": "vector_only", "params": {}},
-        "filter_tree": {"node": {}},
-        "top_k": 5,
-        "min_score": Decimal("0.7"),
-        "model_selection": "qwen2.5:7b",
+        "role_refs": (
+            RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+        ),
         "actor_user_id": "operator",
     }
     defaults.update(overrides)
@@ -252,14 +246,9 @@ def test_tenant_a_cannot_update_methodology_template(
                 repository=repo,
                 security_events=sec,
                 template_id=template.id,
-                system_prompt="tenant tries to update",
-                source_ids=(),
-                tool_allowlist=(),
-                retrieval_strategy={"strategy": "vector_only", "params": {}},
-                filter_tree={"node": {}},
-                top_k=5,
-                min_score=Decimal("0.85"),
-                model_selection="qwen2.5:7b",
+                role_refs=(
+                    RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+                ),
                 actor_user_id="alice",
             )
         )
@@ -326,14 +315,9 @@ def test_operator_can_create_update_and_retire_methodology_template(
             repository=repo,
             security_events=sec,
             template_id=template.id,
-            system_prompt="updated prompt",
-            source_ids=(),
-            tool_allowlist=(),
-            retrieval_strategy={"strategy": "vector_only", "params": {}},
-            filter_tree={"node": {}},
-            top_k=5,
-            min_score=Decimal("0.85"),
-            model_selection="qwen2.5:7b",
+            role_refs=(
+                RoleRef(role_id=uuid4(), role_version=2, overrides=None),
+            ),
             actor_user_id="operator",
         )
     )

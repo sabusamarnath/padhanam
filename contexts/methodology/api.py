@@ -26,6 +26,7 @@ inverse of agent isolation per the P7 epic note).
 from __future__ import annotations
 
 from contexts.methodology.application import (
+    RoleRef,
     create_methodology_template,
     create_role_template,
     get_methodology_template,
@@ -39,6 +40,7 @@ from contexts.methodology.application import (
 )
 
 __all__ = [
+    "RoleRef",
     "create_methodology_template",
     "create_role_template",
     "get_methodology_template",

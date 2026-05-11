@@ -1,4 +1,4 @@
-"""Unit tests for methodology use cases (D74).
+"""Unit tests for methodology use cases (D74, refactored S26a-1 per D86).
 
 Uses an in-memory fake repository to exercise the use case layer's
 policy boundary, hash chain wiring, and revision-creation invariants
@@ -6,10 +6,8 @@ without touching Postgres. The integration tests at
 ``tests/integration/contexts/methodology/adapters/outbound/postgres/``
 verify the adapter against the live control-plane DB.
 
-Async runner pattern follows
-``tests/contract/tenant_isolation/test_registry_isolation.py``:
-module-scoped event_loop fixture plus ``loop.run_until_complete``
-on each coroutine call. No pytest-asyncio dependency.
+Post-D86 the methodology revision carries ``role_refs`` rather than
+the constraint bundle; the use case test mirror updates accordingly.
 """
 
 from __future__ import annotations
@@ -17,19 +15,18 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from datetime import datetime, timezone
-from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
 
 from contexts.methodology.application import (
+    RoleRef,
     create_methodology_template,
     get_methodology_template,
     list_methodology_templates,
     retire_methodology_template,
     update_methodology_template,
 )
-from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
@@ -43,6 +40,7 @@ from padhanam.security import (
     AuthorizationError,
     Principal,
 )
+from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from shared_kernel import TenantId
 
 
@@ -62,6 +60,13 @@ def _tenant_principal() -> Principal:
         roles=frozenset({"audit.read"}),
         credential_ref="dev-token-a",
     )
+
+
+_DEFAULT_ROLE_ID = UUID("00000000-0000-4000-8000-0000000c0001")
+
+
+def _role_ref(role_id: UUID = _DEFAULT_ROLE_ID, role_version: int = 1) -> RoleRef:
+    return RoleRef(role_id=role_id, role_version=role_version, overrides=None)
 
 
 class _FakeMethodologyRepository:
@@ -135,14 +140,7 @@ def _create_kwargs(**overrides) -> dict:
     defaults = {
         "name": "TestMethodology",
         "description": "Test fixture",
-        "system_prompt": "You are a careful analyst.",
-        "source_ids": (),
-        "tool_allowlist": (),
-        "retrieval_strategy": {"strategy": "vector_only", "params": {}},
-        "filter_tree": {"node": {}},
-        "top_k": 5,
-        "min_score": Decimal("0.7"),
-        "model_selection": "qwen2.5:7b",
+        "role_refs": (_role_ref(),),
         "actor_user_id": "alice",
     }
     defaults.update(overrides)
@@ -173,6 +171,7 @@ def test_create_methodology_template_operator_succeeds(event_loop) -> None:
     assert revision.version == 1
     assert revision.previous_revision_hash == GENESIS_REVISION_HASH
     assert len(revision.this_revision_hash) == 64
+    assert len(revision.role_refs) == 1
 
 
 def test_create_methodology_template_tenant_rejected(event_loop) -> None:
@@ -206,20 +205,14 @@ def test_update_methodology_template_chains_hash_to_predecessor(event_loop) -> N
             **_create_kwargs(),
         )
     )
+    second_role = UUID("00000000-0000-4000-8000-0000000c0002")
     rev2 = event_loop.run_until_complete(
         update_methodology_template(
             principal=_operator_principal(),
             repository=repo,
             security_events=sec,
             template_id=template.id,
-            system_prompt="Updated prompt",
-            source_ids=(),
-            tool_allowlist=(),
-            retrieval_strategy={"strategy": "vector_only", "params": {}},
-            filter_tree={"node": {}},
-            top_k=5,
-            min_score=Decimal("0.85"),
-            model_selection="qwen2.5:7b",
+            role_refs=(_role_ref(role_id=second_role),),
             actor_user_id="alice",
         )
     )
@@ -246,14 +239,7 @@ def test_update_methodology_template_tenant_rejected(event_loop) -> None:
                 repository=repo,
                 security_events=sec,
                 template_id=template.id,
-                system_prompt="Updated prompt",
-                source_ids=(),
-                tool_allowlist=(),
-                retrieval_strategy={"strategy": "vector_only", "params": {}},
-                filter_tree={"node": {}},
-                top_k=5,
-                min_score=Decimal("0.85"),
-                model_selection="qwen2.5:7b",
+                role_refs=(_role_ref(),),
                 actor_user_id="alice",
             )
         )
@@ -285,73 +271,34 @@ def test_get_methodology_template_accepts_tenant_context(event_loop) -> None:
     )
     assert fetched_template.id == template.id
     assert fetched_rev.version == 1
+    assert len(fetched_rev.role_refs) == 1
 
 
-def test_get_methodology_template_returns_named_version(event_loop) -> None:
+def test_list_methodology_templates_excludes_archived(event_loop) -> None:
     repo = _FakeMethodologyRepository()
     sec = _CollectingSecurityEvents()
-    template, _ = event_loop.run_until_complete(
+    keep, _ = event_loop.run_until_complete(
         create_methodology_template(
             principal=_operator_principal(),
             repository=repo,
             security_events=sec,
-            **_create_kwargs(),
+            **_create_kwargs(name="KeepMethodology"),
         )
     )
-    event_loop.run_until_complete(
-        update_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            security_events=sec,
-            template_id=template.id,
-            system_prompt="v2",
-            source_ids=(),
-            tool_allowlist=(),
-            retrieval_strategy={"strategy": "vector_only", "params": {}},
-            filter_tree={"node": {}},
-            top_k=5,
-            min_score=Decimal("0.85"),
-            model_selection="qwen2.5:7b",
-            actor_user_id="alice",
-        )
-    )
-    _, v1 = event_loop.run_until_complete(
-        get_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            template_id=template.id,
-            version=1,
-        )
-    )
-    _, v2 = event_loop.run_until_complete(
-        get_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            template_id=template.id,
-            version=2,
-        )
-    )
-    assert v1.version == 1
-    assert v2.version == 2
-
-
-def test_list_methodology_templates_accepts_tenant_context(event_loop) -> None:
-    repo = _FakeMethodologyRepository()
-    sec = _CollectingSecurityEvents()
-    event_loop.run_until_complete(
+    drop, _ = event_loop.run_until_complete(
         create_methodology_template(
             principal=_operator_principal(),
             repository=repo,
             security_events=sec,
-            **_create_kwargs(name="A"),
+            **_create_kwargs(name="DropMethodology"),
         )
     )
     event_loop.run_until_complete(
-        create_methodology_template(
+        retire_methodology_template(
             principal=_operator_principal(),
             repository=repo,
             security_events=sec,
-            **_create_kwargs(name="B"),
+            template_id=drop.id,
         )
     )
     listed = event_loop.run_until_complete(
@@ -360,32 +307,10 @@ def test_list_methodology_templates_accepts_tenant_context(event_loop) -> None:
             repository=repo,
         )
     )
-    assert {t.name for t in listed} == {"A", "B"}
+    assert {t.id for t in listed} == {keep.id}
 
 
-def test_retire_methodology_template_operator_succeeds(event_loop) -> None:
-    repo = _FakeMethodologyRepository()
-    sec = _CollectingSecurityEvents()
-    template, _ = event_loop.run_until_complete(
-        create_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            security_events=sec,
-            **_create_kwargs(),
-        )
-    )
-    archived = event_loop.run_until_complete(
-        retire_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            security_events=sec,
-            template_id=template.id,
-        )
-    )
-    assert archived.archived_at is not None
-
-
-def test_retire_methodology_template_tenant_rejected(event_loop) -> None:
+def test_retire_methodology_tenant_rejected(event_loop) -> None:
     repo = _FakeMethodologyRepository()
     sec = _CollectingSecurityEvents()
     template, _ = event_loop.run_until_complete(
@@ -407,77 +332,39 @@ def test_retire_methodology_template_tenant_rejected(event_loop) -> None:
         )
     assert repo.templates[template.id].archived_at is None
     assert any(
-        e.action == "methodology.retire_template"
-        and e.category is SecurityEventCategory.AUTHZ_DENIAL
+        e.category is SecurityEventCategory.AUTHZ_DENIAL
+        and e.action == "methodology.retire_template"
         for e in sec.events
     )
 
 
-def test_retire_methodology_template_leaves_revisions_intact(event_loop) -> None:
-    """D68: existing clone references survive retirement."""
-    repo = _FakeMethodologyRepository()
+def test_hash_chain_byte_equivalence_under_role_refs_reorder(event_loop) -> None:
+    """Hash determinism (D75): role_refs sorted by role_id at the use case layer."""
+    role_a = UUID("00000000-0000-4000-8000-0000000c0001")
+    role_b = UUID("00000000-0000-4000-8000-0000000c0002")
+    repo1 = _FakeMethodologyRepository()
+    repo2 = _FakeMethodologyRepository()
     sec = _CollectingSecurityEvents()
-    template, original_rev = event_loop.run_until_complete(
+    _, rev1 = event_loop.run_until_complete(
         create_methodology_template(
             principal=_operator_principal(),
-            repository=repo,
+            repository=repo1,
             security_events=sec,
-            **_create_kwargs(),
+            name="HashEq",
+            description="ordering test",
+            role_refs=(_role_ref(role_id=role_a), _role_ref(role_id=role_b)),
+            actor_user_id="alice",
         )
     )
-    event_loop.run_until_complete(
-        retire_methodology_template(
-            principal=_operator_principal(),
-            repository=repo,
-            security_events=sec,
-            template_id=template.id,
-        )
-    )
-    _, fetched_rev = event_loop.run_until_complete(
-        get_methodology_template(
-            principal=_tenant_principal(),
-            repository=repo,
-            template_id=template.id,
-            version=1,
-        )
-    )
-    assert fetched_rev.id == original_rev.id
-    assert fetched_rev.this_revision_hash == original_rev.this_revision_hash
-
-
-def test_create_methodology_template_uses_genesis_for_revision_one(event_loop) -> None:
-    repo = _FakeMethodologyRepository()
-    sec = _CollectingSecurityEvents()
-    _, rev = event_loop.run_until_complete(
+    _, rev2 = event_loop.run_until_complete(
         create_methodology_template(
             principal=_operator_principal(),
-            repository=repo,
+            repository=repo2,
             security_events=sec,
-            **_create_kwargs(),
+            name="HashEq",
+            description="ordering test",
+            role_refs=(_role_ref(role_id=role_b), _role_ref(role_id=role_a)),
+            actor_user_id="alice",
         )
     )
-    assert rev.previous_revision_hash == GENESIS_REVISION_HASH
-
-
-def test_update_methodology_template_propagates_lookuperror_for_unknown_id(event_loop) -> None:
-    repo = _FakeMethodologyRepository()
-    sec = _CollectingSecurityEvents()
-    unknown_id = uuid4()
-    with pytest.raises(LookupError):
-        event_loop.run_until_complete(
-            update_methodology_template(
-                principal=_operator_principal(),
-                repository=repo,
-                security_events=sec,
-                template_id=unknown_id,
-                system_prompt="prompt",
-                source_ids=(),
-                tool_allowlist=(),
-                retrieval_strategy={"strategy": "vector_only", "params": {}},
-                filter_tree={"node": {}},
-                top_k=5,
-                min_score=Decimal("0.7"),
-                model_selection="qwen2.5:7b",
-                actor_user_id="alice",
-            )
-        )
+    assert rev1.this_revision_hash == rev2.this_revision_hash

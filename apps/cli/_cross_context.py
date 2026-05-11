@@ -1,4 +1,4 @@
-"""Cross-context lookup adapters for the CLI (S25 / D79).
+"""Cross-context lookup adapters for the CLI (S25 / D79, S26a-1 / D86).
 
 The agent context's create-from-methodology flow consumes two
 callable Protocol ports defined at
@@ -9,24 +9,21 @@ adapters live at the apps/cli wiring layer — that boundary is the
 legitimate seam where one context's public surface translates into
 another's consumer-side abstraction.
 
-Each adapter is constructed per-command invocation by the CLI
-(commit 8) and disposed alongside the engines it closes over. The
-adapters do not own engine lifecycles; the CLI command does.
+S26a-1 refactor per D86: the methodology aggregate becomes a playbook
+composing roles. The ``MethodologyLookupAdapter`` now resolves
+``role_refs`` at lookup time by calling the role context's
+``get_role_template`` use case (over the role repository) so the
+consumer-side ``MethodologyView`` carries the resolved role's content
+bundle. Phase 1 has single-role methodologies, so the adapter reads
+the first role_ref; per-role-overrides Phase 2 work will lift this
+resolution policy out into a methodology-shape-aware codepath. The
+resolution happens at the adapter (wiring layer), not in the agent
+context's use case, so the use case stays consumer-shape-aware
+without needing the role context's API.
 
-MethodologyLookupAdapter wraps
-``contexts.methodology.application.get_methodology_template`` (a
-control-plane read) and translates the producer's
-(MethodologyTemplate, MethodologyRevision) tuple into the consumer-
-shaped MethodologyView DTO. version=None resolves to the latest
-revision at the underlying repository; the resolved integer is what
-populates the returned view.
-
-SourceLookupAdapter wraps the application-layer
-``contexts.ingestion.application.get_source`` use case (shipped at
-the S25 reconciliation-2 sub-commit) and synthesises the assert
-behaviour by iterating per-id. Missing ids accumulate and a single
-SourceNotFoundError surfaces at the end so the operator sees the
-full set of failures in one error message rather than one-at-a-time.
+Each adapter is constructed per-command invocation by the CLI and
+disposed alongside the engines it closes over. The adapters do not
+own engine lifecycles; the CLI command does.
 """
 
 from __future__ import annotations
@@ -39,23 +36,42 @@ from contexts.agent.application.ports import (
 )
 from contexts.ingestion.application.get_source import get_source
 from contexts.ingestion.ports.source_repository_port import SourceRepositoryPort
-from contexts.methodology.application.use_cases import get_methodology_template
-from contexts.methodology.ports import MethodologyRepositoryPort
+from contexts.methodology.application.use_cases import (
+    get_methodology_template,
+    get_role_template,
+)
+from contexts.methodology.ports import (
+    MethodologyRepositoryPort,
+    RoleRepositoryPort,
+)
 from padhanam.security import Principal
 from shared_kernel import TenantContext
 
 
 class MethodologyLookupAdapter:
-    """Adapter from MethodologyRepositoryPort to the agent context's
-    MethodologyLookup Protocol.
+    """Adapter from MethodologyRepositoryPort + RoleRepositoryPort to
+    the agent context's MethodologyLookup Protocol (S26a-1 / D86).
 
-    Closes over the methodology repository so the CLI command can
-    construct the adapter once per invocation; the __call__ method
-    is the Protocol surface the agent use case invokes.
+    Closes over both repositories so the CLI command can construct
+    the adapter once per invocation; the ``__call__`` method is the
+    Protocol surface the agent use case invokes.
+
+    The adapter resolves ``role_refs[0]`` to a role revision via
+    ``get_role_template`` and populates the consumer-side
+    MethodologyView with the role's bundle content. Phase 1 has
+    single-role methodologies so the first role_ref is the canonical
+    role for the methodology; multi-role resolution defers to Phase 2
+    alongside per-role-overrides.
     """
 
-    def __init__(self, *, repository: MethodologyRepositoryPort) -> None:
-        self._repository = repository
+    def __init__(
+        self,
+        *,
+        methodology_repository: MethodologyRepositoryPort,
+        role_repository: RoleRepositoryPort,
+    ) -> None:
+        self._methodology_repository = methodology_repository
+        self._role_repository = role_repository
 
     async def __call__(
         self,
@@ -66,21 +82,38 @@ class MethodologyLookupAdapter:
     ) -> MethodologyView:
         template, revision = await get_methodology_template(
             principal=principal,
-            repository=self._repository,
+            repository=self._methodology_repository,
             template_id=template_id,
             version=version,
         )
+        if not revision.role_refs:
+            raise LookupError(
+                f"methodology revision {revision.id} carries no role_refs; "
+                "cannot resolve clone-from-methodology content (D86)"
+            )
+
+        first_ref = revision.role_refs[0]
+        _, role_revision = await get_role_template(
+            principal=principal,
+            repository=self._role_repository,
+            template_id=first_ref.role_id,
+            version=first_ref.role_version,
+        )
+
+        # Phase 1: overrides ignored per D86 (no consumer yet). Phase 2
+        # applies hard-tightens-only + soft-replaces semantics here.
+
         return MethodologyView(
             methodology_template_id=template.id,
             methodology_version=revision.version,
             description=template.description,
-            system_prompt=revision.system_prompt,
-            tool_allowlist=revision.tool_allowlist,
-            retrieval_strategy=revision.retrieval_strategy,
-            filter_tree=revision.filter_tree,
-            top_k=revision.top_k,
-            min_score=revision.min_score,
-            model_selection=revision.model_selection,
+            system_prompt=role_revision.system_prompt,
+            tool_allowlist=role_revision.tool_allowlist,
+            retrieval_strategy=role_revision.retrieval_strategy,
+            filter_tree=role_revision.filter_tree,
+            top_k=role_revision.top_k,
+            min_score=role_revision.min_score,
+            model_selection=role_revision.model_selection,
         )
 
 

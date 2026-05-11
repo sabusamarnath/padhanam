@@ -1,10 +1,9 @@
-"""Unit tests for the methodology aggregates (D74)."""
+"""Unit tests for the methodology aggregates (D74, refactored S26a-1 per D86)."""
 
 from __future__ import annotations
 
 import dataclasses
 from datetime import datetime, timezone
-from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -12,11 +11,13 @@ import pytest
 from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
+    RoleRef,
 )
 
 
 _TEMPLATE_ID = UUID("00000000-0000-4000-8000-000000000001")
 _REVISION_ID = UUID("00000000-0000-4000-8000-000000000002")
+_ROLE_ID = UUID("00000000-0000-4000-8000-0000000c0001")
 
 
 def _template(**overrides) -> MethodologyTemplate:
@@ -31,19 +32,22 @@ def _template(**overrides) -> MethodologyTemplate:
     return MethodologyTemplate(**defaults)
 
 
+def _role_ref(**overrides) -> RoleRef:
+    defaults = dict(
+        role_id=_ROLE_ID,
+        role_version=1,
+        overrides=None,
+    )
+    defaults.update(overrides)
+    return RoleRef(**defaults)
+
+
 def _revision(**overrides) -> MethodologyRevision:
     defaults = dict(
         id=_REVISION_ID,
         methodology_template_id=_TEMPLATE_ID,
         version=1,
-        system_prompt="You are a careful analyst.",
-        source_ids=(),
-        tool_allowlist=(),
-        retrieval_strategy={"strategy": "vector_only", "params": {}},
-        filter_tree={"node": {}},
-        top_k=5,
-        min_score=Decimal("0.7"),
-        model_selection="qwen2.5:7b",
+        role_refs=(_role_ref(),),
         created_by_user_id="alice",
         created_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
         previous_revision_hash="0" * 64,
@@ -83,11 +87,30 @@ def test_methodology_template_equality() -> None:
     assert t1 == t2
 
 
+def test_role_ref_construction() -> None:
+    ref = _role_ref()
+    assert ref.role_id == _ROLE_ID
+    assert ref.role_version == 1
+    assert ref.overrides is None
+
+
+def test_role_ref_is_frozen() -> None:
+    ref = _role_ref()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        ref.role_version = 2  # type: ignore[misc]
+
+
+def test_role_ref_overrides_optional_mapping() -> None:
+    ref = _role_ref(overrides={"system_prompt": "tightened"})
+    assert ref.overrides == {"system_prompt": "tightened"}
+
+
 def test_methodology_revision_construction() -> None:
     rev = _revision()
     assert rev.version == 1
-    assert rev.min_score == Decimal("0.7")
     assert rev.previous_revision_hash == "0" * 64
+    assert len(rev.role_refs) == 1
+    assert rev.role_refs[0].role_id == _ROLE_ID
 
 
 def test_methodology_revision_is_frozen() -> None:
@@ -96,28 +119,15 @@ def test_methodology_revision_is_frozen() -> None:
         rev.version = 2  # type: ignore[misc]
 
 
-def test_methodology_revision_source_ids_are_tuple() -> None:
-    src_a = UUID("00000000-0000-4000-8000-00000000a001")
-    src_b = UUID("00000000-0000-4000-8000-00000000b002")
-    rev = _revision(source_ids=(src_a, src_b))
-    assert rev.source_ids == (src_a, src_b)
-    # tuple is hashable; list would not be in a frozen dataclass field
-    assert isinstance(rev.source_ids, tuple)
-
-
-def test_methodology_revision_tool_allowlist_are_tuple() -> None:
-    rev = _revision(tool_allowlist=("vector_search", "graph_traverse"))
-    assert rev.tool_allowlist == ("vector_search", "graph_traverse")
-    assert isinstance(rev.tool_allowlist, tuple)
-
-
-def test_methodology_revision_jsonb_fields_are_mappings() -> None:
-    rev = _revision(
-        retrieval_strategy={"strategy": "hybrid", "params": {"alpha": 0.5}},
-        filter_tree={"op": "and", "operands": []},
+def test_methodology_revision_role_refs_tuple() -> None:
+    second = _role_ref(
+        role_id=UUID("00000000-0000-4000-8000-0000000c0002"),
+        role_version=3,
     )
-    assert rev.retrieval_strategy["strategy"] == "hybrid"
-    assert rev.filter_tree["op"] == "and"
+    rev = _revision(role_refs=(_role_ref(), second))
+    assert isinstance(rev.role_refs, tuple)
+    assert len(rev.role_refs) == 2
+    assert rev.role_refs[1].role_version == 3
 
 
 def test_methodology_revision_chain_pointers_persisted() -> None:
@@ -127,10 +137,3 @@ def test_methodology_revision_chain_pointers_persisted() -> None:
     )
     assert rev.previous_revision_hash == "aa" * 32
     assert rev.this_revision_hash == "bb" * 32
-
-
-def test_methodology_revision_decimal_min_score_preserved() -> None:
-    rev = _revision(min_score=Decimal("0.95"))
-    assert rev.min_score == Decimal("0.95")
-    # Decimal type, not float
-    assert isinstance(rev.min_score, Decimal)
