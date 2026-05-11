@@ -362,3 +362,41 @@ source_modules =
 forbidden_modules =
     neo4j
 allow_indirect_imports = true
+
+# ---------------------------------------------------------------------------
+# S25 / D79 — Agent context internal layers do not depend on methodology or
+# ingestion. The existing cross-context independence contracts (domain /
+# application / adapters) cover this implicitly through their mutual-
+# independence shape; the two explicit one-way forbidden contracts below
+# name the commitment specifically at the agent boundary so a reader of
+# .importlinter sees the architectural shape D79 commits to: agent is the
+# consumer that defines its own MethodologyLookup and SourceLookup port
+# shapes (at contexts/agent/application/ports/), and the apps/cli wiring
+# layer is the legitimate seam where the producer contexts' use cases get
+# translated into the consumer-shaped calls. Together with the AST test
+# at tests/unit/contexts/agent/test_import_isolation.py, the contracts
+# guard against future drift where a developer might add an "innocent"
+# cross-context type import at the consumer side.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:agent-no-methodology-internal]
+name = Agent context internal layers do not depend on methodology
+type = forbidden
+source_modules =
+    contexts.agent.domain
+    contexts.agent.application
+    contexts.agent.ports
+forbidden_modules =
+    contexts.methodology
+allow_indirect_imports = false
+
+[importlinter:contract:agent-no-ingestion-internal]
+name = Agent context internal layers do not depend on ingestion
+type = forbidden
+source_modules =
+    contexts.agent.domain
+    contexts.agent.application
+    contexts.agent.ports
+forbidden_modules =
+    contexts.ingestion
+allow_indirect_imports = false
