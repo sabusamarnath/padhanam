@@ -17,5 +17,14 @@ from contexts.agent.application.ports.methodology_lookup import (
     MethodologyLookup,
     MethodologyView,
 )
+from contexts.agent.application.ports.source_lookup import (
+    SourceLookup,
+    SourceNotFoundError,
+)
 
-__all__ = ["MethodologyLookup", "MethodologyView"]
+__all__ = [
+    "MethodologyLookup",
+    "MethodologyView",
+    "SourceLookup",
+    "SourceNotFoundError",
+]
