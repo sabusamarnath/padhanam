@@ -238,8 +238,8 @@ def _drain_worker_until_indexed(*, tenant_label: str, expected_sources: int, max
             "ingest", "worker",
             "--tenant-id", tenant_label,
             "--max-iterations", "1",
-            "--poll-interval", "0.5",
-            timeout=120,
+            "--poll-interval-seconds", "0.5",
+            timeout=180,
         )
         # The worker exits 0 normally; a non-zero exit suggests
         # infrastructure failure.
