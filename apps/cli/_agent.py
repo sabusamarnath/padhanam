@@ -1,9 +1,20 @@
-"""Agent CLI orchestration (S24 / D75).
+"""Agent CLI orchestration (S24 / D75, S25 / D79).
 
-Five subcommands at the ``padhanam agent`` namespace: ``create``,
-``get``, ``list``, ``update``, ``archive``. Operator-context
-resolution at the command boundary mirrors the S23 methodology CLI
-pattern; production CLI auth lands at Phase 2.
+Six subcommands at the ``padhanam agent`` namespace: ``create``,
+``create-from-methodology``, ``get``, ``list``, ``update``,
+``archive``. Operator-context resolution at the command boundary
+mirrors the S23 methodology CLI pattern; production CLI auth lands
+at Phase 2.
+
+S25 adds ``create-from-methodology``, the cross-context clone flow
+per D79. The command resolves three engines — control-plane
+Postgres (methodology repository), per-tenant Postgres (source
+repository), per-tenant Postgres (agent repository) — and
+constructs the two cross-context adapters from
+``apps/cli/_cross_context.py`` to satisfy the agent use case's
+MethodologyLookup and SourceLookup ports. Both engines plus the
+methodology repository dispose in ``finally`` per the established
+resource-management pattern.
 
 Per D75, agent data is per-tenant-scoped. The CLI takes a
 ``--tenant <label>`` argument resolved through the existing dev-
@@ -60,18 +71,30 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from contexts.agent.adapters.outbound.postgres import AgentPostgresRepository
 from contexts.agent.application import (
     archive_agent,
+    create_agent_from_methodology,
     create_blank_agent,
     get_agent,
     list_agents,
     update_agent,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
+from contexts.ingestion.adapters.outbound.postgres.source_repository import (
+    PostgresSourceRepository,
+)
+from contexts.methodology.adapters.outbound.postgres import (
+    MethodologyPostgresRepository,
+)
+from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
     SecurityEventLogger,
     file_security_event_logger,
 )
 from shared_kernel import TenantContext, TenantId
 
+from apps.cli._cross_context import (
+    MethodologyLookupAdapter,
+    SourceLookupAdapter,
+)
 from apps.cli._runtime import (
     build_operator_principal,
     resolve_tenant_context,
@@ -111,6 +134,11 @@ _UPDATE_REQUIRED_FIELDS = (
     "top_k",
     "min_score",
     "model_selection",
+)
+_CREATE_FROM_METHODOLOGY_REQUIRED_FIELDS = (
+    "methodology_template_id",
+    "name",
+    "source_ids",
 )
 
 
@@ -408,6 +436,69 @@ async def _run_archive(tenant: str, template_id: UUID) -> AgentTemplate:
         await engine.dispose()
 
 
+async def _run_create_from_methodology(
+    tenant: str, config_path: Path
+) -> tuple[AgentTemplate, AgentRevision]:
+    """Resolve the three repositories (control-plane methodology, per-
+    tenant source, per-tenant agent), construct the cross-context
+    adapters, and invoke the use case. Disposes both engines plus the
+    methodology repository in ``finally`` regardless of outcome."""
+    config = _load_config(config_path)
+    _validate_required(config, _CREATE_FROM_METHODOLOGY_REQUIRED_FIELDS)
+
+    tenant_context, label = resolve_tenant_context(tenant)
+    tenant_engine, tenant_sessionmaker = session_factory_for_tenant(label)
+    sec = file_security_event_logger()
+
+    # Agent repository: per-tenant sessionmaker resolver, identical to
+    # _build_repository's shape but constructed inline here so the
+    # tenant_engine can dispose alongside the methodology engine in a
+    # single finally block.
+    agent_resolver = _TenantBoundResolver(
+        bound_tenant_id=str(tenant_context.tenant_id),
+        sessionmaker=tenant_sessionmaker,
+    )
+    agent_repo = AgentPostgresRepository(
+        per_tenant_sessionmaker_resolver=agent_resolver,
+        security_events=sec,
+    )
+
+    # Source repository: same per-tenant sessionmaker; the adapter
+    # treats the sessionmaker as already-tenant-bound and routes the
+    # tenant_id at the SQL predicate layer.
+    source_repo = PostgresSourceRepository(session_factory=tenant_sessionmaker)
+    source_lookup = SourceLookupAdapter(repository=source_repo)
+
+    # Methodology repository: control-plane Postgres, owns its own
+    # engine via from_settings; dispose at the end of the command.
+    methodology_repo = MethodologyPostgresRepository.from_settings(
+        settings=ControlPlaneSettings(), security_events=sec
+    )
+    methodology_lookup = MethodologyLookupAdapter(repository=methodology_repo)
+
+    try:
+        return await create_agent_from_methodology(
+            principal=build_operator_principal(),
+            repository=agent_repo,
+            methodology_lookup=methodology_lookup,
+            source_lookup=source_lookup,
+            security_events=sec,
+            tenant_context=tenant_context,
+            methodology_template_id=UUID(str(config["methodology_template_id"])),
+            methodology_version=(
+                int(config["methodology_version"])
+                if config.get("methodology_version") is not None
+                else None
+            ),
+            name=config["name"],
+            source_ids=_to_uuid_tuple(config["source_ids"]),
+            actor_user_id="cli-operator",
+        )
+    finally:
+        await methodology_repo.dispose()
+        await tenant_engine.dispose()
+
+
 # ---------------------------------------------------------------------
 # Typer command surface
 # ---------------------------------------------------------------------
@@ -567,4 +658,35 @@ def agent_archive(
     sys.stdout.write(
         f"archived agent_template_id={template.id} "
         f"archived_at={template.archived_at.isoformat()}\n"
+    )
+
+
+@agent_app.command("create-from-methodology")
+def agent_create_from_methodology(
+    tenant: Annotated[
+        str,
+        typer.Option(
+            "--tenant",
+            help="Tenant short label ('a', 'b') or UUID.",
+        ),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            help=(
+                "Path to the clone config (.yaml, .yml, or .json) "
+                "with methodology_template_id, optional methodology_version, "
+                "name, and source_ids."
+            ),
+        ),
+    ],
+) -> None:
+    """Clone a methodology template into a new agent (S25 / D79)."""
+    template, revision = asyncio.run(_run_create_from_methodology(tenant, config))
+    sys.stdout.write(
+        f"created agent_template_id={template.id} "
+        f"revision_id={revision.id} version={revision.version} "
+        f"source_methodology_template_id={template.source_methodology_template_id} "
+        f"source_methodology_template_version={template.source_methodology_template_version}\n"
     )
