@@ -1,25 +1,35 @@
-"""Cross-context lookup adapters for the CLI (S25 / D79, S26a-1 / D86).
+"""Cross-context lookup adapters for the CLI (S25 / D79, S26a-1 / D86, S26a-2 / D86).
 
-The agent context's create-from-methodology flow consumes two
-callable Protocol ports defined at
-``contexts/agent/application/ports/``: MethodologyLookup and
-SourceLookup. This module wires the producer contexts' application-
-layer use cases into the consumer-shaped Protocol calls. Per D17 the
-adapters live at the apps/cli wiring layer — that boundary is the
-legitimate seam where one context's public surface translates into
-another's consumer-side abstraction.
+The agent context's create-from-methodology and create-from-role
+flows consume three callable Protocol ports defined at
+``contexts/agent/application/ports/``: MethodologyLookup, RoleLookup,
+and SourceLookup. This module wires the producer contexts'
+application-layer use cases into the consumer-shaped Protocol calls.
+Per D17 the adapters live at the apps/cli wiring layer — that
+boundary is the legitimate seam where one context's public surface
+translates into another's consumer-side abstraction.
 
 S26a-1 refactor per D86: the methodology aggregate becomes a playbook
 composing roles. The ``MethodologyLookupAdapter`` now resolves
 ``role_refs`` at lookup time by calling the role context's
 ``get_role_template`` use case (over the role repository) so the
 consumer-side ``MethodologyView`` carries the resolved role's content
-bundle. Phase 1 has single-role methodologies, so the adapter reads
-the first role_ref; per-role-overrides Phase 2 work will lift this
-resolution policy out into a methodology-shape-aware codepath. The
-resolution happens at the adapter (wiring layer), not in the agent
-context's use case, so the use case stays consumer-shape-aware
-without needing the role context's API.
+bundle plus the resolved role id and version (the latter landing at
+S26a-2 so create_agent_from_methodology populates both lineage pairs
+from a single cross-context hop). Phase 1 has single-role
+methodologies, so the adapter reads the first role_ref; per-role-
+overrides Phase 2 work will lift this resolution policy out into a
+methodology-shape-aware codepath. The resolution happens at the
+adapter (wiring layer), not in the agent context's use case, so the
+use case stays consumer-shape-aware without needing the role
+context's API.
+
+S26a-2 adds ``RoleLookupAdapter`` for the direct role-clone flow.
+The two consumer ports (MethodologyLookup, RoleLookup) share the
+api-facade-via-callable pattern from D17; the second consumer
+reinforces the pattern's value but the structural duplication is a
+Patterns-observed candidate worth tracking at phase audit time if a
+third cross-context lookup with the same shape lands.
 
 Each adapter is constructed per-command invocation by the CLI and
 disposed alongside the engines it closes over. The adapters do not
@@ -32,6 +42,7 @@ from uuid import UUID
 
 from contexts.agent.application.ports import (
     MethodologyView,
+    RoleView,
     SourceNotFoundError,
 )
 from contexts.ingestion.application.get_source import get_source
@@ -116,6 +127,52 @@ class MethodologyLookupAdapter:
             top_k=role_revision.top_k,
             min_score=role_revision.min_score,
             model_selection=role_revision.model_selection,
+        )
+
+
+class RoleLookupAdapter:
+    """Adapter from RoleRepositoryPort to the agent context's
+    RoleLookup Protocol (S26a-2 / D86).
+
+    Closes over the role repository so the CLI command can construct
+    the adapter once per invocation; the ``__call__`` method is the
+    Protocol surface the agent use case invokes. Mirrors
+    MethodologyLookupAdapter's shape per the api-facade-via-callable
+    pattern from D17, except resolution is single-hop (no role_refs
+    join because the consumer asked for the role directly).
+    """
+
+    def __init__(
+        self,
+        *,
+        role_repository: RoleRepositoryPort,
+    ) -> None:
+        self._role_repository = role_repository
+
+    async def __call__(
+        self,
+        *,
+        role_id: UUID,
+        version: int | None,
+        principal: Principal,
+    ) -> RoleView:
+        template, revision = await get_role_template(
+            principal=principal,
+            repository=self._role_repository,
+            template_id=role_id,
+            version=version,
+        )
+        return RoleView(
+            role_id=template.id,
+            role_version=revision.version,
+            description=template.description,
+            system_prompt=revision.system_prompt,
+            tool_allowlist=revision.tool_allowlist,
+            retrieval_strategy=revision.retrieval_strategy,
+            filter_tree=revision.filter_tree,
+            top_k=revision.top_k,
+            min_score=revision.min_score,
+            model_selection=revision.model_selection,
         )
 
 

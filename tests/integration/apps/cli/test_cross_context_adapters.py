@@ -29,10 +29,12 @@ import pytest
 
 from apps.cli._cross_context import (
     MethodologyLookupAdapter,
+    RoleLookupAdapter,
     SourceLookupAdapter,
 )
 from contexts.agent.application.ports import (
     MethodologyView,
+    RoleView,
     SourceNotFoundError,
 )
 from contexts.ingestion.domain.source import Source
@@ -503,3 +505,84 @@ def test_source_adapter_treats_cross_tenant_source_as_missing(event_loop) -> Non
 
     assert exc_info.value.missing_source_ids == (sid,)
     assert repo.calls == [(sid, _TENANT_A_UUID)]
+
+
+# ---------------------------------------------------------------------
+# RoleLookupAdapter (S26a-2 / D86)
+# ---------------------------------------------------------------------
+
+
+def test_role_adapter_resolves_role_template_and_assembles_view(event_loop) -> None:
+    """Happy path: the adapter calls get_role_template and translates
+    the producer's (RoleTemplate, RoleRevision) tuple into a
+    consumer-shaped RoleView."""
+    role_template_id = uuid4()
+    role_repo = _FakeRoleRepository()
+    role_repo.templates[role_template_id] = _make_role_template(
+        template_id=role_template_id
+    )
+    role_repo.revisions[role_template_id] = [
+        _make_role_revision(template_id=role_template_id, version=1, top_k=8)
+    ]
+    adapter = RoleLookupAdapter(role_repository=role_repo)
+
+    view = event_loop.run_until_complete(
+        adapter(
+            role_id=role_template_id,
+            version=1,
+            principal=_operator_principal(),
+        )
+    )
+
+    assert isinstance(view, RoleView)
+    assert view.role_id == role_template_id
+    assert view.role_version == 1
+    assert view.description == "LVT guide role"
+    assert view.system_prompt == "You are an LVT assistant."
+    assert view.top_k == 8
+    assert view.min_score == Decimal("0.3")
+    assert view.model_selection == "qwen2.5:7b"
+
+    assert any(c[0] == "get_template" for c in role_repo.calls)
+
+
+def test_role_adapter_resolves_version_none_to_latest(event_loop) -> None:
+    """version=None passes through; the adapter records the resolved
+    integer in role_version so the consumer never sees None."""
+    role_template_id = uuid4()
+    role_repo = _FakeRoleRepository()
+    role_repo.templates[role_template_id] = _make_role_template(
+        template_id=role_template_id
+    )
+    role_repo.revisions[role_template_id] = [
+        _make_role_revision(template_id=role_template_id, version=1, top_k=8),
+        _make_role_revision(template_id=role_template_id, version=2, top_k=12),
+    ]
+    adapter = RoleLookupAdapter(role_repository=role_repo)
+
+    view = event_loop.run_until_complete(
+        adapter(
+            role_id=role_template_id,
+            version=None,
+            principal=_operator_principal(),
+        )
+    )
+
+    assert view.role_version == 2
+    assert view.top_k == 12
+
+
+def test_role_adapter_propagates_lookup_error(event_loop) -> None:
+    """Missing role raises LookupError from the repository; the adapter
+    lets it propagate without re-wrapping."""
+    role_repo = _FakeRoleRepository()
+    adapter = RoleLookupAdapter(role_repository=role_repo)
+
+    with pytest.raises(LookupError):
+        event_loop.run_until_complete(
+            adapter(
+                role_id=uuid4(),
+                version=None,
+                principal=_operator_principal(),
+            )
+        )
