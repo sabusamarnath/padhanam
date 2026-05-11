@@ -74,8 +74,12 @@ the destination chain (D37).
 ## Methodology templates (control plane)
 
 Lives on the dedicated `postgres-control-plane` Postgres instance per
-D33. Schema lands at S23 via Alembic revision
-`0004_methodology_tables`.
+D33. Schema initially lands at S23 via Alembic revision
+`0004_methodology_tables`. Refactored to the role-first v3 shape per
+D86 at S26a-1 via revisions `0006_methodology_role_refs` (constraint
+bundle moves to the role aggregate; methodology revisions gain
+`role_refs jsonb`) and `0007_lvt_split` (data-only migration renaming
+the auto-migrated role to `LVTGuide`).
 
 ### `methodology_templates`
 
@@ -100,8 +104,83 @@ append-only-at-version-level discipline.
 | `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
 | `methodology_template_id` | `uuid`          | not null; FK → `methodology_templates.id`      |
 | `version`                 | `integer`       | not null                                       |
+| `role_refs`               | `jsonb`         | not null; array of `{role_id, role_version, overrides}` entries per D86; lands at S26a-1 via revision `0006_methodology_role_refs` replacing the prior constraint bundle |
+| `created_by_user_id`      | `text`          | not null                                       |
+| `created_at`              | `timestamptz`   | not null; default `now()`                      |
+| `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
+| `this_revision_hash`      | `text`          | not null; SHA-256 of canonical JSON of content fields plus previous hash per D74 |
+
+`UNIQUE(methodology_template_id, version)` —
+`methodology_revisions_template_version_unique`. Revisions are immutable
+per D31; updates create new revision rows.
+
+Per D86's role-first refinement (Phase 1 methodology v3, skipping the
+never-built v2 from D81), revision `0006_methodology_role_refs` at
+S26a-1 drops the prior constraint bundle columns (`system_prompt`,
+`source_ids`, `tool_allowlist`, `retrieval_strategy`, `filter_tree`,
+`top_k`, `min_score`, `model_selection`) from this table; the bundle
+moves to the role aggregate per `## Role aggregate (control plane)`
+below. Each entry in `role_refs` carries `role_id` (UUID string
+referencing a `role_templates.id`), `role_version` (integer referencing
+a `role_revisions.version` of that role), and `overrides` (nullable
+JSON object carrying methodology-context-specific field overrides per
+D86's per-role overrides commitment; Phase 1 always null because no
+consumer exists for per-role overrides yet).
+
+The hash-chain content surface updates at the same revision: the
+spanned fields become `name` (denormalised from the parent template at
+hash-compute time per D74's chain-self-containment pattern),
+`description` (denormalised likewise), `role_refs` (sorted by
+`role_id` for determinism), plus `previous_revision_hash`. The
+constraint bundle no longer spans the methodology hash; the bundle's
+content surface is now spanned by each role revision's own chain. The
+migration script at `0006_methodology_role_refs` recomputes existing
+methodology revision hashes against the new content surface, anchoring
+chain integrity at the migration boundary; the LVT methodology
+revision 1 from S23 is the only existing row at migration time. Down-
+migration re-adds the bundle columns and re-derives them from
+`role_refs`; lossy when methodology revisions reference multiple roles
+(Phase 1 has single-role methodologies only, so the down-migration
+loss surface is structurally bounded).
+
+`0007_lvt_split` (also at S26a-1) renames the auto-migrated role row
+to `LVTGuide` per D86's LVT methodology + LVTGuide role split
+commitment; no schema change, data-only migration.
+
+## Role aggregate (control plane)
+
+Lives on the dedicated `postgres-control-plane` Postgres instance per
+D33. Schema lands at S26a-1 via Alembic revision `0005_role_tables`.
+Roles are independently authored and identified per D86 Y2 sub-choice:
+hosted within `contexts/methodology/` bounded context but with their
+own aggregate, repository, and use cases. Promotion to a separate
+`contexts/roles/` bounded context defers to Phase 2 if evidence
+demands per D86.
+
+### `role_templates`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                | `text`          | not null; UNIQUE among non-archived templates per partial index `ix_role_templates_name_unique_active` |
+| `description`         | `text`          | nullable                                       |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+| `archived_at`         | `timestamptz`   | nullable                                       |
+
+The partial-unique-index on `name` where `archived_at IS NULL` mirrors
+the methodology_templates pattern: unique active role names across the
+platform; archived rows retain their name for audit per D31.
+
+### `role_revisions`
+
+| Column                    | Type            | Constraints                                    |
+|---------------------------|-----------------|------------------------------------------------|
+| `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `role_template_id`        | `uuid`          | not null; FK → `role_templates.id`             |
+| `version`                 | `integer`       | not null                                       |
 | `system_prompt`           | `text`          | not null                                       |
-| `source_ids`              | `jsonb`         | not null; array of UUID strings; typically empty for platform-managed templates per D68 |
+| `source_ids`              | `jsonb`         | not null; array of UUID strings; typically empty for platform-managed roles per D68 |
 | `tool_allowlist`          | `jsonb`         | not null; array of opaque strings per D68      |
 | `retrieval_strategy`      | `jsonb`         | not null; strategy-name-plus-params shape per D66 |
 | `filter_tree`             | `jsonb`         | not null; typed Boolean tree per D67           |
@@ -113,14 +192,27 @@ append-only-at-version-level discipline.
 | `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
 | `this_revision_hash`      | `text`          | not null; SHA-256 of canonical JSON of content fields plus previous hash per D74 |
 
-`UNIQUE(methodology_template_id, version)` —
-`methodology_revisions_template_version_unique`. Revisions are immutable
-per D31; updates create new revision rows. The hash-chain spans content
-fields per D74's content surface specification; chain metadata
-(template_id, version, timestamps, chain pointers) is excluded from the
-hash. Each template has its own chain rooted at the genesis sentinel;
-chains are independent per template, mirroring the `scoring_sheet_revisions`
-per-sheet revision pattern.
+`UNIQUE(role_template_id, version)` —
+`role_revisions_template_version_unique`. Revisions are immutable per
+D31; updates create new revision rows. Hash-chain content surface
+mirrors the methodology revision pattern from D74: the hash spans
+`name` (denormalised from the parent template at hash-compute time),
+`description` (denormalised likewise), `system_prompt`, `source_ids`
+(sorted), `tool_allowlist` (sorted), `retrieval_strategy`,
+`filter_tree`, `top_k`, `min_score`, `model_selection`, plus
+`previous_revision_hash`. Chain metadata (template_id, version,
+timestamps) is excluded from the hash. Each role template has its own
+independent chain rooted at the genesis sentinel.
+
+D86's idealization names `source_filter` and `cost_ceiling` on the
+role bundle. S26a-1 implements with existing field names (`source_ids`
+matching `methodology_revisions`' prior shape; no `cost_ceiling`
+column at the role layer) to avoid introducing schema concepts without
+consumers — cost-ceiling forward-affordance already lives at the
+tenant-registry level per D41 and is unread until Phase 2 enforcement.
+The drift between D86's idealized field set and implementation reality
+is intentional per the brief's pre-write reconciliation and is logged
+in S26a-1's reflection.
 
 ## Per-tenant tables
 

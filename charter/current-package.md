@@ -2,13 +2,13 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## Between packages — P7 closed, topology design session committed, P8 framing complete
+## P8 active — S26a-1 in flight
 
-P7 closed at S25 close on 2026-05-11. The topology design strategic block at the P7→P8 boundary committed on the same day landing D80-D85 plus the new workflow context charter file at `charter/contexts/workflow.md`, the revised P8 epic note at `charter/packages/p8-epic.md`, a new User safety section in `charter/principles.md` with a refined methodology-embedded principle, the P8 line revision in `charter/packages.md`, a roadmap v4 entry with discovery reasoning category, three new deferred-decisions entries (cascading-harm invariant shape; retrieval-bound hard-constraint shape; per-role binding-mode override), and the captures triage resolution for the 2026-05-11 P7 strategic block entry.
+P8 opened on 2026-05-11. S26 split per D86 into S26a (methodology v3 migration with role aggregate) and S26b (McKinsey 7-Step authoring against the role-first model). S26a further split at scope-meets-reality into S26a-1 (control-plane work: role aggregate + methodology v3 refactor + LVT split) and S26a-2 (per-tenant work: agent role-lineage + `create_agent_from_role` + `padhanam role` CLI namespace + contract tests). S26a-1 is the active session; the brief preserves at `briefs/p8/s26a-1.md`.
 
-The next strategic-mode block authors the McKinsey 7-Step methodology template per D85 (post-topology, pre-P8 build). Layer A policy authoring remains queued per the P7 mid-package security-readiness carryover. P8 build opens at S26 with the methodology v2 migration per the p8-epic.md sessions forecast.
+P8-internal architectural anchor: roles are first-class primary aggregates per D86. Methodology is a playbook composing roles via `role_refs` plus workflow specification plus per-role overrides; methodology v2 from D81 (roles JSONB embedded on methodology) is skipped in favour of v3 directly. The role-first commitment shapes the rest of P8: S27b's agent runtime invokes against role-bound or methodology-bound agents; S28b's tool registry binds classifications via the role's `tool_allowlist`; the four-layer constraint stack from D80 reads as a five-concept stack per D86 (platform invariants, role envelope, methodology overlay, workflow orchestration, agent instance).
 
-The role-first architectural refinement (D86) landed at strategic-mode commit ahead of P8 build. The S26 session split into S26a (methodology v3 migration with roles aggregate) and S26b (McKinsey 7-Step authoring against the role-first model).
+Pre-write reconciliation at S26a-1 fixed three deltas from the brief: control-plane Alembic numbering aligns with the actual versions directory (`0005`/`0006`/`0007`, not `0010`/`0011`/`0012`); `RoleRepositoryPort` lives at `contexts/methodology/ports/role_repository.py` matching the same-context port convention (the brief's `application/ports/` is reserved for cross-context lookup ports per the agent context's existing pattern); brief preservation lands at `briefs/p8/s26a-1.md`.
 
 ## Carryovers active across the P7→P8 boundary
 
