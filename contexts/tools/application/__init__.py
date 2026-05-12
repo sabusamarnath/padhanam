@@ -1,7 +1,27 @@
-"""Tools context application layer (D89).
+"""Tools context application layer (D89)."""
 
-Empty at commit 2 — use cases (``create_tool``, ``create_tool_revision``,
-``get_tool``, ``list_tools``) and the ``tool_invocation_service`` land
-at commit 3. The schema-diff backward-compatibility stub at
-``backward_compatibility.py`` lands at commit 6.
-"""
+from contexts.tools.application.tool_invocation_service import (
+    InvocationAdmissibility,
+    InvocationCheckOutcome,
+    check_invocation_admissibility,
+    list_visible_definitions,
+)
+from contexts.tools.application.use_cases import (
+    archive_tool,
+    create_tool,
+    create_tool_revision,
+    get_tool,
+    list_tools,
+)
+
+__all__ = [
+    "InvocationAdmissibility",
+    "InvocationCheckOutcome",
+    "archive_tool",
+    "check_invocation_admissibility",
+    "create_tool",
+    "create_tool_revision",
+    "get_tool",
+    "list_tools",
+    "list_visible_definitions",
+]

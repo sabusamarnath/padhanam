@@ -25,6 +25,19 @@ entry on customer-deployment evidence.
 
 from __future__ import annotations
 
+from contexts.tools.application.tool_invocation_service import (
+    InvocationAdmissibility,
+    InvocationCheckOutcome,
+    check_invocation_admissibility,
+    list_visible_definitions,
+)
+from contexts.tools.application.use_cases import (
+    archive_tool,
+    create_tool,
+    create_tool_revision,
+    get_tool,
+    list_tools,
+)
 from contexts.tools.domain.exceptions import (
     ClassificationProhibitedError,
     RevisionNotFoundError,
@@ -46,6 +59,8 @@ from contexts.tools.ports.tool_repository import (
 __all__ = [
     "Classification",
     "ClassificationProhibitedError",
+    "InvocationAdmissibility",
+    "InvocationCheckOutcome",
     "PHASE_1_PROHIBITED_CLASSIFICATIONS",
     "PHASE_1_VISIBLE_CLASSIFICATIONS",
     "RevisionNotFoundError",
@@ -55,4 +70,11 @@ __all__ = [
     "ToolNotFoundError",
     "ToolRepositoryPort",
     "ToolRevision",
+    "archive_tool",
+    "check_invocation_admissibility",
+    "create_tool",
+    "create_tool_revision",
+    "get_tool",
+    "list_tools",
+    "list_visible_definitions",
 ]
