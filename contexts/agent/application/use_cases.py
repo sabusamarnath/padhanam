@@ -60,7 +60,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any, AsyncIterator, Mapping
 from uuid import UUID, uuid4
 
 from contexts.agent.application.composition import (
@@ -75,11 +75,11 @@ from contexts.agent.application.ports import (
     ToolDefinitionsLookup,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
+from contexts.agent.domain.events import AgentEvent
 from contexts.agent.ports import (
     AgentExecutor,
     AgentInvocationContext,
     AgentRepositoryPort,
-    AgentResult,
 )
 from padhanam.observability.security_events import (
     SecurityEvent,
@@ -706,16 +706,21 @@ async def invoke_agent(
     tenant_context: TenantContext,
     agent_template_id: UUID,
     user_input: str,
-) -> AgentResult:
-    """Run a single agent invocation end-to-end (D88, S27b).
+) -> AsyncIterator[AgentEvent]:
+    """Run a single agent invocation end-to-end (D88, D90; S27b → S29b).
 
-    Resolves the agent's revision content, re-fetches the role's
-    current content when role lineage is present, fetches the
-    methodology's per-role overrides when methodology lineage is also
-    present, composes the effective constraint bundle per D87, builds
-    the invocation context, and dispatches to the supplied
-    ``AgentExecutor``. The executor handles the LLM-with-tool-loop,
-    cost capture, and audit emission per D88.
+    S29b (D90): the use case is an async generator yielding ``AgentEvent``
+    values from the executor's stream. The use case resolves lineage,
+    composes the effective constraint bundle per D87, builds the
+    invocation context, and streams events through. Audit emission per
+    D26 happens inside the executor (the executor has the data — input
+    hash, response content, cost, termination — at the right moments;
+    moving audit to the use case would require threading that data
+    back through the event stream, which is awkward). The two audit
+    rows land at invocation start (before InvocationStarted yields) and
+    at the terminal event (before the terminal AgentEvent yields).
+    The terminal event carries both hashes so callers (and the
+    collect_to_result helper) can deep-link into the audit chain.
 
     Three lineage paths land here as parallel flows:
 
@@ -730,10 +735,20 @@ async def invoke_agent(
       overrides for this role via ``MethodologyOverridesLookup``;
       compose per D87.
 
-    The use case threads ``tenant_context`` through every cross-cutting
-    concern (repository, role_lookup, methodology_overrides_lookup,
-    executor's internals). Auth posture matches the other agent CRUD
-    use cases per D75: tenant-context-or-operator-context.
+    Auth posture matches the other agent CRUD use cases per D75:
+    tenant-context-or-operator-context. The auth check fires on the
+    first ``__anext__()`` call on the returned async generator (Python
+    async-generator-function semantics); unauthenticated callers see
+    the AuthorizationError on first iteration, not on call.
+
+    Per D90's tool_classifications field on AgentInvocationContext,
+    the use case populates an empty mapping at Phase 1. Surfacing
+    classification through the consumer ports happens when a real
+    consumer evidence emerges (Phase 2 when non-retrieval tools ship);
+    the executor falls back to ``"unknown"`` for any tool not in the
+    map. The integration test against the McKinsey ProblemFramer at
+    commit 9 exercises a content-only invocation where the empty map
+    is unobserved.
     """
     if not _is_authenticated(principal):
         raise _deny(
@@ -785,9 +800,14 @@ async def invoke_agent(
         effective_bundle=bundle,
         user_input=user_input,
         tool_definitions=tool_definitions,
+        # tool_classifications stays empty at Phase 1 per D90; the
+        # executor falls back to "unknown" for any tool not in the
+        # map. See use-case docstring above for the deferral rationale.
+        tool_classifications={},
     )
 
-    return await executor.execute(context)
+    async for event in executor.execute(context):
+        yield event
 
 
 async def _resolve_role_view(

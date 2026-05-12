@@ -31,6 +31,11 @@ import pytest
 from contexts.agent.application import invoke_agent
 from contexts.agent.application.ports import RoleView
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
+from contexts.agent.domain.events import (
+    AgentEvent,
+    InvocationCompleted,
+    InvocationStarted,
+)
 from contexts.agent.ports.executor import (
     AgentInvocationContext,
     AgentResult,
@@ -69,6 +74,19 @@ async def _empty_tool_definitions_lookup(*, allowlist):
     tool surface live at S28b commit 7's cross-context adapter
     integration tests."""
     return ()
+
+
+async def _drain(events):
+    """Iterate an AgentEvent stream to completion (S29b D90).
+
+    invoke_agent is an async generator function per D90; iterating
+    drives the function body (including auth checks, lineage
+    resolution, executor invocation). Tests focused on side-effects
+    (lookups invoked, context captured) drain the stream and assert
+    on those side-effects rather than on event payloads.
+    """
+    async for _ in events:
+        pass
 
 
 _TENANT_A_UUID = "00000000-0000-4000-8000-00000000a001"
@@ -203,21 +221,38 @@ class _ScriptedMethodologyOverridesLookup:
 
 
 class _ScriptedExecutor:
-    """Captures the AgentInvocationContext; returns a fixed AgentResult."""
+    """Captures the AgentInvocationContext; yields a scripted event stream.
+
+    S29b (D90): the AgentExecutor Protocol's execute(context) returns
+    ``AsyncIterator[AgentEvent]``. The scripted executor records the
+    received context and yields a minimal stream — InvocationStarted
+    followed by InvocationCompleted — sufficient for the use-case-level
+    tests that focus on lineage resolution, composition, and the
+    context passed to the executor. The integration test at S29b commit
+    9 exercises the full event vocabulary against the live stack.
+    """
 
     def __init__(self) -> None:
         self.captured: AgentInvocationContext | None = None
 
-    async def execute(self, context: AgentInvocationContext) -> AgentResult:
+    async def execute(
+        self, context: AgentInvocationContext
+    ):
         self.captured = context
-        return AgentResult(
-            response_content="ok",
-            signals=(),
-            cost_total_usd=Decimal("0.001"),
-            iteration_count=1,
+        yield InvocationStarted(
+            invocation_id=UUID(int=1),
+            agent_template_id=context.agent_template_id,
+            tenant_context=context.tenant_context,
+            model_name=context.effective_bundle.model_selection,
+            started_at=datetime.now(timezone.utc),
+        )
+        yield InvocationCompleted(
+            invocation_id=UUID(int=1),
+            final_result="ok",
             termination_reason=TerminationReason.CONTENT,
-            audit_start_hash="a" * 64,
-            audit_end_hash="b" * 64,
+            total_cost_usd=Decimal("0.001"),
+            audit_chain_hashes=("a" * 64, "b" * 64),
+            duration_ms=100,
         )
 
 
@@ -259,7 +294,7 @@ def test_unauthenticated_principal_raises_authorization_error() -> None:
     security_events = _FakeSecurityEventLogger()
 
     with pytest.raises(AuthorizationError):
-        asyncio.run(
+        asyncio.run(_drain(
             invoke_agent(
                 principal=_unauth_principal(),
                 repository=repository,
@@ -272,7 +307,7 @@ def test_unauthenticated_principal_raises_authorization_error() -> None:
                 agent_template_id=template.id,
                 user_input="hi",
             )
-        )
+        ))
 
     # Security-event denial emitted; executor not invoked.
     assert len(security_events.events) == 1
@@ -290,7 +325,7 @@ def test_blank_created_agent_uses_revision_content_as_role_view() -> None:
     overrides_lookup = _ScriptedMethodologyOverridesLookup(overrides={})
     executor = _ScriptedExecutor()
 
-    asyncio.run(
+    asyncio.run(_drain(
         invoke_agent(
             principal=_operator_principal(),
             repository=repository,
@@ -303,7 +338,7 @@ def test_blank_created_agent_uses_revision_content_as_role_view() -> None:
             agent_template_id=template.id,
             user_input="frame the problem",
         )
-    )
+    ))
 
     assert role_lookup.calls == []  # No re-fetch when lineage is absent.
     assert overrides_lookup.calls == []
@@ -330,7 +365,7 @@ def test_role_cloned_agent_refetches_role_no_methodology_overrides() -> None:
     overrides_lookup = _ScriptedMethodologyOverridesLookup(overrides={})
     executor = _ScriptedExecutor()
 
-    asyncio.run(
+    asyncio.run(_drain(
         invoke_agent(
             principal=_operator_principal(),
             repository=repository,
@@ -343,7 +378,7 @@ def test_role_cloned_agent_refetches_role_no_methodology_overrides() -> None:
             agent_template_id=template.id,
             user_input="frame the problem",
         )
-    )
+    ))
 
     assert len(role_lookup.calls) == 1
     assert role_lookup.calls[0]["role_id"] == role_id
@@ -389,7 +424,7 @@ def test_methodology_cloned_agent_applies_augment_override() -> None:
     )
     executor = _ScriptedExecutor()
 
-    asyncio.run(
+    asyncio.run(_drain(
         invoke_agent(
             principal=_operator_principal(),
             repository=repository,
@@ -402,7 +437,7 @@ def test_methodology_cloned_agent_applies_augment_override() -> None:
             agent_template_id=template.id,
             user_input="declining customer retention in Q3",
         )
-    )
+    ))
 
     # Both lookups invoked.
     assert len(role_lookup.calls) == 1
@@ -441,7 +476,7 @@ def test_methodology_cloned_with_empty_overrides_returns_role_base() -> None:
     overrides_lookup = _ScriptedMethodologyOverridesLookup(overrides={})
     executor = _ScriptedExecutor()
 
-    asyncio.run(
+    asyncio.run(_drain(
         invoke_agent(
             principal=_operator_principal(),
             repository=repository,
@@ -454,7 +489,7 @@ def test_methodology_cloned_with_empty_overrides_returns_role_base() -> None:
             agent_template_id=template.id,
             user_input="hi",
         )
-    )
+    ))
 
     assert executor.captured is not None
     bundle = executor.captured.effective_bundle
