@@ -7,6 +7,7 @@ from contexts.inference.domain.completion import (
     Completion,
     Message,
     TokenUsage,
+    ToolDefinition,
 )
 from shared_kernel import TenantContext
 
@@ -21,7 +22,12 @@ _TENANT_A = TenantContext(
 class _FakeInferencePort:
     def __init__(self) -> None:
         self.calls: list[
-            tuple[Sequence[Message], str | None, TenantContext]
+            tuple[
+                Sequence[Message],
+                str | None,
+                TenantContext,
+                Sequence[ToolDefinition],
+            ]
         ] = []
 
     def complete(
@@ -29,8 +35,9 @@ class _FakeInferencePort:
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
+        tools: Sequence[ToolDefinition] = (),
     ) -> Completion:
-        self.calls.append((messages, model, tenant_context))
+        self.calls.append((messages, model, tenant_context, tools))
         return Completion(
             text="hi",
             model=model or "default",
@@ -51,7 +58,7 @@ def test_use_case_passes_arguments_to_port() -> None:
 
     assert result.text == "hi"
     assert result.usage.total_tokens == 6
-    assert port.calls == [(messages, "qwen2.5:7b", _TENANT_A)]
+    assert port.calls == [(messages, "qwen2.5:7b", _TENANT_A, ())]
 
 
 def test_use_case_passes_none_model_through() -> None:
@@ -66,6 +73,27 @@ def test_use_case_passes_none_model_through() -> None:
 
     assert result.model == "default"
     assert port.calls[0][1] is None
+
+
+def test_use_case_threads_tools_through() -> None:
+    """request_completion forwards the tools sequence to the port; the
+    default is an empty tuple so plain-chat callers are unchanged."""
+    port = _FakeInferencePort()
+    tool = ToolDefinition(
+        name="retrieval",
+        description="search",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    request_completion(
+        port=port,
+        messages=[Message(role="user", content="hi")],
+        model="qwen2.5:7b",
+        tenant_context=_TENANT_A,
+        tools=[tool],
+    )
+
+    assert port.calls[0][3] == [tool]
 
 
 def test_completion_carries_trace_id_when_set() -> None:

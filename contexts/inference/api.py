@@ -9,6 +9,9 @@ The inference context's surface is request-shaped, not query-shaped:
 callers ask for a completion. The port-aware variant (request_completion)
 takes the port as a parameter so apps/ can wire the adapter once and pass
 through; that single-seam pattern keeps composition out of the context.
+
+S27b (D88) extends the surface with optional ``tools`` for tool-aware
+chat; default empty preserves plain-chat callers.
 """
 
 from __future__ import annotations
@@ -16,7 +19,12 @@ from __future__ import annotations
 from typing import Sequence
 
 from contexts.inference.application import request_completion as _request_completion
-from contexts.inference.domain.completion import Completion, Message
+from contexts.inference.domain.completion import (
+    Completion,
+    Message,
+    ToolCall,
+    ToolDefinition,
+)
 from contexts.inference.ports import InferencePort
 from shared_kernel import TenantContext
 
@@ -27,6 +35,7 @@ def request_completion(
     messages: Sequence[Message],
     model: str | None,
     tenant_context: TenantContext,
+    tools: Sequence[ToolDefinition] = (),
 ) -> Completion:
     """Run a completion through the supplied InferencePort.
 
@@ -38,7 +47,14 @@ def request_completion(
         messages=messages,
         model=model,
         tenant_context=tenant_context,
+        tools=tools,
     )
 
 
-__all__ = ["Completion", "Message", "request_completion"]
+__all__ = [
+    "Completion",
+    "Message",
+    "ToolCall",
+    "ToolDefinition",
+    "request_completion",
+]

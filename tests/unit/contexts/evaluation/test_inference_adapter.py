@@ -42,6 +42,7 @@ class _FakeInferencePort:
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
+        tools=(),
     ) -> Completion:
         self.calls.append((list(messages), model, tenant_context))
         return self._completion

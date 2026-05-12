@@ -40,7 +40,7 @@ _REGISTERED_TENANT_ID = "00000000-0000-4000-8000-0000000000a1"
 
 
 class _StubInferencePort:
-    def complete(self, messages, model, tenant_context) -> Completion:
+    def complete(self, messages, model, tenant_context, tools=()) -> Completion:
         return Completion(
             text="ok",
             model=model or "stub",

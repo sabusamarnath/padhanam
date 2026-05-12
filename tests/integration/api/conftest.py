@@ -39,6 +39,7 @@ class _StubInferencePort:
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
+        tools=(),
     ) -> Completion:
         self.calls.append((messages, model, tenant_context))
         return Completion(

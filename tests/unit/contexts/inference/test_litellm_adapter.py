@@ -20,7 +20,11 @@ from litellm.exceptions import (
 )
 
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
-from contexts.inference.domain.completion import Message
+from contexts.inference.domain.completion import (
+    Message,
+    ToolCall,
+    ToolDefinition,
+)
 from contexts.inference.domain.errors import (
     InferenceConfigurationError,
     InferenceTimeout,
@@ -373,3 +377,199 @@ def test_tenant_attributes_emitted_on_span(captured_spans) -> None:
     # The legacy padhanam.tenant_id attribute is removed in S15 — D37's
     # tenant.id is now the single source.
     assert "padhanam.tenant_id" not in attrs
+
+
+# S27b (D88) tool-aware chat extension.
+
+def _tool_call_response() -> SimpleNamespace:
+    """A response where the model issued one tool call (retrieval)."""
+    fn = SimpleNamespace(
+        name="retrieval",
+        arguments='{"query": "test query"}',
+    )
+    tool_call = SimpleNamespace(id="call_abc123", type="function", function=fn)
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=None, tool_calls=[tool_call]),
+                finish_reason="tool_calls",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=20, completion_tokens=6),
+        model="qwen2.5:7b",
+    )
+
+
+def test_adapter_passes_tools_when_supplied() -> None:
+    """When tools are passed, the adapter forwards an OpenAI-shaped
+    tool list to litellm.completion. When no tools are passed, the
+    SDK is not invoked with the tools kwarg at all (plain-chat callers
+    see the wire shape unchanged from pre-D88)."""
+    adapter = LiteLLMAdapter(settings=_settings())
+    captured: dict[str, object] = {}
+
+    def fake_completion(**kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return _ok_response()
+
+    tool = ToolDefinition(
+        name="retrieval",
+        description="search the knowledge base",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    )
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        side_effect=fake_completion,
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="qwen2.5:7b",
+            tenant_context=_TENANT_A,
+            tools=[tool],
+        )
+
+    assert "tools" in captured
+    assert captured["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "retrieval",
+                "description": "search the knowledge base",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            },
+        }
+    ]
+
+
+def test_adapter_omits_tools_kwarg_when_empty() -> None:
+    adapter = LiteLLMAdapter(settings=_settings())
+    captured: dict[str, object] = {}
+
+    def fake_completion(**kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return _ok_response()
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        side_effect=fake_completion,
+    ):
+        adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="qwen2.5:7b",
+            tenant_context=_TENANT_A,
+        )
+
+    assert "tools" not in captured
+
+
+def test_adapter_serialises_assistant_tool_calls_in_request() -> None:
+    """An assistant Message with tool_calls (e.g. echoed back into a
+    follow-up call as part of the conversation history) serialises to
+    OpenAI's ``tool_calls`` shape."""
+    adapter = LiteLLMAdapter(settings=_settings())
+    captured: dict[str, object] = {}
+
+    def fake_completion(**kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return _ok_response()
+
+    history = [
+        Message(role="system", content="be helpful"),
+        Message(role="user", content="please retrieve X"),
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=(
+                ToolCall(
+                    id="call_99",
+                    name="retrieval",
+                    arguments_json='{"query": "X"}',
+                ),
+            ),
+        ),
+        Message(role="tool", content="chunk A; chunk B", tool_call_id="call_99"),
+    ]
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        side_effect=fake_completion,
+    ):
+        adapter.complete(
+            messages=history,
+            model="qwen2.5:7b",
+            tenant_context=_TENANT_A,
+        )
+
+    sent_messages = captured["messages"]
+    assert sent_messages[2] == {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_99",
+                "type": "function",
+                "function": {
+                    "name": "retrieval",
+                    "arguments": '{"query": "X"}',
+                },
+            }
+        ],
+    }
+    assert sent_messages[3] == {
+        "role": "tool",
+        "tool_call_id": "call_99",
+        "content": "chunk A; chunk B",
+    }
+
+
+def test_adapter_surfaces_tool_calls_on_completion() -> None:
+    """When the response carries tool_calls, the returned Completion
+    exposes them as a tuple of ToolCall objects so the agent runtime
+    can branch its loop without parsing text."""
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_tool_call_response(),
+    ):
+        result = adapter.complete(
+            messages=[Message(role="user", content="search please")],
+            model="qwen2.5:7b",
+            tenant_context=_TENANT_A,
+        )
+
+    assert result.text == ""
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0] == ToolCall(
+        id="call_abc123",
+        name="retrieval",
+        arguments_json='{"query": "test query"}',
+    )
+    assert result.finish_reason == "tool_calls"
+
+
+def test_adapter_empty_tool_calls_default_on_plain_response() -> None:
+    """Plain content-only responses produce a Completion with an empty
+    tool_calls tuple (not None), so callers branch uniformly."""
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    with patch(
+        "contexts.inference.adapters.outbound.litellm.adapter.litellm.completion",
+        return_value=_ok_response(),
+    ):
+        result = adapter.complete(
+            messages=[Message(role="user", content="hi")],
+            model="qwen2.5:7b",
+            tenant_context=_TENANT_A,
+        )
+
+    assert result.tool_calls == ()

@@ -2,6 +2,8 @@ from contexts.inference.domain.completion import (
     Completion,
     Message,
     TokenUsage,
+    ToolCall,
+    ToolDefinition,
 )
 from contexts.inference.domain.errors import (
     InferenceConfigurationError,
@@ -18,4 +20,6 @@ __all__ = [
     "InferenceUnavailable",
     "Message",
     "TokenUsage",
+    "ToolCall",
+    "ToolDefinition",
 ]

@@ -9,13 +9,21 @@ The use case is intentionally thin — there is no model-routing,
 budget-checking, or tool-invocation logic yet. Those land alongside
 orchestration (P5+) without changing the port signature, which is why
 the port carries the full ``TenantContext`` from S15 onward (D-entry).
+
+S27b (D88) threads optional ``tools`` through the use case so the
+agent runtime can pass a tool definition list. Default empty preserves
+plain-chat semantics for every existing caller.
 """
 
 from __future__ import annotations
 
 from typing import Sequence
 
-from contexts.inference.domain.completion import Completion, Message
+from contexts.inference.domain.completion import (
+    Completion,
+    Message,
+    ToolDefinition,
+)
 from contexts.inference.ports import InferencePort
 from shared_kernel import TenantContext
 
@@ -26,6 +34,7 @@ def request_completion(
     messages: Sequence[Message],
     model: str | None,
     tenant_context: TenantContext,
+    tools: Sequence[ToolDefinition] = (),
 ) -> Completion:
     """Run the completion through the configured InferencePort.
 
@@ -34,5 +43,8 @@ def request_completion(
     is the single seam the inbound side calls into.
     """
     return port.complete(
-        messages=messages, model=model, tenant_context=tenant_context
+        messages=messages,
+        model=model,
+        tenant_context=tenant_context,
+        tools=tools,
     )

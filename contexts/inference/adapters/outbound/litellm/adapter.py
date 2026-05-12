@@ -17,6 +17,16 @@ propagation: the LiteLLM SDK's underlying httpx call inherits the
 current context, the gateway picks up the W3C traceparent header, and
 the gateway-emitted span lands as the LLM-call grandchild. D27
 portability holds end-to-end.
+
+S27b (D88) extends the adapter for tool-aware chat. ``tools`` (a
+sequence of vendor-free ``ToolDefinition``) converts to OpenAI's
+function-calling tool list at request time. ``Message`` with
+``tool_calls`` (assistant turn) or ``tool_call_id`` (tool turn)
+serialises to the OpenAI shape the LiteLLM gateway expects.
+Response-side ``tool_calls`` surface on the returned ``Completion``
+so the agent runtime can branch its loop. The extension is opt-in:
+existing plain-chat callers pass nothing and observe no change in the
+wire shape sent to the gateway.
 """
 
 from __future__ import annotations
@@ -41,6 +51,8 @@ from contexts.inference.domain.completion import (
     Completion,
     Message,
     TokenUsage,
+    ToolCall,
+    ToolDefinition,
 )
 from contexts.inference.domain.errors import (
     InferenceConfigurationError,
@@ -72,6 +84,7 @@ class LiteLLMAdapter:
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
+        tools: Sequence[ToolDefinition] = (),
     ) -> Completion:
         resolved_model = model or self._settings.default_model
         endpoint = self._settings.litellm_endpoint
@@ -108,12 +121,15 @@ class LiteLLMAdapter:
                 # `openai/` prefix on the model. The gateway then maps
                 # the model name (e.g. "qwen2.5:7b") to its configured
                 # backend (Ollama) per ops/litellm/config.yaml.
-                response = litellm.completion(
-                    model=f"openai/{resolved_model}",
-                    messages=[{"role": m.role, "content": m.content} for m in messages],
-                    api_base=endpoint,
-                    api_key=master_key,
-                )
+                call_kwargs: dict[str, Any] = {
+                    "model": f"openai/{resolved_model}",
+                    "messages": [_message_to_payload(m) for m in messages],
+                    "api_base": endpoint,
+                    "api_key": master_key,
+                }
+                if tools:
+                    call_kwargs["tools"] = [_tool_to_payload(t) for t in tools]
+                response = litellm.completion(**call_kwargs)
             except (Timeout,) as e:
                 span.set_status(Status(StatusCode.ERROR, str(e)))
                 span.record_exception(e)
@@ -192,6 +208,81 @@ class LiteLLMAdapter:
             return _with_trace_id(completion, trace_id)
 
 
+def _message_to_payload(m: Message) -> dict[str, Any]:
+    """Serialise a domain Message into the LiteLLM/OpenAI request shape.
+
+    - system/user messages: ``{"role", "content"}``.
+    - assistant messages with content only: ``{"role", "content"}``.
+    - assistant messages with tool_calls: ``{"role", "content", "tool_calls"}``.
+    - tool messages: ``{"role", "tool_call_id", "content"}``.
+    """
+    if m.role == "tool":
+        return {
+            "role": "tool",
+            "tool_call_id": m.tool_call_id or "",
+            "content": m.content,
+        }
+    payload: dict[str, Any] = {"role": m.role, "content": m.content}
+    if m.tool_calls:
+        payload["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.name,
+                    "arguments": tc.arguments_json,
+                },
+            }
+            for tc in m.tool_calls
+        ]
+    return payload
+
+
+def _tool_to_payload(t: ToolDefinition) -> dict[str, Any]:
+    """Serialise a domain ToolDefinition into OpenAI's function-calling shape."""
+    return {
+        "type": "function",
+        "function": {
+            "name": t.name,
+            "description": t.description,
+            "parameters": t.parameters,
+        },
+    }
+
+
+def _tool_calls_from_message(message: Any) -> tuple[ToolCall, ...]:
+    """Extract tool_calls (if any) from a LiteLLM response message.
+
+    LiteLLM normalises tool calls to the OpenAI shape: each call carries
+    ``id``, ``type="function"``, and ``function`` with ``name`` and
+    ``arguments`` (a JSON string). The SDK returns objects or dicts
+    depending on the path; ``getattr`` with a dict fallback handles both.
+    """
+    raw = getattr(message, "tool_calls", None) or []
+    out: list[ToolCall] = []
+    for tc in raw:
+        call_id = getattr(tc, "id", None)
+        if call_id is None and isinstance(tc, dict):
+            call_id = tc.get("id")
+        fn = getattr(tc, "function", None)
+        if fn is None and isinstance(tc, dict):
+            fn = tc.get("function")
+        name = getattr(fn, "name", None)
+        if name is None and isinstance(fn, dict):
+            name = fn.get("name")
+        args = getattr(fn, "arguments", None)
+        if args is None and isinstance(fn, dict):
+            args = fn.get("arguments")
+        out.append(
+            ToolCall(
+                id=str(call_id or ""),
+                name=str(name or ""),
+                arguments_json=str(args or "{}"),
+            )
+        )
+    return tuple(out)
+
+
 def _completion_from_litellm_response(
     response: Any, requested_model: str
 ) -> Completion:
@@ -208,6 +299,7 @@ def _completion_from_litellm_response(
     input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
     output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
     response_model = getattr(response, "model", requested_model) or requested_model
+    tool_calls = _tool_calls_from_message(choice.message)
     return Completion(
         text=text,
         model=response_model,
@@ -215,6 +307,7 @@ def _completion_from_litellm_response(
             input_tokens=input_tokens, output_tokens=output_tokens
         ),
         finish_reason=finish_reason,
+        tool_calls=tool_calls,
     )
 
 
@@ -228,4 +321,5 @@ def _with_trace_id(completion: Completion, trace_id: str | None) -> Completion:
         trace_id=trace_id,
         finish_reason=completion.finish_reason,
         metadata=completion.metadata,
+        tool_calls=completion.tool_calls,
     )
