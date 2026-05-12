@@ -194,164 +194,236 @@ class AgentLoopExecutor(AgentExecutor):
                 while iteration < MAX_ITERATIONS:
                     iteration += 1
                     iteration_started_at = datetime.now(timezone.utc)
-                    yield IterationStarted(
-                        invocation_id=invocation_id,
-                        iteration_index=iteration,
-                        started_at=iteration_started_at,
-                    )
 
-                    yield LLMCallStarted(
-                        invocation_id=invocation_id,
-                        iteration_index=iteration,
-                        model_name=model_name,
-                        message_count=len(messages),
-                        started_at=datetime.now(timezone.utc),
-                    )
-
-                    # ---- stream LLM ----
-                    content_parts: list[str] = []
-                    terminal_chunk: CompletionChunk | None = None
-                    async for chunk in self._inference_port.stream_complete(
-                        messages=messages,
-                        model=model_name,
-                        tenant_context=context.tenant_context,
-                        tools=tool_definitions_list,
-                    ):
-                        if chunk.is_final:
-                            terminal_chunk = chunk
-                            break
-                        if chunk.text_delta:
-                            content_parts.append(chunk.text_delta)
-                            yield ContentDelta(
-                                invocation_id=invocation_id,
-                                iteration_index=iteration,
-                                text_fragment=chunk.text_delta,
-                            )
-
-                    if terminal_chunk is None:
-                        raise RuntimeError(
-                            "inference stream ended without a terminal chunk"
+                    # Per D90 commit 6: each iteration gets its own
+                    # OTel span as a child of agent.invocation. The
+                    # gen_ai.llm_call span from the LiteLLM adapter
+                    # nests as a grandchild via OTel context
+                    # propagation; the agent.tool_call spans (also
+                    # children of this iteration span) nest as
+                    # grandchildren of agent.invocation.
+                    with _tracer.start_as_current_span(
+                        "agent.iteration",
+                        kind=SpanKind.INTERNAL,
+                        attributes={
+                            "agent.invocation_id": str(invocation_id),
+                            "iteration.index": iteration,
+                        },
+                    ) as iteration_span:
+                        yield IterationStarted(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            started_at=iteration_started_at,
                         )
 
-                    iteration_cost = terminal_chunk.cost_usd
-                    cost_total += iteration_cost
-                    iteration_content = "".join(content_parts)
-                    tool_calls = terminal_chunk.tool_calls
+                        yield LLMCallStarted(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            model_name=model_name,
+                            message_count=len(messages),
+                            started_at=datetime.now(timezone.utc),
+                        )
 
-                    # ---- branch: content-only iteration ----
-                    if not tool_calls:
-                        response_content = iteration_content
-                        termination_reason = TerminationReason.CONTENT
+                        # ---- stream LLM (gen_ai.llm_call span nests via context) ----
+                        content_parts: list[str] = []
+                        terminal_chunk: CompletionChunk | None = None
+                        async for chunk in self._inference_port.stream_complete(
+                            messages=messages,
+                            model=model_name,
+                            tenant_context=context.tenant_context,
+                            tools=tool_definitions_list,
+                        ):
+                            if chunk.is_final:
+                                terminal_chunk = chunk
+                                break
+                            if chunk.text_delta:
+                                content_parts.append(chunk.text_delta)
+                                yield ContentDelta(
+                                    invocation_id=invocation_id,
+                                    iteration_index=iteration,
+                                    text_fragment=chunk.text_delta,
+                                )
+
+                        if terminal_chunk is None:
+                            raise RuntimeError(
+                                "inference stream ended without a terminal chunk"
+                            )
+
+                        # Per D90 commit 6, cost rolls up at the iteration
+                        # level: iteration.cost_usd = LLM cost + sum of
+                        # tool costs. Phase 1 has no tool-side costs
+                        # (retrieval is local DB); the sum is the LLM
+                        # cost. The forward-affordance: when tools start
+                        # carrying cost (Phase 2), this expression
+                        # extends without rearchitecting the span tree.
+                        iteration_llm_cost = terminal_chunk.cost_usd
+                        iteration_tool_cost = Decimal("0")
+                        iteration_content = "".join(content_parts)
+                        tool_calls = terminal_chunk.tool_calls
+
+                        # ---- branch: content-only iteration ----
+                        if not tool_calls:
+                            response_content = iteration_content
+                            termination_reason = TerminationReason.CONTENT
+                            iteration_cost = (
+                                iteration_llm_cost + iteration_tool_cost
+                            )
+                            cost_total += iteration_cost
+                            duration_ms = _ms_since(iteration_started_at)
+                            iteration_span.set_attribute(
+                                "iteration.cost_usd", float(iteration_cost)
+                            )
+                            iteration_span.set_attribute(
+                                "iteration.duration_ms", duration_ms
+                            )
+                            yield IterationCompleted(
+                                invocation_id=invocation_id,
+                                iteration_index=iteration,
+                                termination_signal="content",
+                                duration_ms=duration_ms,
+                                cost_usd=iteration_cost,
+                            )
+                            break
+
+                        # ---- branch: tool calls in this iteration ----
+                        messages.append(
+                            Message(
+                                role="assistant",
+                                content=iteration_content,
+                                tool_calls=tool_calls,
+                            )
+                        )
+
+                        iteration_terminated_signal: str | None = None
+
+                        for tool_call in tool_calls:
+                            classification = context.tool_classifications.get(
+                                tool_call.name, "unknown"
+                            )
+                            yield ToolCallProposed(
+                                invocation_id=invocation_id,
+                                iteration_index=iteration,
+                                tool_name=tool_call.name,
+                                arguments=tool_call.arguments_json,
+                                classification=classification,
+                            )
+
+                            tool_started_at = datetime.now(timezone.utc)
+
+                            # Per D90 commit 6: each tool call gets its
+                            # own OTel span as a child of agent.iteration.
+                            with _tracer.start_as_current_span(
+                                "agent.tool_call",
+                                kind=SpanKind.INTERNAL,
+                                attributes={
+                                    "agent.invocation_id": str(invocation_id),
+                                    "iteration.index": iteration,
+                                    "tool.name": tool_call.name,
+                                    "tool.classification": classification,
+                                },
+                            ) as tool_span:
+                                result: ToolInvocationResult = await self._tool_invoker(
+                                    tool_call=tool_call,
+                                    tenant_context=context.tenant_context,
+                                )
+                                tool_duration_ms = _ms_since(tool_started_at)
+                                tool_span.set_attribute(
+                                    "tool.duration_ms", tool_duration_ms
+                                )
+                                tool_span.set_attribute(
+                                    "tool.result.status",
+                                    result.outcome.value,
+                                )
+
+                            if result.outcome is InvocationOutcome.INVARIANT_BLOCKED:
+                                blocked_tool_name = tool_call.name
+                                blocked_classification = (
+                                    _INVARIANT_INDEX_TO_CLASSIFICATION.get(
+                                        result.invariant_index or 0,
+                                        classification,
+                                    )
+                                )
+                                response_content = (
+                                    iteration_content
+                                    or result.message
+                                    or result.payload
+                                )
+                                termination_reason = (
+                                    TerminationReason.INVARIANT_BLOCKED
+                                )
+                                iteration_terminated_signal = (
+                                    "invariant_blocked"
+                                )
+                                break
+
+                            if (
+                                result.outcome
+                                is InvocationOutcome.TOOL_NOT_REGISTERED
+                            ):
+                                response_content = (
+                                    iteration_content
+                                    or result.message
+                                    or (
+                                        f"(model attempted to call unregistered tool "
+                                        f"{tool_call.name!r})"
+                                    )
+                                )
+                                termination_reason = (
+                                    TerminationReason.TOOL_NOT_REGISTERED
+                                )
+                                iteration_terminated_signal = (
+                                    "tool_not_registered"
+                                )
+                                break
+
+                            # OK / ERROR both proceed; the loop continues.
+                            yield ToolCallExecuting(
+                                invocation_id=invocation_id,
+                                iteration_index=iteration,
+                                tool_name=tool_call.name,
+                                started_at=tool_started_at,
+                            )
+                            yield ToolCallCompleted(
+                                invocation_id=invocation_id,
+                                iteration_index=iteration,
+                                tool_name=tool_call.name,
+                                success=result.outcome is InvocationOutcome.OK,
+                                result_summary=_summarise(result.payload),
+                                duration_ms=tool_duration_ms,
+                            )
+                            messages.append(
+                                Message(
+                                    role="tool",
+                                    content=result.payload,
+                                    tool_call_id=tool_call.id,
+                                )
+                            )
+
+                        iteration_cost = (
+                            iteration_llm_cost + iteration_tool_cost
+                        )
+                        cost_total += iteration_cost
+                        duration_ms = _ms_since(iteration_started_at)
+                        iteration_span.set_attribute(
+                            "iteration.cost_usd", float(iteration_cost)
+                        )
+                        iteration_span.set_attribute(
+                            "iteration.duration_ms", duration_ms
+                        )
+
+                        iteration_signal_label = (
+                            iteration_terminated_signal or "continue"
+                        )
                         yield IterationCompleted(
                             invocation_id=invocation_id,
                             iteration_index=iteration,
-                            termination_signal="content",
-                            duration_ms=_ms_since(iteration_started_at),
+                            termination_signal=iteration_signal_label,
+                            duration_ms=duration_ms,
                             cost_usd=iteration_cost,
                         )
-                        break
 
-                    # ---- branch: tool calls in this iteration ----
-                    messages.append(
-                        Message(
-                            role="assistant",
-                            content=iteration_content,
-                            tool_calls=tool_calls,
-                        )
-                    )
-
-                    iteration_terminated_signal: str | None = None
-
-                    for tool_call in tool_calls:
-                        classification = context.tool_classifications.get(
-                            tool_call.name, "unknown"
-                        )
-                        yield ToolCallProposed(
-                            invocation_id=invocation_id,
-                            iteration_index=iteration,
-                            tool_name=tool_call.name,
-                            arguments=tool_call.arguments_json,
-                            classification=classification,
-                        )
-
-                        tool_started_at = datetime.now(timezone.utc)
-                        result: ToolInvocationResult = await self._tool_invoker(
-                            tool_call=tool_call,
-                            tenant_context=context.tenant_context,
-                        )
-
-                        if result.outcome is InvocationOutcome.INVARIANT_BLOCKED:
-                            blocked_tool_name = tool_call.name
-                            blocked_classification = (
-                                _INVARIANT_INDEX_TO_CLASSIFICATION.get(
-                                    result.invariant_index or 0, classification
-                                )
-                            )
-                            response_content = (
-                                iteration_content
-                                or result.message
-                                or result.payload
-                            )
-                            termination_reason = (
-                                TerminationReason.INVARIANT_BLOCKED
-                            )
-                            iteration_terminated_signal = "invariant_blocked"
+                        if iteration_terminated_signal is not None:
                             break
-
-                        if result.outcome is InvocationOutcome.TOOL_NOT_REGISTERED:
-                            response_content = (
-                                iteration_content
-                                or result.message
-                                or (
-                                    f"(model attempted to call unregistered tool "
-                                    f"{tool_call.name!r})"
-                                )
-                            )
-                            termination_reason = (
-                                TerminationReason.TOOL_NOT_REGISTERED
-                            )
-                            iteration_terminated_signal = "tool_not_registered"
-                            break
-
-                        # OK / ERROR both proceed through the executing/completed
-                        # path; the loop continues regardless. ERROR appends an
-                        # explanation as a tool-role message so the LLM can react.
-                        yield ToolCallExecuting(
-                            invocation_id=invocation_id,
-                            iteration_index=iteration,
-                            tool_name=tool_call.name,
-                            started_at=tool_started_at,
-                        )
-                        tool_duration_ms = _ms_since(tool_started_at)
-                        yield ToolCallCompleted(
-                            invocation_id=invocation_id,
-                            iteration_index=iteration,
-                            tool_name=tool_call.name,
-                            success=result.outcome is InvocationOutcome.OK,
-                            result_summary=_summarise(result.payload),
-                            duration_ms=tool_duration_ms,
-                        )
-                        messages.append(
-                            Message(
-                                role="tool",
-                                content=result.payload,
-                                tool_call_id=tool_call.id,
-                            )
-                        )
-
-                    iteration_signal_label = (
-                        iteration_terminated_signal or "continue"
-                    )
-                    yield IterationCompleted(
-                        invocation_id=invocation_id,
-                        iteration_index=iteration,
-                        termination_signal=iteration_signal_label,
-                        duration_ms=_ms_since(iteration_started_at),
-                        cost_usd=iteration_cost,
-                    )
-
-                    if iteration_terminated_signal is not None:
-                        break
                 else:
                     # while-else: max-iteration cap fired
                     response_content = (
@@ -399,8 +471,11 @@ class AgentLoopExecutor(AgentExecutor):
             invoke_span.set_attribute(
                 "agent.termination_reason", termination_reason.value
             )
+            # Per D90 commit 6: the invocation-level cost rolls up from
+            # iteration costs (which themselves roll up LLM + tool costs).
+            # Attribute name aligned to brief: agent.total_cost_usd.
             invoke_span.set_attribute(
-                "agent.cost_total_usd", float(cost_total)
+                "agent.total_cost_usd", float(cost_total)
             )
             invoke_span.set_attribute(
                 "agent.early_termination",
