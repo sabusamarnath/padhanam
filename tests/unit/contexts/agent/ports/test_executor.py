@@ -11,7 +11,7 @@ import inspect
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
 from typing import get_type_hints
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -24,7 +24,7 @@ from contexts.agent.ports import (
     InvocationMessage,
     TerminationReason,
 )
-from shared_kernel import TenantContext
+from shared_kernel import TenantContext, ToolAllowlistEntry
 
 
 _TENANT_A = TenantContext(
@@ -32,12 +32,16 @@ _TENANT_A = TenantContext(
     jurisdiction="eu-west",
     cost_attribution_id="00000000-0000-4000-8000-00000000a001",
 )
+_RETRIEVAL = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000001"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+)
 
 
 def _bundle() -> EffectiveConstraintBundle:
     return EffectiveConstraintBundle(
         system_prompt="be helpful",
-        tool_allowlist=("retrieval",),
+        tool_allowlist=(_RETRIEVAL,),
         retrieval_strategy={"primary": "vector"},
         filter_tree={},
         top_k=5,

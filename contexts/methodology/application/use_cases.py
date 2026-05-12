@@ -79,6 +79,7 @@ from padhanam.security.hash_chain import (
     GENESIS_REVISION_HASH,
     compute_revision_hash,
 )
+from shared_kernel import ToolAllowlistEntry
 
 
 def _deny(
@@ -352,26 +353,38 @@ def _role_content_payload(
     description: str | None,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,
     min_score: Decimal,
     model_selection: str,
 ) -> dict[str, Any]:
-    """Construct the canonical hash content payload for a role revision (D86).
+    """Construct the canonical hash content payload for a role revision (D86, D89).
 
     Mirrors the methodology content payload from D74 / S23 in shape.
     Description's null normalises to the empty string for hash
     determinism. List fields are sorted by the use case per D75's
     field-set-agnostic helper API.
+
+    Per D89 commit 4, ``tool_allowlist`` carries pinned tool-revision
+    references (``ToolAllowlistEntry``); entries are sorted by the
+    ``(tool_id, revision_id)`` tuple via the dataclass's ``order=True``
+    ordering and encoded as ``[{"tool_id": "<uuid>", "revision_id":
+    "<uuid>"}, ...]`` in the canonical payload. Empty allowlist
+    canonicalises to ``[]`` byte-equivalent to the prior empty-string-
+    list shape, preserving hash stability for the seven McKinsey roles
+    seeded with empty allowlist at S26b.
     """
     return {
         "name": name,
         "description": description or "",
         "system_prompt": system_prompt,
         "source_ids": sorted(str(s) for s in source_ids),
-        "tool_allowlist": sorted(str(t) for t in tool_allowlist),
+        "tool_allowlist": [
+            {"tool_id": str(e.tool_id), "revision_id": str(e.revision_id)}
+            for e in sorted(tool_allowlist)
+        ],
         "retrieval_strategy": dict(retrieval_strategy),
         "filter_tree": dict(filter_tree),
         "top_k": top_k,
@@ -389,7 +402,7 @@ async def create_role_template(
     description: str | None,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,
@@ -483,7 +496,7 @@ async def update_role_template(
     template_id: UUID,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,

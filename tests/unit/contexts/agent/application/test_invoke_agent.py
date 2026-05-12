@@ -46,7 +46,17 @@ from padhanam.security import (
     Principal,
 )
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import TenantContext, TenantId, ToolAllowlistEntry
+
+
+_RETRIEVAL_ENTRY = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000001"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+)
+_SEARCH_ENTRY = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000010"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000011"),
+)
 
 
 _TENANT_A_UUID = "00000000-0000-4000-8000-00000000a001"
@@ -105,7 +115,7 @@ def _agent_revision(template_id: UUID) -> AgentRevision:
         version=1,
         system_prompt="You are a problem framer (revision snapshot).",
         source_ids=(),
-        tool_allowlist=("retrieval",),
+        tool_allowlist=(_RETRIEVAL_ENTRY,),
         retrieval_strategy={"primary": "vector"},
         filter_tree={},
         top_k=8,
@@ -216,7 +226,7 @@ def _mckinsey_role_view(role_id: UUID, version: int) -> RoleView:
             "You frame problems for structured analysis. Your job is to "
             "produce a sharpened problem statement."
         ),
-        tool_allowlist=("retrieval", "search"),
+        tool_allowlist=(_RETRIEVAL_ENTRY, _SEARCH_ENTRY),
         retrieval_strategy={"primary": "vector", "secondary": "graph"},
         filter_tree={},
         top_k=8,

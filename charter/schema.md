@@ -196,7 +196,7 @@ platform; archived rows retain their name for audit per D31.
 | `version`                 | `integer`       | not null                                       |
 | `system_prompt`           | `text`          | not null                                       |
 | `source_ids`              | `jsonb`         | not null; array of UUID strings; typically empty for platform-managed roles per D68 |
-| `tool_allowlist`          | `jsonb`         | not null; array of opaque strings per D68      |
+| `tool_allowlist`          | `jsonb`         | not null; pre-D89 shape was an array of opaque name strings; post-S28b commit 4 the shape is an array of `{tool_id, revision_id}` objects pinning to specific tool revisions per D89 |
 | `retrieval_strategy`      | `jsonb`         | not null; strategy-name-plus-params shape per D66 |
 | `filter_tree`             | `jsonb`         | not null; typed Boolean tree per D67           |
 | `top_k`                   | `integer`       | not null                                       |
@@ -213,7 +213,10 @@ D31; updates create new revision rows. Hash-chain content surface
 mirrors the methodology revision pattern from D74: the hash spans
 `name` (denormalised from the parent template at hash-compute time),
 `description` (denormalised likewise), `system_prompt`, `source_ids`
-(sorted), `tool_allowlist` (sorted), `retrieval_strategy`,
+(sorted), `tool_allowlist` (sorted by `(tool_id, revision_id)` per
+D89 commit 4; the on-disk shape is an array of
+`{"tool_id": "<uuid>", "revision_id": "<uuid>"}` objects),
+`retrieval_strategy`,
 `filter_tree`, `top_k`, `min_score`, `model_selection`, plus
 `previous_revision_hash`. Chain metadata (template_id, version,
 timestamps) is excluded from the hash. Each role template has its own
@@ -680,7 +683,7 @@ The partial-unique-index on `name` where `archived_at IS NULL` enforces unique a
 | `version`                 | `integer`       | not null                                       |
 | `system_prompt`           | `text`          | not null                                       |
 | `source_ids`              | `jsonb`         | not null; array of UUID strings                |
-| `tool_allowlist`          | `jsonb`         | not null; array of opaque strings              |
+| `tool_allowlist`          | `jsonb`         | not null; pre-D89 shape was an array of opaque name strings; post-S28b commit 4 the per-tenant shape is an array of `{tool_id, revision_id}` objects pinning to specific tool revisions per D89 (Alembic per-tenant `0010_agent_tool_allowlist_pin`) |
 | `retrieval_strategy`      | `jsonb`         | not null; strategy-name-plus-params per D66    |
 | `filter_tree`             | `jsonb`         | not null; typed Boolean tree per D67           |
 | `top_k`                   | `integer`       | not null                                       |

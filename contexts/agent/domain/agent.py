@@ -61,6 +61,8 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID
 
+from shared_kernel import ToolAllowlistEntry
+
 
 @dataclass(frozen=True)
 class AgentTemplate:
@@ -139,7 +141,7 @@ class AgentRevision:
     version: int
     system_prompt: str
     source_ids: tuple[UUID, ...]
-    tool_allowlist: tuple[str, ...]
+    tool_allowlist: tuple[ToolAllowlistEntry, ...]
     retrieval_strategy: Mapping[str, Any]
     filter_tree: Mapping[str, Any]
     top_k: int

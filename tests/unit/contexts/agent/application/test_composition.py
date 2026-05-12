@@ -11,7 +11,7 @@ shape-defence ``CompositionError`` cases.
 from __future__ import annotations
 
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -21,6 +21,37 @@ from contexts.agent.application.composition import (
     SYSTEM_PROMPT_AUGMENT_SEPARATOR,
 )
 from contexts.agent.application.ports import RoleView
+from shared_kernel import ToolAllowlistEntry
+
+
+# Synthetic pinned tool entries used by the composition tests. The
+# tool UUIDs are fixtures-only; the resolver doesn't look up the tool
+# registry, it only operates on the (tool_id, revision_id) tuples
+# composition produces.
+_RETRIEVAL = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000001"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+)
+_SEARCH = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000010"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000011"),
+)
+_WRITE_FILE = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000020"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000021"),
+)
+_SUMMARISE = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000030"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000031"),
+)
+_CALENDAR_SEND = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000040"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000041"),
+)
+
+
+def _allowlist_dict(entry: ToolAllowlistEntry) -> dict[str, str]:
+    return {"tool_id": str(entry.tool_id), "revision_id": str(entry.revision_id)}
 
 
 def _lvt_role_view() -> RoleView:
@@ -30,7 +61,7 @@ def _lvt_role_view() -> RoleView:
         role_version=1,
         description="LVT guide.",
         system_prompt="You are an LVT coach.",
-        tool_allowlist=("retrieval",),
+        tool_allowlist=(_RETRIEVAL,),
         retrieval_strategy={"primary": "vector"},
         filter_tree={},
         top_k=8,
@@ -51,7 +82,7 @@ def _mckinsey_problem_framer_view() -> RoleView:
             "sharpened problem statement with explicit scope, context, "
             "complication, and success criteria."
         ),
-        tool_allowlist=("retrieval", "search"),
+        tool_allowlist=(_RETRIEVAL, _SEARCH),
         retrieval_strategy={"primary": "vector", "secondary": "graph"},
         filter_tree={},
         top_k=8,
@@ -120,26 +151,30 @@ def test_system_prompt_replace_substitutes() -> None:
 
 def test_tool_allowlist_tighten_intersects_preserving_role_order() -> None:
     role = _mckinsey_problem_framer_view()
-    # role.tool_allowlist == ("retrieval", "search")
+    # role.tool_allowlist == (_RETRIEVAL, _SEARCH); the override lists
+    # _SEARCH and _WRITE_FILE by their pinned tuples. The intersection
+    # by tool_id keeps _SEARCH (also in role) and drops _RETRIEVAL
+    # (not in override) and _WRITE_FILE (not in role).
     overrides = {
         "tool_allowlist": {
             "mode": "tighten",
-            "value": ["search", "write_file"],
+            "value": [_allowlist_dict(_SEARCH), _allowlist_dict(_WRITE_FILE)],
         },
     }
     result = compose_effective_constraint_bundle(
         role=role,
         methodology_overrides=overrides,
     )
-    # "search" is in both; "write_file" not in role; "retrieval" not
-    # in override. Result is intersection preserving role order.
-    assert result.tool_allowlist == ("search",)
+    assert result.tool_allowlist == (_SEARCH,)
 
 
 def test_tool_allowlist_tighten_empty_intersection_yields_empty_tuple() -> None:
     role = _lvt_role_view()
     overrides = {
-        "tool_allowlist": {"mode": "tighten", "value": ["calendar_send"]},
+        "tool_allowlist": {
+            "mode": "tighten",
+            "value": [_allowlist_dict(_CALENDAR_SEND)],
+        },
     }
     result = compose_effective_constraint_bundle(
         role=role,
@@ -151,13 +186,16 @@ def test_tool_allowlist_tighten_empty_intersection_yields_empty_tuple() -> None:
 def test_tool_allowlist_replace_substitutes() -> None:
     role = _lvt_role_view()
     overrides = {
-        "tool_allowlist": {"mode": "replace", "value": ["search", "summarise"]},
+        "tool_allowlist": {
+            "mode": "replace",
+            "value": [_allowlist_dict(_SEARCH), _allowlist_dict(_SUMMARISE)],
+        },
     }
     result = compose_effective_constraint_bundle(
         role=role,
         methodology_overrides=overrides,
     )
-    assert result.tool_allowlist == ("search", "summarise")
+    assert result.tool_allowlist == (_SEARCH, _SUMMARISE)
 
 
 # 4. retrieval_strategy: replace only.

@@ -10,16 +10,24 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from shared_kernel import ToolAllowlistEntry
+
+
+_RETRIEVAL = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000001"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+)
 
 
 def _sample_bundle() -> EffectiveConstraintBundle:
     return EffectiveConstraintBundle(
         system_prompt="You are a problem framer.\n\nApply the SCQ framework.",
-        tool_allowlist=("retrieval",),
+        tool_allowlist=(_RETRIEVAL,),
         retrieval_strategy={"primary": "vector"},
         filter_tree={},
         top_k=8,
@@ -32,7 +40,7 @@ def test_bundle_construction_carries_all_fields() -> None:
     b = _sample_bundle()
     assert b.system_prompt.startswith("You are a problem framer.")
     assert "Apply the SCQ framework." in b.system_prompt
-    assert b.tool_allowlist == ("retrieval",)
+    assert b.tool_allowlist == (_RETRIEVAL,)
     assert b.retrieval_strategy == {"primary": "vector"}
     assert b.filter_tree == {}
     assert b.top_k == 8

@@ -36,7 +36,17 @@ from padhanam.security import (
     Principal,
 )
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
-from shared_kernel import TenantId
+from shared_kernel import TenantId, ToolAllowlistEntry
+
+
+_TOOL_A = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-4000-8000-00000000aaaa"),
+    revision_id=UUID("00000000-0000-4000-8000-00000000aaab"),
+)
+_TOOL_B = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-4000-8000-00000000bbbb"),
+    revision_id=UUID("00000000-0000-4000-8000-00000000bbbc"),
+)
 
 
 def _operator_principal() -> Principal:
@@ -398,7 +408,7 @@ def test_hash_chain_byte_equivalence_under_list_field_reorder(event_loop) -> Non
             security_events=sec,
             **_create_kwargs(
                 source_ids=(src_a, src_b),
-                tool_allowlist=("tool_b", "tool_a"),
+                tool_allowlist=(_TOOL_B, _TOOL_A),
             ),
         )
     )
@@ -409,7 +419,7 @@ def test_hash_chain_byte_equivalence_under_list_field_reorder(event_loop) -> Non
             security_events=sec,
             **_create_kwargs(
                 source_ids=(src_b, src_a),
-                tool_allowlist=("tool_a", "tool_b"),
+                tool_allowlist=(_TOOL_A, _TOOL_B),
             ),
         )
     )

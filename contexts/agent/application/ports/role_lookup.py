@@ -40,6 +40,7 @@ from typing import Any, Mapping, Protocol
 from uuid import UUID
 
 from padhanam.security import Principal
+from shared_kernel import ToolAllowlistEntry
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class RoleView:
     role_version: int
     description: str | None
     system_prompt: str
-    tool_allowlist: tuple[str, ...]
+    tool_allowlist: tuple[ToolAllowlistEntry, ...]
     retrieval_strategy: Mapping[str, Any]
     filter_tree: Mapping[str, Any]
     top_k: int

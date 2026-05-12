@@ -36,7 +36,7 @@ from padhanam.security import (
     Principal,
 )
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import TenantContext, TenantId, ToolAllowlistEntry
 
 
 _TENANT_A_UUID = "00000000-0000-4000-8000-00000000a001"
@@ -458,7 +458,10 @@ def test_byte_equivalent_hash_versus_blank_create(event_loop) -> None:
     description = "shared description"
     system_prompt = "shared prompt"
     source_ids = (uuid4(), uuid4())
-    tool_allowlist = ("tool-a", "tool-b")
+    tool_allowlist = (
+        ToolAllowlistEntry(tool_id=UUID("00000000-0000-4000-8000-00000000aaaa"), revision_id=UUID("00000000-0000-4000-8000-00000000aaab")),
+        ToolAllowlistEntry(tool_id=UUID("00000000-0000-4000-8000-00000000bbbb"), revision_id=UUID("00000000-0000-4000-8000-00000000bbbc")),
+    )
     retrieval_strategy = {"strategy": "hybrid", "params": {}}
     filter_tree = {"node": {}}
     top_k = 8

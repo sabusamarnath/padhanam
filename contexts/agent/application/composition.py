@@ -53,9 +53,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any, Mapping
+from uuid import UUID
 
 from contexts.agent.application.ports import RoleView
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from shared_kernel import ToolAllowlistEntry
 
 
 SYSTEM_PROMPT_AUGMENT_SEPARATOR = "\n\n"
@@ -179,28 +181,75 @@ def _resolve_text_field(
 
 def _resolve_tool_allowlist(
     *,
-    base: tuple[str, ...],
+    base: tuple[ToolAllowlistEntry, ...],
     overrides: Mapping[str, Mapping[str, Any]],
-) -> tuple[str, ...]:
+) -> tuple[ToolAllowlistEntry, ...]:
     """Resolve tool_allowlist (tighten via intersection, or replace).
+
+    Per D89 commit 4, entries are pinned ``ToolAllowlistEntry`` value
+    objects (``tool_id``, ``revision_id``). Override payloads carry
+    the on-disk wire shape (list of ``{"tool_id", "revision_id"}``
+    dicts); ``_parse_allowlist_value`` decodes them.
 
     Tighten preserves role-base ordering so the effective list is
     deterministic and the byte-level shape is stable across invocations.
+    The intersection is by ``tool_id`` only: when the methodology
+    tightens by listing ``tool_id`` X, the role's pinned revision of X
+    wins (the methodology cannot upgrade or downgrade the pin during
+    tighten; only the role's authoring decides which revision to bind).
+    Replace substitutes the methodology's pinned entries wholesale.
     """
     pair = _entry(overrides, "tool_allowlist")
     if pair is None:
         return base
     mode, value = pair
-    incoming = tuple(str(t) for t in value)
+    incoming = _parse_allowlist_value(value)
     if mode == "tighten":
-        incoming_set = set(incoming)
-        return tuple(t for t in base if t in incoming_set)
+        incoming_tool_ids = {e.tool_id for e in incoming}
+        return tuple(e for e in base if e.tool_id in incoming_tool_ids)
     if mode == "replace":
         return incoming
     raise CompositionError(
         f"override mode {mode!r} unexpected for field 'tool_allowlist'; "
         f"D87 admissible modes are 'tighten' or 'replace'"
     )
+
+
+def _parse_allowlist_value(
+    value: Any,
+) -> tuple[ToolAllowlistEntry, ...]:
+    """Decode a tool_allowlist override value to a tuple of entries.
+
+    Accepts the on-disk JSONB wire shape (list of dicts with
+    ``tool_id`` and ``revision_id`` keys), already-decoded tuples of
+    ``ToolAllowlistEntry``, or a mix. Raises ``CompositionError`` on
+    malformed entries.
+    """
+    if not value:
+        return ()
+    out: list[ToolAllowlistEntry] = []
+    for entry in value:
+        if isinstance(entry, ToolAllowlistEntry):
+            out.append(entry)
+            continue
+        if isinstance(entry, Mapping):
+            try:
+                tool_id = UUID(str(entry["tool_id"]))
+                revision_id = UUID(str(entry["revision_id"]))
+            except (KeyError, ValueError, TypeError) as exc:
+                raise CompositionError(
+                    f"override entry for field 'tool_allowlist' carries "
+                    f"a malformed allowlist entry {entry!r}: {exc}"
+                ) from exc
+            out.append(
+                ToolAllowlistEntry(tool_id=tool_id, revision_id=revision_id)
+            )
+            continue
+        raise CompositionError(
+            f"override entry for field 'tool_allowlist' carries an "
+            f"unsupported entry shape {type(entry).__name__!r}: {entry!r}"
+        )
+    return tuple(out)
 
 
 def _resolve_replace_only_mapping(

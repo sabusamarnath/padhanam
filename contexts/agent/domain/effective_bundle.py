@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Mapping
 
+from shared_kernel import ToolAllowlistEntry
+
 
 @dataclass(frozen=True)
 class EffectiveConstraintBundle:
@@ -41,7 +43,7 @@ class EffectiveConstraintBundle:
     """
 
     system_prompt: str
-    tool_allowlist: tuple[str, ...]
+    tool_allowlist: tuple[ToolAllowlistEntry, ...]
     retrieval_strategy: Mapping[str, Any]
     filter_tree: Mapping[str, Any]
     top_k: int

@@ -43,6 +43,7 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
@@ -73,8 +74,12 @@ MAX_ITERATIONS = 10
 
 # The single tool the agent runtime registers at Phase 1 per D88's
 # retrieval-as-only-callable framing. S28b's tool registry generalises
-# this surface to multiple tools with classification enforcement.
+# this surface to multiple tools with classification enforcement. The
+# retrieval tool's identity is the well-known UUID seeded by
+# ``0009_create_tools_tables`` per D89; the role's allowlist pin
+# (post-commit-4 tuple shape) carries this UUID for revision 1.
 RETRIEVAL_TOOL_NAME = "retrieval"
+RETRIEVAL_TOOL_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 _RETRIEVAL_TOOL_DEFINITION = ToolDefinition(
     name=RETRIEVAL_TOOL_NAME,
@@ -209,12 +214,16 @@ class AgentLoopExecutor(AgentExecutor):
 
         # Phase 1: register the retrieval tool only when the role's
         # tool_allowlist permits it (after composition with the
-        # methodology's tighten). An empty allowlist or a non-retrieval
-        # allowlist runs the loop without tools, producing a single
-        # content turn or terminating early on a model-issued unknown
-        # tool call.
+        # methodology's tighten). Per D89 commit 4 the allowlist
+        # carries pinned ``ToolAllowlistEntry`` entries; the retrieval
+        # match is by ``tool_id`` against the seeded retrieval UUID.
+        # An empty allowlist or one that does not pin retrieval runs
+        # the loop without tools, producing a single content turn or
+        # terminating early on a model-issued unknown tool call.
+        # Commit 5 replaces this hardcoded branch with
+        # ``ToolDefinitionsLookup`` from the tools context.
         tools: list[ToolDefinition] = []
-        if RETRIEVAL_TOOL_NAME in bundle.tool_allowlist:
+        if any(e.tool_id == RETRIEVAL_TOOL_ID for e in bundle.tool_allowlist):
             tools.append(_RETRIEVAL_TOOL_DEFINITION)
 
         cost_total = Decimal("0")

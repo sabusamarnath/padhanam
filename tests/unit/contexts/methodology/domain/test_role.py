@@ -101,10 +101,23 @@ def test_role_revision_source_ids_are_tuple() -> None:
     assert isinstance(rev.source_ids, tuple)
 
 
-def test_role_revision_tool_allowlist_are_tuple() -> None:
-    rev = _revision(tool_allowlist=("vector_search", "graph_traverse"))
-    assert rev.tool_allowlist == ("vector_search", "graph_traverse")
+def test_role_revision_tool_allowlist_are_tuple_of_pinned_entries() -> None:
+    """Per D89 commit 4, tool_allowlist carries pinned ToolAllowlistEntry
+    value objects (UUID tuple) instead of the prior opaque-string shape."""
+    from shared_kernel import ToolAllowlistEntry
+
+    a = ToolAllowlistEntry(
+        tool_id=UUID("00000000-0000-4000-8000-00000000aaaa"),
+        revision_id=UUID("00000000-0000-4000-8000-00000000aaab"),
+    )
+    b = ToolAllowlistEntry(
+        tool_id=UUID("00000000-0000-4000-8000-00000000bbbb"),
+        revision_id=UUID("00000000-0000-4000-8000-00000000bbbc"),
+    )
+    rev = _revision(tool_allowlist=(a, b))
+    assert rev.tool_allowlist == (a, b)
     assert isinstance(rev.tool_allowlist, tuple)
+    assert all(isinstance(e, ToolAllowlistEntry) for e in rev.tool_allowlist)
 
 
 def test_role_revision_jsonb_fields_are_mappings() -> None:

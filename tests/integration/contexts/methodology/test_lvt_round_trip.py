@@ -50,7 +50,17 @@ from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import file_security_event_logger
 from padhanam.security import OPERATOR_ROLE, Principal
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
-from shared_kernel import TenantId
+from shared_kernel import TenantId, ToolAllowlistEntry
+
+
+_VECTOR_SEARCH = ToolAllowlistEntry(
+    tool_id=__import__("uuid").UUID("00000000-0000-4000-8000-00000000eee1"),
+    revision_id=__import__("uuid").UUID("00000000-0000-4000-8000-00000000eee2"),
+)
+_GRAPH_TRAVERSE = ToolAllowlistEntry(
+    tool_id=__import__("uuid").UUID("00000000-0000-4000-8000-00000000fff1"),
+    revision_id=__import__("uuid").UUID("00000000-0000-4000-8000-00000000fff2"),
+)
 
 
 _LVT_SYSTEM_PROMPT = (
@@ -161,7 +171,7 @@ def test_lvt_round_trip_resolves_role_content_through_methodology_view(
             description="Lean Value Tree guide role",
             system_prompt=_LVT_SYSTEM_PROMPT,
             source_ids=(),
-            tool_allowlist=("vector_search", "graph_traverse"),
+            tool_allowlist=(_VECTOR_SEARCH, _GRAPH_TRAVERSE),
             retrieval_strategy={"strategy": "hybrid", "params": {}},
             filter_tree={"node": {}},
             top_k=8,
@@ -217,7 +227,7 @@ def test_lvt_round_trip_resolves_role_content_through_methodology_view(
     assert view.methodology_version == 1
     assert view.description == "Lean Value Tree methodology"
     assert view.system_prompt == _LVT_SYSTEM_PROMPT
-    assert view.tool_allowlist == ("vector_search", "graph_traverse")
+    assert view.tool_allowlist == (_VECTOR_SEARCH, _GRAPH_TRAVERSE)
     assert view.retrieval_strategy == {"strategy": "hybrid", "params": {}}
     assert view.filter_tree == {"node": {}}
     assert view.top_k == 8

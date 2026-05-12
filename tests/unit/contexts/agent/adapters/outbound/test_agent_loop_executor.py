@@ -38,7 +38,7 @@ from contexts.inference.domain.completion import (
     ToolCall,
     ToolDefinition,
 )
-from shared_kernel import TenantContext
+from shared_kernel import TenantContext, ToolAllowlistEntry
 
 
 _TENANT_A = TenantContext(
@@ -47,8 +47,16 @@ _TENANT_A = TenantContext(
     cost_attribution_id="00000000-0000-4000-8000-00000000a001",
 )
 
+# Well-known retrieval tool UUIDs per D89's commit-2 seed.
+_RETRIEVAL_ALLOWLIST_ENTRY = ToolAllowlistEntry(
+    tool_id=UUID("00000000-0000-0000-0000-000000000001"),
+    revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+)
 
-def _bundle(tools: tuple[str, ...] = ("retrieval",)) -> EffectiveConstraintBundle:
+
+def _bundle(
+    tools: tuple[ToolAllowlistEntry, ...] = (_RETRIEVAL_ALLOWLIST_ENTRY,),
+) -> EffectiveConstraintBundle:
     return EffectiveConstraintBundle(
         system_prompt="be helpful",
         tool_allowlist=tools,
@@ -62,7 +70,7 @@ def _bundle(tools: tuple[str, ...] = ("retrieval",)) -> EffectiveConstraintBundl
 
 def _context(
     *,
-    tools: tuple[str, ...] = ("retrieval",),
+    tools: tuple[ToolAllowlistEntry, ...] = (_RETRIEVAL_ALLOWLIST_ENTRY,),
     methodology_id: UUID | None = None,
 ) -> AgentInvocationContext:
     return AgentInvocationContext(

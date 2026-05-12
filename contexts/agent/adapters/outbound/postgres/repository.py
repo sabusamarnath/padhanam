@@ -41,7 +41,7 @@ from padhanam.observability.security_events import (
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import TenantContext, TenantId, ToolAllowlistEntry
 
 
 _metadata = sa.MetaData()
@@ -332,7 +332,10 @@ def _revision_insert_values(rev: AgentRevision) -> dict:
         "version": rev.version,
         "system_prompt": rev.system_prompt,
         "source_ids": [str(s) for s in rev.source_ids],
-        "tool_allowlist": list(rev.tool_allowlist),
+        "tool_allowlist": [
+            {"tool_id": str(e.tool_id), "revision_id": str(e.revision_id)}
+            for e in rev.tool_allowlist
+        ],
         "retrieval_strategy": dict(rev.retrieval_strategy),
         "filter_tree": dict(rev.filter_tree),
         "top_k": rev.top_k,
@@ -375,7 +378,13 @@ def _row_to_revision(row) -> AgentRevision:
         version=row["version"],
         system_prompt=row["system_prompt"],
         source_ids=tuple(UUID(s) for s in row["source_ids"]),
-        tool_allowlist=tuple(row["tool_allowlist"]),
+        tool_allowlist=tuple(
+            ToolAllowlistEntry(
+                tool_id=UUID(e["tool_id"]),
+                revision_id=UUID(e["revision_id"]),
+            )
+            for e in row["tool_allowlist"]
+        ),
         retrieval_strategy=row["retrieval_strategy"],
         filter_tree=row["filter_tree"],
         top_k=row["top_k"],

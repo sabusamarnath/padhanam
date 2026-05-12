@@ -94,7 +94,7 @@ from padhanam.security.hash_chain import (
     GENESIS_REVISION_HASH,
     compute_revision_hash,
 )
-from shared_kernel import TenantContext
+from shared_kernel import TenantContext, ToolAllowlistEntry
 
 
 def _is_authenticated(principal: Principal) -> bool:
@@ -138,7 +138,7 @@ def _content_payload(
     description: str | None,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,
@@ -164,7 +164,10 @@ def _content_payload(
         "description": description or "",
         "system_prompt": system_prompt,
         "source_ids": sorted(str(s) for s in source_ids),
-        "tool_allowlist": sorted(str(t) for t in tool_allowlist),
+        "tool_allowlist": [
+            {"tool_id": str(e.tool_id), "revision_id": str(e.revision_id)}
+            for e in sorted(tool_allowlist)
+        ],
         "retrieval_strategy": dict(retrieval_strategy),
         "filter_tree": dict(filter_tree),
         "top_k": top_k,
@@ -183,7 +186,7 @@ async def create_blank_agent(
     description: str | None,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,
@@ -319,7 +322,7 @@ async def update_agent(
     template_id: UUID,
     system_prompt: str,
     source_ids: tuple[UUID, ...],
-    tool_allowlist: tuple[str, ...],
+    tool_allowlist: tuple[ToolAllowlistEntry, ...],
     retrieval_strategy: Mapping[str, Any],
     filter_tree: Mapping[str, Any],
     top_k: int,

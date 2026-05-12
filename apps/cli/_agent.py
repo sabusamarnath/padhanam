@@ -187,6 +187,13 @@ def _to_str_tuple(values: list[Any] | None) -> tuple[str, ...]:
     return tuple(str(v) for v in values)
 
 
+# Reuses the parser helpers from apps.cli._role per D89 commit 4. The
+# helpers handle both legacy string-shaped allowlist entries (resolved
+# to well-known UUIDs for platform-managed tools) and explicit dict-
+# shaped entries.
+from apps.cli._role import _allowlist_to_json, _to_tool_allowlist  # noqa: E402
+
+
 def _to_decimal(value: Any) -> Decimal:
     """Parse a numeric value into Decimal without float-precision loss.
 
@@ -293,7 +300,7 @@ def _render_template_human(
                 f"id:                       {revision.id}",
                 f"system_prompt:            {revision.system_prompt}",
                 f"source_ids:               {[str(s) for s in revision.source_ids]}",
-                f"tool_allowlist:           {list(revision.tool_allowlist)}",
+                f"tool_allowlist:           {_allowlist_to_json(revision.tool_allowlist)}",
                 f"retrieval_strategy:       {dict(revision.retrieval_strategy)}",
                 f"filter_tree:              {dict(revision.filter_tree)}",
                 f"top_k:                    {revision.top_k}",
@@ -338,7 +345,7 @@ def _render_template_json(
             "version": revision.version,
             "system_prompt": revision.system_prompt,
             "source_ids": [str(s) for s in revision.source_ids],
-            "tool_allowlist": list(revision.tool_allowlist),
+            "tool_allowlist": _allowlist_to_json(revision.tool_allowlist),
             "retrieval_strategy": dict(revision.retrieval_strategy),
             "filter_tree": dict(revision.filter_tree),
             "top_k": revision.top_k,
@@ -373,7 +380,7 @@ async def _run_create(
             description=config.get("description"),
             system_prompt=config["system_prompt"],
             source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
+            tool_allowlist=_to_tool_allowlist(config["tool_allowlist"]),
             retrieval_strategy=config["retrieval_strategy"],
             filter_tree=config["filter_tree"],
             top_k=int(config["top_k"]),
@@ -433,7 +440,7 @@ async def _run_update(
             template_id=template_id,
             system_prompt=config["system_prompt"],
             source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
+            tool_allowlist=_to_tool_allowlist(config["tool_allowlist"]),
             retrieval_strategy=config["retrieval_strategy"],
             filter_tree=config["filter_tree"],
             top_k=int(config["top_k"]),

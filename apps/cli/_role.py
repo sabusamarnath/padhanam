@@ -139,6 +139,82 @@ def _to_str_tuple(values: list[Any] | None) -> tuple[str, ...]:
     return tuple(str(v) for v in values)
 
 
+# Well-known UUIDs for platform-managed tools seeded by Alembic
+# 0009_create_tools_tables per D89. The CLI resolves legacy string-
+# shaped allowlist entries by name; richer tool authoring lands at
+# the padhanam tool CLI at S28b commit 8.
+_RETRIEVAL_TOOL_ID = UUID("00000000-0000-0000-0000-000000000001")
+_RETRIEVAL_REVISION_ID = UUID("00000000-0000-0000-0000-000000000002")
+_NAMED_TOOL_PINS: dict[str, tuple[UUID, UUID]] = {
+    "retrieval": (_RETRIEVAL_TOOL_ID, _RETRIEVAL_REVISION_ID),
+}
+
+
+def _to_tool_allowlist(values: list[Any] | None) -> tuple[Any, ...]:
+    """Parse a tool_allowlist config entry to a tuple of pinned entries (D89).
+
+    Accepts two shapes per the commit-4 migration story:
+
+    - **String entries**: legacy shape. Each name resolves to the
+      well-known UUID for the platform-managed tool. Phase 1 has one
+      name (``retrieval``); unknown names raise.
+
+    - **Dict entries**: explicit pin. Keys ``tool_id`` and
+      ``revision_id`` (both UUID strings). The dict form is what the
+      ``padhanam tool list`` output produces for round-tripping at
+      S28b commit 8.
+
+    Lazy import of ``ToolAllowlistEntry`` from ``shared_kernel`` keeps
+    the helper independent of the type if the caller imports it
+    elsewhere (avoids circular import in some test paths).
+    """
+    from shared_kernel import ToolAllowlistEntry
+
+    if not values:
+        return ()
+    out: list[ToolAllowlistEntry] = []
+    for entry in values:
+        if isinstance(entry, str):
+            pin = _NAMED_TOOL_PINS.get(entry)
+            if pin is None:
+                raise typer.BadParameter(
+                    f"tool_allowlist entry {entry!r} is not a known "
+                    f"platform-managed tool; pass {{tool_id, revision_id}} "
+                    f"explicitly or use one of: "
+                    f"{sorted(_NAMED_TOOL_PINS.keys())!r}"
+                )
+            tool_id, revision_id = pin
+            out.append(
+                ToolAllowlistEntry(tool_id=tool_id, revision_id=revision_id)
+            )
+        elif isinstance(entry, dict):
+            try:
+                tool_id = UUID(str(entry["tool_id"]))
+                revision_id = UUID(str(entry["revision_id"]))
+            except (KeyError, ValueError, TypeError) as exc:
+                raise typer.BadParameter(
+                    f"tool_allowlist entry {entry!r} malformed; "
+                    f"expected {{tool_id, revision_id}}: {exc}"
+                ) from exc
+            out.append(
+                ToolAllowlistEntry(tool_id=tool_id, revision_id=revision_id)
+            )
+        else:
+            raise typer.BadParameter(
+                f"tool_allowlist entry {entry!r} has unexpected "
+                f"type {type(entry).__name__!r}"
+            )
+    return tuple(out)
+
+
+def _allowlist_to_json(allowlist: tuple[Any, ...]) -> list[dict[str, str]]:
+    """Serialise a tool_allowlist tuple to JSON-renderer-friendly dicts (D89)."""
+    return [
+        {"tool_id": str(e.tool_id), "revision_id": str(e.revision_id)}
+        for e in allowlist
+    ]
+
+
 def _to_decimal(value: Any) -> Decimal:
     """Parse a numeric value into Decimal without float-precision loss."""
     return Decimal(str(value))
@@ -182,7 +258,7 @@ def _render_template_human(
                 f"id:                       {revision.id}",
                 f"system_prompt:            {revision.system_prompt}",
                 f"source_ids:               {[str(s) for s in revision.source_ids]}",
-                f"tool_allowlist:           {list(revision.tool_allowlist)}",
+                f"tool_allowlist:           {_allowlist_to_json(revision.tool_allowlist)}",
                 f"retrieval_strategy:       {dict(revision.retrieval_strategy)}",
                 f"filter_tree:              {dict(revision.filter_tree)}",
                 f"top_k:                    {revision.top_k}",
@@ -215,7 +291,7 @@ def _render_template_json(
             "version": revision.version,
             "system_prompt": revision.system_prompt,
             "source_ids": [str(s) for s in revision.source_ids],
-            "tool_allowlist": list(revision.tool_allowlist),
+            "tool_allowlist": _allowlist_to_json(revision.tool_allowlist),
             "retrieval_strategy": dict(revision.retrieval_strategy),
             "filter_tree": dict(revision.filter_tree),
             "top_k": revision.top_k,
@@ -247,7 +323,7 @@ async def _run_create(config_path: Path) -> tuple[RoleTemplate, RoleRevision]:
             description=config.get("description"),
             system_prompt=config["system_prompt"],
             source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
+            tool_allowlist=_to_tool_allowlist(config["tool_allowlist"]),
             retrieval_strategy=config["retrieval_strategy"],
             filter_tree=config["filter_tree"],
             top_k=int(config["top_k"]),
@@ -297,7 +373,7 @@ async def _run_update(template_id: UUID, config_path: Path) -> RoleRevision:
             template_id=template_id,
             system_prompt=config["system_prompt"],
             source_ids=_to_uuid_tuple(config["source_ids"]),
-            tool_allowlist=_to_str_tuple(config["tool_allowlist"]),
+            tool_allowlist=_to_tool_allowlist(config["tool_allowlist"]),
             retrieval_strategy=config["retrieval_strategy"],
             filter_tree=config["filter_tree"],
             top_k=int(config["top_k"]),

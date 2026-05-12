@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 
 from contexts.methodology.domain.role import RoleRevision, RoleTemplate
 from padhanam.config import ControlPlaneSettings
+from shared_kernel import ToolAllowlistEntry
 from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
@@ -277,7 +278,10 @@ def _revision_insert_values(rev: RoleRevision) -> dict:
         "version": rev.version,
         "system_prompt": rev.system_prompt,
         "source_ids": [str(s) for s in rev.source_ids],
-        "tool_allowlist": list(rev.tool_allowlist),
+        "tool_allowlist": [
+            {"tool_id": str(e.tool_id), "revision_id": str(e.revision_id)}
+            for e in rev.tool_allowlist
+        ],
         "retrieval_strategy": dict(rev.retrieval_strategy),
         "filter_tree": dict(rev.filter_tree),
         "top_k": rev.top_k,
@@ -308,7 +312,13 @@ def _row_to_revision(row) -> RoleRevision:
         version=row["version"],
         system_prompt=row["system_prompt"],
         source_ids=tuple(UUID(s) for s in row["source_ids"]),
-        tool_allowlist=tuple(row["tool_allowlist"]),
+        tool_allowlist=tuple(
+            ToolAllowlistEntry(
+                tool_id=UUID(e["tool_id"]),
+                revision_id=UUID(e["revision_id"]),
+            )
+            for e in row["tool_allowlist"]
+        ),
         retrieval_strategy=row["retrieval_strategy"],
         filter_tree=row["filter_tree"],
         top_k=row["top_k"],
