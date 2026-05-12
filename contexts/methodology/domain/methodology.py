@@ -29,33 +29,37 @@ Pydantic, no SQLAlchemy.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
 from uuid import UUID
 
 
 @dataclass(frozen=True)
 class RoleRef:
-    """Reference from a methodology revision to a role revision (D86).
+    """Reference from a methodology revision to a role revision (D86, D87).
 
     Carries the role identity (role_id), the pinned role version
-    (role_version), and optional methodology-context-specific overrides
-    (overrides). Phase 1 always populates overrides as None; the field
-    is preserved on the type so methodology authors at Phase 2 can
-    declare per-role overrides without a schema migration.
+    (role_version), and methodology-context-specific overrides
+    (overrides).
 
-    The overrides shape is intentionally open (Mapping[str, Any] |
-    None) at Phase 1; D86's per-role overrides commitment specifies
-    that hard fields tighten and soft fields replace, but Phase 1 has
-    no consumer for overrides yet so the shape stays free. A future
-    session that introduces real overrides will land a typed override
-    spec at that point.
+    Per D87 (S26b), ``overrides`` is ``dict[str, dict[str, Any]]``
+    keyed by role-bundle field name; each value is the canonical
+    ``{"mode": <str>, "value": <any>}`` shape with mode drawn from
+    ``{augment, replace, tighten}``. Authoring goes through
+    ``contexts/methodology/domain/overrides.py:project_overrides``
+    which projects flat values to the structured form using the
+    per-field default-mode table and validates admissibility.
+
+    Empty overrides (``{}``) is the trivial no-op and represents an
+    unmodified role reference. The canonical-JSON encoder at the
+    methodology hash payload helper maps empty overrides to ``null``
+    for byte-stability with pre-D87 LVT methodology hashes.
     """
 
     role_id: UUID
     role_version: int
-    overrides: Mapping[str, Any] | None = None
+    overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

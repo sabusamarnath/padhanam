@@ -93,7 +93,7 @@ def _create_kwargs(name: str = "PlatformMethodology", **overrides) -> dict:
         "name": name,
         "description": "Platform-managed test methodology",
         "role_refs": (
-            RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+            RoleRef(role_id=uuid4(), role_version=1),
         ),
         "actor_user_id": "operator",
     }
@@ -247,7 +247,7 @@ def test_tenant_a_cannot_update_methodology_template(
                 security_events=sec,
                 template_id=template.id,
                 role_refs=(
-                    RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+                    RoleRef(role_id=uuid4(), role_version=1),
                 ),
                 actor_user_id="alice",
             )
@@ -316,7 +316,7 @@ def test_operator_can_create_update_and_retire_methodology_template(
             security_events=sec,
             template_id=template.id,
             role_refs=(
-                RoleRef(role_id=uuid4(), role_version=2, overrides=None),
+                RoleRef(role_id=uuid4(), role_version=2),
             ),
             actor_user_id="operator",
         )

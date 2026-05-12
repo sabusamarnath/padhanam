@@ -158,7 +158,7 @@ def test_lvt_round_trip_resolves_role_content_through_methodology_view(
             name="LVT",
             description="Lean Value Tree methodology",
             role_refs=(
-                RoleRef(role_id=role_template.id, role_version=1, overrides=None),
+                RoleRef(role_id=role_template.id, role_version=1),
             ),
             actor_user_id="test-operator",
         )
@@ -264,7 +264,7 @@ def test_role_archival_does_not_propagate_into_methodology_view_resolution(
             name="ArchTestMethodology",
             description=None,
             role_refs=(
-                RoleRef(role_id=role_template.id, role_version=1, overrides=None),
+                RoleRef(role_id=role_template.id, role_version=1),
             ),
             actor_user_id="test-operator",
         )

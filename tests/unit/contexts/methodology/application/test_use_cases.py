@@ -66,7 +66,7 @@ _DEFAULT_ROLE_ID = UUID("00000000-0000-4000-8000-0000000c0001")
 
 
 def _role_ref(role_id: UUID = _DEFAULT_ROLE_ID, role_version: int = 1) -> RoleRef:
-    return RoleRef(role_id=role_id, role_version=role_version, overrides=None)
+    return RoleRef(role_id=role_id, role_version=role_version)
 
 
 class _FakeMethodologyRepository:
@@ -368,3 +368,101 @@ def test_hash_chain_byte_equivalence_under_role_refs_reorder(event_loop) -> None
         )
     )
     assert rev1.this_revision_hash == rev2.this_revision_hash
+
+
+# ---------------------------------------------------------------------
+# D87 byte-equivalence and canonical-encoder tests.
+#
+# After S26b's D87 refactor, ``RoleRef.overrides`` is typed
+# ``dict[str, dict[str, Any]]`` defaulted to an empty dict. The
+# canonical-JSON encoder at ``_role_ref_to_canonical`` maps empty
+# overrides to ``None`` so methodology hashes computed pre-D87 (LVT
+# methodology authored at S25 with overrides=None) remain byte-stable
+# post-refactor. The byte-equivalence test below pins this invariant.
+# ---------------------------------------------------------------------
+
+
+def test_empty_overrides_canonicalise_to_none_for_byte_stability() -> None:
+    """LVT methodology (empty overrides) hashes byte-equivalent post-D87."""
+    from contexts.methodology.application.use_cases import (
+        _content_payload,
+        _role_ref_to_canonical,
+    )
+
+    ref = RoleRef(role_id=_DEFAULT_ROLE_ID, role_version=1)
+    canonical = _role_ref_to_canonical(ref)
+    assert canonical["overrides"] is None
+
+    # Methodology hash payload spans ``role_refs`` sorted by role_id;
+    # for the LVT no-op case the canonical bytes match the pre-D87
+    # shape verbatim (overrides null inside each entry).
+    payload = _content_payload(
+        name="LVT",
+        description="Lean Value Tree methodology",
+        role_refs=(ref,),
+    )
+    assert payload["role_refs"][0]["overrides"] is None
+
+
+def test_populated_overrides_pass_through_canonical_form() -> None:
+    """Populated D87 overrides preserve their structured shape canonically."""
+    from contexts.methodology.application.use_cases import (
+        _role_ref_to_canonical,
+    )
+
+    overrides = {
+        "system_prompt": {
+            "mode": "augment",
+            "value": "Apply the SCQ framework when framing",
+        },
+    }
+    ref = RoleRef(
+        role_id=_DEFAULT_ROLE_ID,
+        role_version=1,
+        overrides=overrides,
+    )
+    canonical = _role_ref_to_canonical(ref)
+    assert canonical["overrides"] == overrides
+
+
+def test_methodology_create_with_populated_overrides_hashes_distinctly() -> None:
+    """An override-populated revision hash differs from the empty case."""
+    role_id = uuid4()
+    repo_empty = _FakeMethodologyRepository()
+    repo_populated = _FakeMethodologyRepository()
+    sec = _CollectingSecurityEvents()
+
+    _, rev_empty = asyncio.run(
+        create_methodology_template(
+            principal=_operator_principal(),
+            repository=repo_empty,
+            security_events=sec,
+            name="HashOverridesDiffer",
+            description="d87",
+            role_refs=(RoleRef(role_id=role_id, role_version=1),),
+            actor_user_id="alice",
+        )
+    )
+    _, rev_populated = asyncio.run(
+        create_methodology_template(
+            principal=_operator_principal(),
+            repository=repo_populated,
+            security_events=sec,
+            name="HashOverridesDiffer",
+            description="d87",
+            role_refs=(
+                RoleRef(
+                    role_id=role_id,
+                    role_version=1,
+                    overrides={
+                        "system_prompt": {
+                            "mode": "augment",
+                            "value": "specialise for X",
+                        },
+                    },
+                ),
+            ),
+            actor_user_id="alice",
+        )
+    )
+    assert rev_empty.this_revision_hash != rev_populated.this_revision_hash

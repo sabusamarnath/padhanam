@@ -87,15 +87,15 @@ def _make_revision(
 ) -> MethodologyRevision:
     if role_refs is None:
         role_refs = (
-            RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+            RoleRef(role_id=uuid4(), role_version=1),
         )
+    # D87: empty overrides canonicalise to ``None`` (byte-stable with
+    # pre-D87 LVT methodology hashes); populated overrides pass through.
     payload_role_refs = [
         {
             "role_id": str(r.role_id),
             "role_version": r.role_version,
-            "overrides": (
-                None if r.overrides is None else dict(r.overrides)
-            ),
+            "overrides": (None if not r.overrides else dict(r.overrides)),
         }
         for r in role_refs
     ]
@@ -214,7 +214,7 @@ def test_add_revision_increments_version_and_chains_hash(event_loop, repo) -> No
         previous_hash=revision1.this_revision_hash,
         name="ChainTest",
         role_refs=(
-            RoleRef(role_id=uuid4(), role_version=1, overrides=None),
+            RoleRef(role_id=uuid4(), role_version=1),
         ),
     )
     event_loop.run_until_complete(r.add_revision(template.id, revision2))

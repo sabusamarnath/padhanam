@@ -105,13 +105,18 @@ def _deny(
 
 
 def _role_ref_to_canonical(ref: RoleRef) -> dict[str, Any]:
-    """Canonicalise a RoleRef for the methodology hash payload."""
+    """Canonicalise a RoleRef for the methodology hash payload (D87).
+
+    Empty overrides (``{}``) maps to ``None`` in canonical form so the
+    LVT methodology authored at S25 (with no per-role overrides per
+    D86) hashes byte-equivalent before and after the D87 refactor.
+    Populated overrides preserve their D87 structured shape
+    (``{field: {"mode", "value"}}``) verbatim in canonical form.
+    """
     return {
         "role_id": str(ref.role_id),
         "role_version": ref.role_version,
-        "overrides": (
-            None if ref.overrides is None else dict(ref.overrides)
-        ),
+        "overrides": (None if not ref.overrides else dict(ref.overrides)),
     }
 
 

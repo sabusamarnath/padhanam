@@ -33,10 +33,9 @@ def _template(**overrides) -> MethodologyTemplate:
 
 
 def _role_ref(**overrides) -> RoleRef:
-    defaults = dict(
+    defaults: dict[str, object] = dict(
         role_id=_ROLE_ID,
         role_version=1,
-        overrides=None,
     )
     defaults.update(overrides)
     return RoleRef(**defaults)
@@ -91,7 +90,10 @@ def test_role_ref_construction() -> None:
     ref = _role_ref()
     assert ref.role_id == _ROLE_ID
     assert ref.role_version == 1
-    assert ref.overrides is None
+    # D87: overrides defaults to an empty dict (the trivial no-op case),
+    # not None. Empty maps to ``null`` only at the canonical-JSON
+    # boundary for byte-stability with pre-D87 LVT hashes.
+    assert ref.overrides == {}
 
 
 def test_role_ref_is_frozen() -> None:
@@ -100,9 +102,11 @@ def test_role_ref_is_frozen() -> None:
         ref.role_version = 2  # type: ignore[misc]
 
 
-def test_role_ref_overrides_optional_mapping() -> None:
-    ref = _role_ref(overrides={"system_prompt": "tightened"})
-    assert ref.overrides == {"system_prompt": "tightened"}
+def test_role_ref_overrides_carries_structured_payload() -> None:
+    """D87: overrides is dict[str, dict[str, Any]] keyed by role field."""
+    payload = {"system_prompt": {"mode": "augment", "value": "specialise"}}
+    ref = _role_ref(overrides=payload)
+    assert ref.overrides == payload
 
 
 def test_methodology_revision_construction() -> None:

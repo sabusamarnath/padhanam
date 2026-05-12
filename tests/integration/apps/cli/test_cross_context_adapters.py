@@ -92,7 +92,7 @@ def _make_methodology_revision(
         methodology_template_id=template_id,
         version=version,
         role_refs=(
-            RoleRef(role_id=role_id, role_version=role_version, overrides=None),
+            RoleRef(role_id=role_id, role_version=role_version),
         ),
         created_by_user_id="cli-operator",
         created_at=datetime.now(timezone.utc),

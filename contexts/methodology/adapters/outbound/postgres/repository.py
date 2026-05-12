@@ -275,9 +275,11 @@ def _revision_insert_values(rev: MethodologyRevision) -> dict:
             {
                 "role_id": str(r.role_id),
                 "role_version": r.role_version,
-                "overrides": (
-                    None if r.overrides is None else dict(r.overrides)
-                ),
+                # D87: empty overrides serialise to JSONB ``null`` so the
+                # stored shape stays byte-stable with pre-D87 LVT rows;
+                # the materialiser below normalises both ``null`` and ``{}``
+                # back to the dataclass's empty-dict default.
+                "overrides": (None if not r.overrides else dict(r.overrides)),
             }
             for r in rev.role_refs
         ],
@@ -308,7 +310,11 @@ def _row_to_revision(row) -> MethodologyRevision:
             RoleRef(
                 role_id=UUID(r["role_id"]),
                 role_version=r["role_version"],
-                overrides=r.get("overrides"),
+                # D87 materialiser: JSONB ``null`` (pre-D87 LVT shape) and
+                # ``{}`` (post-D87 empty case) both normalise to the
+                # dataclass's empty-dict default. Populated overrides pass
+                # through.
+                overrides=dict(r["overrides"]) if r.get("overrides") else {},
             )
             for r in row["role_refs"]
         ),

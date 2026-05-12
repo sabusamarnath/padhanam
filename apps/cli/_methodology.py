@@ -59,6 +59,10 @@ from contexts.methodology.domain.methodology import (
     MethodologyRevision,
     MethodologyTemplate,
 )
+from contexts.methodology.domain.overrides import (
+    OverrideValidationError,
+    project_overrides,
+)
 from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
     SecurityEventLogger,
@@ -116,11 +120,21 @@ def _to_role_refs(values: list[Any] | None) -> tuple[RoleRef, ...]:
             raise typer.BadParameter(
                 f"role_refs entry missing role_id or role_version: {entry!r}"
             )
+        # D87 projection: flat values expand to the structured
+        # {mode, value} form via DEFAULT_MODE_BY_FIELD; structured
+        # values pass through; inadmissible (field, mode) pairs raise.
+        try:
+            overrides = project_overrides(entry.get("overrides"))
+        except OverrideValidationError as exc:
+            raise typer.BadParameter(
+                f"role_refs entry overrides invalid for role_id "
+                f"{entry.get('role_id')!r}: {exc}"
+            ) from exc
         refs.append(
             RoleRef(
                 role_id=UUID(str(entry["role_id"])),
                 role_version=int(entry["role_version"]),
-                overrides=entry.get("overrides"),
+                overrides=overrides,
             )
         )
     return tuple(refs)
@@ -174,7 +188,7 @@ def _render_template_human(
             lines.append(
                 f"  - role_id={ref.role_id} "
                 f"role_version={ref.role_version} "
-                f"overrides={ref.overrides if ref.overrides is not None else '(none)'}"
+                f"overrides={dict(ref.overrides) if ref.overrides else '(none)'}"
             )
         lines.extend(
             [
@@ -207,9 +221,7 @@ def _render_template_json(
                 {
                     "role_id": str(r.role_id),
                     "role_version": r.role_version,
-                    "overrides": (
-                        None if r.overrides is None else dict(r.overrides)
-                    ),
+                    "overrides": (None if not r.overrides else dict(r.overrides)),
                 }
                 for r in revision.role_refs
             ],
