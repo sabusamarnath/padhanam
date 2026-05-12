@@ -181,3 +181,20 @@ Recurrence count: five reinforcements per operator count at S28b close. S4 Langf
 
   - triaged: note on 2026-05-12
   - resolution: forwarded to Phase 1 close audit prep as a methodology-document Patterns-observed promotion candidate. The audit's strategic-mode conversation drafts the formal entry per the build-versus-strategic discipline (build sessions do not write to charter/methodology.md directly per D47).
+
+## 2026-05-12 — Consumer-port-plus-wiring-adapter pattern altitude-agnostic: methodology-document promotion candidate at four reinforcements
+
+Source: S29b session close.
+
+Pattern: consumer-port-plus-wiring-adapter as an altitude-agnostic abstraction. Distinguishing characteristic worth naming for promotion: the same shape (consumer-side port defined against a consumer-shaped DTO; wiring adapter at `apps/cli/_cross_context.py` or `apps/api/adapters/` translating producer aggregates or transport wire formats to consumer DTOs) now applies at three architectural altitudes:
+
+- **Cross-context.** S26a-1 (MethodologyLookup), S26a-2 (RoleLookup), S27b (AgentRetrievalClient + MethodologyOverridesLookup), S28b (ToolDefinitionsLookup + ToolInvoker). Consumer context defines the port against its own DTO; producer context exposes use cases at `api.py`; wiring adapter joins them at `apps/cli` without leaking producer aggregates into consumer code.
+- **Intra-context wiring.** S28b's ToolInvoker. The agent context's executor consumes the ToolInvoker port; the wiring adapter at `apps/cli` composes tool-context use cases plus retrieval-context use cases plus agent-side helpers into one consumer-shaped surface.
+- **Transport.** S29b's SSE adapter. Domain-shaped events flow through a consumer port (the runtime yields AgentEvent); the wiring adapter at `apps/api/adapters/sse_event_translator.py` translates to W3C EventSource wire format. The transport is another consumer of the runtime's port; the adapter pattern absorbs the transport-specific impedance.
+
+The mechanism is the same at every altitude: define the port with the consumer's DTO, never import the producer's aggregate, wire the impedance mismatch at the application composition layer (`apps/cli` or `apps/api`). The altitude-agnostic shape is what lifts the pattern from a build-time tactic to a Phase 1 methodology principle candidate.
+
+Recurrence count: four reinforcements across five sessions in a row (S26a-1 as first instance; S26a-2, S27b, S28b, S29b as four reinforcements). The S29b session-log methodology line 2 names this explicitly as a Phase 1 close audit methodology-promotion candidate. The pre-write reconciliation captures entry above is the structural precedent for this entry's shape.
+
+  - triaged: note on 2026-05-12
+  - resolution: forwarded to Phase 1 close audit prep as a methodology-document Patterns-observed promotion candidate. The audit's strategic-mode conversation drafts the formal entry per the build-versus-strategic discipline (build sessions do not write to `charter/methodology.md` directly per D47).
