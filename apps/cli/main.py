@@ -52,6 +52,7 @@ from apps.cli._ingest import (
 from apps.cli._agent import agent_app
 from apps.cli._methodology import methodology_app
 from apps.cli._role import role_app
+from apps.cli._tool import tool_app
 
 app = typer.Typer(
     name="padhanam",
@@ -83,6 +84,9 @@ app.add_typer(role_app, name="role")
 
 # S24 agent authoring commands (D75).
 app.add_typer(agent_app, name="agent")
+
+# S28b tool registry authoring commands (D89).
+app.add_typer(tool_app, name="tool")
 
 
 _OUTPUT_FORMAT_TEXT = "text"
