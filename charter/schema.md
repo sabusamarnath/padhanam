@@ -229,6 +229,84 @@ The drift between D86's idealized field set and implementation reality
 is intentional per the brief's pre-write reconciliation and is logged
 in S26a-1's reflection.
 
+## Tool registry (control plane)
+
+Lives on the dedicated `postgres-control-plane` Postgres instance per
+D33. Schema lands at S28b via Alembic revision
+`0009_create_tools_tables`. Storage location resolves per D89's
+storage-location section: alongside `methodology_templates`,
+`methodology_revisions`, `role_templates`, `role_revisions` rather
+than per-tenant per the P8 epic note's initial framing. Per-tenant
+tool authoring lifts at Phase 2 per the deferred-decisions entry on
+customer-deployment evidence.
+
+### `tools`
+
+| Column                | Type            | Constraints                                    |
+|-----------------------|-----------------|------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `name`                | `text`          | not null; UNIQUE among non-archived templates per partial index `ix_tools_name_unique_active` |
+| `description`         | `text`          | nullable                                       |
+| `classification`      | `text`          | not null; CHECK ∈ {`read-only`, `drafting`, `user-affecting-with-consent`, `financial`, `communication`, `legal`} per `tools_classification_check` (the six-category D89 taxonomy) |
+| `created_by_user_id`  | `text`          | not null                                       |
+| `created_at`          | `timestamptz`   | not null; default `now()`                      |
+| `archived_at`         | `timestamptz`   | nullable                                       |
+
+Classification is on the template per D89 alternative (g):
+classification is a property of what the tool does, not what role
+uses it. Reclassifying mid-revision would semantically be a different
+tool; the template owns classification, revisions evolve the
+parameters and returns schemas.
+
+The partial-unique-index on `name` where `archived_at IS NULL` mirrors
+the methodology / role pattern: unique active tool names across the
+platform; archived rows retain their name for audit per D31.
+
+The retrieval tool seeds as part of revision `0009_create_tools_tables`
+with the well-known UUID `00000000-0000-0000-0000-000000000001`. The
+fixed UUID is the durable anchor that lets platform-managed role
+allowlists reference retrieval across the role allowlist tuple-shape
+migration at S28b commit 4 (`0010_role_tool_allowlist_pin`).
+Classification is `read-only`.
+
+### `tool_revisions`
+
+| Column                    | Type            | Constraints                                    |
+|---------------------------|-----------------|------------------------------------------------|
+| `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
+| `tool_id`                 | `uuid`          | not null; FK → `tools.id`                      |
+| `version`                 | `integer`       | not null                                       |
+| `parameters_schema`       | `jsonb`         | not null; JSON-schema payload describing the tool's argument shape |
+| `returns_schema`          | `jsonb`         | not null; JSON-schema payload describing the tool's result shape; used by the BC stub at commit 6 |
+| `bc_result`               | `jsonb`         | not null; default `'{}'::jsonb`; populated by `create_tool_revision` at commit 6 with the schema-diff outcome per D89 (forward-affordance column at the table-create migration) |
+| `created_by_user_id`      | `text`          | not null                                       |
+| `created_at`              | `timestamptz`   | not null; default `now()`                      |
+| `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
+| `this_revision_hash`      | `text`          | not null; SHA-256 of canonical JSON of content fields plus previous hash per D74 |
+
+`UNIQUE(tool_id, version)` —
+`tool_revisions_tool_version_unique`. Revisions are immutable per
+D31; updates create new revision rows. Hash-chain content surface
+mirrors the methodology / role revision patterns from D74:
+the hash spans `name` (denormalised from the parent template at
+hash-compute time), `description` (denormalised likewise),
+`classification` (denormalised likewise; classification is on the
+template per D89 alternative (g)), `parameters_schema`,
+`returns_schema`, plus `previous_revision_hash`. Chain metadata
+(template_id, version, timestamps, bc_result) is excluded from the
+hash. Each tool has its own independent chain rooted at the
+genesis sentinel.
+
+The retrieval revision-1 seeds with the well-known UUID
+`00000000-0000-0000-0000-000000000002` and a `previous_revision_hash`
+of the genesis sentinel; `parameters_schema` matches the prior
+hardcoded `_RETRIEVAL_TOOL_DEFINITION.parameters` in S27b's
+`AgentLoopExecutor` verbatim; `returns_schema` describes the single-
+string result shape produced by `_format_chunks_as_tool_result`. The
+retrieval seed lands at the table-create migration so the role
+allowlist tuple-shape migration at commit 4 has a stable target
+revision to pin against.
+
 ## Per-tenant tables
 
 Live on each tenant's dedicated Postgres instance per D32. Schema is
