@@ -164,11 +164,28 @@ def test_agent_result_is_frozen() -> None:
         r.response_content = "different"  # type: ignore[misc]
 
 
-def test_executor_protocol_has_async_execute_method() -> None:
+def test_executor_protocol_has_streaming_execute_method() -> None:
     """Pin the Protocol's single-method shape so adapter implementations
-    have an unambiguous target. ``execute`` is async per D88."""
+    have an unambiguous target. ``execute`` returns ``AsyncIterator``
+    per D90; the method name is preserved (not renamed to ``invoke``)
+    per the S29b pre-write reconciliation. The Protocol method is
+    declared with ``def`` (not ``async def``) because the adapter's
+    implementation is an async generator function — calling such a
+    function returns the iterator directly without an extra await.
+    """
     methods = {
         name for name in dir(AgentExecutor) if not name.startswith("_")
     }
     assert "execute" in methods
-    assert inspect.iscoroutinefunction(AgentExecutor.execute)
+    # Async generator function bodies show as regular (non-coroutine)
+    # functions on the class-level descriptor; the iterator-returning
+    # shape is reflected via the return type annotation rather than
+    # via the coroutine-ness of the function. Verify via the typed
+    # return annotation instead of inspect.iscoroutinefunction.
+    hints = get_type_hints(AgentExecutor.execute)
+    assert "return" in hints
+    # Check the typing annotation string mentions AsyncIterator (the
+    # actual class identity matches typing.AsyncIterator from the
+    # collections.abc registry).
+    return_repr = repr(hints["return"])
+    assert "AsyncIterator" in return_repr or "AgentEvent" in return_repr

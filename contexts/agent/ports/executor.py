@@ -1,4 +1,4 @@
-"""AgentExecutor port plus invocation DTOs (D88, S27b).
+"""AgentExecutor port plus invocation DTOs (D88, D90; S27b, S29b).
 
 The ``AgentExecutor`` is the outbound port the ``invoke_agent`` use
 case calls to run a single agent invocation. The adapter at
@@ -7,25 +7,35 @@ the hand-rolled LLM-with-tool-loop against the inference context per
 D88; future adapters (LangGraph at Phase 2 per D84) implement the same
 port without changing the use case.
 
+S29b (D90): the Protocol becomes streaming-only. ``execute(context)``
+returns ``AsyncIterator[AgentEvent]`` where the eleven event types live
+at ``contexts/agent/domain/events.py``. Non-streaming callers wrap the
+stream via the ``collect_to_result`` helper at
+``contexts/agent/application/collect.py``. The method name is preserved
+(``execute``, not ``invoke``) per the S29b pre-write reconciliation;
+only the return shape changes.
+
+``AgentResult`` and ``AgentSignal`` relocate to
+``contexts/agent/domain/agent_result.py`` at S29b; this module
+re-exports them so existing import paths
+(``contexts.agent.ports.executor.AgentResult``, etc.) continue to
+work unchanged.
+
 The DTOs in this module are vendor-free per D16 — stdlib dataclasses,
 no Pydantic, no provider-specific shapes. The executor adapter
 translates to/from the inference context's tool-aware message shape
 internally.
-
-S27b ships ``execute`` as ``async def``: the underlying LLM call is
-sync but bridged via ``asyncio.to_thread`` inside the adapter; the
-retrieval client is async; audit emission is async. Matching the
-existing async posture of the agent application layer.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Any, Mapping, Protocol
+from dataclasses import dataclass
+from typing import AsyncIterator, Protocol
 from uuid import UUID
 
+from contexts.agent.domain.agent_result import AgentResult, AgentSignal
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from contexts.agent.domain.events import AgentEvent
 from contexts.agent.domain.termination import TerminationReason
 from contexts.inference.domain.completion import ToolDefinition
 from shared_kernel import TenantContext
@@ -87,57 +97,32 @@ class AgentInvocationContext:
     tool_definitions: tuple[ToolDefinition, ...] = ()
 
 
-@dataclass(frozen=True)
-class AgentSignal:
-    """A structured signal emitted during an agent invocation (D88).
-
-    Observability surface, not control surface. Phase 1 kinds:
-    ``tool_invoked`` (payload carries name, latency_ms, result_summary),
-    ``retrieval_performed`` (payload carries query, chunk_count,
-    top_score), ``iteration_started`` and ``iteration_completed``
-    (payload carries iteration index and per-iteration cost).
-    S28b's tool registry extends the kinds; the DTO shape is stable.
-    """
-
-    kind: str
-    payload: Mapping[str, Any]
-
-
-@dataclass(frozen=True)
-class AgentResult:
-    """Output of a single agent invocation (D88).
-
-    ``cost_total_usd`` is a Decimal to preserve precision; the
-    aggregate sums per-LLM-call costs captured via OTel spans tagged
-    with ``gen_ai.cost.*`` attributes per D49. The two audit hashes
-    (``audit_start_hash``, ``audit_end_hash``) are the
-    ``this_event_hash`` values from the AuditEvents emitted at
-    invocation start and end per D26; callers can use them to deep-
-    link into the audit chain or to verify chain integrity for the
-    invocation.
-
-    ``early_termination`` is True when the invocation hit the max-
-    iterations cap (D88 conventional 10) or terminated due to an
-    unknown-tool branch; False on clean ``content`` termination.
-    """
-
-    response_content: str
-    signals: tuple[AgentSignal, ...]
-    cost_total_usd: Decimal
-    iteration_count: int
-    termination_reason: TerminationReason
-    audit_start_hash: str
-    audit_end_hash: str
-    early_termination: bool = False
-    metadata: dict[str, str] = field(default_factory=dict)
-
-
 class AgentExecutor(Protocol):
-    """The outbound abstraction the ``invoke_agent`` use case calls (D88).
+    """The outbound abstraction the ``invoke_agent`` use case calls (D88, D90).
+
+    Streaming-only at S29b per D90: ``execute(context)`` returns an
+    ``AsyncIterator[AgentEvent]`` over the eleven event types at
+    ``contexts/agent/domain/events.py``. Non-streaming callers wrap the
+    stream via ``contexts/agent/application/collect.py``\\'s
+    ``collect_to_result`` helper to derive the legacy ``AgentResult``
+    shape.
 
     Adapters implement this Protocol; the use case does not import
-    any concrete adapter. The hand-rolled ``AgentLoopExecutor`` lands
-    at S27b; the LangGraph adapter defers to Phase 2 per D84.
+    any concrete adapter. The hand-rolled ``AgentLoopExecutor`` adapter
+    refactors at S29b commit 5 to yield events; the LangGraph adapter
+    defers to Phase 2 per D84 and implements the same streaming shape.
     """
 
-    async def execute(self, context: AgentInvocationContext) -> AgentResult: ...
+    def execute(
+        self, context: AgentInvocationContext
+    ) -> AsyncIterator[AgentEvent]: ...
+
+
+__all__ = [
+    "AgentExecutor",
+    "AgentInvocationContext",
+    "AgentResult",
+    "AgentSignal",
+    "InvocationMessage",
+    "TerminationReason",
+]
