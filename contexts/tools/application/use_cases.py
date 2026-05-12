@@ -24,6 +24,10 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
+from contexts.tools.application.backward_compatibility import (
+    BCResult,
+    check_revision_compatibility,
+)
 from contexts.tools.domain.exceptions import (
     ClassificationProhibitedError,
     RevisionNotFoundError,
@@ -244,6 +248,17 @@ async def create_tool_revision(
     template, latest_revision = await repository.get_template(template_id)
     next_version = latest_revision.version + 1
 
+    # Run the schema-diff BC stub against the predecessor revision
+    # per D89 commit 6. The result stores on the new revision as
+    # JSONB metadata; it does not block creation (a failed BC result
+    # is signal to downstream adoption flow, not a hard gate).
+    bc_result = check_revision_compatibility(
+        old_parameters=latest_revision.parameters_schema,
+        old_returns=latest_revision.returns_schema,
+        new_parameters=parameters_schema,
+        new_returns=returns_schema,
+    )
+
     payload = _tool_content_payload(
         name=template.name,
         description=template.description,
@@ -263,7 +278,7 @@ async def create_tool_revision(
         version=next_version,
         parameters_schema=parameters_schema,
         returns_schema=returns_schema,
-        bc_result={},
+        bc_result=bc_result.to_dict(),
         created_by_user_id=actor_user_id,
         created_at=now,
         previous_revision_hash=latest_revision.this_revision_hash,

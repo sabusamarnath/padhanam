@@ -371,51 +371,55 @@ class ToolPostgresRepository:
         self,
         tool_id: UUID,
     ) -> list[RoleToolBinding]:
-        """Return role-tool bindings for the named tool.
+        """Return role-tool bindings for the named tool (D89).
 
-        Joins the control-plane ``role_revisions`` against the latest
-        tool revision. The ``tool_allowlist`` shape on
-        ``role_revisions`` is a JSONB array of opaque strings at S28b
-        commit 2 (the tuple-shape migration in commit 4 changes this
-        to an array of objects with ``tool_id`` and ``revision_id``
-        keys); this method's implementation here handles the
-        post-commit-4 shape because ``list_roles_using_tool`` becomes
-        operationally meaningful only after the migration lands. The
-        commit-2 version returns an empty list when the allowlist
-        carries opaque strings (no UUID match possible against the
-        tool id); commit 4's migration converts existing rows to the
-        new shape and this query starts returning bindings.
+        Joins the control-plane ``role_revisions`` against the tool
+        revision chain. Per D89 commit 6, ``can_auto_adopt`` is
+        computed from the BC chain between
+        ``current_revision_id`` and ``latest_revision_id``: every
+        intervening revision's ``bc_result`` must be ``passed`` for
+        the binding to auto-adopt safely. The flag drives the Phase 2
+        adoption UX per the automated-adoption-flow deferred-decisions
+        entry.
 
-        The ``can_auto_adopt`` flag defaults to False at commit 2 / 3;
-        commit 6's BC stub populates it from the chain between
-        ``current_revision_id`` and ``latest_revision_id``.
+        The query is structurally cross-aggregate (joins
+        ``role_revisions`` against ``tool_revisions`` on the same
+        control-plane DB); cross-context independence per D17 is
+        preserved at the import boundary (no
+        ``contexts.methodology`` imports in this module).
         """
         async with self._sessionmaker() as session:
-            latest_rev_stmt = (
+            # Load the full ordered chain so can_auto_adopt computation
+            # has access to every intermediate revision's bc_result.
+            rev_chain_result = await session.execute(
                 sa.select(
                     tool_revisions.c.id,
                     tool_revisions.c.version,
+                    tool_revisions.c.bc_result,
                 )
                 .where(tool_revisions.c.tool_id == str(tool_id))
-                .order_by(tool_revisions.c.version.desc())
-                .limit(1)
+                .order_by(tool_revisions.c.version.asc())
             )
-            latest_result = await session.execute(latest_rev_stmt)
-            latest = latest_result.mappings().first()
-            if latest is None:
+            rev_chain = rev_chain_result.mappings().all()
+            if not rev_chain:
                 raise ToolNotFoundError(
                     f"tool {tool_id} has no revisions; cannot enumerate "
                     f"role bindings"
                 )
 
-            latest_revision_id = UUID(latest["id"])
+            latest_row = rev_chain[-1]
+            latest_revision_id = UUID(latest_row["id"])
+            # Map version-ordered (id, bc_outcome) so the BC chain
+            # walk between current and latest is O(N) across the
+            # ordered list.
+            chain_order: list[tuple[UUID, str]] = [
+                (
+                    UUID(r["id"]),
+                    str((r["bc_result"] or {}).get("outcome", "passed")),
+                )
+                for r in rev_chain
+            ]
 
-            # Query role_revisions whose tool_allowlist contains an
-            # entry matching this tool_id. JSONB containment via the
-            # @> operator. The exact match shape depends on commit 4's
-            # tuple form: ``[{"tool_id": "<uuid>", ...}]``. Until
-            # commit 4 lands the existing string-list form yields no
-            # matches; the query is forward-compatible.
             role_stmt = sa.select(
                 _role_revisions.c.id,
                 _role_revisions.c.role_template_id,
@@ -434,6 +438,11 @@ class ToolPostgresRepository:
             )
             if current_revision_id is None:
                 continue
+            can_auto_adopt = _can_auto_adopt(
+                chain_order=chain_order,
+                current_revision_id=current_revision_id,
+                latest_revision_id=latest_revision_id,
+            )
             bindings.append(
                 RoleToolBinding(
                     role_id=UUID(row["role_template_id"]),
@@ -442,7 +451,7 @@ class ToolPostgresRepository:
                     tool_id=tool_id,
                     current_revision_id=current_revision_id,
                     latest_revision_id=latest_revision_id,
-                    can_auto_adopt=False,
+                    can_auto_adopt=can_auto_adopt,
                 )
             )
         return bindings
@@ -462,6 +471,41 @@ class ToolPostgresRepository:
                 outcome="allow",
             )
         )
+
+
+def _can_auto_adopt(
+    *,
+    chain_order: list[tuple[UUID, str]],
+    current_revision_id: UUID,
+    latest_revision_id: UUID,
+) -> bool:
+    """Compute can_auto_adopt by walking the BC chain (D89 commit 6).
+
+    The binding can auto-adopt if every revision between current and
+    latest has ``bc_result.outcome == 'passed'``. If current equals
+    latest, the binding is already at the latest revision (no
+    adoption needed); return True for "no work to do, no risk
+    introduced" semantics.
+    """
+    if current_revision_id == latest_revision_id:
+        return True
+
+    seen_current = False
+    for rev_id, outcome in chain_order:
+        if rev_id == current_revision_id:
+            seen_current = True
+            continue
+        if not seen_current:
+            continue
+        if outcome != "passed":
+            return False
+        if rev_id == latest_revision_id:
+            return True
+
+    # current_revision_id not in chain (binding points at a
+    # revision not present in the tool's chain — structural
+    # inconsistency). Be conservative.
+    return False
 
 
 def _extract_pinned_revision_id(

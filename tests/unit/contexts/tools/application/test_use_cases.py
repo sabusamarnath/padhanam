@@ -265,6 +265,82 @@ class TestCreateTool:
         )
 
 
+class TestCreateToolRevisionBCResult:
+    def test_bc_result_pass_on_identical_schemas(self) -> None:
+        repo = _FakeToolRepository()
+        sec = _CollectingSecurityEvents()
+        t, r1 = asyncio.run(
+            create_tool(
+                principal=_operator_principal(),
+                repository=repo,
+                security_events=sec,
+                name="t",
+                description="d",
+                classification=Classification.READ_ONLY,
+                parameters_schema=_PARAMS,
+                returns_schema=_RETURNS,
+                actor_user_id="op",
+            )
+        )
+        r2 = asyncio.run(
+            create_tool_revision(
+                principal=_operator_principal(),
+                repository=repo,
+                security_events=sec,
+                template_id=t.id,
+                parameters_schema=_PARAMS,
+                returns_schema=_RETURNS,
+                actor_user_id="op",
+            )
+        )
+        assert r2.bc_result["outcome"] == "passed"
+
+    def test_bc_result_fail_on_removed_field(self) -> None:
+        repo = _FakeToolRepository()
+        sec = _CollectingSecurityEvents()
+        t, r1 = asyncio.run(
+            create_tool(
+                principal=_operator_principal(),
+                repository=repo,
+                security_events=sec,
+                name="t",
+                description="d",
+                classification=Classification.READ_ONLY,
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["query"],
+                },
+                returns_schema=_RETURNS,
+                actor_user_id="op",
+            )
+        )
+        narrowed = {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        }
+        r2 = asyncio.run(
+            create_tool_revision(
+                principal=_operator_principal(),
+                repository=repo,
+                security_events=sec,
+                template_id=t.id,
+                parameters_schema=narrowed,
+                returns_schema=_RETURNS,
+                actor_user_id="op",
+            )
+        )
+        # BC failure is signal not a hard gate; the revision still
+        # persists. The adoption flow at Phase 2 sees the failed BC
+        # result and gates auto-adopt.
+        assert r2.bc_result["outcome"] == "failed"
+        assert "limit" in r2.bc_result["reason"]
+
+
 class TestCreateToolRevision:
     def test_revision_chains_from_latest(self) -> None:
         repo = _FakeToolRepository()
@@ -296,7 +372,11 @@ class TestCreateToolRevision:
         assert r2.version == 2
         assert r2.previous_revision_hash == r1.this_revision_hash
         assert r2.this_revision_hash != r1.this_revision_hash
-        assert r2.bc_result == {}  # commit 6 populates
+        # At commit 6, the BC stub populates bc_result; widening
+        # ``additionalProperties`` from absent to False on an
+        # otherwise-identical schema passes (the type-widening rule
+        # doesn't reject schema-keyword additions).
+        assert r2.bc_result["outcome"] == "passed"
 
     def test_revision_classification_pulled_from_template(self) -> None:
         repo = _FakeToolRepository()

@@ -1,5 +1,10 @@
 """Tools context application layer (D89)."""
 
+from contexts.tools.application.backward_compatibility import (
+    BCOutcome,
+    BCResult,
+    check_revision_compatibility,
+)
 from contexts.tools.application.tool_invocation_service import (
     InvocationAdmissibility,
     InvocationCheckOutcome,
@@ -15,10 +20,13 @@ from contexts.tools.application.use_cases import (
 )
 
 __all__ = [
+    "BCOutcome",
+    "BCResult",
     "InvocationAdmissibility",
     "InvocationCheckOutcome",
     "archive_tool",
     "check_invocation_admissibility",
+    "check_revision_compatibility",
     "create_tool",
     "create_tool_revision",
     "get_tool",
