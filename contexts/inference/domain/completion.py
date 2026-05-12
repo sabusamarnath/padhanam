@@ -119,3 +119,37 @@ class Completion:
     # introspection. Default Decimal("0") covers the unknown-model
     # (pricing-status drift) and dev-zero-cost paths uniformly.
     cost_usd: Decimal = field(default_factory=lambda: Decimal("0"))
+
+
+@dataclass(frozen=True)
+class CompletionChunk:
+    """One chunk from a streaming completion (D90, S29b).
+
+    The streaming InferencePort yields these chunks as an
+    ``AsyncIterator[CompletionChunk]``. Intermediate chunks carry
+    ``text_delta`` (the model's incremental output) and partial
+    tool-call state; the terminal chunk (``is_final=True``) carries
+    the resolved model name, final cost, finish reason, and any
+    final ``Completion``-equivalent fields the caller needs.
+
+    Tool calls accumulate across chunks because LiteLLM (matching
+    OpenAI's function-calling streaming shape) emits tool-call arguments
+    piecewise — first chunk carries the call id and function name,
+    subsequent chunks add fragments to ``function.arguments``. The
+    adapter accumulates inside its loop and emits the fully-assembled
+    ``tool_calls`` tuple on the terminal chunk; intermediate chunks
+    carry an empty tuple to keep the chunk shape unambiguous.
+
+    Per the vendor-isolation principle (D4 / D27 / D90), this shape
+    is the only contract callers and consumers see; the LiteLLM-side
+    StreamingChunk type stays inside the adapter.
+    """
+
+    text_delta: str
+    is_final: bool = False
+    finish_reason: str | None = None
+    model: str | None = None
+    tool_calls: tuple[ToolCall, ...] = ()
+    usage: TokenUsage | None = None
+    cost_usd: Decimal = field(default_factory=lambda: Decimal("0"))
+    trace_id: str | None = None

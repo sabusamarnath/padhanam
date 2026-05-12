@@ -4,11 +4,20 @@ The adapter is the only place ``litellm`` enters the codebase, so the
 tests stub the SDK at the module-import boundary using
 ``unittest.mock.patch``. Domain-shape assertions verify the response
 mapping and the exception-translation rules at the adapter boundary.
+
+S29b (D90) adds streaming coverage: the ``stream_complete`` method is
+exercised with a scripted async iterator of LiteLLM-shape chunks,
+verifying text-delta accumulation, tool-call piecewise reassembly,
+cost computation on the terminal chunk, and the terminal-chunk
+``is_final=True`` semantics.
 """
 
 from __future__ import annotations
 
+import asyncio
+from decimal import Decimal
 from types import SimpleNamespace
+from typing import AsyncIterator
 from unittest.mock import patch
 
 import pytest
@@ -21,6 +30,7 @@ from litellm.exceptions import (
 
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
 from contexts.inference.domain.completion import (
+    CompletionChunk,
     Message,
     ToolCall,
     ToolDefinition,
@@ -573,3 +583,249 @@ def test_adapter_empty_tool_calls_default_on_plain_response() -> None:
         )
 
     assert result.tool_calls == ()
+
+
+# ----------------------------------------------------------------------
+# Streaming surface (D90, S29b)
+# ----------------------------------------------------------------------
+
+
+def _streaming_chunk(
+    *,
+    content: str | None = None,
+    tool_calls: list[SimpleNamespace] | None = None,
+    finish_reason: str | None = None,
+    model: str = "qwen2.5:7b",
+) -> SimpleNamespace:
+    """Build a LiteLLM-shape streaming chunk for tests.
+
+    LiteLLM streams the OpenAI shape: each chunk has .choices[0].delta
+    with .content (text delta) and .tool_calls (delta-shaped partial
+    tool calls); .choices[0].finish_reason is set on the terminal chunk.
+    """
+    delta = SimpleNamespace(content=content, tool_calls=tool_calls or [])
+    choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
+    return SimpleNamespace(choices=[choice], model=model)
+
+
+async def _async_iter(items: list[SimpleNamespace]) -> AsyncIterator[SimpleNamespace]:
+    for item in items:
+        yield item
+
+
+def _assembled_response(
+    *,
+    content: str = "",
+    tool_calls: list[SimpleNamespace] | None = None,
+    finish_reason: str = "stop",
+    prompt_tokens: int = 12,
+    completion_tokens: int = 4,
+    model: str = "qwen2.5:7b",
+) -> SimpleNamespace:
+    """Mock the litellm.stream_chunk_builder output shape."""
+    message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
+    choice = SimpleNamespace(message=message, finish_reason=finish_reason)
+    return SimpleNamespace(
+        choices=[choice],
+        usage=SimpleNamespace(
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
+        ),
+        model=model,
+    )
+
+
+def test_stream_complete_yields_text_deltas_and_terminal_chunk() -> None:
+    """A simple text-only stream yields one CompletionChunk per non-
+    empty text delta, then a final chunk with is_final=True carrying
+    finish_reason, model, and usage."""
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    chunks = [
+        _streaming_chunk(content="Hello"),
+        _streaming_chunk(content=" "),
+        _streaming_chunk(content="world"),
+        _streaming_chunk(finish_reason="stop"),
+    ]
+
+    async def fake_acompletion(**kwargs: object) -> AsyncIterator[SimpleNamespace]:
+        return _async_iter(chunks)
+
+    async def drive() -> list[CompletionChunk]:
+        with patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.acompletion",
+            side_effect=fake_acompletion,
+        ), patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.stream_chunk_builder",
+            return_value=_assembled_response(content="Hello world"),
+        ):
+            return [
+                chunk
+                async for chunk in adapter.stream_complete(
+                    messages=[Message(role="user", content="hi")],
+                    model="qwen2.5:7b",
+                    tenant_context=_TENANT_A,
+                )
+            ]
+
+    out = asyncio.run(drive())
+
+    deltas = [c for c in out if not c.is_final]
+    final = [c for c in out if c.is_final]
+
+    assert len(deltas) == 3
+    assert "".join(c.text_delta for c in deltas) == "Hello world"
+    assert len(final) == 1
+    assert final[0].finish_reason == "stop"
+    assert final[0].model == "qwen2.5:7b"
+    assert final[0].usage is not None
+    assert final[0].usage.input_tokens == 12
+    assert final[0].usage.output_tokens == 4
+    assert final[0].tool_calls == ()
+
+
+def test_stream_complete_accumulates_tool_call_arguments_piecewise() -> None:
+    """LiteLLM streams tool-call arguments piecewise; the adapter
+    reassembles by index and surfaces the fully-assembled tool calls
+    on the terminal chunk only."""
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    chunks = [
+        _streaming_chunk(
+            tool_calls=[
+                SimpleNamespace(
+                    index=0,
+                    id="call_123",
+                    function=SimpleNamespace(name="retrieval", arguments='{"que'),
+                )
+            ],
+        ),
+        _streaming_chunk(
+            tool_calls=[
+                SimpleNamespace(
+                    index=0,
+                    id=None,
+                    function=SimpleNamespace(name=None, arguments='ry": "lvt"}'),
+                )
+            ],
+        ),
+        _streaming_chunk(finish_reason="tool_calls"),
+    ]
+
+    async def fake_acompletion(**kwargs: object) -> AsyncIterator[SimpleNamespace]:
+        return _async_iter(chunks)
+
+    async def drive() -> list[CompletionChunk]:
+        with patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.acompletion",
+            side_effect=fake_acompletion,
+        ), patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.stream_chunk_builder",
+            return_value=_assembled_response(finish_reason="tool_calls"),
+        ):
+            return [
+                chunk
+                async for chunk in adapter.stream_complete(
+                    messages=[Message(role="user", content="search")],
+                    model="qwen2.5:7b",
+                    tenant_context=_TENANT_A,
+                )
+            ]
+
+    out = asyncio.run(drive())
+    final = [c for c in out if c.is_final][0]
+
+    assert len(final.tool_calls) == 1
+    assert final.tool_calls[0].id == "call_123"
+    assert final.tool_calls[0].name == "retrieval"
+    assert final.tool_calls[0].arguments_json == '{"query": "lvt"}'
+    assert final.finish_reason == "tool_calls"
+
+
+def test_stream_complete_zero_cost_when_usage_unavailable() -> None:
+    """When stream_chunk_builder returns no usage, cost falls back to
+    zero with streaming_no_usage pricing_status (covered via the span
+    attributes); the terminal chunk carries cost_usd=Decimal('0')."""
+    adapter = LiteLLMAdapter(settings=_settings())
+
+    chunks = [
+        _streaming_chunk(content="ok"),
+        _streaming_chunk(finish_reason="stop"),
+    ]
+
+    async def fake_acompletion(**kwargs: object) -> AsyncIterator[SimpleNamespace]:
+        return _async_iter(chunks)
+
+    # Assembled response without usage block.
+    assembled_no_usage = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="ok", tool_calls=[]),
+                finish_reason="stop",
+            )
+        ],
+        usage=None,
+        model="qwen2.5:7b",
+    )
+
+    async def drive() -> list[CompletionChunk]:
+        with patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.acompletion",
+            side_effect=fake_acompletion,
+        ), patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.stream_chunk_builder",
+            return_value=assembled_no_usage,
+        ):
+            return [
+                chunk
+                async for chunk in adapter.stream_complete(
+                    messages=[Message(role="user", content="hi")],
+                    model="qwen2.5:7b",
+                    tenant_context=_TENANT_A,
+                )
+            ]
+
+    out = asyncio.run(drive())
+    final = [c for c in out if c.is_final][0]
+
+    assert final.cost_usd == Decimal("0")
+    assert final.usage is None
+
+
+def test_stream_complete_forwards_tools_to_litellm() -> None:
+    """The tools parameter on stream_complete must reach litellm.acompletion
+    in the OpenAI function-calling shape."""
+    adapter = LiteLLMAdapter(settings=_settings())
+    captured: dict[str, object] = {}
+
+    async def fake_acompletion(**kwargs: object) -> AsyncIterator[SimpleNamespace]:
+        captured.update(kwargs)
+        return _async_iter([_streaming_chunk(finish_reason="stop")])
+
+    tool = ToolDefinition(
+        name="retrieval",
+        description="search",
+        parameters={"type": "object"},
+    )
+
+    async def drive() -> None:
+        with patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.acompletion",
+            side_effect=fake_acompletion,
+        ), patch(
+            "contexts.inference.adapters.outbound.litellm.adapter.litellm.stream_chunk_builder",
+            return_value=_assembled_response(),
+        ):
+            async for _ in adapter.stream_complete(
+                messages=[Message(role="user", content="hi")],
+                model="qwen2.5:7b",
+                tenant_context=_TENANT_A,
+                tools=[tool],
+            ):
+                pass
+
+    asyncio.run(drive())
+
+    assert captured["stream"] is True
+    assert "stream_options" in captured
+    assert "tools" in captured
+    assert captured["tools"][0]["function"]["name"] == "retrieval"

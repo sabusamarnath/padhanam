@@ -32,7 +32,7 @@ wire shape sent to the gateway.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 import litellm
 from litellm.exceptions import (
@@ -50,6 +50,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from contexts.inference.domain.completion import (
     Completion,
+    CompletionChunk,
     Message,
     TokenUsage,
     ToolCall,
@@ -209,6 +210,311 @@ class LiteLLMAdapter:
             ctx = span.get_span_context()
             trace_id = format(ctx.trace_id, "032x") if ctx.trace_id else None
             return _with_cost_and_trace(completion, trace_id, cost_decimal)
+
+    async def stream_complete(
+        self,
+        messages: Sequence[Message],
+        model: str | None,
+        tenant_context: TenantContext,
+        tools: Sequence[ToolDefinition] = (),
+    ) -> AsyncIterator[CompletionChunk]:
+        """Streaming completion against the LiteLLM gateway (D90, S29b).
+
+        Calls ``litellm.acompletion(..., stream=True)`` for the async-
+        streaming path; translates each LiteLLM chunk into a domain-
+        shape ``CompletionChunk``; accumulates tool calls across deltas
+        (LiteLLM emits tool-call arguments piecewise per the OpenAI
+        function-calling streaming shape); reassembles all chunks via
+        ``litellm.stream_chunk_builder`` at stream end to compute final
+        usage and cost; emits a terminal chunk with ``is_final=True``
+        carrying the resolved model name, finish reason, cost, and the
+        fully-assembled tool calls.
+
+        Trace span: one ``chat {model}`` span wraps the whole stream
+        (kind=CLIENT), matching the existing ``complete`` adapter's
+        span shape so the LiteLLM-side and Padhanam-side spans nest
+        consistently regardless of which method initiated the call.
+        Intermediate chunks do not get their own spans (one chunk-per-
+        span would explode the trace tree without consumer evidence);
+        the gateway-emitted span tree per D27 propagation gives chunk-
+        level visibility when needed.
+
+        Cost capture per D49: usage tokens reassemble via
+        stream_chunk_builder; cost_for() then maps to USD. The dev/
+        Ollama zero-cost case and the unknown-model-pricing case both
+        surface as Decimal("0") with the appropriate pricing_status
+        attribute on the span. If stream_chunk_builder fails to produce
+        usage (some streaming providers omit the usage block entirely),
+        the cost falls back to Decimal("0") with a
+        ``streaming_no_usage`` pricing_status flag distinct from
+        ``unknown_model``.
+        """
+        resolved_model = model or self._settings.default_model
+        endpoint = self._settings.litellm_endpoint
+        master_key = self._settings.litellm_master_key
+
+        with _tracer.start_as_current_span(
+            f"chat {resolved_model}",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "gen_ai.system": "litellm",
+                "gen_ai.request.model": resolved_model,
+                "gen_ai.operation.name": "chat",
+                "gen_ai.request.streaming": True,
+                "tenant.id": tenant_context.tenant_id,
+                "tenant.jurisdiction": tenant_context.jurisdiction,
+                "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
+            },
+        ) as span:
+            call_kwargs: dict[str, Any] = {
+                "model": f"openai/{resolved_model}",
+                "messages": [_message_to_payload(m) for m in messages],
+                "api_base": endpoint,
+                "api_key": master_key,
+                "stream": True,
+                # Ask providers that support it (cloud OpenAI-compatible
+                # gateways) to include usage on the terminal chunk so
+                # cost_for() can compute on the same span. Dev / Ollama
+                # may ignore the option; stream_chunk_builder reassembles
+                # tokens as a fallback either way.
+                "stream_options": {"include_usage": True},
+            }
+            if tools:
+                call_kwargs["tools"] = [_tool_to_payload(t) for t in tools]
+
+            try:
+                response_iter = await litellm.acompletion(**call_kwargs)
+            except (Timeout,) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceTimeout(str(e)) from e
+            except (
+                RateLimitError,
+                ServiceUnavailableError,
+                APIConnectionError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceUnavailable(str(e)) from e
+            except (AuthenticationError, BadRequestError, NotFoundError) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceConfigurationError(str(e)) from e
+            except APIError as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceError(str(e)) from e
+
+            # Tool-call accumulator: LiteLLM streams tool calls
+            # piecewise; each delta's tool_calls entry has an ``index``
+            # field and partial fields. We accumulate by index so the
+            # terminal chunk can surface the fully-assembled list.
+            tool_call_accumulator: dict[int, dict[str, Any]] = {}
+            raw_chunks: list[Any] = []
+            finish_reason: str | None = None
+            response_model_observed: str | None = None
+
+            try:
+                async for raw_chunk in response_iter:
+                    raw_chunks.append(raw_chunk)
+                    response_model_observed = (
+                        getattr(raw_chunk, "model", None)
+                        or response_model_observed
+                    )
+                    choices = getattr(raw_chunk, "choices", None) or []
+                    if not choices:
+                        continue
+                    choice = choices[0]
+                    finish_reason = (
+                        getattr(choice, "finish_reason", None) or finish_reason
+                    )
+                    delta = getattr(choice, "delta", None)
+                    if delta is None:
+                        continue
+                    text_delta = getattr(delta, "content", None) or ""
+                    delta_tool_calls = getattr(delta, "tool_calls", None) or []
+                    _accumulate_tool_call_deltas(
+                        tool_call_accumulator, delta_tool_calls
+                    )
+
+                    if text_delta:
+                        yield CompletionChunk(
+                            text_delta=text_delta,
+                            is_final=False,
+                        )
+            except (Timeout,) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceTimeout(str(e)) from e
+            except (
+                RateLimitError,
+                ServiceUnavailableError,
+                APIConnectionError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceUnavailable(str(e)) from e
+            except APIError as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceError(str(e)) from e
+
+            # Reassemble the full response so we can extract usage and
+            # cost on the terminal chunk. stream_chunk_builder returns
+            # the same shape as a non-streaming completion.
+            usage: TokenUsage | None = None
+            cost_decimal = Decimal("0")
+            pricing_status = "streaming_no_usage"
+
+            try:
+                assembled = litellm.stream_chunk_builder(raw_chunks)
+            except Exception:  # noqa: BLE001 — vendor-side reassembly failure
+                assembled = None
+
+            response_model = response_model_observed or resolved_model
+
+            if assembled is not None:
+                response_model = (
+                    getattr(assembled, "model", None) or response_model
+                )
+                usage_raw = getattr(assembled, "usage", None)
+                if usage_raw is not None:
+                    input_tokens = int(
+                        getattr(usage_raw, "prompt_tokens", 0) or 0
+                    )
+                    output_tokens = int(
+                        getattr(usage_raw, "completion_tokens", 0) or 0
+                    )
+                    if input_tokens or output_tokens:
+                        usage = TokenUsage(
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                        )
+                        try:
+                            breakdown = cost_for(
+                                response_model, input_tokens, output_tokens
+                            )
+                            cost_decimal = breakdown.total_usd
+                            pricing_status = "table_hit"
+                        except UnknownModelError:
+                            cost_decimal = Decimal("0")
+                            pricing_status = "unknown_model"
+
+            span.set_attribute("gen_ai.response.model", response_model)
+            if usage is not None:
+                span.set_attribute(
+                    "gen_ai.usage.input_tokens", usage.input_tokens
+                )
+                span.set_attribute(
+                    "gen_ai.usage.output_tokens", usage.output_tokens
+                )
+            span.set_attribute(
+                "gen_ai.cost.input_usd",
+                float(cost_for_input(usage, response_model)),
+            )
+            span.set_attribute(
+                "gen_ai.cost.output_usd",
+                float(cost_for_output(usage, response_model)),
+            )
+            span.set_attribute("gen_ai.cost.total_usd", float(cost_decimal))
+            span.set_attribute("gen_ai.cost.pricing_status", pricing_status)
+            if finish_reason is not None:
+                span.set_attribute(
+                    "gen_ai.response.finish_reasons", [finish_reason]
+                )
+
+            ctx = span.get_span_context()
+            trace_id = format(ctx.trace_id, "032x") if ctx.trace_id else None
+
+            yield CompletionChunk(
+                text_delta="",
+                is_final=True,
+                finish_reason=finish_reason,
+                model=response_model,
+                tool_calls=_finalize_tool_calls(tool_call_accumulator),
+                usage=usage,
+                cost_usd=cost_decimal,
+                trace_id=trace_id,
+            )
+
+
+def _accumulate_tool_call_deltas(
+    accumulator: dict[int, dict[str, Any]],
+    delta_tool_calls: list[Any],
+) -> None:
+    """Merge tool-call deltas into the index-keyed accumulator.
+
+    LiteLLM streams tool calls in the OpenAI shape: each delta's
+    ``tool_calls`` is a list of entries with ``index`` plus partial
+    fields. The first delta for a given index carries ``id`` and
+    ``function.name``; subsequent deltas extend ``function.arguments``
+    fragment-by-fragment. The accumulator keys by index and concatenates
+    arguments fragments.
+    """
+    for tc in delta_tool_calls:
+        index = getattr(tc, "index", None)
+        if index is None and isinstance(tc, dict):
+            index = tc.get("index")
+        if index is None:
+            continue
+        bucket = accumulator.setdefault(int(index), {"arguments_parts": []})
+        tc_id = getattr(tc, "id", None) or (
+            tc.get("id") if isinstance(tc, dict) else None
+        )
+        if tc_id:
+            bucket["id"] = str(tc_id)
+        fn = getattr(tc, "function", None) or (
+            tc.get("function") if isinstance(tc, dict) else None
+        )
+        if fn is not None:
+            name = getattr(fn, "name", None) or (
+                fn.get("name") if isinstance(fn, dict) else None
+            )
+            if name:
+                bucket["name"] = str(name)
+            args_fragment = getattr(fn, "arguments", None) or (
+                fn.get("arguments") if isinstance(fn, dict) else None
+            )
+            if args_fragment:
+                bucket["arguments_parts"].append(str(args_fragment))
+
+
+def _finalize_tool_calls(
+    accumulator: dict[int, dict[str, Any]],
+) -> tuple[ToolCall, ...]:
+    """Convert the index-keyed accumulator into a frozen ToolCall tuple."""
+    out: list[ToolCall] = []
+    for index in sorted(accumulator.keys()):
+        bucket = accumulator[index]
+        out.append(
+            ToolCall(
+                id=str(bucket.get("id", "")),
+                name=str(bucket.get("name", "")),
+                arguments_json="".join(bucket.get("arguments_parts", []))
+                or "{}",
+            )
+        )
+    return tuple(out)
+
+
+def cost_for_input(usage: TokenUsage | None, model: str) -> Decimal:
+    """Compute input-side cost component; zero when usage unavailable."""
+    if usage is None:
+        return Decimal("0")
+    try:
+        return cost_for(model, usage.input_tokens, 0).total_usd
+    except UnknownModelError:
+        return Decimal("0")
+
+
+def cost_for_output(usage: TokenUsage | None, model: str) -> Decimal:
+    """Compute output-side cost component; zero when usage unavailable."""
+    if usage is None:
+        return Decimal("0")
+    try:
+        return cost_for(model, 0, usage.output_tokens).total_usd
+    except UnknownModelError:
+        return Decimal("0")
 
 
 def _message_to_payload(m: Message) -> dict[str, Any]:
