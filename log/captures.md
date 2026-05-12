@@ -168,3 +168,16 @@ Gap 3: D78's "operator deploys public Padhanam personally" scope grows if operat
 
   - triaged: strategic-input note on 2026-05-11
   - resolution: topology design strategic block executed 2026-05-11 at the P7→P8 boundary. Architectural scope absorbed: D80 (four-layer constraint stack), D81 (methodology aggregate v2 with multi-role refinement and per-field binding mode), D82 (platform invariants and Padhanam-as-intelligence-layer with five danger-targeted invariants), D83 (workflow as architectural primitive with Phase 2 implementation), D84 (P8 agent runtime adapter shape and LangGraph deferral), D85 (McKinsey 7-Step methodology authoring placement). New charter file at charter/contexts/workflow.md. Revised charter/packages/p8-epic.md. New User safety section in charter/principles.md with refined methodology-embedded principle. charter/packages.md P8 line revision. charter/roadmap.md v4 entry with discovery reasoning. charter/current-package.md transition. Three new deferred-decisions entries (cascading-harm invariant shape; retrieval-bound hard-constraint shape; per-role binding-mode override). Three gaps land at named future surfaces per original triage (Gap 1 at Phase 1 close audit per D45; Gap 2 at Phase 2 framing; Gap 3 at next phase audit alongside Gap 1).
+
+## 2026-05-12 — Pre-write reconciliation as architectural discovery: methodology-document promotion candidate at five reinforcements
+
+Source: S28b session close.
+
+Pattern: pre-write reconciliation as architectural discovery. Distinguishing characteristic worth naming for promotion: this pattern catches cross-document architectural inconsistencies that prose review at prompt-drafting time cannot catch, because the prompt-drafter sees local consistency within the prompt and misses implicit dependencies on charter documents authored at different times against different consumers. The mechanism is mechanical: at session start, the implementer reads every file the prompt names before drafting code; if the read surfaces inconsistency with the prompt's assumptions, the implementer raises a user question; the architect resolves with an explicit decision (often a new or amended D-entry); code lands only after reconciliation.
+
+S28b instance: prompt's "per-tenant tools" framing (inherited from p8-epic line carrying D32 reference) contradicted "tuple-shape pin at control-plane role authoring" (D86 commitment). Pre-write reconciliation surfaced the cross-plane reference tension. User-question moment resolved to control-plane tool storage at Phase 1, with per-tenant tool authoring deferred to Phase 2 per the customer-deployment-evidence trajectory. D89 absorbs the choice as alternative (h).
+
+Recurrence count: five reinforcements per operator count at S28b close. S4 Langfuse vendor-version drift is the originating precedent.
+
+  - triaged: note on 2026-05-12
+  - resolution: forwarded to Phase 1 close audit prep as a methodology-document Patterns-observed promotion candidate. The audit's strategic-mode conversation drafts the formal entry per the build-versus-strategic discipline (build sessions do not write to charter/methodology.md directly per D47).
