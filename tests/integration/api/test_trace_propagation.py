@@ -29,24 +29,37 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
 
 @pytest.fixture
 def trace_capture() -> Any:
-    """Set the global tracer provider to one whose spans go to memory.
+    """Attach an in-memory span exporter to the current TracerProvider.
 
-    The SDK uses the global provider; FastAPI instrumentation and the
-    LiteLLM adapter both call trace.get_tracer() which resolves
-    against it. Resetting the global at the end so other tests are
-    unaffected.
+    OTel guards against multi-replace of the global TracerProvider
+    within a single process (raises a warning and silently ignores
+    subsequent set calls), so this fixture attaches a fresh
+    SimpleSpanProcessor + InMemorySpanExporter to whichever provider
+    is current. Each test gets a fresh exporter; the processor is
+    shut down at teardown so the provider's processor list does not
+    grow unbounded across the session. If the current provider is
+    the SDK's no-op (no add_span_processor method), promote to a real
+    TracerProvider for the duration of the test. Mirrors the fixture
+    pattern at tests/unit/contexts/agent/adapters/outbound/test_agent_loop_executor_spans.py.
     """
     exporter = InMemorySpanExporter()
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": "padhanam-api-test"})
-    )
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    previous = trace.get_tracer_provider()
-    trace.set_tracer_provider(provider)
+    processor = SimpleSpanProcessor(exporter)
+
+    current = trace.get_tracer_provider()
+    add_span_processor = getattr(current, "add_span_processor", None)
+    if add_span_processor is None:
+        promoted = TracerProvider(
+            resource=Resource.create({"service.name": "padhanam-api-test"})
+        )
+        promoted.add_span_processor(processor)
+        trace.set_tracer_provider(promoted)
+    else:
+        add_span_processor(processor)
+
     try:
         yield exporter
     finally:
-        trace.set_tracer_provider(previous)
+        processor.shutdown()
         exporter.shutdown()
 
 

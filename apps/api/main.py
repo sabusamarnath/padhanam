@@ -29,9 +29,11 @@ from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from apps.api.middleware import AuthenticationMiddleware
+from apps.api.routers import agent as agent_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import tenant_audit as tenant_audit_router
+from apps.api.routers.agent import AgentRuntimeComposition
 from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
 from contexts.audit.domain.ports import AuditPort
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
@@ -80,6 +82,12 @@ class AppCompositions:
     audit_port: AuditPort | None = None
     tenant_registry: PostgresTenantRegistry | None = None
     session_factory_cache: TenantSessionFactoryCache | None = None
+    # S29b (D90): optional agent runtime composition for the SSE
+    # endpoint. Defaults to None so apps without the agent stack
+    # (existing inference + audit + tenancy clients, test fixtures) can
+    # keep their narrow factory invocations; commit 9's integration
+    # test populates this for the live-stack end-to-end run.
+    agent_runtime: AgentRuntimeComposition | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -204,6 +212,7 @@ def create_app(
     app.include_router(health_router.router)
     app.include_router(inference_router.router)
     app.include_router(tenant_audit_router.router)
+    app.include_router(agent_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
@@ -211,6 +220,7 @@ def create_app(
     app.state.audit_port = compositions.audit_port
     app.state.tenant_registry = compositions.tenant_registry
     app.state.session_factory_cache = compositions.session_factory_cache
+    app.state.agent_runtime = compositions.agent_runtime
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit
