@@ -140,11 +140,35 @@ def cli_runtime(
     )
 
     async def reset() -> None:
+        # Preserve migration-owned rows (e.g. 0008_create_mckinsey_7_step)
+        # so cross-test ordering doesn't strip the McKinsey methodology
+        # or its seven roles. Test-authored rows use distinct
+        # created_by_user_id values.
         async with cleanup_repo._sessionmaker() as session:
-            await session.execute(sa.delete(methodology_revisions))
-            await session.execute(sa.delete(methodology_templates))
-            await session.execute(sa.delete(role_revisions))
-            await session.execute(sa.delete(role_templates))
+            await session.execute(
+                sa.delete(methodology_revisions).where(
+                    methodology_revisions.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(methodology_templates).where(
+                    methodology_templates.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(role_revisions).where(
+                    role_revisions.c.created_by_user_id.notlike("migration:%")
+                )
+            )
+            await session.execute(
+                sa.delete(role_templates).where(
+                    role_templates.c.created_by_user_id.notlike("migration:%")
+                )
+            )
             await session.commit()
 
     try:

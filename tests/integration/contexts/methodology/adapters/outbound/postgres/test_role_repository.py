@@ -127,10 +127,21 @@ def repo(
         settings=settings, security_events=sec
     )
 
+    # Preserve migration-owned rows (e.g. 0008_create_mckinsey_7_step's
+    # seven McKinsey roles); test-authored rows use distinct
+    # created_by_user_id values.
     async def setup() -> None:
         async with repo._sessionmaker() as session:
-            await session.execute(sa.delete(role_revisions))
-            await session.execute(sa.delete(role_templates))
+            await session.execute(
+                sa.delete(role_revisions).where(
+                    role_revisions.c.created_by_user_id.notlike("migration:%")
+                )
+            )
+            await session.execute(
+                sa.delete(role_templates).where(
+                    role_templates.c.created_by_user_id.notlike("migration:%")
+                )
+            )
             await session.commit()
 
     try:
@@ -143,8 +154,20 @@ def repo(
     finally:
         async def teardown() -> None:
             async with repo._sessionmaker() as session:
-                await session.execute(sa.delete(role_revisions))
-                await session.execute(sa.delete(role_templates))
+                await session.execute(
+                    sa.delete(role_revisions).where(
+                        role_revisions.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
+                await session.execute(
+                    sa.delete(role_templates).where(
+                        role_templates.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
                 await session.commit()
             await repo.dispose()
         event_loop.run_until_complete(teardown())

@@ -149,10 +149,26 @@ def repo(
         settings=settings, security_events=sec
     )
 
+    # Preserve migration-owned rows (e.g. 0008_create_mckinsey_7_step's
+    # McKinsey methodology and its seven roles) across this fixture's
+    # setup and teardown; test-authored rows use distinct
+    # created_by_user_id values.
     async def setup() -> None:
         async with repo._sessionmaker() as session:
-            await session.execute(sa.delete(methodology_revisions))
-            await session.execute(sa.delete(methodology_templates))
+            await session.execute(
+                sa.delete(methodology_revisions).where(
+                    methodology_revisions.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(methodology_templates).where(
+                    methodology_templates.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
             await session.commit()
 
     try:
@@ -165,8 +181,20 @@ def repo(
     finally:
         async def teardown() -> None:
             async with repo._sessionmaker() as session:
-                await session.execute(sa.delete(methodology_revisions))
-                await session.execute(sa.delete(methodology_templates))
+                await session.execute(
+                    sa.delete(methodology_revisions).where(
+                        methodology_revisions.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
+                await session.execute(
+                    sa.delete(methodology_templates).where(
+                        methodology_templates.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
                 await session.commit()
             await repo.dispose()
         event_loop.run_until_complete(teardown())

@@ -98,11 +98,37 @@ def repos(
     )
 
     async def reset() -> None:
+        # Preserve migration-owned rows (e.g. 0008_create_mckinsey_7_step's
+        # McKinsey 7-Step methodology and its seven roles) so the McKinsey
+        # integration test at test_mckinsey_resolution.py continues to find
+        # them after this fixture runs. Test-authored rows use distinct
+        # created_by_user_id values ("test-operator", or operator-context
+        # subjects routed through use cases).
         async with methodology_repo._sessionmaker() as session:
-            await session.execute(sa.delete(methodology_revisions))
-            await session.execute(sa.delete(methodology_templates))
-            await session.execute(sa.delete(role_revisions))
-            await session.execute(sa.delete(role_templates))
+            await session.execute(
+                sa.delete(methodology_revisions).where(
+                    methodology_revisions.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(methodology_templates).where(
+                    methodology_templates.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(role_revisions).where(
+                    role_revisions.c.created_by_user_id.notlike("migration:%")
+                )
+            )
+            await session.execute(
+                sa.delete(role_templates).where(
+                    role_templates.c.created_by_user_id.notlike("migration:%")
+                )
+            )
             await session.commit()
 
     try:
