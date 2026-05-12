@@ -1,14 +1,14 @@
-"""Agent CRUD use cases (D75, D79, D86).
+"""Agent CRUD use cases (D75, D79, D86) plus invoke_agent (D88, S27b).
 
-Seven policy-aware coroutines wrapping ``AgentRepositoryPort``.
-Tenant-context-or-operator-context auth at the use case layer per
-D75: agents are tenant-user-owned per the P7 epic note's audience
-definition; tenant users CRUD their own agents through the tenant-
-context route. The CLI in operator-context per the dev-shape
-pattern at ``apps/cli/_runtime.py`` also CRUDs agents on behalf of a
-tenant; this is operator-as-platform-administrator, not operator-
-as-tenant-impersonator. Unauthenticated callers (no role at all)
-raise ``AuthorizationError``.
+Eight policy-aware coroutines wrapping ``AgentRepositoryPort`` and the
+cross-context lookup ports. Tenant-context-or-operator-context auth at
+the use case layer per D75: agents are tenant-user-owned per the P7
+epic note's audience definition; tenant users CRUD their own agents
+through the tenant-context route. The CLI in operator-context per the
+dev-shape pattern at ``apps/cli/_runtime.py`` also CRUDs agents on
+behalf of a tenant; this is operator-as-platform-administrator, not
+operator-as-tenant-impersonator. Unauthenticated callers (no role at
+all) raise ``AuthorizationError``.
 
 Two cross-context create paths per D79 (S25) and D86 (S26a-2):
 ``create_agent_from_methodology`` clones a methodology playbook into
@@ -21,6 +21,18 @@ application layer takes zero imports from contexts.methodology or
 contexts.ingestion; the apps/cli wiring layer translates each
 producer context's application-layer use cases into the consumer-
 shaped Protocol calls.
+
+S27b adds ``invoke_agent`` per D88: the first runtime path for an
+agent. Resolves the agent template, re-fetches the role from
+``RoleLookup`` (when the agent has role lineage), fetches the
+methodology's per-role overrides via ``MethodologyOverridesLookup``
+(when methodology lineage is also present), composes the effective
+constraint bundle per D87's resolver at ``composition.py``, builds an
+``AgentInvocationContext``, and invokes the supplied ``AgentExecutor``.
+The agent's own revision content acts as fallback for blank-created
+agents (lineage absent); the runtime path's structural shape is
+uniform: every invocation produces an effective bundle, even when
+lineage is absent.
 
 Hash chain: ``create_blank_agent``, ``update_agent``,
 ``create_agent_from_methodology``, and ``create_agent_from_role``
@@ -51,13 +63,23 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
+from contexts.agent.application.composition import (
+    compose_effective_constraint_bundle,
+)
 from contexts.agent.application.ports import (
     MethodologyLookup,
+    MethodologyOverridesLookup,
     RoleLookup,
+    RoleView,
     SourceLookup,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
-from contexts.agent.ports import AgentRepositoryPort
+from contexts.agent.ports import (
+    AgentExecutor,
+    AgentInvocationContext,
+    AgentRepositoryPort,
+    AgentResult,
+)
 from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
@@ -510,6 +532,40 @@ async def create_agent_from_methodology(
     return template, revision
 
 
+def _revision_as_role_view(
+    revision: AgentRevision,
+    *,
+    role_id: UUID | None,
+    role_version: int | None,
+    description: str | None,
+) -> RoleView:
+    """Build a RoleView from an agent revision's own content (D88).
+
+    Used by ``invoke_agent`` for blank-created agents (no role lineage)
+    where the agent's revision content is the source of truth for the
+    constraint bundle. The composition resolver consumes this view the
+    same way it consumes a RoleLookup-returned view; effectively the
+    agent's revision is its own role.
+
+    role_id and role_version are passed through unchanged so the
+    AgentInvocationContext can carry sentinel zeros for blank-created
+    agents — the executor's audit payload records what the lineage
+    says, not synthesised values.
+    """
+    return RoleView(
+        role_id=role_id or UUID(int=0),
+        role_version=role_version or 0,
+        description=description,
+        system_prompt=revision.system_prompt,
+        tool_allowlist=revision.tool_allowlist,
+        retrieval_strategy=revision.retrieval_strategy,
+        filter_tree=revision.filter_tree,
+        top_k=revision.top_k,
+        min_score=revision.min_score,
+        model_selection=revision.model_selection,
+    )
+
+
 async def create_agent_from_role(
     *,
     principal: Principal,
@@ -632,3 +688,117 @@ async def create_agent_from_role(
 
     await repository.create_template(template, revision, tenant_context)
     return template, revision
+
+
+async def invoke_agent(
+    *,
+    principal: Principal,
+    repository: AgentRepositoryPort,
+    role_lookup: RoleLookup,
+    methodology_overrides_lookup: MethodologyOverridesLookup,
+    executor: AgentExecutor,
+    security_events: SecurityEventLogger,
+    tenant_context: TenantContext,
+    agent_template_id: UUID,
+    user_input: str,
+) -> AgentResult:
+    """Run a single agent invocation end-to-end (D88, S27b).
+
+    Resolves the agent's revision content, re-fetches the role's
+    current content when role lineage is present, fetches the
+    methodology's per-role overrides when methodology lineage is also
+    present, composes the effective constraint bundle per D87, builds
+    the invocation context, and dispatches to the supplied
+    ``AgentExecutor``. The executor handles the LLM-with-tool-loop,
+    cost capture, and audit emission per D88.
+
+    Three lineage paths land here as parallel flows:
+
+    - Both pairs NULL (blank-created agent): the agent's own revision
+      content acts as the role view; no methodology overrides apply;
+      the composition resolver returns the role view unchanged.
+    - Only role pair populated (role-cloned): re-fetch the role's
+      current content via ``RoleLookup``; no methodology overrides;
+      composition returns the role view unchanged.
+    - Both pairs populated (methodology-cloned): re-fetch the role via
+      ``RoleLookup``; fetch the methodology revision's per-role
+      overrides for this role via ``MethodologyOverridesLookup``;
+      compose per D87.
+
+    The use case threads ``tenant_context`` through every cross-cutting
+    concern (repository, role_lookup, methodology_overrides_lookup,
+    executor's internals). Auth posture matches the other agent CRUD
+    use cases per D75: tenant-context-or-operator-context.
+    """
+    if not _is_authenticated(principal):
+        raise _deny(
+            principal=principal,
+            action="agent.invoke_agent",
+            resource_ref=f"agent_template:{agent_template_id}",
+            security_events=security_events,
+        )
+
+    template, revision = await repository.get_template(
+        agent_template_id, tenant_context
+    )
+
+    role_view = await _resolve_role_view(
+        template=template,
+        revision=revision,
+        role_lookup=role_lookup,
+        principal=principal,
+    )
+
+    methodology_overrides: dict[str, dict[str, Any]] = {}
+    if (
+        template.source_methodology_template_id is not None
+        and template.source_role_id is not None
+    ):
+        methodology_overrides = await methodology_overrides_lookup(
+            methodology_template_id=template.source_methodology_template_id,
+            methodology_version=template.source_methodology_template_version,
+            role_id=template.source_role_id,
+            principal=principal,
+        )
+
+    bundle = compose_effective_constraint_bundle(
+        role=role_view,
+        methodology_overrides=methodology_overrides,
+    )
+
+    context = AgentInvocationContext(
+        tenant_context=tenant_context,
+        agent_template_id=template.id,
+        agent_revision_version=revision.version,
+        role_template_id=role_view.role_id,
+        role_revision_version=role_view.role_version,
+        methodology_template_id=template.source_methodology_template_id,
+        methodology_version=template.source_methodology_template_version,
+        effective_bundle=bundle,
+        user_input=user_input,
+    )
+
+    return await executor.execute(context)
+
+
+async def _resolve_role_view(
+    *,
+    template: AgentTemplate,
+    revision: AgentRevision,
+    role_lookup: RoleLookup,
+    principal: Principal,
+) -> RoleView:
+    """Re-fetch the role's current content when lineage is set, else
+    project the agent's own revision content as a RoleView (D88)."""
+    if template.source_role_id is not None:
+        return await role_lookup(
+            role_id=template.source_role_id,
+            version=template.source_role_version,
+            principal=principal,
+        )
+    return _revision_as_role_view(
+        revision,
+        role_id=None,
+        role_version=None,
+        description=template.description,
+    )

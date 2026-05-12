@@ -4,6 +4,7 @@ from contexts.agent.application.use_cases import (
     create_agent_from_role,
     create_blank_agent,
     get_agent,
+    invoke_agent,
     list_agents,
     update_agent,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "create_agent_from_role",
     "create_blank_agent",
     "get_agent",
+    "invoke_agent",
     "list_agents",
     "update_agent",
 ]
