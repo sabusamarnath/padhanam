@@ -2,6 +2,8 @@
 
 Padhanam (Esperanto for "studying") is a public demonstration that a senior product leader can direct the end-to-end implementation of an enterprise-grade agentic platform through Claude Code without writing code. The platform is built to enterprise standards: multi-tenant, identity-federated, audit-chained, jurisdiction-aware, OTel-instrumented. The architectural discipline is the test of whether AI-assisted development can sustain production-shaped software when directed by a product leader rather than implemented by engineers. The methodology that emerges from running the experiment is the proprietary insight; the platform is the artefact that proves it.
 
+Padhanam is Apache 2.0 licensed. The platform is the demonstration; the methodology is the proprietary insight. See [LICENSE](LICENSE) for the full text.
+
 ## How to read the charter
 
 The charter under charter/ holds design intent. Read in this order:

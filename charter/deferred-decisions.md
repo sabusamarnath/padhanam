@@ -70,6 +70,40 @@ Activates at Phase 2 framing.
 
 **The specific D-entry lands when ceiling enforcement enters the codebase.** Premature commitment to specific threshold percentages, throttling mechanisms, or routing tiers ahead of integration is paper architecture.
 
+## Gate-as-workflow-step topology category
+
+Activates at Phase 2 workflow context implementation per D83.
+
+**The workflow context admits a fourth topology category beyond sequential, conditional, and reflective: gate.** A gate step pauses workflow execution for explicit human action, distinct from agent-to-agent handoff in the three currently-committed categories. The gate step's authoring surface carries gate_type, required_role or required_roles (mutually exclusive, single and multi-signatory cases), available_actions (the action vocabulary the human can take), visibility_scope (which signals and step outputs the human sees), entry_condition (signal-based gate-firing logic), signatory_mode (single or multi), and ownership_rules.
+
+**The gate-type vocabulary commits at the topology amendment.** Karma's framework named seven action-time gate types (escalation, confirmation, exception, feedback_loop_cap, conflict_resolution, structured_correction, approval) and six reserved lifecycle-transition gate types (agent_upgrade, imported_agent_drift, workflow_upgrade, workflow_deprecate, workflow_archive, model_upgrade). Padhanam adopts the categorical separation: action-time gates ship at workflow context implementation; lifecycle-transition gates remain reserved for the dependency-version-pinning surface when it lands.
+
+**Multi-signatory gates are first-class from inception.** Per-signatory state rows track approval state; decline on any row resets every row to pending; the schema accommodates both single and multi-signatory modes without retrofit. Karma's Phase 1 brief warned specifically against retrofitting this later; Padhanam adopts the warning.
+
+**Tool-boundary invariants and workflow-step gates are complementary surfaces, not alternatives.** D82's invariants enforce structural safety at every tool invocation regardless of workflow shape (per-classification consent at the tool layer). Workflow-step gates author explicit human-decision moments at the methodology layer (a methodology author can design "after draft, before send, the human reviews and edits"). Padhanam needs both. The gate category does not loosen tool-boundary invariants; it adds a separate surface for explicit authoring of workflow-internal HITL moments.
+
+**Design reference.** Karma's GateConfigSubDTO and GateSignatory at `docs/notes/prior-art-karma/authoring-contract.md` §5.3.2 and §5.3.5; multi-signatory state machine at karma's GateSignatory model; gate-rendering UX surfaces at karma's WorkflowCanvas.jsx EdgeConfigPanel.
+
+**The specific D-entry lands at the Phase 2 workflow context strategic block.** The amendment to D83's topology categories from three to four is the primary commitment. Sub-commitments on gate-type vocabulary, signatory shape, and entry-condition semantics land in the same strategic block. Premature commitment to specific gate types or signatory state machines ahead of Phase 2 implementation is paper architecture.
+
+## User-authored taps as workflow-attached checkpoints
+
+Activates at Phase 2 workflow context implementation, no later than the first power-user-customisation surface.
+
+**Power users attach observability and governance hooks to workflow scopes.** Padhanam already commits to observability as foundation: trace capture from the first LLM call per D7, run history at P9, optimization dashboard at P11. The trace store is the platform-level read-only observability surface. Taps add a tenant- or user-authored extension layer: a tap fires at a named trigger point within a workflow run and invokes a tap agent that emits its own observations to the audit trail, the trace store, or the run-history view.
+
+**Tap mechanics extend the role-first substrate per D86.** A tap is a role-attached observability agent. A user authors the tap agent as a role with a constraint bundle (read-only tool allowlist, evaluation-shaped output contract) and attaches it at a workflow scope with a trigger declaration carrying trigger_point, optional trigger_signal, and policy fields (loop_mode, loop_failure_policy). The trigger taxonomy follows karma's framework: before_execution, after_execution, on_output_signal. Padhanam's reflective topology category from D83 may require a fourth trigger (on_iteration); the strategic block resolves this.
+
+**Tap loop semantics need explicit commitment.** Karma's framework declared three loop_mode values (stateless, cumulative, trajectory) shaping what context a tap agent sees across loop iterations, and three loop_failure_policy values (inform_loop, cap_loop, block_loop) shaping what the workflow does when a tap fails inside a loop. Padhanam adopts the categorical separation at Phase 2 implementation; specific mode and policy values may be refined per authoring-evidence at adoption time.
+
+**Taps do not loosen platform invariants.** D82's invariants are platform commitments at the tool boundary, non-overridable. Taps are tenant capability extension at the workflow boundary, user-authored. Capability expansion that does not loosen invariants is exactly what D82's evolution discipline accommodates. Tap agents themselves are subject to the same invariants as any other agent: their tool allowlist is classification-checked at invocation, their outbound communications require per-invocation consent, their data flows through tenant-configured tool paths.
+
+**Three open architectural questions resolve at the Phase 2 strategic block.** First: tap scope. Karma's Phase 1 shipped scope-level taps only (attached to a client or workspace scope); agent-level and workflow-level tap composition deferred. Padhanam can ship narrow or broad; the cheaper move is scope-level first with agent-level added when authoring evidence forces it. Second: tap identity. Tap-as-role-attached-agent is one shape; tap-as-distinct-aggregate is another. The role-first model accommodates the first naturally; the strategic block confirms or chooses otherwise. Third: trigger taxonomy. Karma's three trigger points work for sequential workflows; reflective topologies and gate steps may require additional triggers.
+
+**Design reference.** Karma's tap framework at `docs/notes/prior-art-karma/taps-and-dispatcher.md` (extracted from karma's TapDeclaration model, ScopeGovernanceConfiguration, and taps/dispatcher.py); karma's authoring contract §6.1 through §6.4 covers tap composition mechanics.
+
+**The specific D-entry lands at the Phase 2 workflow context strategic block.** The taps-as-power-user-customisation framing is the primary commitment; the three open architectural questions resolve at the same block. Premature commitment to specific scope levels, identity shape, or trigger names ahead of Phase 2 implementation is paper architecture.
+
 ## Multi-currency cost reporting
 
 Activates at Phase 2 framing when the first non-USD-jurisdiction tenant enters scope.

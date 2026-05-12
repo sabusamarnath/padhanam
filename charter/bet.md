@@ -62,6 +62,8 @@ Decided at Phase 1 close audit. The pivot will reflect what Phase 1 surfaced abo
 
 ## What this is not
 
-This is not a startup. The platform is not for sale. There is no commercial intent in the platform itself; the platform is the demonstration. Architectural decisions that read like "what enterprise procurement requires for purchase" should be read literally as "enterprise procurement is the level at which the proposition is being tested," not as preparation for a sales motion that doesn't exist.
+Padhanam is Apache 2.0 licensed. Anyone can fork it, deploy it, host it, build a commercial product on top of it, or rebrand and resell it. Padhanam is not operating as a product or a commercial offering. The platform is the demonstration; the methodology is the proprietary insight. The Apache licence is itself part of the proposition: a methodology that requires code lock-in to monetise is not a methodology worth describing.
+
+Architectural decisions that read like "what enterprise procurement requires for purchase" should be read literally as "enterprise procurement is the level at which the proposition is being tested," not as preparation for a sales motion that doesn't exist.
 
 The methodology is the proprietary insight, and the public visibility of the platform is what makes the methodology credible. Selling the methodology is anticipated to take the form of L&D, advisory, content, and senior-role positioning rather than a product company. Phase 2 may revisit this; Phase 1 does not.
