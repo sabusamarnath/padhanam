@@ -2,9 +2,11 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P8 active — S27b closed; S28b next
+## P8 active — S28b in flight
 
 P8 opened on 2026-05-11. S26 split per D86 into S26a (methodology v3 migration with role aggregate) and S26b (McKinsey 7-Step authoring against the role-first model). S26a further split at scope-meets-reality into S26a-1 (control-plane work) and S26a-2 (per-tenant work).
+
+**S28b in flight.** Tool registry bounded context ships as the substrate generalisation that unlocks Phase 2's consumer-grade UX work on high-classification tooling. The hardcoded retrieval branch in `AgentLoopExecutor` retires and retrieval becomes a tool registered in the registry. Two thin ports at agent context (`ToolDefinitionsLookup`, `ToolInvoker`) replace the prior single hardcoded surface — third reinforcement of the consumer-port-plus-wiring-adapter pattern from S26a-1, S26a-2, S27b, promoting the pattern to a Phase 1 norm. Classification taxonomy with the three-to-three invariant mapping per D89 (financial→1, communication→2, legal→3) lands at the invocation boundary; Phase 1 authoring of high-classification tools is prohibited until the per-invocation confirmation pathway lands per the deferred-decisions entry. The pre-write reconciliation surfaced a cross-plane reference tension between the P8 epic note's per-tenant tools framing and the control-plane role-allowlist UUID pinning the prompt assumed; user-question moment resolved to control-plane storage (matching the methodology/role precedent) with per-tenant authoring deferred to Phase 2 — D89 absorbs the choice as alternative (h) and the storage section names the trajectory. BC stub at revision creation lands as Phase 1 substrate with consumer-grade adoption UX deferred to a future session per the deferred-decisions entry.
 
 **S26a closed on 2026-05-12** with S26a-1 (six commits, control-plane scope) and S26a-2 (seven commits, per-tenant + cross-plane scope). The split-at-implementation-reality decision yielded two clean sessions of comparable size and audit weight rather than one overloaded one; the original S26a brief's commit-4-to-5 boundary held up as a cut point through implementation.
 

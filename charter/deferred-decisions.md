@@ -305,3 +305,27 @@ Activates when methodology evidence shows the platform-level binding-mode conven
 **Methodology authors choose binding mode per role per field, overriding the platform-level default.** Current D81 commitment is a platform-level convention: methodology authors do not choose binding mode based on the field's nature; the platform decides. The override is forward affordance for compliance-shaped methodologies (a regulatory methodology might want `system_prompt` hard for control purposes, or `model_selection` hard for jurisdiction-specific reasons).
 
 **The specific D-entry lands at the methodology authoring session that surfaces the need**, with reasoning about the override mechanism (per-field annotation on the role bundle; precedence between platform default and role override). Premature commitment ahead of consumer evidence adds complexity without benefit.
+
+## Per-invocation human-in-the-loop confirmation pathway for high-classification tools
+
+Activates when the first tool of classification `financial`, `communication`, or `legal` is authored for a tenant.
+
+**The pathway shape commits at the activating session.** Three shape candidates: hand-off (agent drafts the proposed action; user acts out-of-band through the relevant external system); pause-and-confirm (agent loop pauses at the invocation boundary; user reviews proposed call + arguments in-context; agent resumes on confirmation); queue-and-resume (run terminates with `awaiting_confirmation` status; user reviews out-of-band; resumption is a new run that carries forward the prior context). Each shape has different blast radius, UX latency, audit-trail implications, and runtime-state complexity. The choice depends on consumer evidence: which surface (CLI, future UI, API client) is the actual user environment; whether the action is reversible if mis-authorised; how long the user needs to review; whether the user holds context for the full agent invocation or just the proposed action.
+
+D89 commits the substrate (`Classification` enum, classification-to-invariant mapping, `INVARIANT_BLOCKED` termination signal, Phase 1 authoring prohibition) without committing the pathway shape. The activating session's D-entry captures shape reasoning and the consumer evidence that drove it. Until then, the Phase 1 authoring prohibition is the operative guardrail.
+
+## Rich backward-compatibility testing for tool revisions
+
+Activates when the second tool revision in a tenant produces a false positive (BC stub passed but the new revision actually broke a consumer) or a false negative (BC stub failed but the new revision is actually safe for adoption).
+
+**Refines the BC test surface beyond the schema-diff stub.** Three candidate sophistications: contract tests per tool (the tool author provides a contract test suite that the BC check runs against revision Rn+1's behaviour to validate semantic compatibility, not just schema compatibility); scenario-based regression (a corpus of representative invocations is captured per tool revision; BC check replays the corpus against Rn+1 and diffs results); schema diff with type-evolution rules (codified rules for Pydantic-aware schema evolution — e.g., `int → int | None` is compatible if no consumer requires non-null, `str → enum` is compatible only if all prior values are in the enum, `list[X] → list[Y]` is compatible if Y is a strict superset of X). The right shape depends on whether the first false result is a behavioural drift (suggests contract tests or scenarios) or a schema-evolution gap (suggests typed rules).
+
+D89 commits the schema-diff stub as Phase 1 substrate. The activating session's D-entry chooses the next sophistication based on the actual false-result evidence.
+
+## Automated adoption flow for backward-compatible tool revisions
+
+Activates when the first BC-passed revision lands in production with an existing role-tool binding pointing at the prior revision.
+
+**Designs the adoption UX that consumes the `RoleToolBinding.can_auto_adopt` signal D89 commits as substrate.** Three candidate flows: auto-adopt on BC pass with notification (binding silently updates to the new revision; user gets a digest notification listing what changed); review-required on BC fail (binding does not auto-adopt; user sees a review queue with the BC failure reason and decides per binding); opt-in adoption with BC result as recommendation strength (binding does not auto-update; the recommendation surface shows "BC passed — safe to adopt" or "BC failed — review required" with the user explicitly choosing every adoption). The trade-off is between notification fatigue (auto-adopt is the lowest-touch but bypasses user awareness), review fatigue (review-required is the highest-touch but ensures intentionality), and recommendation-quality dependence (opt-in lives or dies on whether the recommendation strength is well-calibrated).
+
+D89 commits the `list_roles_using_tool` query surface and the `can_auto_adopt` signal at the binding DTO. The activating session's D-entry commits the adoption UX based on the consumer surface (CLI, future UI) and the operator's preference for autonomy versus review.
