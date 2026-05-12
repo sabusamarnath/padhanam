@@ -22,29 +22,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from enum import Enum
 from typing import Any, Mapping, Protocol
 from uuid import UUID
 
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from contexts.agent.domain.termination import TerminationReason
 from contexts.inference.domain.completion import ToolDefinition
 from shared_kernel import TenantContext
-
-
-class TerminationReason(str, Enum):
-    """Why an agent invocation stopped (D88).
-
-    Strings rather than opaque ints so audit-row payloads and
-    AgentResult instances are human-readable end-to-end. Subclassing
-    ``str`` keeps comparison against literal strings ergonomic for
-    callers that haven't imported the Enum.
-    """
-
-    CONTENT = "content"
-    MAX_ITERATIONS = "max_iterations"
-    TOOL_NOT_REGISTERED = "tool_not_registered"
-    INVARIANT_BLOCKED = "invariant_blocked"
-    ERROR = "error"
 
 
 @dataclass(frozen=True)
