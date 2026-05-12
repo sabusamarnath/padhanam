@@ -72,6 +72,7 @@ from contexts.agent.application.ports import (
     RoleLookup,
     RoleView,
     SourceLookup,
+    ToolDefinitionsLookup,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
 from contexts.agent.ports import (
@@ -699,6 +700,7 @@ async def invoke_agent(
     repository: AgentRepositoryPort,
     role_lookup: RoleLookup,
     methodology_overrides_lookup: MethodologyOverridesLookup,
+    tool_definitions_lookup: ToolDefinitionsLookup,
     executor: AgentExecutor,
     security_events: SecurityEventLogger,
     tenant_context: TenantContext,
@@ -768,6 +770,9 @@ async def invoke_agent(
         role=role_view,
         methodology_overrides=methodology_overrides,
     )
+    tool_definitions = await tool_definitions_lookup(
+        allowlist=bundle.tool_allowlist,
+    )
 
     context = AgentInvocationContext(
         tenant_context=tenant_context,
@@ -779,6 +784,7 @@ async def invoke_agent(
         methodology_version=template.source_methodology_template_version,
         effective_bundle=bundle,
         user_input=user_input,
+        tool_definitions=tool_definitions,
     )
 
     return await executor.execute(context)

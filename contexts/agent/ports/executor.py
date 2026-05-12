@@ -27,6 +27,7 @@ from typing import Any, Mapping, Protocol
 from uuid import UUID
 
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from contexts.inference.domain.completion import ToolDefinition
 from shared_kernel import TenantContext
 
 
@@ -42,6 +43,7 @@ class TerminationReason(str, Enum):
     CONTENT = "content"
     MAX_ITERATIONS = "max_iterations"
     TOOL_NOT_REGISTERED = "tool_not_registered"
+    INVARIANT_BLOCKED = "invariant_blocked"
     ERROR = "error"
 
 
@@ -91,6 +93,14 @@ class AgentInvocationContext:
     effective_bundle: EffectiveConstraintBundle
     user_input: str
     conversation_history: tuple[InvocationMessage, ...] = ()
+    # Per D89 commit 5, the LLM-ready ToolDefinition list resolved by
+    # ToolDefinitionsLookup at composition time. The executor reads
+    # this field when constructing the LiteLLM ``tools`` parameter;
+    # the hardcoded retrieval branch from D88 retires. Carried at the
+    # ports layer (not on EffectiveConstraintBundle in domain) so the
+    # inference context's ToolDefinition type stays out of agent
+    # domain per the cross-context independence contract.
+    tool_definitions: tuple[ToolDefinition, ...] = ()
 
 
 @dataclass(frozen=True)

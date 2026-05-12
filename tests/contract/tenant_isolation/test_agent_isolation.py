@@ -557,15 +557,15 @@ def test_agent_invocation_audit_isolated_per_tenant(
                 cost_usd=Decimal("0.0001"),
             )
 
-    class _UnusedRetrievalClient:
+    class _UnusedToolInvoker:
         async def __call__(self, **kwargs):  # pragma: no cover
             raise AssertionError(
-                "retrieval client unused in single-turn content path"
+                "tool invoker unused in single-turn content path"
             )
 
     executor = AgentLoopExecutor(
         inference_port=_StubInferencePort(),
-        retrieval_client=_UnusedRetrievalClient(),
+        tool_invoker=_UnusedToolInvoker(),
         audit_port=audit_adapter,
     )
 

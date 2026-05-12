@@ -22,7 +22,7 @@ from shared_kernel import ToolAllowlistEntry
 
 @dataclass(frozen=True)
 class EffectiveConstraintBundle:
-    """Composed view of a role plus optional methodology overrides (D87, D88).
+    """Composed view of a role plus optional methodology overrides (D87, D88, D89).
 
     Field shapes match the role aggregate's constraint bundle (per D86).
     The composition resolver guarantees:
@@ -36,6 +36,14 @@ class EffectiveConstraintBundle:
       apply; otherwise carry role base verbatim.
     - ``retrieval_strategy``, ``model_selection`` reflect replace
       semantics when overridden; otherwise carry role base verbatim.
+
+    Per D89 (S28b commit 5), the LLM-ready ``ToolDefinition`` list
+    resolved from ``tool_allowlist`` via the ``ToolDefinitionsLookup``
+    port at composition time lands on ``AgentInvocationContext`` (the
+    ports-layer DTO that wraps this bundle), not on the bundle
+    itself. Domain code cannot import the inference context's
+    ``ToolDefinition`` type per the cross-context independence
+    contract; ports-layer DTOs may.
 
     Inadmissible (field, mode) pairs cannot reach this point because
     they are rejected at methodology write time per D87's

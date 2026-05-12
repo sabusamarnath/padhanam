@@ -39,9 +39,18 @@ from contexts.agent.application.ports.source_lookup import (
     SourceLookup,
     SourceNotFoundError,
 )
+from contexts.agent.application.ports.tool_definitions_lookup import (
+    ToolDefinitionsLookup,
+)
+from contexts.agent.application.ports.tool_invoker import (
+    InvocationOutcome,
+    ToolInvocationResult,
+    ToolInvoker,
+)
 
 __all__ = [
     "AgentRetrievalClient",
+    "InvocationOutcome",
     "MethodologyLookup",
     "MethodologyOverridesLookup",
     "MethodologyView",
@@ -50,4 +59,7 @@ __all__ = [
     "RoleView",
     "SourceLookup",
     "SourceNotFoundError",
+    "ToolDefinitionsLookup",
+    "ToolInvocationResult",
+    "ToolInvoker",
 ]

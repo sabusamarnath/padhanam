@@ -38,17 +38,19 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
-from contexts.agent.application.ports import AgentRetrievalClient, RetrievedChunk
+from contexts.agent.application.ports import (
+    InvocationOutcome,
+    ToolInvocationResult,
+    ToolInvoker,
+)
 from contexts.agent.ports.executor import (
     AgentExecutor,
     AgentInvocationContext,
@@ -72,32 +74,14 @@ _tracer = trace.get_tracer("padhanam.agent.loop_executor")
 # evidence demands; the value here is the single Phase 1 setting.
 MAX_ITERATIONS = 10
 
-# The single tool the agent runtime registers at Phase 1 per D88's
-# retrieval-as-only-callable framing. S28b's tool registry generalises
-# this surface to multiple tools with classification enforcement. The
-# retrieval tool's identity is the well-known UUID seeded by
-# ``0009_create_tools_tables`` per D89; the role's allowlist pin
-# (post-commit-4 tuple shape) carries this UUID for revision 1.
-RETRIEVAL_TOOL_NAME = "retrieval"
-RETRIEVAL_TOOL_ID = UUID("00000000-0000-0000-0000-000000000001")
-
-_RETRIEVAL_TOOL_DEFINITION = ToolDefinition(
-    name=RETRIEVAL_TOOL_NAME,
-    description=(
-        "Search the agent's grounded knowledge base for relevant chunks "
-        "matching the query. Returns text excerpts ranked by relevance."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "The natural-language search query.",
-            },
-        },
-        "required": ["query"],
-    },
-)
+# The hardcoded retrieval surface from S27b / D88 retires at S28b
+# commit 5 per D89. Tool definitions now flow from
+# ``EffectiveConstraintBundle.tool_definitions`` (composed at
+# ``contexts/agent/application/composition.py`` via
+# ``ToolDefinitionsLookup``); tool invocation flows through the
+# ``ToolInvoker`` port wired at ``apps/cli/_cross_context.py``.
+# Retrieval becomes a tool registered in the tool registry like any
+# other tool.
 
 
 class AgentLoopExecutor(AgentExecutor):
@@ -107,10 +91,12 @@ class AgentLoopExecutor(AgentExecutor):
 
     - ``inference_port``: the LiteLLM-backed ``InferencePort`` (D4).
       Sync call bridged via ``asyncio.to_thread``.
-    - ``retrieval_client``: the ``AgentRetrievalClient`` consumer port
-      (D88). The adapter at ``apps/cli/_cross_context.py`` composes
-      the ingestion context's ``search_vector`` and ``traverse_graph``
-      per the role's retrieval strategy.
+    - ``tool_invoker``: the ``ToolInvoker`` consumer port at D89.
+      The adapter at ``apps/cli/_cross_context.py`` (S28b commit 7)
+      composes the tools-context invocation service (classification
+      gating + defensive invariant check) with per-tool dispatch
+      (Phase 1: retrieval via ``AgentRetrievalClient``). The
+      hardcoded retrieval branch from D88 retires here.
     - ``audit_port``: the ``AuditPort`` (D22). The Postgres adapter is
       the chain authority and returns the persisted event with the
       authoritative ``this_event_hash`` per D88's port widening.
@@ -120,11 +106,11 @@ class AgentLoopExecutor(AgentExecutor):
         self,
         *,
         inference_port: InferencePort,
-        retrieval_client: AgentRetrievalClient,
+        tool_invoker: ToolInvoker,
         audit_port: AuditPort,
     ) -> None:
         self._inference_port = inference_port
-        self._retrieval_client = retrieval_client
+        self._tool_invoker = tool_invoker
         self._audit_port = audit_port
 
     async def execute(self, context: AgentInvocationContext) -> AgentResult:
@@ -212,19 +198,12 @@ class AgentLoopExecutor(AgentExecutor):
             messages.append(Message(role=prior.role, content=prior.content))
         messages.append(Message(role="user", content=context.user_input))
 
-        # Phase 1: register the retrieval tool only when the role's
-        # tool_allowlist permits it (after composition with the
-        # methodology's tighten). Per D89 commit 4 the allowlist
-        # carries pinned ``ToolAllowlistEntry`` entries; the retrieval
-        # match is by ``tool_id`` against the seeded retrieval UUID.
-        # An empty allowlist or one that does not pin retrieval runs
-        # the loop without tools, producing a single content turn or
-        # terminating early on a model-issued unknown tool call.
-        # Commit 5 replaces this hardcoded branch with
-        # ``ToolDefinitionsLookup`` from the tools context.
-        tools: list[ToolDefinition] = []
-        if any(e.tool_id == RETRIEVAL_TOOL_ID for e in bundle.tool_allowlist):
-            tools.append(_RETRIEVAL_TOOL_DEFINITION)
+        # Per D89 commit 5, the tool definitions list arrives on the
+        # invocation context (resolved by ``ToolDefinitionsLookup`` at
+        # ``invoke_agent`` use case time and threaded through here).
+        # The executor passes the list through to the LiteLLM call
+        # verbatim. Empty tuple → loop runs without tools.
+        tools: list[ToolDefinition] = list(context.tool_definitions)
 
         cost_total = Decimal("0")
         signals: list[AgentSignal] = []
@@ -249,30 +228,6 @@ class AgentLoopExecutor(AgentExecutor):
                 termination_reason = TerminationReason.CONTENT
                 break
 
-            unknown_tools = [
-                tc.name
-                for tc in completion.tool_calls
-                if tc.name != RETRIEVAL_TOOL_NAME
-            ]
-            if unknown_tools:
-                response_content = (
-                    completion.text
-                    or (
-                        f"(model attempted to call unregistered tools at "
-                        f"Phase 1: {unknown_tools!r}; S28b's tool registry "
-                        f"will resolve)"
-                    )
-                )
-                termination_reason = TerminationReason.TOOL_NOT_REGISTERED
-                early_termination = True
-                signals.append(
-                    AgentSignal(
-                        kind="unregistered_tool_attempted",
-                        payload={"names": tuple(unknown_tools)},
-                    )
-                )
-                break
-
             messages.append(
                 Message(
                     role="assistant",
@@ -281,36 +236,89 @@ class AgentLoopExecutor(AgentExecutor):
                 )
             )
 
+            # Per D89 commit 5: dispatch every tool call through the
+            # ``ToolInvoker`` port. The adapter at
+            # ``apps/cli/_cross_context.py`` (commit 7) composes the
+            # tools-context invocation service (classification gating
+            # + defensive invariant check) with per-tool dispatch.
+            # INVARIANT_BLOCKED or TOOL_NOT_REGISTERED outcomes
+            # terminate the loop with the corresponding
+            # ``TerminationReason``; OK appends the formatted tool
+            # result and the loop continues; ERROR surfaces the
+            # message in response content and terminates.
+            early_break = False
             for tool_call in completion.tool_calls:
-                query = _parse_retrieval_query(tool_call.arguments_json)
-                chunks = await self._retrieval_client(
-                    query=query,
+                result: ToolInvocationResult = await self._tool_invoker(
+                    tool_call=tool_call,
                     tenant_context=context.tenant_context,
-                    retrieval_strategy=bundle.retrieval_strategy,
-                    filter_tree=bundle.filter_tree,
-                    top_k=bundle.top_k,
-                    min_score=bundle.min_score,
                 )
-                chunks_tuple: tuple[RetrievedChunk, ...] = tuple(chunks)
+
+                if result.outcome is InvocationOutcome.INVARIANT_BLOCKED:
+                    response_content = (
+                        completion.text or result.message or result.payload
+                    )
+                    termination_reason = TerminationReason.INVARIANT_BLOCKED
+                    early_termination = True
+                    signals.append(
+                        AgentSignal(
+                            kind="invariant_blocked",
+                            payload={
+                                "tool_name": tool_call.name,
+                                "invariant_index": (
+                                    result.invariant_index
+                                    if result.invariant_index is not None
+                                    else 0
+                                ),
+                                "message": result.message,
+                            },
+                        )
+                    )
+                    early_break = True
+                    break
+
+                if result.outcome is InvocationOutcome.TOOL_NOT_REGISTERED:
+                    response_content = (
+                        completion.text
+                        or result.message
+                        or (
+                            f"(model attempted to call unregistered tool "
+                            f"{tool_call.name!r})"
+                        )
+                    )
+                    termination_reason = TerminationReason.TOOL_NOT_REGISTERED
+                    early_termination = True
+                    signals.append(
+                        AgentSignal(
+                            kind="unregistered_tool_attempted",
+                            payload={"names": (tool_call.name,)},
+                        )
+                    )
+                    early_break = True
+                    break
+
+                # OK or ERROR — both append the payload as a tool-
+                # role message and continue the loop. ERROR carries
+                # an explanatory string in payload so the LLM can
+                # react; OK carries the tool's formatted result.
                 messages.append(
                     Message(
                         role="tool",
-                        content=_format_chunks_as_tool_result(chunks_tuple),
+                        content=result.payload,
                         tool_call_id=tool_call.id,
                     )
                 )
                 signals.append(
                     AgentSignal(
-                        kind="retrieval_performed",
+                        kind="tool_invoked",
                         payload={
-                            "query": query,
-                            "chunk_count": len(chunks_tuple),
-                            "top_score": (
-                                chunks_tuple[0].score if chunks_tuple else 0.0
-                            ),
+                            "tool_name": tool_call.name,
+                            "outcome": result.outcome.value,
                         },
                     )
                 )
+
+            if early_break:
+                break
         else:
             # The while loop completed iteration MAX_ITERATIONS without
             # the ``break``: the cap fired. The last completion still
@@ -470,42 +478,9 @@ def _draft_event(
     )
 
 
-def _parse_retrieval_query(arguments_json: str) -> str:
-    """Parse the model-issued retrieval-tool arguments.
-
-    The OpenAI function-calling shape that LiteLLM normalises passes
-    ``arguments`` as a JSON string. A well-behaved model produces
-    ``{"query": "..."}``; a malformed payload yields an empty query
-    string rather than raising, which lets the loop produce a
-    structured no-result tool message rather than terminating the
-    invocation with an error.
-    """
-    try:
-        parsed = json.loads(arguments_json)
-    except (ValueError, TypeError):
-        _log.warning(
-            "retrieval tool arguments not parseable as JSON: %r",
-            arguments_json,
-        )
-        return ""
-    if not isinstance(parsed, dict):
-        return ""
-    query = parsed.get("query", "")
-    return str(query) if query is not None else ""
-
-
-def _format_chunks_as_tool_result(
-    chunks: tuple[RetrievedChunk, ...],
-) -> str:
-    """Format retrieved chunks as a single tool-result string.
-
-    The shape is human-readable so the LLM can consume it as a tool
-    message verbatim. Empty results produce a structured empty marker
-    that signals "no matches" rather than an empty string (the LLM may
-    interpret an empty tool message as a tool execution failure).
-    """
-    if not chunks:
-        return "(no chunks matched the query)"
-    return "\n\n".join(
-        f"[score={c.score:.3f}] {c.text}" for c in chunks
-    )
+# Per D89 commit 5, retrieval-specific parsing
+# (``_parse_retrieval_query``) and chunk-formatting
+# (``_format_chunks_as_tool_result``) relocated to the wiring layer
+# at ``apps/cli/_cross_context.py`` (S28b commit 7), where the
+# ``ToolInvoker`` adapter dispatches each tool to its specific
+# implementation. The executor stays tool-agnostic.

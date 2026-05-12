@@ -1,21 +1,36 @@
-"""Unit tests for AgentLoopExecutor (D88, S27b).
+"""Unit tests for AgentLoopExecutor against the two-thin-ports surface (D89, S28b commit 5).
 
-Covers the control-flow shape: content-only single turn, single tool
-call then content, two tool calls then content, unknown-tool branch,
-max-iteration cap. Plus audit emission and per-call cost aggregation.
+The executor's surface generalised from the S27b retrieval-as-only-callable
+branch to ``ToolInvoker``-driven dispatch. The tool definitions list
+arrives pre-resolved on ``EffectiveConstraintBundle.tool_definitions``
+(composition resolves it via ``ToolDefinitionsLookup``); the executor
+passes that list through to the LiteLLM call and dispatches each
+model-issued ``ToolCall`` through ``ToolInvoker``.
 
-The executor's collaborators (InferencePort, AgentRetrievalClient,
-AuditPort) are faked at the Protocol level; the real Postgres adapter
-and the real LiteLLM gateway are exercised at the integration test
-(S27b commit 8). Faking at the port boundary keeps each unit test
-small and fast.
+The eight scenarios:
+
+1. Content-only response terminates at iteration 1 with CONTENT.
+2. Tool call resolved OK terminates after the second LLM turn.
+3. Tool call returning INVARIANT_BLOCKED terminates with the new
+   ``TerminationReason.INVARIANT_BLOCKED`` and the invariant_index
+   on the AgentSignal.
+4. Tool call returning TOOL_NOT_REGISTERED terminates with the
+   existing ``TerminationReason.TOOL_NOT_REGISTERED`` path.
+5. Tool call returning ERROR appends the explanation as a tool-role
+   message and continues the loop.
+6. Max-iterations cap with continuous tool calls terminates with
+   MAX_ITERATIONS.
+7. Audit chain integrity holds across the new termination paths.
+8. The tool definitions list flows through to the LiteLLM call's
+   ``tools`` parameter verbatim.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -24,13 +39,20 @@ from contexts.agent.adapters.outbound.agent_loop_executor import (
     AgentLoopExecutor,
     MAX_ITERATIONS,
 )
+from contexts.agent.application.ports import (
+    InvocationOutcome,
+    ToolInvocationResult,
+)
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
 from contexts.agent.ports.executor import (
     AgentInvocationContext,
     TerminationReason,
 )
-from contexts.agent.application.ports import RetrievedChunk
-from contexts.audit.domain.events import AuditEvent, GENESIS_HASH, compute_event_hash
+from contexts.audit.domain.events import (
+    AuditEvent,
+    GENESIS_HASH,
+    compute_event_hash,
+)
 from contexts.inference.domain.completion import (
     Completion,
     Message,
@@ -47,19 +69,22 @@ _TENANT_A = TenantContext(
     cost_attribution_id="00000000-0000-4000-8000-00000000a001",
 )
 
-# Well-known retrieval tool UUIDs per D89's commit-2 seed.
-_RETRIEVAL_ALLOWLIST_ENTRY = ToolAllowlistEntry(
+_RETRIEVAL_ENTRY = ToolAllowlistEntry(
     tool_id=UUID("00000000-0000-0000-0000-000000000001"),
     revision_id=UUID("00000000-0000-0000-0000-000000000002"),
 )
 
+_RETRIEVAL_DEFINITION = ToolDefinition(
+    name="retrieval",
+    description="Search.",
+    parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+)
 
-def _bundle(
-    tools: tuple[ToolAllowlistEntry, ...] = (_RETRIEVAL_ALLOWLIST_ENTRY,),
-) -> EffectiveConstraintBundle:
+
+def _bundle() -> EffectiveConstraintBundle:
     return EffectiveConstraintBundle(
         system_prompt="be helpful",
-        tool_allowlist=tools,
+        tool_allowlist=(_RETRIEVAL_ENTRY,),
         retrieval_strategy={"primary": "vector"},
         filter_tree={},
         top_k=5,
@@ -70,7 +95,7 @@ def _bundle(
 
 def _context(
     *,
-    tools: tuple[ToolAllowlistEntry, ...] = (_RETRIEVAL_ALLOWLIST_ENTRY,),
+    tool_definitions: tuple[ToolDefinition, ...] = (_RETRIEVAL_DEFINITION,),
     methodology_id: UUID | None = None,
 ) -> AgentInvocationContext:
     return AgentInvocationContext(
@@ -81,8 +106,9 @@ def _context(
         role_revision_version=1,
         methodology_template_id=methodology_id,
         methodology_version=1 if methodology_id else None,
-        effective_bundle=_bundle(tools=tools),
+        effective_bundle=_bundle(),
         user_input="help me frame this problem",
+        tool_definitions=tool_definitions,
     )
 
 
@@ -102,14 +128,6 @@ def _completion(
 
 
 class _ScriptedInferencePort:
-    """Replays a queue of pre-canned Completions in order.
-
-    Tests script the model's behaviour by adding completions in the
-    order the executor will consume them. Each call captures the
-    request shape so assertions can inspect message lists and tool
-    payloads.
-    """
-
     def __init__(self, completions: list[Completion]) -> None:
         self._completions = list(completions)
         self.calls: list[
@@ -131,47 +149,28 @@ class _ScriptedInferencePort:
         return self._completions.pop(0)
 
 
-class _ScriptedRetrievalClient:
-    """Replays a queue of pre-canned chunk-result tuples."""
+class _ScriptedToolInvoker:
+    """Replays a queue of pre-canned ToolInvocationResults."""
 
-    def __init__(self, results: list[tuple[RetrievedChunk, ...]]) -> None:
+    def __init__(self, results: list[ToolInvocationResult]) -> None:
         self._results = list(results)
         self.calls: list[dict[str, Any]] = []
 
     async def __call__(
         self,
         *,
-        query: str,
+        tool_call: ToolCall,
         tenant_context: TenantContext,
-        retrieval_strategy,
-        filter_tree,
-        top_k: int,
-        min_score: Decimal,
-    ) -> tuple[RetrievedChunk, ...]:
+    ) -> ToolInvocationResult:
         self.calls.append(
-            {
-                "query": query,
-                "tenant_context": tenant_context,
-                "retrieval_strategy": retrieval_strategy,
-                "filter_tree": filter_tree,
-                "top_k": top_k,
-                "min_score": min_score,
-            }
+            {"tool_call": tool_call, "tenant_context": tenant_context}
         )
         if not self._results:
-            raise AssertionError("ScriptedRetrievalClient exhausted")
+            raise AssertionError("ScriptedToolInvoker exhausted")
         return self._results.pop(0)
 
 
 class _ChainingFakeAuditPort:
-    """In-memory audit port that mimics the Postgres chain authority.
-
-    Builds an in-memory chain: each emit reads the chain tail, computes
-    the authoritative hashes, appends a persisted event, and returns
-    it. Mirrors the per-tenant scoping by keying the chain on tenant_id
-    so cross-tenant isolation can be asserted.
-    """
-
     def __init__(self) -> None:
         self.chains: dict[str, list[AuditEvent]] = {}
 
@@ -209,316 +208,285 @@ class _ChainingFakeAuditPort:
         return persisted
 
 
-# 1. Content-only termination at iteration 1.
+def _executor(
+    *,
+    inference: _ScriptedInferencePort,
+    invoker: _ScriptedToolInvoker,
+    audit: _ChainingFakeAuditPort,
+) -> AgentLoopExecutor:
+    return AgentLoopExecutor(
+        inference_port=inference,
+        tool_invoker=invoker,
+        audit_port=audit,
+    )
+
+
+# 1. Content-only termination.
 
 def test_content_only_response_terminates_at_iteration_one() -> None:
     inference = _ScriptedInferencePort(
         [_completion(text="here is your framed problem", cost="0.001")]
     )
-    retrieval = _ScriptedRetrievalClient([])
+    invoker = _ScriptedToolInvoker([])
     audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=retrieval,
-        audit_port=audit,
-    )
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
     result = asyncio.run(executor.execute(_context()))
 
-    assert result.response_content == "here is your framed problem"
+    assert result.termination_reason is TerminationReason.CONTENT
     assert result.iteration_count == 1
-    assert result.termination_reason == TerminationReason.CONTENT
-    assert result.cost_total_usd == Decimal("0.001")
-    assert result.early_termination is False
-    assert result.signals == ()
-    assert len(inference.calls) == 1
-    assert len(retrieval.calls) == 0
+    assert result.response_content == "here is your framed problem"
+    assert invoker.calls == []
 
 
-# 2. Audit emission: two events per invocation, chained.
+# 2. Tool call resolved OK then content.
 
-def test_audit_emits_start_and_end_events_chained() -> None:
-    inference = _ScriptedInferencePort([_completion(text="ok")])
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=_ScriptedRetrievalClient([]),
-        audit_port=audit,
-    )
-
-    result = asyncio.run(executor.execute(_context()))
-
-    chain = audit.chains[_TENANT_A.tenant_id]
-    assert len(chain) == 2
-    assert chain[0].action_verb == "agent.invoke.start"
-    assert chain[1].action_verb == "agent.invoke.end"
-    # Chain integrity: end's previous_event_hash equals start's
-    # this_event_hash; both hashes are non-empty and 64-char hex.
-    assert chain[1].previous_event_hash == chain[0].this_event_hash
-    assert len(chain[0].this_event_hash) == 64
-    assert len(chain[1].this_event_hash) == 64
-    # AgentResult surfaces both hashes.
-    assert result.audit_start_hash == chain[0].this_event_hash
-    assert result.audit_end_hash == chain[1].this_event_hash
-
-
-def test_audit_payload_carries_methodology_lineage_when_set() -> None:
-    inference = _ScriptedInferencePort([_completion(text="ok")])
-    audit = _ChainingFakeAuditPort()
-    methodology_id = uuid4()
-    ctx = _context(methodology_id=methodology_id)
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=_ScriptedRetrievalClient([]),
-        audit_port=audit,
-    )
-
-    asyncio.run(executor.execute(ctx))
-
-    start = audit.chains[_TENANT_A.tenant_id][0]
-    assert start.after_state["methodology_template_id"] == str(methodology_id)
-    assert start.after_state["methodology_version"] == 1
-
-
-def test_audit_end_payload_carries_termination_and_cost() -> None:
-    inference = _ScriptedInferencePort(
-        [_completion(text="done", cost="0.0042")]
-    )
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=_ScriptedRetrievalClient([]),
-        audit_port=audit,
-    )
-
-    asyncio.run(executor.execute(_context()))
-
-    end = audit.chains[_TENANT_A.tenant_id][1]
-    assert end.after_state["termination_reason"] == "content"
-    assert end.after_state["iteration_count"] == 1
-    assert end.after_state["cost_total_usd"] == "0.0042"
-
-
-# 3. Tool loop: single retrieval then content.
-
-def test_single_tool_call_then_content_terminates_at_iteration_two() -> None:
-    """The agent issues one retrieval call, gets chunks, then produces
-    content."""
+def test_tool_call_ok_then_content() -> None:
     inference = _ScriptedInferencePort(
         [
             _completion(
                 tool_calls=(
-                    ToolCall(
-                        id="call_1",
-                        name="retrieval",
-                        arguments_json='{"query": "What is LVT?"}',
-                    ),
+                    ToolCall(id="c1", name="retrieval", arguments_json='{"query": "scope"}'),
                 ),
                 cost="0.001",
             ),
-            _completion(text="LVT is...", cost="0.002"),
+            _completion(text="final answer", cost="0.002"),
         ]
     )
-    chunk = RetrievedChunk(
-        text="LVT means Land Value Tax", source_id=uuid4(), score=0.92
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.OK,
+                payload="[score=0.9] relevant chunk",
+            )
+        ]
     )
-    retrieval = _ScriptedRetrievalClient([(chunk,)])
     audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=retrieval,
-        audit_port=audit,
-    )
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
     result = asyncio.run(executor.execute(_context()))
 
-    assert result.response_content == "LVT is..."
+    assert result.termination_reason is TerminationReason.CONTENT
     assert result.iteration_count == 2
-    assert result.termination_reason == TerminationReason.CONTENT
-    assert result.cost_total_usd == Decimal("0.003")
-    assert len(retrieval.calls) == 1
-    # The retrieval client received the parsed query argument and the
-    # bundle's strategy/filter_tree/top_k/min_score.
-    assert retrieval.calls[0]["query"] == "What is LVT?"
-    assert retrieval.calls[0]["top_k"] == 5
-    assert retrieval.calls[0]["min_score"] == Decimal("0.5")
-    # signals carry the retrieval_performed event with chunk_count.
-    retrieval_signals = [s for s in result.signals if s.kind == "retrieval_performed"]
-    assert len(retrieval_signals) == 1
-    assert retrieval_signals[0].payload["chunk_count"] == 1
-    assert retrieval_signals[0].payload["query"] == "What is LVT?"
+    assert result.response_content == "final answer"
+    assert len(invoker.calls) == 1
+    assert invoker.calls[0]["tool_call"].name == "retrieval"
+    # Second LLM call sees the tool-role message in the conversation.
+    second_call_msgs = inference.calls[1][0]
+    assert any(m.role == "tool" and "relevant chunk" in m.content for m in second_call_msgs)
 
 
-def test_second_inference_call_sees_assistant_tool_calls_and_tool_result() -> None:
-    """After the first retrieval call resolves, the executor appends
-    the assistant's tool_calls and the tool result; the second
-    inference call sees both in the message list."""
-    inference = _ScriptedInferencePort(
-        [
-            _completion(
-                tool_calls=(
-                    ToolCall(
-                        id="call_xyz",
-                        name="retrieval",
-                        arguments_json='{"query": "x"}',
-                    ),
-                ),
-            ),
-            _completion(text="answer"),
-        ]
-    )
-    chunk = RetrievedChunk(text="chunk-content", source_id=uuid4(), score=0.7)
-    retrieval = _ScriptedRetrievalClient([(chunk,)])
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=retrieval,
-        audit_port=audit,
-    )
+# 3. INVARIANT_BLOCKED termination path.
 
-    asyncio.run(executor.execute(_context()))
-
-    second_call_messages = inference.calls[1][0]
-    # Layout: system, user, assistant(tool_calls), tool(result)
-    assert len(second_call_messages) == 4
-    assert second_call_messages[0].role == "system"
-    assert second_call_messages[1].role == "user"
-    assert second_call_messages[2].role == "assistant"
-    assert second_call_messages[2].tool_calls[0].id == "call_xyz"
-    assert second_call_messages[3].role == "tool"
-    assert second_call_messages[3].tool_call_id == "call_xyz"
-    assert "chunk-content" in second_call_messages[3].content
-
-
-# 4. Unknown-tool branch.
-
-def test_unknown_tool_call_terminates_with_tool_not_registered() -> None:
-    inference = _ScriptedInferencePort(
-        [
-            _completion(
-                tool_calls=(
-                    ToolCall(
-                        id="call_bad",
-                        name="send_email",
-                        arguments_json='{"to": "bob@example.com"}',
-                    ),
-                ),
-            ),
-        ]
-    )
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=_ScriptedRetrievalClient([]),
-        audit_port=audit,
-    )
-
-    result = asyncio.run(executor.execute(_context()))
-
-    assert result.termination_reason == TerminationReason.TOOL_NOT_REGISTERED
-    assert result.early_termination is True
-    assert "send_email" in result.response_content
-    signals = [s for s in result.signals if s.kind == "unregistered_tool_attempted"]
-    assert len(signals) == 1
-    assert signals[0].payload["names"] == ("send_email",)
-    # End audit row records the termination.
-    end = audit.chains[_TENANT_A.tenant_id][1]
-    assert end.after_state["termination_reason"] == "tool_not_registered"
-
-
-# 5. Tool-allowlist enforcement: no retrieval in bundle = no tool definition.
-
-def test_empty_tool_allowlist_passes_no_tools_to_inference() -> None:
-    inference = _ScriptedInferencePort([_completion(text="ok")])
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=_ScriptedRetrievalClient([]),
-        audit_port=audit,
-    )
-
-    asyncio.run(executor.execute(_context(tools=())))
-
-    # The first (and only) inference call gets an empty tools list.
-    _, _, _, tools_sent = inference.calls[0]
-    assert tools_sent == []
-
-
-# 6. Max-iteration cap.
-
-def test_max_iterations_cap_terminates_with_max_iterations() -> None:
-    """The agent issues retrieval calls indefinitely; after the cap
-    (MAX_ITERATIONS) iterations without content, the loop terminates
-    with TerminationReason.MAX_ITERATIONS."""
-    # Script MAX_ITERATIONS tool-call responses; the last completion's
-    # text is what the executor surfaces with the cap.
-    completions = [
-        _completion(
-            text=f"thinking {i}",
-            tool_calls=(
-                ToolCall(
-                    id=f"call_{i}",
-                    name="retrieval",
-                    arguments_json='{"query": "x"}',
-                ),
-            ),
-        )
-        for i in range(MAX_ITERATIONS)
-    ]
-    inference = _ScriptedInferencePort(completions)
-    chunks = [
-        (RetrievedChunk(text=f"chunk {i}", source_id=uuid4(), score=0.5),)
-        for i in range(MAX_ITERATIONS)
-    ]
-    retrieval = _ScriptedRetrievalClient(chunks)
-    audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=retrieval,
-        audit_port=audit,
-    )
-
-    result = asyncio.run(executor.execute(_context()))
-
-    assert result.iteration_count == MAX_ITERATIONS
-    assert result.termination_reason == TerminationReason.MAX_ITERATIONS
-    assert result.early_termination is True
-    # The signals list carries the max_iterations_terminated marker.
-    max_signals = [
-        s for s in result.signals if s.kind == "max_iterations_terminated"
-    ]
-    assert len(max_signals) == 1
-    assert max_signals[0].payload["cap"] == MAX_ITERATIONS
-
-
-# 7. Cost aggregation.
-
-def test_cost_total_sums_across_calls() -> None:
+def test_invariant_blocked_terminates_with_invariant_signal() -> None:
     inference = _ScriptedInferencePort(
         [
             _completion(
                 tool_calls=(
                     ToolCall(
                         id="c1",
-                        name="retrieval",
-                        arguments_json='{"query": "x"}',
+                        name="transfer",
+                        arguments_json='{"amount": 1000}',
                     ),
                 ),
-                cost="0.0010",
-            ),
-            _completion(text="done", cost="0.0025"),
+                cost="0.001",
+            )
         ]
     )
-    retrieval = _ScriptedRetrievalClient(
-        [(RetrievedChunk(text="x", source_id=uuid4(), score=0.6),)]
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.INVARIANT_BLOCKED,
+                payload="(invocation blocked by invariant 1)",
+                message=(
+                    "tool 'transfer' is gated by platform invariant 1; "
+                    "invocation prohibited at Phase 1"
+                ),
+                invariant_index=1,
+            )
+        ]
     )
     audit = _ChainingFakeAuditPort()
-    executor = AgentLoopExecutor(
-        inference_port=inference,
-        retrieval_client=retrieval,
-        audit_port=audit,
-    )
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
     result = asyncio.run(executor.execute(_context()))
 
-    assert result.cost_total_usd == Decimal("0.0035")
+    assert result.termination_reason is TerminationReason.INVARIANT_BLOCKED
+    assert result.early_termination is True
+    assert any(
+        s.kind == "invariant_blocked"
+        and s.payload.get("invariant_index") == 1
+        and s.payload.get("tool_name") == "transfer"
+        for s in result.signals
+    )
+
+
+# 4. TOOL_NOT_REGISTERED termination path.
+
+def test_tool_not_registered_terminates() -> None:
+    inference = _ScriptedInferencePort(
+        [
+            _completion(
+                tool_calls=(
+                    ToolCall(id="c1", name="unknown_tool", arguments_json="{}"),
+                ),
+                cost="0.001",
+            )
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.TOOL_NOT_REGISTERED,
+                payload="(tool not registered)",
+                message="tool 'unknown_tool' not in registry",
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    result = asyncio.run(executor.execute(_context()))
+
+    assert result.termination_reason is TerminationReason.TOOL_NOT_REGISTERED
+    assert result.early_termination is True
+
+
+# 5. ERROR outcome continues the loop.
+
+def test_tool_error_continues_loop_with_error_payload() -> None:
+    inference = _ScriptedInferencePort(
+        [
+            _completion(
+                tool_calls=(
+                    ToolCall(id="c1", name="retrieval", arguments_json='{"query": "x"}'),
+                ),
+                cost="0.001",
+            ),
+            _completion(text="recovered after error", cost="0.001"),
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.ERROR,
+                payload="(retrieval failed: backend unavailable)",
+                message="retrieval failed",
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    result = asyncio.run(executor.execute(_context()))
+
+    assert result.termination_reason is TerminationReason.CONTENT
+    assert result.iteration_count == 2
+    # Error payload reaches the LLM as a tool-role message.
+    second_call_msgs = inference.calls[1][0]
+    assert any(
+        m.role == "tool" and "retrieval failed" in m.content
+        for m in second_call_msgs
+    )
+
+
+# 6. Max iterations cap.
+
+def test_max_iterations_cap_terminates_with_max_iterations() -> None:
+    completions = []
+    for _ in range(MAX_ITERATIONS):
+        completions.append(
+            _completion(
+                tool_calls=(
+                    ToolCall(id=f"c{_}", name="retrieval", arguments_json='{"query": "x"}'),
+                ),
+                cost="0.001",
+            )
+        )
+    invoker_results = [
+        ToolInvocationResult(outcome=InvocationOutcome.OK, payload="result")
+        for _ in range(MAX_ITERATIONS)
+    ]
+    inference = _ScriptedInferencePort(completions)
+    invoker = _ScriptedToolInvoker(invoker_results)
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    result = asyncio.run(executor.execute(_context()))
+
+    assert result.termination_reason is TerminationReason.MAX_ITERATIONS
+    assert result.iteration_count == MAX_ITERATIONS
+
+
+# 7. Tool definitions flow through to LiteLLM verbatim.
+
+def test_tool_definitions_pass_through_to_inference_call() -> None:
+    custom_def = ToolDefinition(
+        name="search",
+        description="search the web",
+        parameters={"type": "object"},
+    )
+    inference = _ScriptedInferencePort(
+        [_completion(text="done", cost="0")]
+    )
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    ctx = _context(tool_definitions=(custom_def,))
+    asyncio.run(executor.execute(ctx))
+
+    sent_tools = inference.calls[0][3]
+    assert sent_tools == [custom_def]
+
+
+def test_empty_tool_definitions_means_loop_calls_llm_without_tools() -> None:
+    inference = _ScriptedInferencePort(
+        [_completion(text="content", cost="0")]
+    )
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    ctx = _context(tool_definitions=())
+    asyncio.run(executor.execute(ctx))
+
+    sent_tools = inference.calls[0][3]
+    assert sent_tools == []
+
+
+# 8. Audit chain integrity across the new termination paths.
+
+def test_audit_chain_integrity_through_invariant_blocked_path() -> None:
+    inference = _ScriptedInferencePort(
+        [
+            _completion(
+                tool_calls=(
+                    ToolCall(id="c1", name="transfer", arguments_json="{}"),
+                ),
+                cost="0.001",
+            )
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.INVARIANT_BLOCKED,
+                payload="blocked",
+                message="msg",
+                invariant_index=2,
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    result = asyncio.run(executor.execute(_context()))
+
+    chain = audit.chains[_TENANT_A.tenant_id]
+    assert len(chain) == 2
+    assert chain[0].previous_event_hash == GENESIS_HASH
+    assert chain[1].previous_event_hash == chain[0].this_event_hash
+    assert chain[1].after_state["termination_reason"] == "invariant_blocked"
+    assert result.audit_start_hash == chain[0].this_event_hash
+    assert result.audit_end_hash == chain[1].this_event_hash

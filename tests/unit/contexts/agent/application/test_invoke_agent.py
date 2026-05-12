@@ -59,6 +59,18 @@ _SEARCH_ENTRY = ToolAllowlistEntry(
 )
 
 
+async def _empty_tool_definitions_lookup(*, allowlist):
+    """Fake ToolDefinitionsLookup that always returns an empty tuple.
+
+    The invoke_agent tests do not exercise the tool surface; the
+    fake stand-in lets composition return a bundle with empty
+    tool_definitions, which is the Phase 1 default for any allowlist
+    that doesn't pin a Phase-1-visible tool. Tests focused on the
+    tool surface live at S28b commit 7's cross-context adapter
+    integration tests."""
+    return ()
+
+
 _TENANT_A_UUID = "00000000-0000-4000-8000-00000000a001"
 
 
@@ -253,6 +265,7 @@ def test_unauthenticated_principal_raises_authorization_error() -> None:
                 repository=repository,
                 role_lookup=role_lookup,
                 methodology_overrides_lookup=overrides_lookup,
+                tool_definitions_lookup=_empty_tool_definitions_lookup,
                 executor=executor,
                 security_events=security_events,
                 tenant_context=_tenant_context(),
@@ -283,6 +296,7 @@ def test_blank_created_agent_uses_revision_content_as_role_view() -> None:
             repository=repository,
             role_lookup=role_lookup,
             methodology_overrides_lookup=overrides_lookup,
+                tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
@@ -322,6 +336,7 @@ def test_role_cloned_agent_refetches_role_no_methodology_overrides() -> None:
             repository=repository,
             role_lookup=role_lookup,
             methodology_overrides_lookup=overrides_lookup,
+                tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
@@ -380,6 +395,7 @@ def test_methodology_cloned_agent_applies_augment_override() -> None:
             repository=repository,
             role_lookup=role_lookup,
             methodology_overrides_lookup=overrides_lookup,
+                tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
@@ -431,6 +447,7 @@ def test_methodology_cloned_with_empty_overrides_returns_role_base() -> None:
             repository=repository,
             role_lookup=role_lookup,
             methodology_overrides_lookup=overrides_lookup,
+                tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),

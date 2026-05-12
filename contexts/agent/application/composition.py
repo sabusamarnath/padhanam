@@ -55,7 +55,7 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID
 
-from contexts.agent.application.ports import RoleView
+from contexts.agent.application.ports import RoleView, ToolDefinitionsLookup
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
 from shared_kernel import ToolAllowlistEntry
 
@@ -88,6 +88,13 @@ def compose_effective_constraint_bundle(
     Each non-empty override entry pairs a field name with a
     ``{"mode": <str>, "value": <any>}`` mapping. The resolver
     dispatches per (field, mode) and produces the effective value.
+
+    Per D89 (S28b commit 5), tool definition resolution moved off
+    composition: ``invoke_agent`` calls ``ToolDefinitionsLookup``
+    after composition and threads the resulting ``ToolDefinition``
+    tuple onto ``AgentInvocationContext.tool_definitions``. The
+    agent domain stays free of inference-context types per the
+    cross-context independence contract; composition stays sync.
     """
     system_prompt = _resolve_text_field(
         field="system_prompt",
@@ -125,6 +132,7 @@ def compose_effective_constraint_bundle(
         base=role.model_selection,
         overrides=methodology_overrides,
     )
+
     return EffectiveConstraintBundle(
         system_prompt=system_prompt,
         tool_allowlist=tool_allowlist,
