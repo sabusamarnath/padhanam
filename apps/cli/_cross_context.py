@@ -52,17 +52,25 @@ own engine lifecycles; the CLI command does.
 
 from __future__ import annotations
 
+import json
+import logging
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 from uuid import UUID
 
 from contexts.agent.application.ports import (
     AgentRetrievalClient,
+    InvocationOutcome,
     MethodologyOverridesLookup,
     MethodologyView,
     RetrievedChunk,
     RoleView,
     SourceNotFoundError,
+    ToolInvocationResult,
+)
+from contexts.inference.domain.completion import (
+    ToolCall,
+    ToolDefinition as InferenceToolDefinition,
 )
 from contexts.ingestion.application.get_source import get_source
 from contexts.ingestion.ports.retrieval_client import RetrievalClient
@@ -75,8 +83,26 @@ from contexts.methodology.ports import (
     MethodologyRepositoryPort,
     RoleRepositoryPort,
 )
+from contexts.tools.application.tool_invocation_service import (
+    InvocationCheckOutcome,
+    check_invocation_admissibility,
+    list_visible_definitions as tools_list_visible_definitions,
+)
+from contexts.tools.ports import ToolRepositoryPort
 from padhanam.security import Principal
-from shared_kernel import TenantContext
+from shared_kernel import TenantContext, ToolAllowlistEntry
+
+
+_log = logging.getLogger("apps.cli.cross_context")
+
+
+# Well-known retrieval tool UUID seeded by Alembic
+# 0009_create_tools_tables per D89. The ToolInvokerAdapter routes
+# tool_call.name == "retrieval" via AgentRetrievalClient; future
+# Phase 2 tools register here without changing the agent context's
+# port shape.
+_RETRIEVAL_TOOL_ID = UUID("00000000-0000-0000-0000-000000000001")
+_RETRIEVAL_TOOL_NAME = "retrieval"
 
 
 class MethodologyLookupAdapter:
@@ -391,3 +417,222 @@ class MethodologyOverridesLookupAdapter:
             if ref.role_id == role_id:
                 return dict(ref.overrides)
         return {}
+
+
+class ToolDefinitionsLookupAdapter:
+    """Adapter from tools-context invocation service to the agent-context
+    ``ToolDefinitionsLookup`` Protocol (S28b commit 7, D89).
+
+    The agent runtime resolves a role's pinned ``tool_allowlist`` into
+    the LLM-ready inference-context ``ToolDefinition`` tuple at
+    invocation time. This adapter:
+
+    1. Calls the tools-context ``list_visible_definitions`` with the
+       allowlist references; the tools-context filters by Phase 1
+       classification policy (excludes financial, communication,
+       legal classifications) and returns the tools-context
+       ``ToolDefinition`` value object.
+
+    2. Translates the tools-context ``ToolDefinition`` (4 fields:
+       tool_id, revision_id, name, description, classification,
+       parameters_schema, returns_schema) into the inference-context
+       ``ToolDefinition`` (3 fields: name, description, parameters)
+       that LiteLLM consumes.
+
+    The translation is the agent context's responsibility: the tools
+    context owns its consumer surface (returns its own VO); the
+    inference context owns its wire format (the OpenAI function-
+    calling shape that LiteLLM normalises). The adapter bridges the
+    two without leaking either context's types into the other.
+    """
+
+    def __init__(
+        self,
+        *,
+        tool_repository: ToolRepositoryPort,
+    ) -> None:
+        self._tool_repository = tool_repository
+
+    async def __call__(
+        self,
+        *,
+        allowlist: Sequence[ToolAllowlistEntry],
+    ) -> tuple[InferenceToolDefinition, ...]:
+        references = [(e.tool_id, e.revision_id) for e in allowlist]
+        tools_defs = await tools_list_visible_definitions(
+            repository=self._tool_repository,
+            references=references,
+        )
+        return tuple(
+            InferenceToolDefinition(
+                name=td.name,
+                description=td.description,
+                parameters=dict(td.parameters_schema),
+            )
+            for td in tools_defs
+        )
+
+
+class ToolInvokerAdapter:
+    """Adapter from ToolRepositoryPort + AgentRetrievalClient to the
+    agent-context ``ToolInvoker`` Protocol (S28b commit 7, D89).
+
+    Two-step dispatch per call:
+
+    1. Defensive invariant check via the tools-context invocation
+       service. Rejects high-classification calls (financial,
+       communication, legal) with ``INVARIANT_BLOCKED`` and the
+       three-to-three invariant_index per D89. Phase 1 has no
+       authored high-classification tools (the CLI rejects them per
+       commit 8), so this branch fires defensively for future
+       scenarios where the filter is bypassed.
+
+    2. Tool-specific dispatch. Phase 1 has retrieval as the only
+       registered tool; the adapter routes ``tool_call.name ==
+       "retrieval"`` to the ``AgentRetrievalClient`` (consuming the
+       role's effective retrieval constraints from the closure). Any
+       other name returns ``TOOL_NOT_REGISTERED``. Future Phase 2
+       tools (calendar, email, etc.) register here without changing
+       the agent context's port shape.
+
+    The retrieval-specific parsing (``_parse_retrieval_query``) and
+    chunk-formatting (``_format_chunks_as_tool_result``) relocate
+    here from the executor per D89's tool-agnostic-executor
+    architecture.
+
+    The adapter receives the role's retrieval constraints
+    (retrieval_strategy, filter_tree, top_k, min_score) at
+    construction time because the executor doesn't pass them through
+    on each invocation (the executor is tool-agnostic). The CLI
+    command builds a fresh adapter per agent invocation closing over
+    the bundle's retrieval constraints; future Phase 2 tools that
+    need different per-invocation context settle the constructor
+    shape at their landing session.
+    """
+
+    def __init__(
+        self,
+        *,
+        tool_repository: ToolRepositoryPort,
+        retrieval_client: AgentRetrievalClient,
+        retrieval_strategy: Mapping[str, Any],
+        filter_tree: Mapping[str, Any],
+        top_k: int,
+        min_score: Decimal,
+    ) -> None:
+        self._tool_repository = tool_repository
+        self._retrieval_client = retrieval_client
+        self._retrieval_strategy = dict(retrieval_strategy)
+        self._filter_tree = dict(filter_tree)
+        self._top_k = top_k
+        self._min_score = min_score
+
+    async def __call__(
+        self,
+        *,
+        tool_call: ToolCall,
+        tenant_context: TenantContext,
+    ) -> ToolInvocationResult:
+        # Phase 1 retrieval dispatch by name. Future Phase 2 tools
+        # may dispatch by (tool_id, revision_id) once the LLM-issued
+        # tool_call carries those identifiers; the name-based shape
+        # is the OpenAI function-calling format LiteLLM normalises.
+        if tool_call.name == _RETRIEVAL_TOOL_NAME:
+            return await self._dispatch_retrieval(
+                tool_call=tool_call,
+                tenant_context=tenant_context,
+            )
+
+        # Unknown tool name: surface as TOOL_NOT_REGISTERED. The
+        # executor translates to TerminationReason.TOOL_NOT_REGISTERED.
+        return ToolInvocationResult(
+            outcome=InvocationOutcome.TOOL_NOT_REGISTERED,
+            payload=(
+                f"(tool {tool_call.name!r} is not registered at Phase 1)"
+            ),
+            message=f"tool {tool_call.name!r} not in registry",
+        )
+
+    async def _dispatch_retrieval(
+        self,
+        *,
+        tool_call: ToolCall,
+        tenant_context: TenantContext,
+    ) -> ToolInvocationResult:
+        # Defensive invariant check via the tools-context invocation
+        # service. Retrieval is classification read-only so this
+        # always passes at Phase 1; the call exercises the seam for
+        # future tools.
+        admissibility = await check_invocation_admissibility(
+            repository=self._tool_repository,
+            tool_id=_RETRIEVAL_TOOL_ID,
+            revision_id=UUID("00000000-0000-0000-0000-000000000002"),
+        )
+        if admissibility.outcome is InvocationCheckOutcome.INVARIANT_BLOCKED:
+            return ToolInvocationResult(
+                outcome=InvocationOutcome.INVARIANT_BLOCKED,
+                payload=admissibility.message,
+                message=admissibility.message,
+                invariant_index=admissibility.invariant_index,
+            )
+
+        query = _parse_retrieval_query(tool_call.arguments_json)
+        try:
+            chunks = await self._retrieval_client(
+                query=query,
+                tenant_context=tenant_context,
+                retrieval_strategy=self._retrieval_strategy,
+                filter_tree=self._filter_tree,
+                top_k=self._top_k,
+                min_score=self._min_score,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            _log.exception("retrieval dispatch failed")
+            return ToolInvocationResult(
+                outcome=InvocationOutcome.ERROR,
+                payload=f"(retrieval failed: {exc!r})",
+                message=str(exc),
+            )
+
+        return ToolInvocationResult(
+            outcome=InvocationOutcome.OK,
+            payload=_format_chunks_as_tool_result(tuple(chunks)),
+        )
+
+
+def _parse_retrieval_query(arguments_json: str) -> str:
+    """Parse the model-issued retrieval-tool arguments (relocated D89 commit 7).
+
+    Was in the executor at S27b; moved here when commit 5 made the
+    executor tool-agnostic. Malformed JSON yields an empty query
+    string so the loop produces a structured no-result tool message
+    rather than terminating with an error.
+    """
+    try:
+        parsed = json.loads(arguments_json)
+    except (ValueError, TypeError):
+        _log.warning(
+            "retrieval tool arguments not parseable as JSON: %r",
+            arguments_json,
+        )
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    query = parsed.get("query", "")
+    return str(query) if query is not None else ""
+
+
+def _format_chunks_as_tool_result(
+    chunks: tuple[RetrievedChunk, ...],
+) -> str:
+    """Format retrieved chunks as a single tool-result string
+    (relocated D89 commit 7).
+
+    Empty results produce a structured empty marker so the LLM
+    distinguishes a successful no-match from a tool execution failure.
+    """
+    if not chunks:
+        return "(no chunks matched the query)"
+    return "\n\n".join(
+        f"[score={c.score:.3f}] {c.text}" for c in chunks
+    )
