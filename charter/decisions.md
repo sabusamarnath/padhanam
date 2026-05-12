@@ -734,3 +734,36 @@ D81 (methodology v2 with roles JSONB) revises to methodology v3 (separate role a
 (d) Option W: No gap to fill at Phase 1. Rejected because deferring forces a larger refactor when consumer UX scenarios force the question at Phase 2 with more data to migrate.
 
 **Kano.** Must-have for the mass-consumer Phase 2 direction per D77 and D78 (gallery surfaces roles and methodologies as separate browsable units); performance for architectural alignment with how methodologies and roles work in real practice; delighter for the structural enforcement of authoring discipline.
+
+
+## D87: Override-mode space and structured on-disk overrides — augment, replace, tighten; per-field default modes; authoring projection from flat to structured (Package P8, Session S26b, 2026-05-12; refinement of D86 sub-commitments (b) and (e))
+
+**Choice.** `RoleRef.overrides` is `dict[str, dict[str, Any]]` with each entry the canonical `{"mode": <str>, "value": <any>}` shape. Mode space: augment, replace, tighten. Default mode per field is committed at the substrate layer:
+
+- `system_prompt` (soft): augment.
+- `tool_allowlist` (hard): tighten.
+- `source_filter` (hard): tighten.
+- `retrieval_strategy` (soft): replace.
+- `filter_tree` (hard): tighten.
+- `top_k` (hard): tighten.
+- `min_score` (hard): tighten.
+- `model_selection` (soft): replace.
+- `cost_ceiling` (hard): tighten.
+
+Authoring projection: methodology config parsers accept a flat value for each field and expand to the structured form using the default mode; an author writing the structured form overrides the default. The on-disk JSONB always carries the structured form so canonical JSON serialisation and hash determinism stay byte-stable. Validation: the substrate rejects writes that pair an inadmissible mode with a field type. `augment` is admissible only for free-text soft fields (`system_prompt`). `tighten` is admissible only for hard fields (`tool_allowlist`, `source_filter`, `filter_tree`, `top_k`, `min_score`, `cost_ceiling`). `replace` is admissible for all soft fields and for hard fields where structural replacement is meaningful (the full hard set at Phase 1; the meaningful-replacement predicate is the field-shape predicate, not a per-field allowlist). Resolver semantics defer to S27b's agent runtime; S26b commits storage plus validation only.
+
+**Reasoning.** D86's sub-commitment (b) framing — "hard fields tighten only; soft fields replace" — held against architectural intent but did not survive the first authoring evidence. The McKinsey 7-Step brief's "system_prompt addition" semantics for each of the seven roles read as augment, not replace. Forcing the brief to rewrite each addition into a full overridden prompt (concatenating role base plus methodology specialisation by hand at authoring time) doubles authoring cost on every methodology and dilutes the role-first model's separation between standalone role identity and methodology context. The cleaner refinement admits a richer mode space at the substrate layer and ties default modes to fields so authoring stays terse for the common case. The authoring projection means "augment" never reaches the methodology author for routine overrides; the structural form surfaces only when the author deliberately overrides the default. Hash determinism is preserved by canonical-on-disk storage. The light-UX-as-authoring-discipline principle from `charter/principles.md` is satisfied: flat string for default mode, structured object only on deliberate override.
+
+**Revisions to prior decisions.** D86 sub-commitment (b) extends from "hard fields tighten only; soft fields replace" to "soft fields support augment or replace; hard fields tighten or replace where structural replacement is meaningful; methodology chooses per instance via the override-mode space; defaults committed per field at the substrate layer". D86 sub-commitment (e)'s structural-enforcement framing extends to mode validation: the substrate rejects inadmissible (field, mode) pairs at methodology write time. D74's hash-payload composition (`name + description + role_refs` sorted by `role_id`) is preserved; the override structural shape lives inside each `role_refs` entry's `overrides` field and is canonicalised through the same encoder.
+
+**Alternatives considered.**
+
+(a) Option A, keyed addition (`{"system_prompt_addition": "..."}`): encodes mode in key names; works for one (field, mode) combination but breaks when a methodology needs replace on `system_prompt` or augment on `tool_allowlist`; key space explodes; binding-mode taxonomy hides inside string conventions. Rejected.
+
+(b) Option C, flat field-keyed with implicit mode (`{"system_prompt": "..."}`, mode = default for the field globally): simplest authoring shape but ties mode to field globally, foreclosing per-methodology mode choice. Rejected; a future methodology wanting to replace `system_prompt` entirely would need a substrate change.
+
+(c) Hold D86, rewrite the McKinsey brief to expand each addition into a full replacement prompt: defensible but doubles authoring cost on every methodology and breaks the role-first model's clean separation between standalone role identity and methodology overlay. Rejected on authoring-discipline grounds.
+
+(d) Defer override modes entirely to S27b alongside resolver semantics: keeps S26b strictly content-only but lands seven roles with empty overrides on the McKinsey methodology, leaving the brief's overrides table unrepresented in the substrate at session close. Rejected because AC #7 of the original S26b prompt names per-role overrides as load-bearing; deferring the on-disk shape produces a methodology revision that fails to carry the brief verbatim.
+
+**Kano.** Must-have for the brief's authoring fidelity at the first authoring-evidence moment (option (c) doubles authoring cost; option (d) drops content from the substrate). Performance for the architectural commitment: the mode space is explicit, extensible, and validated at the substrate layer.

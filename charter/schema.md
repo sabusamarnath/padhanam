@@ -104,7 +104,7 @@ append-only-at-version-level discipline.
 | `id`                      | `uuid`          | primary key; default `gen_random_uuid()`       |
 | `methodology_template_id` | `uuid`          | not null; FK → `methodology_templates.id`      |
 | `version`                 | `integer`       | not null                                       |
-| `role_refs`               | `jsonb`         | not null; array of `{role_id, role_version, overrides}` entries per D86; lands at S26a-1 via revision `0006_methodology_role_refs` replacing the prior constraint bundle |
+| `role_refs`               | `jsonb`         | not null; array of `{role_id, role_version, overrides}` entries per D86; lands at S26a-1 via revision `0006_methodology_role_refs` replacing the prior constraint bundle; D87 commits `overrides` to the structured `{<field>: {"mode", "value"}}` shape |
 | `created_by_user_id`      | `text`          | not null                                       |
 | `created_at`              | `timestamptz`   | not null; default `now()`                      |
 | `previous_revision_hash`  | `text`          | not null; genesis sentinel `"0" * 64` for the chain head |
@@ -122,10 +122,25 @@ S26a-1 drops the prior constraint bundle columns (`system_prompt`,
 moves to the role aggregate per `## Role aggregate (control plane)`
 below. Each entry in `role_refs` carries `role_id` (UUID string
 referencing a `role_templates.id`), `role_version` (integer referencing
-a `role_revisions.version` of that role), and `overrides` (nullable
-JSON object carrying methodology-context-specific field overrides per
-D86's per-role overrides commitment; Phase 1 always null because no
-consumer exists for per-role overrides yet).
+a `role_revisions.version` of that role), and `overrides` (JSON object
+carrying methodology-context-specific field overrides per D86's per-role
+overrides commitment, refined by D87).
+
+Per D87 (S26b), the `overrides` shape is `{<field>: {"mode": <str>,
+"value": <any>}}` with the mode drawn from `{augment, replace, tighten}`.
+Each entry in `overrides` keys by the underlying role field (e.g.
+`system_prompt`, `tool_allowlist`, `retrieval_strategy`) and carries the
+canonical mode-and-value pair the agent runtime at S27b consumes. Empty
+or absent `overrides` (e.g. the LVT methodology's single `role_ref`) is
+the trivial no-op: the JSONB stores `{}` and canonical serialisation
+remains byte-stable. The authoring projection at the methodology config
+parser layer accepts a flat value per field and expands to the
+structured form using the per-field default mode committed in D87
+(`system_prompt` → augment; soft fields → replace; hard fields →
+tighten); structured input passes through; inadmissible (field, mode)
+pairs raise at parse time. The on-disk JSONB always carries the
+structured form so hash determinism stays byte-stable across authoring
+paths.
 
 The hash-chain content surface updates at the same revision: the
 spanned fields become `name` (denormalised from the parent template at
