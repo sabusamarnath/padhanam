@@ -767,3 +767,54 @@ Authoring projection: methodology config parsers accept a flat value for each fi
 (d) Defer override modes entirely to S27b alongside resolver semantics: keeps S26b strictly content-only but lands seven roles with empty overrides on the McKinsey methodology, leaving the brief's overrides table unrepresented in the substrate at session close. Rejected because AC #7 of the original S26b prompt names per-role overrides as load-bearing; deferring the on-disk shape produces a methodology revision that fails to carry the brief verbatim.
 
 **Kano.** Must-have for the brief's authoring fidelity at the first authoring-evidence moment (option (c) doubles authoring cost; option (d) drops content from the substrate). Performance for the architectural commitment: the mode space is explicit, extensible, and validated at the substrate layer.
+
+
+## D88: Agent runtime architecture — AgentExecutor port, AgentLoopExecutor adapter, tool-call extension to InferencePort, agent-context retrieval and overrides ports, D87 resolver at agent context, retrieval-as-only-callable at Phase 1 (Package P8, Session S27b, 2026-05-12)
+
+**Choice.** The agent runtime ships as a port-plus-adapter at `contexts/agent/` with four interlocking decisions resolved at pre-write reconciliation against the existing substrate.
+
+(1) **`AgentExecutor` port at `contexts/agent/ports/executor.py`** declaring `execute(context: AgentInvocationContext) -> AgentResult`. **`AgentLoopExecutor` adapter at `contexts/agent/adapters/outbound/agent_loop_executor.py`** implements LLM-with-tool-loop against the InferencePort extended for tool calls (per (2)). The loop's tool surface at Phase 1 is retrieval-as-only-callable: the loop knows about retrieval as a hardcoded internal callable; the agent-context `AgentRetrievalClient` port (per (3)) is invoked when the LLM requests retrieval. Other tool names at Phase 1 return errors. S28b's tool registry replaces this hardcoded surface with registry lookup plus classification enforcement plus invariant checks per D82.
+
+(2) **Inference context extension for tool calls.** The existing `InferencePort` at `contexts/inference/ports/inference_port.py` is sync and lacks tool-call surface (`Message` carries only role + content; `Completion` carries only text). S27b extends `Message` to carry optional `tool_calls: tuple[ToolCall, ...]` (assistant messages) and `tool_call_id: str | None` (tool-role messages); extends `Completion` to carry optional `tool_calls: tuple[ToolCall, ...]` returned by the model; adds `ToolCall` value object (`id`, `name`, `arguments_json`). The LiteLLMAdapter is extended to pass-through tool definitions on request and to surface tool_calls on response. D4 vendor isolation is preserved (only `contexts/inference/adapters/outbound/litellm/adapter.py` imports `litellm`). A narrower agent-context-shaped tool-aware chat port was considered and rejected because it would either duplicate the vendor-isolation seam or require an import-linter contract allowance for the agent context to import `litellm`; extending the existing inference seam keeps a single LLM access path for both plain-chat and tool-aware calls.
+
+(3) **`AgentRetrievalClient` port at `contexts/agent/application/ports/retrieval_client.py`.** The existing `RetrievalClient` at `contexts/ingestion/ports/retrieval_client.py` exposes two methods (`search_vector`, `traverse_graph`) per D5 and D65's explicit decision that hybrid composition is an agent-layer concern, not a port method. S27b defines a consumer-shaped agent-context port that takes the role's effective retrieval constraints (`retrieval_strategy`, `filter_tree`, `top_k`, `min_score`, `tenant_context`, `query`) and returns a chunk-result sequence. The wiring adapter at `apps/cli/_cross_context.py` composes `search_vector` and `traverse_graph` per the strategy. The pattern mirrors `MethodologyLookup` and `RoleLookup` from D79 and S26a-2 (api-facade-via-callable per D17); the agent context stays independent of ingestion.
+
+(4) **`MethodologyOverridesLookup` port at `contexts/agent/application/ports/methodology_overrides_lookup.py`.** The clone-time `MethodologyView` from D79 only carries `role_refs[0]`'s content. Runtime composition needs the methodology revision's per-role overrides for the agent's specific role (which may be any of the seven McKinsey roles, not just the first). S27b defines a consumer-shaped port `(methodology_template_id, methodology_version, role_id) -> dict[str, dict[str, Any]]` returning the structured overrides per D87. The wiring adapter at `apps/cli/_cross_context.py` resolves the methodology revision via the existing methodology repository and scans `role_refs` for the matching role_id. A new port (rather than overloading `MethodologyLookup`) keeps the clone-time and runtime use cases separate at the port boundary.
+
+**D87 resolver placement and algorithm.** The composition of role base plus methodology per-role overrides happens at `contexts/agent/application/composition.py`. The methodology context defines the override-mode space and validates writes per D87; the agent context composes at invocation time. Composition algorithm per D87 mode space:
+
+- `system_prompt` augment (soft): `role_base + "\n\n" + methodology_value`. The two-newline separator is structurally simple and load-bearing only in being byte-stable across invocations; richer framing (named sections, XML wrapping) deferred until reflection evidence demands.
+- soft replace: methodology value substitutes role base.
+- hard tighten (list-shaped, e.g. `tool_allowlist`, `filter_tree`): intersection of role base list and methodology override list.
+- hard tighten (numeric, e.g. `top_k`, `min_score`, `cost_ceiling`): take the more restrictive value (lower for caps, higher for floors).
+- methodology absent: effective bundle equals role base unchanged (LVT no-overrides path).
+
+`invoke_agent` use case shape. Takes `(tenant_context, agent_template_id, user_input)`. Resolves agent template; resolves role template via `RoleLookup` (S26a-2); if methodology lineage present, resolves the methodology's per-role overrides for the agent's `source_role_id` via `MethodologyOverridesLookup`. Composes effective constraint bundle via `compose_effective_constraint_bundle`. Builds `AgentInvocationContext`. Invokes executor. Emits audit events at start and end per D26. Returns `AgentResult` (cost aggregated from per-call OTel spans per D49).
+
+**Audit shape.** Two audit rows per invocation (start, end) on the per-tenant audit chain per D26 via the existing `AuditPort`. Start event: `action_verb="agent.invoke.start"`, `resource_type="agent_template"`, `resource_id=str(agent_template_id)`, `before_state={}`, `after_state={"role_template_id", "methodology_template_id" (nullable), "input_hash"}`. End event: `action_verb="agent.invoke.end"`, same resource, `before_state={"input_hash"}`, `after_state={"response_hash", "cost_total_usd", "iteration_count", "termination_reason"}`. Termination reason ∈ {`content`, `max_iterations`, `tool_not_registered`, `error`}. The existing `AuditEvent.compute_event_hash` chains the events. No new chain-helper code; the per-tenant audit chain absorbs the new event types.
+
+**Iteration cap.** Maximum 10 LLM round-trips per invocation. After 10, terminate with `termination_reason=max_iterations` and return the last response content with a structured early-termination flag. The cap is conventional; per-role configuration defers if evidence demands.
+
+**Reasoning.** Port-plus-adapter mirrors P5 evaluation and P6 ingestion patterns. Hand-rolling the agent loop preserves D4 provider-agnosticism without coupling to provider-specific agent SDKs per D84. Retrieval-as-only-callable at Phase 1 lands the tool-loop control flow once with one tool; S28b's tool registry generalises without restructuring the control flow. Resolver placement at agent context follows the cross-context port pattern from S26a-2 (consumer-side composition; producer context defines the mode space and validates). The three new agent-context ports (AgentExecutor, AgentRetrievalClient, MethodologyOverridesLookup) are the load-bearing additions; the inference context extension is structural enablement for the tool loop.
+
+**Alternatives considered.**
+
+(a) LangGraph adapter implementing AgentExecutor at Phase 1: rejected per D84 (LangGraph defers to Phase 2 alongside workflow context).
+
+(b) Provider-specific agent SDK (Anthropic agent loop, OpenAI Agents SDK): rejected per the orchestration architecture deferred-decisions entry framing on provider coupling as configuration.
+
+(c) No tool loop at Phase 1, pure LLM-with-pre-fetched-context: rejected because the LLM-with-tool-loop control flow is the substantive complexity; building two different runtime shapes (no-loop at S27b, loop at S28b) is more cost than landing the loop once with retrieval-as-only-callable.
+
+(d) D87 resolver at methodology context: rejected because the methodology context shouldn't know about agent invocation timing; cross-context port pattern from S26a-2 sets the precedent for consumer-side composition.
+
+(e) New agent-context-shaped tool-aware chat port duplicating the LLM seam: rejected because it doubles the vendor-isolation policing surface (two adapters importing litellm) or requires an import-linter contract allowance for the agent context.
+
+(f) AgentLoopExecutor consumes the ingestion RetrievalClient directly (cross-context import): rejected because it cross-imports across bounded contexts and would require an import-linter contract allowance; the consumer-port-plus-wiring-adapter pattern from D17 is the correct shape.
+
+(g) Extend MethodologyLookup to take role_id for runtime overrides: rejected because it conflates clone-time and runtime use cases on one port; a separate port keeps the port boundary aligned with the use case.
+
+(h) Extend MethodologyView to carry the full role_refs list: rejected because it leaks methodology-aggregate structure (role_refs as wire shape) into the agent context's consumer DTO.
+
+(i) Richer augment separator (named section, XML wrapping): deferred to reflection at session close. The two-newline separator is the simplest viable shape; reflection captures whether LLM behaviour under the composed prompt argues for richer framing before McKinsey's six other roles get exercised at S30b.
+
+**Kano.** Must-have for the first demonstrable agent invocation (the bet's success criterion 2 at Phase 1 close per the PRFAQ). Performance on the inference context extension (the tool-call shape generalises beyond agent runtime; future workflow runtime will reuse it). Performance on the three agent-context ports (the shape commits the consumer surface the workflow context at Phase 2 will reuse). Delighter on the consumer-port-plus-wiring-adapter pattern's third reinforcement (after MethodologyLookup and RoleLookup); the pattern is now a Phase 1 norm for cross-context lookups per D17.
