@@ -1,19 +1,35 @@
-"""End-to-end test for the clone-from-methodology flow (S25 / D79).
+"""End-to-end test for the role-aware clone flows (S26a-2 / D86).
 
-Exercises the full operator workflow against the live Compose stack:
+Exercises both clone-from-methodology and clone-from-role against the
+live Compose stack so the role-first composition has end-to-end
+coverage the unit and integration tests miss.
 
-  1. Create LVT methodology on control-plane Postgres.
-  2. Ingest two test markdown source files for tenant alpha.
-  3. Drain the ingest worker until both sources reach indexed state.
-  4. Create a PM agent cloned from LVT with the indexed sources
-     attached.
-  5. Assert lineage fields populate paired (template_id + version);
-     revision 1 content matches LVT defaults; source_ids match.
-  6. Update the agent (top_k 8 → 12) and capture revision 2.
-  7. Assert revision 2's hash chains correctly from revision 1.
-  8. Assert the methodology template is unchanged after the agent's
-     edits (single revision; no clone-back propagation per D68).
-  9. Cleanup: archive agent, retire methodology, drop test sources.
+S26a-1 (D86) refactored methodology to compose roles via role_refs;
+S26a-2 added the padhanam role CLI namespace plus
+``padhanam agent create-from-role``. The original S25 e2e wrote a
+pre-v3 methodology config that no longer parses; this file is the
+full rewrite restoring the deferred integration commitment per the
+brief's commit 5 scope.
+
+Workflow exercised (numbered to match the test body):
+
+  1. Create the LVTGuide role on the control plane via padhanam role.
+  2. Create the LVT methodology on the control plane referencing the
+     role via role_refs.
+  3. Ingest two test markdown source files for tenant alpha.
+  4. Drain the ingest worker until both sources reach indexed.
+  5a. Clone an agent from the methodology; assert both lineage pairs
+      populate (methodology + resolved role) and content matches the
+      role's bundle.
+  5b. Clone a second agent directly from the role; assert only the
+      role lineage pair populates (methodology pair NULL).
+  6. Update the methodology-cloned agent (top_k 8 → 12); capture
+     revision 2.
+  7. Assert revision 2 chains correctly from revision 1; assert the
+     methodology and role templates are unchanged after the agent's
+     edit (no clone-back propagation per D68).
+  8. Cleanup: archive both agents; retire methodology; archive role;
+     truncate sources.
 
 The test runs CLI commands inside the padhanam-api container via
 ``docker compose exec`` so per-tenant Postgres hostnames resolve
@@ -23,10 +39,7 @@ tests/integration/contexts/ingestion/test_ingest_e2e.py.
 Skip-on-unreachable behaviour: the test skips cleanly when Docker
 is not available, when the Compose services are not running, or
 when the LiteLLM / Ollama / Neo4j services needed by the worker
-are not responsive. The worker drain step is the most failure-
-sensitive step because it depends on the full pipeline (parse +
-embed + extract); the test reports a precise skip reason rather
-than failing on infrastructure absence.
+are not responsive.
 """
 
 from __future__ import annotations
@@ -50,11 +63,14 @@ _AGENT_REVISION_RE = re.compile(
 _METHODOLOGY_TEMPLATE_ID_RE = re.compile(
     r"created methodology_template_id=([0-9a-f-]+)"
 )
+_ROLE_TEMPLATE_ID_RE = re.compile(
+    r"created role_template_id=([0-9a-f-]+)"
+)
 _GENESIS_REVISION_HASH = "0" * 64
 
 
 # ---------------------------------------------------------------------
-# Compose / docker helpers (mirrors test_ingest_e2e.py conventions)
+# Compose / docker helpers
 # ---------------------------------------------------------------------
 
 
@@ -75,15 +91,7 @@ def _docker_available() -> bool:
 
 @pytest.fixture(scope="module")
 def compose_running() -> None:
-    """Skip when the Compose services the flow depends on are not running.
-
-    The flow needs:
-      - padhanam-api (host for the CLI invocations)
-      - postgres-control-plane (methodology storage)
-      - postgres-tenant-a (sources, chunks, agent storage)
-      - litellm + ollama (embedding stage)
-      - padhanam-neo4j (extraction stage)
-    """
+    """Skip when the Compose services the flow depends on are not running."""
     if not _docker_available():
         pytest.skip("docker compose not reachable from test environment")
     services = subprocess.run(
@@ -143,9 +151,10 @@ def _truncate_agents(label: str) -> None:
     )
 
 
-def _truncate_methodology() -> None:
+def _truncate_methodology_and_role() -> None:
     _exec_psql_control_plane(
-        "TRUNCATE TABLE methodology_revisions, methodology_templates;"
+        "TRUNCATE TABLE methodology_revisions, methodology_templates, "
+        "role_revisions, role_templates;"
     )
 
 
@@ -182,20 +191,26 @@ def _padhanam(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]
     return _exec("padhanam-api", "python", "-m", "apps.cli.main", *args, timeout=timeout)
 
 
-def _create_lvt_methodology(*, system_prompt: str) -> str:
-    """Write the LVT methodology config inside the container and run
-    `methodology create`. Returns the new template_id."""
-    config_path = "/tmp/lvt-methodology.yaml"
+_LVTGUIDE_SYSTEM_PROMPT = (
+    "You are an LVTGuide role: help the user place work in the "
+    "bet/initiative/epic/story hierarchy, check alignment upward and "
+    "decomposition downward, surface drift between strategic intent "
+    "and execution. Output is recommendation-shaped: locate, assess "
+    "alignment, name the gap, recommend a next step."
+)
+
+
+def _create_lvtguide_role() -> str:
+    """Write the role config inside the container and run
+    ``role create``. Returns the new role_template_id."""
+    config_path = "/tmp/lvtguide-role.yaml"
     description = (
-        "Lean Value Tree methodology assistant: locates work in the "
-        "bet->initiative->epic->story hierarchy, checks alignment "
-        "upward and decomposition downward, surfaces drift between "
-        "strategic intent and execution."
+        "LVT guide role: places work in the LVT four-level hierarchy."
     )
     config = (
-        "name: LVT\n"
+        "name: LVTGuide\n"
         f"description: {json.dumps(description)}\n"
-        f"system_prompt: {json.dumps(system_prompt)}\n"
+        f"system_prompt: {json.dumps(_LVTGUIDE_SYSTEM_PROMPT)}\n"
         "source_ids: []\n"
         "tool_allowlist: []\n"
         "retrieval_strategy:\n"
@@ -208,6 +223,30 @@ def _create_lvt_methodology(*, system_prompt: str) -> str:
         "model_selection: qwen2.5:7b\n"
     )
     _write_file_in_container(config_path, config)
+    result = _padhanam("role", "create", "--config", config_path)
+    assert result.returncode == 0, result.stderr or result.stdout
+    match = _ROLE_TEMPLATE_ID_RE.search(result.stdout)
+    assert match is not None, f"unexpected output: {result.stdout!r}"
+    return match.group(1)
+
+
+def _create_lvt_methodology(*, role_id: str) -> str:
+    """Write the methodology config inside the container (referencing
+    the role via role_refs) and run ``methodology create``. Returns
+    the new methodology_template_id."""
+    config_path = "/tmp/lvt-methodology.yaml"
+    description = (
+        "Lean Value Tree methodology: composes the LVTGuide role with "
+        "playbook-level guidance for tree placement and alignment checks."
+    )
+    config = (
+        "name: LVT\n"
+        f"description: {json.dumps(description)}\n"
+        "role_refs:\n"
+        f"  - role_id: {role_id}\n"
+        "    role_version: 1\n"
+    )
+    _write_file_in_container(config_path, config)
     result = _padhanam("methodology", "create", "--config", config_path)
     assert result.returncode == 0, result.stderr or result.stdout
     match = _METHODOLOGY_TEMPLATE_ID_RE.search(result.stdout)
@@ -216,7 +255,6 @@ def _create_lvt_methodology(*, system_prompt: str) -> str:
 
 
 def _ingest_source(*, tenant_label: str, file_path: str, body: str) -> None:
-    """Write a markdown file inside the container and register it."""
     _write_file_in_container(file_path, body)
     result = _padhanam(
         "ingest", "run", file_path, "--tenant-id", tenant_label
@@ -225,15 +263,7 @@ def _ingest_source(*, tenant_label: str, file_path: str, body: str) -> None:
 
 
 def _drain_worker_until_indexed(*, tenant_label: str, expected_sources: int, max_iterations: int = 40) -> None:
-    """Run the worker repeatedly until all sources reach 'indexed' state.
-
-    Each ingest worker invocation processes a single stage transition
-    per claimed source; the full pipeline needs three transitions per
-    source (parse → embed → extract). For two sources that's six
-    transitions; the iteration bound allows margin for retries.
-    """
-    deadline_iterations = max_iterations
-    for _ in range(deadline_iterations):
+    for _ in range(max_iterations):
         result = _padhanam(
             "ingest", "worker",
             "--tenant-id", tenant_label,
@@ -241,14 +271,11 @@ def _drain_worker_until_indexed(*, tenant_label: str, expected_sources: int, max
             "--poll-interval-seconds", "0.5",
             timeout=180,
         )
-        # The worker exits 0 normally; a non-zero exit suggests
-        # infrastructure failure.
         if result.returncode != 0:
             raise RuntimeError(
                 f"ingest worker failed: rc={result.returncode}, "
                 f"stdout={result.stdout!r}, stderr={result.stderr!r}"
             )
-        # Check progress via direct SQL.
         count = _exec_psql_tenant(
             tenant_label,
             "SELECT count(*) FROM sources WHERE state = 'indexed';",
@@ -258,7 +285,7 @@ def _drain_worker_until_indexed(*, tenant_label: str, expected_sources: int, max
         time.sleep(0.5)
     raise RuntimeError(
         f"worker did not reach indexed state for {expected_sources} sources "
-        f"within {deadline_iterations} iterations"
+        f"within {max_iterations} iterations"
     )
 
 
@@ -276,77 +303,41 @@ def _get_source_ids_in_state(*, tenant_label: str, state: str) -> list[str]:
 # ---------------------------------------------------------------------
 
 
-_LVT_SYSTEM_PROMPT = (
-    "You are an LVT (Lean Value Tree) methodology assistant. LVT structures "
-    "product strategy as a four-level hierarchy: bet, initiative, epic, story. "
-    "Each level cascades strategic intent downward and aggregates evidence upward.\n\n"
-    "Your role is to help users place work in the right level of the tree, "
-    "identify when a level is misaligned with the level above, and surface drift "
-    "between strategic intent and execution.\n\n"
-    "When a user describes work, locate it in the tree first.\n\n"
-    "A bet is a load-bearing strategic claim with named test conditions and "
-    "falsifiable success criteria. Bets answer \\\"what proposition are we testing "
-    "in the market?\\\"\n\n"
-    "An initiative is a coherent body of work aligned with one bet's success "
-    "criteria. Initiatives answer \\\"what concrete arc do we ship to test the "
-    "bet?\\\"\n\n"
-    "An epic is a shippable scope within an initiative that produces measurable "
-    "outcomes. Epics answer \\\"what ships, and how do we know it worked?\\\"\n\n"
-    "A story is the smallest unit of value within an epic. Stories answer \\\"what "
-    "does the team do this week?\\\"\n\n"
-    "When asked to assess work, locate it first, then check alignment upward "
-    "(does this epic actually serve its initiative? does this initiative actually "
-    "test its bet?) and decomposition downward (does this initiative break into "
-    "shippable epics? do the stories aggregate to the epic's outcomes?).\n\n"
-    "Push back on weak placements. A bet without falsifiable success criteria is "
-    "a vision statement. An initiative without measurable outcomes is a roadmap "
-    "header. An epic without shippable scope is a wish. A story without "
-    "acceptance criteria is a task.\n\n"
-    "Use the source materials attached to this agent for the user's specific "
-    "bet, initiatives, epics, and stories. Cite specific source content when "
-    "grounding assessments. When source materials contradict each other, surface "
-    "the contradiction rather than papering over it.\n\n"
-    "Your output is recommendation-shaped: name the placement, name the alignment "
-    "status, name the gap, recommend a next step. End with a position, not a menu."
-)
-
-
 @pytest.fixture
 def clean_state(compose_running):  # noqa: ARG001
     _truncate_ingestion(_TENANT_LABEL)
     _truncate_agents(_TENANT_LABEL)
-    _truncate_methodology()
+    _truncate_methodology_and_role()
     yield
     _truncate_ingestion(_TENANT_LABEL)
     _truncate_agents(_TENANT_LABEL)
-    _truncate_methodology()
+    _truncate_methodology_and_role()
 
 
-@pytest.mark.skip(
-    reason=(
-        "S26a-1 (D86) refactored methodology to role_refs; methodology CLI "
-        "no longer accepts the constraint bundle directly. Restoring this "
-        "full clone-and-edit e2e against the new shape requires the "
-        "`padhanam role` CLI namespace (S26a-2) so an operator can author "
-        "a role via CLI before authoring the methodology that references it. "
-        "S26a-1 commit 4 lands a focused LVT round-trip e2e that exercises "
-        "the methodology→role resolution end-to-end via the agent flow."
-    )
-)
-def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> None:  # noqa: ARG001
-    """End-to-end exercise: methodology create → sources ingest →
-    sources drain to indexed → clone agent → assert lineage and
-    content → update agent → assert hash chain advances → assert
-    methodology unchanged → cleanup.
+def test_full_role_aware_clone_and_edit_flow_against_live_stack(
+    clean_state,
+) -> None:  # noqa: ARG001
+    """End-to-end exercise of the S26a-2 role-aware shape:
 
-    Each step uses the production CLI surface so the test catches
-    drift between the unit/integration tests' in-memory fakes and
-    the real adapter behaviour against the live data planes.
+      - Role authoring via padhanam role create.
+      - Methodology authoring via padhanam methodology create
+        referencing the role via role_refs.
+      - Source ingestion + indexing.
+      - Agent cloning via both create-from-methodology (both lineage
+        pairs populated) and create-from-role (only the role pair
+        populated).
+      - Edit one cloned agent; assert hash chain advances; assert
+        methodology and role templates unchanged (D68 independence).
+      - Archive both agents; retire methodology; archive role.
     """
-    # 1. Create LVT methodology on control plane.
-    methodology_id = _create_lvt_methodology(system_prompt=_LVT_SYSTEM_PROMPT)
+    # 1. Create LVTGuide role on the control plane.
+    role_id = _create_lvtguide_role()
 
-    # 2. Ingest two markdown sources for tenant alpha.
+    # 2. Create LVT methodology on the control plane, referencing the
+    #    role via role_refs (single-role methodology per D86 Phase 1).
+    methodology_id = _create_lvt_methodology(role_id=role_id)
+
+    # 3. Ingest two markdown sources for tenant alpha.
     bodies = [
         (
             "# Bet 1\n\n"
@@ -362,77 +353,130 @@ def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> N
     for i, body in enumerate(bodies):
         _ingest_source(
             tenant_label=_TENANT_LABEL,
-            file_path=f"/tmp/s25-source-{i}.md",
+            file_path=f"/tmp/s26a2-source-{i}.md",
             body=body,
         )
 
-    # 3. Drain worker until both sources reach indexed.
+    # 4. Drain worker until both sources reach indexed.
     _drain_worker_until_indexed(
         tenant_label=_TENANT_LABEL,
         expected_sources=2,
         max_iterations=40,
     )
 
-    # 4. Pull the indexed source ids.
     source_ids = _get_source_ids_in_state(
         tenant_label=_TENANT_LABEL, state="indexed"
     )
     assert len(source_ids) == 2, source_ids
 
-    # 5. Clone the agent.
-    clone_config_path = "/tmp/lvt-pm-agent-clone.yaml"
-    clone_config = (
+    # 5a. Clone an agent from the methodology (both lineage pairs
+    #     populate per the S26a-2 extension).
+    methodology_clone_path = "/tmp/lvt-pm-agent-clone.yaml"
+    methodology_clone = (
         f"methodology_template_id: {methodology_id}\n"
         "methodology_version: null\n"
-        "name: LVT PM Agent\n"
+        "name: LVT PM Agent (from methodology)\n"
         "source_ids:\n"
         + "".join(f"  - {sid}\n" for sid in source_ids)
     )
-    _write_file_in_container(clone_config_path, clone_config)
-    clone_result = _padhanam(
+    _write_file_in_container(methodology_clone_path, methodology_clone)
+    methodology_clone_result = _padhanam(
         "agent", "create-from-methodology",
         "--tenant", _TENANT_LABEL,
-        "--config", clone_config_path,
+        "--config", methodology_clone_path,
     )
-    assert clone_result.returncode == 0, clone_result.stderr or clone_result.stdout
-    agent_match = _AGENT_TEMPLATE_ID_RE.search(clone_result.stdout)
-    assert agent_match is not None, clone_result.stdout
-    agent_id = agent_match.group(1)
-
-    # 6. Read the agent back and assert lineage + content match.
-    get_result = _padhanam(
-        "agent", "get", agent_id, "--tenant", _TENANT_LABEL, "--json",
+    assert methodology_clone_result.returncode == 0, (
+        methodology_clone_result.stderr or methodology_clone_result.stdout
     )
-    assert get_result.returncode == 0, get_result.stderr or get_result.stdout
-    payload = json.loads(get_result.stdout)
+    methodology_agent_match = _AGENT_TEMPLATE_ID_RE.search(
+        methodology_clone_result.stdout
+    )
+    assert methodology_agent_match is not None, methodology_clone_result.stdout
+    methodology_agent_id = methodology_agent_match.group(1)
 
-    assert payload["source_methodology_template_id"] == methodology_id
-    assert payload["source_methodology_template_version"] == 1
-    assert payload["name"] == "LVT PM Agent"
+    methodology_agent_get = _padhanam(
+        "agent", "get", methodology_agent_id, "--tenant", _TENANT_LABEL, "--json",
+    )
+    assert methodology_agent_get.returncode == 0
+    methodology_agent_payload = json.loads(methodology_agent_get.stdout)
 
-    revision = payload["revision"]
-    assert revision["version"] == 1
-    assert revision["previous_revision_hash"] == _GENESIS_REVISION_HASH
-    assert revision["system_prompt"] == _LVT_SYSTEM_PROMPT
-    assert revision["retrieval_strategy"] == {"strategy": "hybrid", "params": {}}
-    assert revision["filter_tree"] == {"node": {}}
-    assert revision["top_k"] == 8
-    # Decimal round-trips through the CLI as a string per the
-    # _render_template_json convention.
-    assert revision["min_score"] == "0.3"
-    assert revision["model_selection"] == "qwen2.5:7b"
-    assert revision["tool_allowlist"] == []
-    assert sorted(revision["source_ids"]) == sorted(source_ids)
-    revision_1_hash = revision["this_revision_hash"]
-    assert revision_1_hash != _GENESIS_REVISION_HASH
-    assert len(revision_1_hash) == 64
+    # Both lineage pairs populated.
+    assert methodology_agent_payload["source_methodology_template_id"] == methodology_id
+    assert methodology_agent_payload["source_methodology_template_version"] == 1
+    assert methodology_agent_payload["source_role_id"] == role_id
+    assert methodology_agent_payload["source_role_version"] == 1
+    assert methodology_agent_payload["name"] == "LVT PM Agent (from methodology)"
 
-    # 7. Update the agent (top_k 8 → 12). The CLI's update command
-    # takes the same shape as agent create but without name; we feed
-    # all the revision content fields per the existing update schema.
+    methodology_revision = methodology_agent_payload["revision"]
+    assert methodology_revision["version"] == 1
+    assert methodology_revision["previous_revision_hash"] == _GENESIS_REVISION_HASH
+    assert methodology_revision["system_prompt"] == _LVTGUIDE_SYSTEM_PROMPT
+    assert methodology_revision["top_k"] == 8
+    assert methodology_revision["min_score"] == "0.3"
+    assert methodology_revision["model_selection"] == "qwen2.5:7b"
+    assert sorted(methodology_revision["source_ids"]) == sorted(source_ids)
+    methodology_agent_v1_hash = methodology_revision["this_revision_hash"]
+    assert methodology_agent_v1_hash != _GENESIS_REVISION_HASH
+    assert len(methodology_agent_v1_hash) == 64
+
+    # 5b. Clone a second agent directly from the role; only the role
+    #     pair populates (methodology pair NULL — D86 third valid state).
+    role_clone_path = "/tmp/lvtguide-direct-clone.yaml"
+    role_clone = (
+        f"role_id: {role_id}\n"
+        "role_version: null\n"
+        "name: LVTGuide Direct Agent (from role)\n"
+        "source_ids:\n"
+        + "".join(f"  - {sid}\n" for sid in source_ids)
+    )
+    _write_file_in_container(role_clone_path, role_clone)
+    role_clone_result = _padhanam(
+        "agent", "create-from-role",
+        "--tenant", _TENANT_LABEL,
+        "--config", role_clone_path,
+    )
+    assert role_clone_result.returncode == 0, (
+        role_clone_result.stderr or role_clone_result.stdout
+    )
+    role_agent_match = _AGENT_TEMPLATE_ID_RE.search(role_clone_result.stdout)
+    assert role_agent_match is not None, role_clone_result.stdout
+    role_agent_id = role_agent_match.group(1)
+
+    role_agent_get = _padhanam(
+        "agent", "get", role_agent_id, "--tenant", _TENANT_LABEL, "--json",
+    )
+    assert role_agent_get.returncode == 0
+    role_agent_payload = json.loads(role_agent_get.stdout)
+
+    # Methodology pair is NULL; role pair populated. Third valid state.
+    assert role_agent_payload["source_methodology_template_id"] is None
+    assert role_agent_payload["source_methodology_template_version"] is None
+    assert role_agent_payload["source_role_id"] == role_id
+    assert role_agent_payload["source_role_version"] == 1
+    assert role_agent_payload["name"] == "LVTGuide Direct Agent (from role)"
+
+    role_agent_revision = role_agent_payload["revision"]
+    assert role_agent_revision["version"] == 1
+    assert role_agent_revision["previous_revision_hash"] == _GENESIS_REVISION_HASH
+    # The role-cloned agent inherits the same role bundle content as
+    # the methodology-cloned agent because methodology-cloning resolves
+    # to the same first role_ref. Hashes legitimately differ because
+    # the two agents carry different names (D75 includes name in the
+    # canonical hash payload); content-field equality is the audit
+    # invariant.
+    assert role_agent_revision["system_prompt"] == methodology_revision["system_prompt"]
+    assert role_agent_revision["top_k"] == methodology_revision["top_k"]
+    assert role_agent_revision["min_score"] == methodology_revision["min_score"]
+    assert role_agent_revision["model_selection"] == methodology_revision["model_selection"]
+    assert sorted(role_agent_revision["source_ids"]) == sorted(
+        methodology_revision["source_ids"]
+    )
+
+    # 6. Update the methodology-cloned agent (top_k 8 → 12). Capture
+    #    revision 2 and assert chain advances.
     update_config_path = "/tmp/lvt-pm-agent-update.yaml"
     update_config = (
-        f"system_prompt: {json.dumps(_LVT_SYSTEM_PROMPT)}\n"
+        f"system_prompt: {json.dumps(_LVTGUIDE_SYSTEM_PROMPT)}\n"
         "source_ids:\n"
         + "".join(f"  - {sid}\n" for sid in source_ids)
         + "tool_allowlist: []\n"
@@ -447,7 +491,7 @@ def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> N
     )
     _write_file_in_container(update_config_path, update_config)
     update_result = _padhanam(
-        "agent", "update", agent_id,
+        "agent", "update", methodology_agent_id,
         "--tenant", _TENANT_LABEL,
         "--config", update_config_path,
     )
@@ -456,9 +500,9 @@ def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> N
     assert rev_match is not None
     assert rev_match.group(2) == "2"
 
-    # 8. Assert revision 2 chains correctly.
+    # 7. Assert revision 2 chains correctly from revision 1.
     get_v2 = _padhanam(
-        "agent", "get", agent_id,
+        "agent", "get", methodology_agent_id,
         "--tenant", _TENANT_LABEL,
         "--version", "2",
         "--json",
@@ -466,30 +510,46 @@ def test_full_clone_and_edit_flow_against_live_stack(clean_state, tmp_path) -> N
     assert get_v2.returncode == 0
     v2_payload = json.loads(get_v2.stdout)
     assert v2_payload["revision"]["version"] == 2
-    assert v2_payload["revision"]["previous_revision_hash"] == revision_1_hash
+    assert v2_payload["revision"]["previous_revision_hash"] == methodology_agent_v1_hash
     assert v2_payload["revision"]["top_k"] == 12
-    assert v2_payload["revision"]["this_revision_hash"] != revision_1_hash
+    assert v2_payload["revision"]["this_revision_hash"] != methodology_agent_v1_hash
 
-    # 9. Assert the methodology template is unchanged after the
-    # agent's edits — single revision, no clone-back propagation.
+    # 7b. Assert the role template is unchanged after the agent's edit
+    #     — single revision, no clone-back propagation (D68 independence).
+    role_get = _padhanam("role", "get", role_id, "--json")
+    assert role_get.returncode == 0
+    role_payload = json.loads(role_get.stdout)
+    assert role_payload["revision"]["version"] == 1
+    assert role_payload["revision"]["top_k"] == 8
+
+    # 7c. Assert the methodology template is unchanged: still references
+    #     the original role at version 1; methodology revision count is 1.
     methodology_get = _padhanam(
         "methodology", "get", methodology_id, "--json",
     )
     assert methodology_get.returncode == 0
     methodology_payload = json.loads(methodology_get.stdout)
     assert methodology_payload["revision"]["version"] == 1
-    assert methodology_payload["revision"]["system_prompt"] == _LVT_SYSTEM_PROMPT
-    # The methodology's top_k is the LVT default; the agent's edit
-    # did not propagate back.
-    assert methodology_payload["revision"]["top_k"] == 8
+    role_refs = methodology_payload["revision"]["role_refs"]
+    assert len(role_refs) == 1
+    assert role_refs[0]["role_id"] == role_id
+    assert role_refs[0]["role_version"] == 1
 
-    # 10. Cleanup of agent + methodology (sources cleaned by fixture
-    # teardown via _truncate_ingestion).
-    archive_result = _padhanam(
-        "agent", "archive", agent_id, "--tenant", _TENANT_LABEL,
+    # 8. Cleanup of agents + methodology + role (sources cleaned by
+    #    fixture teardown).
+    archive_methodology_agent = _padhanam(
+        "agent", "archive", methodology_agent_id, "--tenant", _TENANT_LABEL,
     )
-    assert archive_result.returncode == 0
-    retire_result = _padhanam(
+    assert archive_methodology_agent.returncode == 0
+    archive_role_agent = _padhanam(
+        "agent", "archive", role_agent_id, "--tenant", _TENANT_LABEL,
+    )
+    assert archive_role_agent.returncode == 0
+    retire_methodology = _padhanam(
         "methodology", "retire", methodology_id,
     )
-    assert retire_result.returncode == 0
+    assert retire_methodology.returncode == 0
+    archive_role_result = _padhanam(
+        "role", "archive", role_id,
+    )
+    assert archive_role_result.returncode == 0
