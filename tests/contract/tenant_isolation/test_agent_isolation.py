@@ -658,3 +658,197 @@ def test_agent_invocation_audit_isolated_per_tenant(
         assert r["previous_event_hash"] not in a_hashes
 
     event_loop.run_until_complete(cp_engine.dispose())
+
+
+def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """A ToolInvoker invocation inside the agent loop receives the
+    invoking agent's TenantContext, not a global default. The audit
+    chain still lands on the correct tenant's data plane.
+
+    Scope: scripts a model-issued tool call to ``retrieval`` and a
+    ToolInvoker that records each invocation's tenant_context. The
+    test asserts the invoker saw the right tenant_context per
+    execute() call, and that the per-tenant audit chains are
+    structurally isolated (genesis-anchored start + end rows on each
+    side, no cross-pollination).
+
+    Per D89's control-plane storage choice, tools themselves are not
+    per-tenant; the isolation invariant is about *invocation*: the
+    TenantContext flows through every layer (ToolInvoker port,
+    tools-context invocation service if it invokes downstream
+    per-tenant resources, audit emission). This test exercises the
+    threading at the ToolInvoker boundary.
+    """
+    from contexts.agent.adapters.outbound.agent_loop_executor import AgentLoopExecutor
+    from contexts.agent.application.ports import (
+        InvocationOutcome,
+        ToolInvocationResult,
+    )
+    from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+    from contexts.agent.ports.executor import AgentInvocationContext
+    from contexts.audit.adapters.outbound.postgres.audit import (
+        PostgresAuditAdapter,
+        tenant_audit,
+    )
+    from contexts.audit.domain.events import GENESIS_HASH
+    from contexts.inference.domain.completion import (
+        Completion,
+        TokenUsage,
+        ToolCall,
+        ToolDefinition,
+    )
+
+    repo, ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    sm_by_id = {ctx_a.tenant_id: sm_a, ctx_b.tenant_id: sm_b}
+
+    async def resolver(tenant_id):
+        sm = sm_by_id.get(str(tenant_id))
+        if sm is None:
+            raise LookupError(f"unexpected tenant_id {tenant_id!r}")
+        return sm
+
+    cp_settings = _cp_settings()
+    cp_engine = create_async_engine(_async_url(cp_settings))
+    audit_adapter = PostgresAuditAdapter(
+        control_plane_engine=cp_engine,
+        per_tenant_sessionmaker_resolver=resolver,
+    )
+
+    class _ToolCallingInferencePort:
+        def __init__(self) -> None:
+            self._step = 0
+
+        def complete(self, messages, model, tenant_context, tools=()):
+            self._step += 1
+            if self._step == 1:
+                return Completion(
+                    text="",
+                    model=model or "stub",
+                    usage=TokenUsage(input_tokens=1, output_tokens=1),
+                    cost_usd=Decimal("0.0001"),
+                    tool_calls=(
+                        ToolCall(
+                            id="c1",
+                            name="retrieval",
+                            arguments_json='{"query": "test"}',
+                        ),
+                    ),
+                )
+            return Completion(
+                text="done",
+                model=model or "stub",
+                usage=TokenUsage(input_tokens=1, output_tokens=1),
+                cost_usd=Decimal("0.0001"),
+            )
+
+    class _RecordingToolInvoker:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def __call__(
+            self, *, tool_call: ToolCall, tenant_context,
+        ) -> ToolInvocationResult:
+            self.calls.append(str(tenant_context.tenant_id))
+            return ToolInvocationResult(
+                outcome=InvocationOutcome.OK,
+                payload="(no chunks matched the query)",
+            )
+
+    invoker = _RecordingToolInvoker()
+
+    bundle = EffectiveConstraintBundle(
+        system_prompt="be helpful",
+        tool_allowlist=(),
+        retrieval_strategy={"primary": "vector"},
+        filter_tree={},
+        top_k=5,
+        min_score=Decimal("0.5"),
+        model_selection="qwen2.5:7b",
+    )
+
+    retrieval_def = ToolDefinition(
+        name="retrieval",
+        description="search",
+        parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+    )
+
+    template_a_id = uuid4()
+    template_b_id = uuid4()
+
+    async def run() -> None:
+        # Build two separate executors with a fresh InferencePort
+        # each so the scripted two-step sequence resets per tenant.
+        executor_a = AgentLoopExecutor(
+            inference_port=_ToolCallingInferencePort(),
+            tool_invoker=invoker,
+            audit_port=audit_adapter,
+        )
+        executor_b = AgentLoopExecutor(
+            inference_port=_ToolCallingInferencePort(),
+            tool_invoker=invoker,
+            audit_port=audit_adapter,
+        )
+
+        await executor_a.execute(
+            AgentInvocationContext(
+                tenant_context=ctx_a,
+                agent_template_id=template_a_id,
+                agent_revision_version=1,
+                role_template_id=uuid4(),
+                role_revision_version=1,
+                methodology_template_id=None,
+                methodology_version=None,
+                effective_bundle=bundle,
+                user_input="hi from A",
+                tool_definitions=(retrieval_def,),
+            )
+        )
+        await executor_b.execute(
+            AgentInvocationContext(
+                tenant_context=ctx_b,
+                agent_template_id=template_b_id,
+                agent_revision_version=1,
+                role_template_id=uuid4(),
+                role_revision_version=1,
+                methodology_template_id=None,
+                methodology_version=None,
+                effective_bundle=bundle,
+                user_input="hi from B",
+                tool_definitions=(retrieval_def,),
+            )
+        )
+
+    event_loop.run_until_complete(run())
+
+    # The recording invoker saw two tenant_contexts, one per execute.
+    assert invoker.calls == [ctx_a.tenant_id, ctx_b.tenant_id]
+
+    # Audit chain isolation per tenant.
+    async def read_chain(sm):
+        async with sm() as session:
+            result = await session.execute(
+                sa.select(
+                    tenant_audit.c.tenant_id,
+                    tenant_audit.c.action_verb,
+                    tenant_audit.c.this_event_hash,
+                ).order_by(
+                    tenant_audit.c.timestamp.asc(), tenant_audit.c.id.asc()
+                )
+            )
+            return result.mappings().all()
+
+    a_rows = event_loop.run_until_complete(read_chain(sm_a))
+    b_rows = event_loop.run_until_complete(read_chain(sm_b))
+
+    assert len(a_rows) == 2  # start + end
+    assert len(b_rows) == 2
+    assert all(r["tenant_id"] == ctx_a.tenant_id for r in a_rows)
+    assert all(r["tenant_id"] == ctx_b.tenant_id for r in b_rows)
+
+    a_hashes = {r["this_event_hash"] for r in a_rows}
+    b_hashes = {r["this_event_hash"] for r in b_rows}
+    assert a_hashes.isdisjoint(b_hashes)
+
+    event_loop.run_until_complete(cp_engine.dispose())
