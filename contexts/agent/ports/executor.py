@@ -29,8 +29,8 @@ internally.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import AsyncIterator, Protocol
+from dataclasses import dataclass, field
+from typing import AsyncIterator, Mapping, Protocol
 from uuid import UUID
 
 from contexts.agent.domain.agent_result import AgentResult, AgentSignal
@@ -95,6 +95,18 @@ class AgentInvocationContext:
     # inference context's ToolDefinition type stays out of agent
     # domain per the cross-context independence contract.
     tool_definitions: tuple[ToolDefinition, ...] = ()
+    # Per D90 (S29b), the classification per tool keyed by name. The
+    # AgentLoopExecutor emits ``ToolCallProposed`` events with the
+    # tool's D89 classification ("read_only", "drafting", "user_
+    # affecting_with_consent", "financial", "communication", "legal")
+    # so consumers (the SSE transport, future CLI / UI) can render
+    # tool calls with classification-aware UX. Default empty dict so
+    # the executor's existing test scaffolding constructs valid
+    # contexts; the wiring adapter populates this from the tools-
+    # context invocation service at the same point it resolves
+    # ``tool_definitions``. Tools not in the map default to
+    # ``"unknown"`` at the executor's emit site.
+    tool_classifications: Mapping[str, str] = field(default_factory=dict)
 
 
 class AgentExecutor(Protocol):

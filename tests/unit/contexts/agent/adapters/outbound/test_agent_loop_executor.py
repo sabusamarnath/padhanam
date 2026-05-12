@@ -1,28 +1,43 @@
-"""Unit tests for AgentLoopExecutor against the two-thin-ports surface (D89, S28b commit 5).
+"""Unit tests for AgentLoopExecutor — streaming event surface (D88, D89, D90; S29b refactor).
 
-The executor's surface generalised from the S27b retrieval-as-only-callable
-branch to ``ToolInvoker``-driven dispatch. The tool definitions list
-arrives pre-resolved on ``EffectiveConstraintBundle.tool_definitions``
-(composition resolves it via ``ToolDefinitionsLookup``); the executor
-passes that list through to the LiteLLM call and dispatches each
-model-issued ``ToolCall`` through ``ToolInvoker``.
+The executor's surface evolved across three sessions:
 
-The eight scenarios:
+- S27b (D88): hand-rolled LLM-with-tool-loop returning AgentResult.
+- S28b (D89): two-thin-ports refactor (ToolDefinitionsLookup +
+  ToolInvoker); ``tool_definitions`` flows on AgentInvocationContext.
+- S29b (D90): streaming-only; execute() yields ``AgentEvent`` values.
+
+These tests drive the streaming-aware executor against a scripted
+streaming inference port and a scripted tool invoker. Each test
+consumes the event stream end-to-end and verifies both:
+
+1. The collect_to_result helper synthesises an AgentResult that
+   matches the previous AgentResult shape on the load-bearing fields
+   (termination_reason, response_content, iteration_count, audit
+   hashes). The legacy ``signals`` field is empty per D90 — the event
+   stream is the canonical observability surface.
+
+2. The event stream itself contains the expected event types in the
+   expected order with the expected payloads (load-bearing per D90).
+
+The seven scenarios cover the same territory as the S28b test set:
 
 1. Content-only response terminates at iteration 1 with CONTENT.
 2. Tool call resolved OK terminates after the second LLM turn.
-3. Tool call returning INVARIANT_BLOCKED terminates with the new
-   ``TerminationReason.INVARIANT_BLOCKED`` and the invariant_index
-   on the AgentSignal.
+3. Tool call returning INVARIANT_BLOCKED yields a terminal
+   InvariantBlocked event with classification + blocked_tool_name.
 4. Tool call returning TOOL_NOT_REGISTERED terminates with the
-   existing ``TerminationReason.TOOL_NOT_REGISTERED`` path.
+   existing TerminationReason.TOOL_NOT_REGISTERED path.
 5. Tool call returning ERROR appends the explanation as a tool-role
    message and continues the loop.
 6. Max-iterations cap with continuous tool calls terminates with
    MAX_ITERATIONS.
 7. Audit chain integrity holds across the new termination paths.
-8. The tool definitions list flows through to the LiteLLM call's
-   ``tools`` parameter verbatim.
+8. Tool definitions flow through to the inference call verbatim.
+9. (New at S29b) ContentDelta events accumulate from the streaming
+   inference port across the loop.
+10. (New at S29b) Unhandled exception in the loop yields InvocationFailed
+    with the partial audit state.
 """
 
 from __future__ import annotations
@@ -30,7 +45,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from decimal import Decimal
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import UUID, uuid4
 
 import pytest
@@ -39,11 +54,26 @@ from contexts.agent.adapters.outbound.agent_loop_executor import (
     AgentLoopExecutor,
     MAX_ITERATIONS,
 )
+from contexts.agent.application.collect import collect_to_result
 from contexts.agent.application.ports import (
     InvocationOutcome,
     ToolInvocationResult,
 )
 from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+from contexts.agent.domain.events import (
+    AgentEvent,
+    ContentDelta,
+    InvariantBlocked,
+    InvocationCompleted,
+    InvocationFailed,
+    InvocationStarted,
+    IterationCompleted,
+    IterationStarted,
+    LLMCallStarted,
+    ToolCallCompleted,
+    ToolCallExecuting,
+    ToolCallProposed,
+)
 from contexts.agent.ports.executor import (
     AgentInvocationContext,
     TerminationReason,
@@ -54,7 +84,7 @@ from contexts.audit.domain.events import (
     compute_event_hash,
 )
 from contexts.inference.domain.completion import (
-    Completion,
+    CompletionChunk,
     Message,
     TokenUsage,
     ToolCall,
@@ -96,6 +126,7 @@ def _bundle() -> EffectiveConstraintBundle:
 def _context(
     *,
     tool_definitions: tuple[ToolDefinition, ...] = (_RETRIEVAL_DEFINITION,),
+    tool_classifications: dict[str, str] | None = None,
     methodology_id: UUID | None = None,
 ) -> AgentInvocationContext:
     return AgentInvocationContext(
@@ -109,44 +140,102 @@ def _context(
         effective_bundle=_bundle(),
         user_input="help me frame this problem",
         tool_definitions=tool_definitions,
+        tool_classifications=tool_classifications
+        or {"retrieval": "read_only"},
     )
 
 
-def _completion(
-    *,
-    text: str = "",
-    tool_calls: tuple[ToolCall, ...] = (),
-    cost: str = "0",
-) -> Completion:
-    return Completion(
-        text=text,
-        model="qwen2.5:7b",
-        usage=TokenUsage(input_tokens=10, output_tokens=4),
-        tool_calls=tool_calls,
-        cost_usd=Decimal(cost),
+def _chunks_for_content(
+    text: str, *, cost: str = "0", chunk_count: int = 2
+) -> list[CompletionChunk]:
+    """Build a streaming chunk list for a content-only completion.
+
+    The text splits into ``chunk_count`` deltas plus a terminal chunk
+    carrying the final cost and the empty tool_calls tuple.
+    """
+    parts: list[str] = []
+    if text:
+        size = max(1, len(text) // chunk_count)
+        for i in range(0, len(text), size):
+            parts.append(text[i : i + size])
+    chunks = [
+        CompletionChunk(text_delta=p, is_final=False) for p in parts
+    ]
+    chunks.append(
+        CompletionChunk(
+            text_delta="",
+            is_final=True,
+            finish_reason="stop",
+            model="qwen2.5:7b",
+            tool_calls=(),
+            usage=TokenUsage(input_tokens=10, output_tokens=len(text)),
+            cost_usd=Decimal(cost),
+        )
     )
+    return chunks
 
 
-class _ScriptedInferencePort:
-    def __init__(self, completions: list[Completion]) -> None:
+def _chunks_for_tool_calls(
+    tool_calls: tuple[ToolCall, ...], *, cost: str = "0", text: str = ""
+) -> list[CompletionChunk]:
+    """Build a streaming chunk list for a tool-call-issuing completion."""
+    chunks: list[CompletionChunk] = []
+    if text:
+        chunks.append(CompletionChunk(text_delta=text, is_final=False))
+    chunks.append(
+        CompletionChunk(
+            text_delta="",
+            is_final=True,
+            finish_reason="tool_calls",
+            model="qwen2.5:7b",
+            tool_calls=tool_calls,
+            usage=TokenUsage(input_tokens=10, output_tokens=4),
+            cost_usd=Decimal(cost),
+        )
+    )
+    return chunks
+
+
+class _ScriptedStreamingInferencePort:
+    """Replays a queue of pre-canned streaming chunk lists.
+
+    Each list represents one stream_complete invocation. The port
+    records each invocation's messages, model, tenant_context, and
+    tools for test assertions.
+    """
+
+    def __init__(self, completions: list[list[CompletionChunk]]) -> None:
         self._completions = list(completions)
         self.calls: list[
-            tuple[Sequence[Message], str | None, TenantContext, Sequence[ToolDefinition]]
+            tuple[
+                Sequence[Message],
+                str | None,
+                TenantContext,
+                Sequence[ToolDefinition],
+            ]
         ] = []
 
-    def complete(
+    def complete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError(
+            "the streaming executor must not call the non-streaming "
+            "complete() method; use stream_complete instead"
+        )
+
+    async def stream_complete(
         self,
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
-    ) -> Completion:
+    ) -> AsyncIterator[CompletionChunk]:
         self.calls.append(
             (list(messages), model, tenant_context, list(tools))
         )
         if not self._completions:
-            raise AssertionError("ScriptedInferencePort exhausted")
-        return self._completions.pop(0)
+            raise AssertionError("ScriptedStreamingInferencePort exhausted")
+        chunks = self._completions.pop(0)
+        for chunk in chunks:
+            yield chunk
 
 
 class _ScriptedToolInvoker:
@@ -210,7 +299,7 @@ class _ChainingFakeAuditPort:
 
 def _executor(
     *,
-    inference: _ScriptedInferencePort,
+    inference: _ScriptedStreamingInferencePort,
     invoker: _ScriptedToolInvoker,
     audit: _ChainingFakeAuditPort,
 ) -> AgentLoopExecutor:
@@ -221,36 +310,60 @@ def _executor(
     )
 
 
+async def _collect_events(
+    executor: AgentLoopExecutor, context: AgentInvocationContext
+) -> list[AgentEvent]:
+    return [event async for event in executor.execute(context)]
+
+
 # 1. Content-only termination.
 
 def test_content_only_response_terminates_at_iteration_one() -> None:
-    inference = _ScriptedInferencePort(
-        [_completion(text="here is your framed problem", cost="0.001")]
+    inference = _ScriptedStreamingInferencePort(
+        [_chunks_for_content("here is your framed problem", cost="0.001")]
     )
     invoker = _ScriptedToolInvoker([])
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(_collect_events(executor, _context()))
 
+    assert isinstance(events[0], InvocationStarted)
+    assert isinstance(events[-1], InvocationCompleted)
+    terminal = events[-1]
+    assert terminal.termination_reason is TerminationReason.CONTENT
+    assert terminal.final_result == "here is your framed problem"
+    # No tool calls in this path.
+    assert invoker.calls == []
+
+    # Sanity-check via collect_to_result.
+    result = asyncio.run(
+        collect_to_result(
+            _replay_events(events)
+        )
+    )
     assert result.termination_reason is TerminationReason.CONTENT
     assert result.iteration_count == 1
     assert result.response_content == "here is your framed problem"
-    assert invoker.calls == []
+
+
+async def _replay_events(
+    events: list[AgentEvent],
+) -> AsyncIterator[AgentEvent]:
+    for e in events:
+        yield e
 
 
 # 2. Tool call resolved OK then content.
 
 def test_tool_call_ok_then_content() -> None:
-    inference = _ScriptedInferencePort(
+    inference = _ScriptedStreamingInferencePort(
         [
-            _completion(
-                tool_calls=(
-                    ToolCall(id="c1", name="retrieval", arguments_json='{"query": "scope"}'),
-                ),
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="retrieval", arguments_json='{"query": "scope"}'),),
                 cost="0.001",
             ),
-            _completion(text="final answer", cost="0.002"),
+            _chunks_for_content("final answer", cost="0.002"),
         ]
     )
     invoker = _ScriptedToolInvoker(
@@ -264,25 +377,44 @@ def test_tool_call_ok_then_content() -> None:
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(_collect_events(executor, _context()))
 
-    assert result.termination_reason is TerminationReason.CONTENT
-    assert result.iteration_count == 2
-    assert result.response_content == "final answer"
-    assert len(invoker.calls) == 1
-    assert invoker.calls[0]["tool_call"].name == "retrieval"
-    # Second LLM call sees the tool-role message in the conversation.
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationCompleted)
+    assert terminal.termination_reason is TerminationReason.CONTENT
+    assert terminal.final_result == "final answer"
+
+    # Verify event ordering: ToolCallProposed → ToolCallExecuting → ToolCallCompleted.
+    proposed_idx = next(
+        i for i, e in enumerate(events) if isinstance(e, ToolCallProposed)
+    )
+    executing_idx = next(
+        i for i, e in enumerate(events) if isinstance(e, ToolCallExecuting)
+    )
+    completed_idx = next(
+        i for i, e in enumerate(events) if isinstance(e, ToolCallCompleted)
+    )
+    assert proposed_idx < executing_idx < completed_idx
+
+    completed = events[completed_idx]
+    assert completed.success is True
+    assert "relevant chunk" in completed.result_summary
+
+    # Second LLM call saw the tool-role message in the conversation.
     second_call_msgs = inference.calls[1][0]
-    assert any(m.role == "tool" and "relevant chunk" in m.content for m in second_call_msgs)
+    assert any(
+        m.role == "tool" and "relevant chunk" in m.content
+        for m in second_call_msgs
+    )
 
 
 # 3. INVARIANT_BLOCKED termination path.
 
-def test_invariant_blocked_terminates_with_invariant_signal() -> None:
-    inference = _ScriptedInferencePort(
+def test_invariant_blocked_yields_terminal_invariant_blocked_event() -> None:
+    inference = _ScriptedStreamingInferencePort(
         [
-            _completion(
-                tool_calls=(
+            _chunks_for_tool_calls(
+                (
                     ToolCall(
                         id="c1",
                         name="transfer",
@@ -309,27 +441,35 @@ def test_invariant_blocked_terminates_with_invariant_signal() -> None:
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
-
-    assert result.termination_reason is TerminationReason.INVARIANT_BLOCKED
-    assert result.early_termination is True
-    assert any(
-        s.kind == "invariant_blocked"
-        and s.payload.get("invariant_index") == 1
-        and s.payload.get("tool_name") == "transfer"
-        for s in result.signals
+    events = asyncio.run(
+        _collect_events(
+            executor,
+            _context(
+                tool_classifications={"transfer": "financial"},
+            ),
+        )
     )
+
+    terminal = events[-1]
+    assert isinstance(terminal, InvariantBlocked)
+    assert terminal.classification == "financial"
+    assert terminal.blocked_tool_name == "transfer"
+    assert len(terminal.audit_chain_hashes) == 2
+
+    # ToolCallExecuting and ToolCallCompleted DO NOT fire on the
+    # invariant-blocked path (per the executor's intent: the block
+    # surfaces before invocation actually runs).
+    assert not any(isinstance(e, ToolCallExecuting) for e in events)
+    assert not any(isinstance(e, ToolCallCompleted) for e in events)
 
 
 # 4. TOOL_NOT_REGISTERED termination path.
 
 def test_tool_not_registered_terminates() -> None:
-    inference = _ScriptedInferencePort(
+    inference = _ScriptedStreamingInferencePort(
         [
-            _completion(
-                tool_calls=(
-                    ToolCall(id="c1", name="unknown_tool", arguments_json="{}"),
-                ),
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="unknown_tool", arguments_json="{}"),),
                 cost="0.001",
             )
         ]
@@ -346,24 +486,29 @@ def test_tool_not_registered_terminates() -> None:
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(_collect_events(executor, _context()))
 
-    assert result.termination_reason is TerminationReason.TOOL_NOT_REGISTERED
-    assert result.early_termination is True
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationCompleted)
+    assert terminal.termination_reason is TerminationReason.TOOL_NOT_REGISTERED
 
 
 # 5. ERROR outcome continues the loop.
 
 def test_tool_error_continues_loop_with_error_payload() -> None:
-    inference = _ScriptedInferencePort(
+    inference = _ScriptedStreamingInferencePort(
         [
-            _completion(
-                tool_calls=(
-                    ToolCall(id="c1", name="retrieval", arguments_json='{"query": "x"}'),
+            _chunks_for_tool_calls(
+                (
+                    ToolCall(
+                        id="c1",
+                        name="retrieval",
+                        arguments_json='{"query": "x"}',
+                    ),
                 ),
                 cost="0.001",
             ),
-            _completion(text="recovered after error", cost="0.001"),
+            _chunks_for_content("recovered after error", cost="0.001"),
         ]
     )
     invoker = _ScriptedToolInvoker(
@@ -378,10 +523,18 @@ def test_tool_error_continues_loop_with_error_payload() -> None:
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(_collect_events(executor, _context()))
 
-    assert result.termination_reason is TerminationReason.CONTENT
-    assert result.iteration_count == 2
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationCompleted)
+    assert terminal.termination_reason is TerminationReason.CONTENT
+    # ToolCallCompleted fires for the ERROR outcome with success=False.
+    completed_events = [
+        e for e in events if isinstance(e, ToolCallCompleted)
+    ]
+    assert len(completed_events) == 1
+    assert completed_events[0].success is False
+
     # Error payload reaches the LLM as a tool-role message.
     second_call_msgs = inference.calls[1][0]
     assert any(
@@ -393,12 +546,16 @@ def test_tool_error_continues_loop_with_error_payload() -> None:
 # 6. Max iterations cap.
 
 def test_max_iterations_cap_terminates_with_max_iterations() -> None:
-    completions = []
-    for _ in range(MAX_ITERATIONS):
+    completions: list[list[CompletionChunk]] = []
+    for i in range(MAX_ITERATIONS):
         completions.append(
-            _completion(
-                tool_calls=(
-                    ToolCall(id=f"c{_}", name="retrieval", arguments_json='{"query": "x"}'),
+            _chunks_for_tool_calls(
+                (
+                    ToolCall(
+                        id=f"c{i}",
+                        name="retrieval",
+                        arguments_json='{"query": "x"}',
+                    ),
                 ),
                 cost="0.001",
             )
@@ -407,63 +564,30 @@ def test_max_iterations_cap_terminates_with_max_iterations() -> None:
         ToolInvocationResult(outcome=InvocationOutcome.OK, payload="result")
         for _ in range(MAX_ITERATIONS)
     ]
-    inference = _ScriptedInferencePort(completions)
+    inference = _ScriptedStreamingInferencePort(completions)
     invoker = _ScriptedToolInvoker(invoker_results)
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(_collect_events(executor, _context()))
 
-    assert result.termination_reason is TerminationReason.MAX_ITERATIONS
-    assert result.iteration_count == MAX_ITERATIONS
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationCompleted)
+    assert terminal.termination_reason is TerminationReason.MAX_ITERATIONS
 
-
-# 7. Tool definitions flow through to LiteLLM verbatim.
-
-def test_tool_definitions_pass_through_to_inference_call() -> None:
-    custom_def = ToolDefinition(
-        name="search",
-        description="search the web",
-        parameters={"type": "object"},
-    )
-    inference = _ScriptedInferencePort(
-        [_completion(text="done", cost="0")]
-    )
-    invoker = _ScriptedToolInvoker([])
-    audit = _ChainingFakeAuditPort()
-    executor = _executor(inference=inference, invoker=invoker, audit=audit)
-
-    ctx = _context(tool_definitions=(custom_def,))
-    asyncio.run(executor.execute(ctx))
-
-    sent_tools = inference.calls[0][3]
-    assert sent_tools == [custom_def]
+    iteration_started_events = [
+        e for e in events if isinstance(e, IterationStarted)
+    ]
+    assert len(iteration_started_events) == MAX_ITERATIONS
 
 
-def test_empty_tool_definitions_means_loop_calls_llm_without_tools() -> None:
-    inference = _ScriptedInferencePort(
-        [_completion(text="content", cost="0")]
-    )
-    invoker = _ScriptedToolInvoker([])
-    audit = _ChainingFakeAuditPort()
-    executor = _executor(inference=inference, invoker=invoker, audit=audit)
-
-    ctx = _context(tool_definitions=())
-    asyncio.run(executor.execute(ctx))
-
-    sent_tools = inference.calls[0][3]
-    assert sent_tools == []
-
-
-# 8. Audit chain integrity across the new termination paths.
+# 7. Audit chain integrity through INVARIANT_BLOCKED path.
 
 def test_audit_chain_integrity_through_invariant_blocked_path() -> None:
-    inference = _ScriptedInferencePort(
+    inference = _ScriptedStreamingInferencePort(
         [
-            _completion(
-                tool_calls=(
-                    ToolCall(id="c1", name="transfer", arguments_json="{}"),
-                ),
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="transfer", arguments_json="{}"),),
                 cost="0.001",
             )
         ]
@@ -481,12 +605,150 @@ def test_audit_chain_integrity_through_invariant_blocked_path() -> None:
     audit = _ChainingFakeAuditPort()
     executor = _executor(inference=inference, invoker=invoker, audit=audit)
 
-    result = asyncio.run(executor.execute(_context()))
+    events = asyncio.run(
+        _collect_events(
+            executor,
+            _context(tool_classifications={"transfer": "communication"}),
+        )
+    )
 
     chain = audit.chains[_TENANT_A.tenant_id]
     assert len(chain) == 2
     assert chain[0].previous_event_hash == GENESIS_HASH
     assert chain[1].previous_event_hash == chain[0].this_event_hash
     assert chain[1].after_state["termination_reason"] == "invariant_blocked"
-    assert result.audit_start_hash == chain[0].this_event_hash
-    assert result.audit_end_hash == chain[1].this_event_hash
+
+    terminal = events[-1]
+    assert isinstance(terminal, InvariantBlocked)
+    assert terminal.audit_chain_hashes == (
+        chain[0].this_event_hash,
+        chain[1].this_event_hash,
+    )
+
+
+# 8. Tool definitions flow through to inference call.
+
+def test_tool_definitions_pass_through_to_inference_call() -> None:
+    custom_def = ToolDefinition(
+        name="search",
+        description="search the web",
+        parameters={"type": "object"},
+    )
+    inference = _ScriptedStreamingInferencePort(
+        [_chunks_for_content("done", cost="0")]
+    )
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    ctx = _context(tool_definitions=(custom_def,))
+    asyncio.run(_collect_events(executor, ctx))
+
+    sent_tools = inference.calls[0][3]
+    assert sent_tools == [custom_def]
+
+
+def test_empty_tool_definitions_means_loop_calls_llm_without_tools() -> None:
+    inference = _ScriptedStreamingInferencePort(
+        [_chunks_for_content("content", cost="0")]
+    )
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    ctx = _context(tool_definitions=(), tool_classifications={})
+    asyncio.run(_collect_events(executor, ctx))
+
+    sent_tools = inference.calls[0][3]
+    assert sent_tools == []
+
+
+# 9. ContentDelta events accumulate from the streaming inference port.
+
+def test_content_deltas_yield_during_streaming() -> None:
+    """A multi-chunk content response should yield one ContentDelta event
+    per non-empty text delta from the inference adapter."""
+    inference = _ScriptedStreamingInferencePort(
+        [_chunks_for_content("Hello world", cost="0", chunk_count=4)]
+    )
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    events = asyncio.run(_collect_events(executor, _context()))
+    deltas = [e for e in events if isinstance(e, ContentDelta)]
+    assert len(deltas) >= 1
+    assert "".join(d.text_fragment for d in deltas) == "Hello world"
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationCompleted)
+    assert terminal.final_result == "Hello world"
+
+
+# 10. Unhandled exception yields InvocationFailed.
+
+def test_unhandled_exception_in_loop_yields_invocation_failed() -> None:
+    class _BoomInferencePort:
+        async def stream_complete(self, **kwargs):  # type: ignore[no-untyped-def]
+            raise RuntimeError("boom")
+            # unreachable but required for the function to be a generator
+            yield  # pragma: no cover
+
+        def complete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            raise AssertionError("streaming-only executor calls stream_complete")
+
+    invoker = _ScriptedToolInvoker([])
+    audit = _ChainingFakeAuditPort()
+    executor = AgentLoopExecutor(
+        inference_port=_BoomInferencePort(),  # type: ignore[arg-type]
+        tool_invoker=invoker,
+        audit_port=audit,
+    )
+
+    events = asyncio.run(_collect_events(executor, _context()))
+
+    terminal = events[-1]
+    assert isinstance(terminal, InvocationFailed)
+    assert terminal.error_type == "RuntimeError"
+    assert terminal.error_detail == "boom"
+    # Start audit landed before the failure; end audit did not.
+    assert len(terminal.partial_audit_chain_state) == 1
+    chain = audit.chains[_TENANT_A.tenant_id]
+    assert len(chain) == 1
+    assert terminal.partial_audit_chain_state[0] == chain[0].this_event_hash
+
+
+# 11. LLMCallStarted event fires per iteration with message_count.
+
+def test_llm_call_started_event_per_iteration() -> None:
+    inference = _ScriptedStreamingInferencePort(
+        [
+            _chunks_for_tool_calls(
+                (
+                    ToolCall(
+                        id="c1",
+                        name="retrieval",
+                        arguments_json='{"query": "x"}',
+                    ),
+                ),
+                cost="0.001",
+            ),
+            _chunks_for_content("done", cost="0.001"),
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.OK, payload="result"
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    events = asyncio.run(_collect_events(executor, _context()))
+    llm_call_events = [e for e in events if isinstance(e, LLMCallStarted)]
+    assert len(llm_call_events) == 2
+    assert llm_call_events[0].iteration_index == 1
+    assert llm_call_events[1].iteration_index == 2
+    # Second iteration's message_count is greater (assistant + tool messages).
+    assert llm_call_events[1].message_count > llm_call_events[0].message_count

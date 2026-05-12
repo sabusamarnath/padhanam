@@ -1,47 +1,53 @@
-"""AgentLoopExecutor — hand-rolled LLM-with-tool-loop adapter (D88, S27b).
+"""AgentLoopExecutor — streaming LLM-with-tool-loop adapter (D88, D89, D90; S27b→S29b).
 
 Implements the ``AgentExecutor`` port at
-``contexts/agent/ports/executor.py``. The loop runs one or more
-inference calls against the LiteLLM-backed ``InferencePort`` per D4;
-between calls, model-issued tool calls are dispatched to the
-``AgentRetrievalClient`` (Phase 1: retrieval is the only registered
-tool per D88's retrieval-as-only-callable framing). The loop
-terminates on content-only responses, on calls to unregistered tools
-(Phase 1 returns ``TerminationReason.TOOL_NOT_REGISTERED``), or on
-the conventional max-iteration cap of 10.
+``contexts/agent/ports/executor.py``. Per D90 (S29b) the executor is
+streaming-only: ``execute(context)`` is an async generator yielding
+``AgentEvent`` values from the eleven-type domain vocabulary. Non-
+streaming callers wrap via ``contexts/agent/application/collect.py``'s
+``collect_to_result`` helper.
 
-Audit emission per D26: two events per invocation (start, end) via
-the existing ``AuditPort`` (the per-tenant audit chain absorbs the
-new event types). The Postgres adapter is the chain authority and
-the persisted event with the authoritative ``this_event_hash``
-returns on each emit per D88's widened port contract; the agent
-result surfaces both hashes for caller deep-linking and chain
-verification.
+Loop shape: drive LLM-with-tool iterations via
+``InferencePort.stream_complete`` (D90 commit 4), accumulate text
+fragments into ``ContentDelta`` events as they arrive, branch on the
+terminal-chunk's tool calls, dispatch each via the ``ToolInvoker`` port
+(D89 commit 5), terminate on content / max-iterations cap / tool-not-
+registered / invariant-blocked. ``MAX_ITERATIONS`` stays at 10 per D88.
 
-Cost capture per D49 / D88: each LiteLLM call carries a per-call
-``cost_usd`` Decimal on the returned ``Completion`` (sourced from
-``padhanam.config.cost_for`` inside the inference adapter); the
-executor sums per-call cost to produce the invocation aggregate on
-``AgentResult.cost_total_usd``. OTel spans for each call land
-unchanged through the inference adapter; the agent runtime adds a
-parent span wrapping the full invocation so the trace tree is
-``agent.invoke`` → ``chat {model}`` × N → retrieval_calls when
-present.
+Audit per D26: two events per invocation regardless of termination
+reason (D90 sub-choice 2 Option C). The start audit fires before the
+first event yields; the end audit fires after the loop terminates and
+before the terminal ``AgentEvent`` yields. The terminal event carries
+both audit hashes so consumers can deep-link into the audit chain or
+verify integrity.
 
-Async-over-sync bridge: ``InferencePort.complete`` is sync (the
-LiteLLM gateway call is sync per the existing adapter); the
-executor offloads via ``asyncio.to_thread`` so the event loop stays
-unblocked while retrieval and audit operations run async.
+Failure handling: any unhandled exception inside the loop emits an
+``InvocationFailed`` event with ``partial_audit_chain_state`` carrying
+whichever audit hashes have landed at the failure point (empty when
+the failure is pre-start-audit; one hash when start-only; the helper
+in collect_to_result handles both).
+
+Trace span: one ``agent.invocation`` span wraps the whole loop with
+tenant + agent attributes; the LiteLLM adapter's ``chat {model}`` span
+nests as a child via OTel context propagation (one per iteration's
+stream_complete call). The nested ``agent.iteration`` and
+``agent.tool_call`` spans land at commit 6 per D90's nested span
+hierarchy commitment.
+
+Cost capture per D49 / D90: per-iteration cost from the terminal
+``CompletionChunk.cost_usd``; per-invocation total sums per-iteration
+costs. Surfaced on ``IterationCompleted`` (per iteration) and on
+``InvocationCompleted`` (total).
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, AsyncIterator
+from uuid import UUID, uuid4
 
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
@@ -51,17 +57,29 @@ from contexts.agent.application.ports import (
     ToolInvocationResult,
     ToolInvoker,
 )
+from contexts.agent.domain.events import (
+    AgentEvent,
+    ContentDelta,
+    InvariantBlocked,
+    InvocationCompleted,
+    InvocationFailed,
+    InvocationStarted,
+    IterationCompleted,
+    IterationStarted,
+    LLMCallStarted,
+    ToolCallCompleted,
+    ToolCallExecuting,
+    ToolCallProposed,
+)
+from contexts.agent.domain.termination import TerminationReason
 from contexts.agent.ports.executor import (
     AgentExecutor,
     AgentInvocationContext,
-    AgentResult,
-    AgentSignal,
-    TerminationReason,
 )
 from contexts.audit.domain.events import AuditEvent, GENESIS_HASH, compute_event_hash
 from contexts.audit.domain.ports import AuditPort
 from contexts.inference.domain.completion import (
-    Completion,
+    CompletionChunk,
     Message,
     ToolDefinition,
 )
@@ -70,37 +88,24 @@ from contexts.inference.ports import InferencePort
 _log = logging.getLogger("contexts.agent.agent_loop_executor")
 _tracer = trace.get_tracer("padhanam.agent.loop_executor")
 
-# D88 conventional max-iteration cap. Per-role configuration defers if
-# evidence demands; the value here is the single Phase 1 setting.
+# D88 conventional max-iteration cap; preserved at D90 per the streaming
+# refactor's no-scope-creep discipline.
 MAX_ITERATIONS = 10
 
-# The hardcoded retrieval surface from S27b / D88 retires at S28b
-# commit 5 per D89. Tool definitions now flow from
-# ``EffectiveConstraintBundle.tool_definitions`` (composed at
-# ``contexts/agent/application/composition.py`` via
-# ``ToolDefinitionsLookup``); tool invocation flows through the
-# ``ToolInvoker`` port wired at ``apps/cli/_cross_context.py``.
-# Retrieval becomes a tool registered in the tool registry like any
-# other tool.
+
+# D89's three-to-three mapping (financial→1, communication→2, legal→3).
+# Used to derive the classification string when a tool invocation
+# returns INVARIANT_BLOCKED so the InvariantBlocked event surfaces a
+# human-readable classification rather than just the invariant index.
+_INVARIANT_INDEX_TO_CLASSIFICATION: dict[int, str] = {
+    1: "financial",
+    2: "communication",
+    3: "legal",
+}
 
 
 class AgentLoopExecutor(AgentExecutor):
-    """Hand-rolled LLM-with-tool-loop executor (D88).
-
-    Constructor wiring:
-
-    - ``inference_port``: the LiteLLM-backed ``InferencePort`` (D4).
-      Sync call bridged via ``asyncio.to_thread``.
-    - ``tool_invoker``: the ``ToolInvoker`` consumer port at D89.
-      The adapter at ``apps/cli/_cross_context.py`` (S28b commit 7)
-      composes the tools-context invocation service (classification
-      gating + defensive invariant check) with per-tool dispatch
-      (Phase 1: retrieval via ``AgentRetrievalClient``). The
-      hardcoded retrieval branch from D88 retires here.
-    - ``audit_port``: the ``AuditPort`` (D22). The Postgres adapter is
-      the chain authority and returns the persisted event with the
-      authoritative ``this_event_hash`` per D88's port widening.
-    """
+    """Streaming hand-rolled LLM-with-tool-loop executor (D88, D89, D90)."""
 
     def __init__(
         self,
@@ -113,9 +118,17 @@ class AgentLoopExecutor(AgentExecutor):
         self._tool_invoker = tool_invoker
         self._audit_port = audit_port
 
-    async def execute(self, context: AgentInvocationContext) -> AgentResult:
+    async def execute(
+        self, context: AgentInvocationContext
+    ) -> AsyncIterator[AgentEvent]:
+        invocation_id = uuid4()
+        invocation_started_at = datetime.now(timezone.utc)
+        bundle = context.effective_bundle
+        model_name = bundle.model_selection
+        tool_definitions_list = list(context.tool_definitions)
+
         with _tracer.start_as_current_span(
-            "agent.invoke",
+            "agent.invocation",
             kind=SpanKind.INTERNAL,
             attributes={
                 "agent.template_id": str(context.agent_template_id),
@@ -126,29 +139,263 @@ class AgentLoopExecutor(AgentExecutor):
                     if context.methodology_template_id
                     else ""
                 ),
+                "agent.invocation_id": str(invocation_id),
                 "tenant.id": context.tenant_context.tenant_id,
                 "tenant.jurisdiction": context.tenant_context.jurisdiction,
+                "model.name": model_name,
             },
         ) as invoke_span:
             input_hash = _hash_text(context.user_input)
             correlation_id = _correlation_id_for(invoke_span, context)
 
-            start_event = await self._emit_start_audit(
-                context=context,
-                input_hash=input_hash,
-                correlation_id=correlation_id,
+            # ---- start audit ----
+            try:
+                start_event = await self._emit_start_audit(
+                    context=context,
+                    input_hash=input_hash,
+                    correlation_id=correlation_id,
+                )
+            except Exception as exc:  # noqa: BLE001 — fail safely with partial state
+                duration_ms = _ms_since(invocation_started_at)
+                yield InvocationFailed(
+                    invocation_id=invocation_id,
+                    error_type=type(exc).__name__,
+                    error_detail=str(exc),
+                    partial_audit_chain_state=(),
+                    duration_ms=duration_ms,
+                )
+                return
+
+            yield InvocationStarted(
+                invocation_id=invocation_id,
+                agent_template_id=context.agent_template_id,
+                tenant_context=context.tenant_context,
+                model_name=model_name,
+                started_at=invocation_started_at,
             )
 
-            (
-                response_content,
-                signals,
-                cost_total,
-                iteration_count,
-                termination_reason,
-                early_termination,
-            ) = await self._run_loop(context=context)
+            # ---- loop scaffold ----
+            messages: list[Message] = [
+                Message(role="system", content=bundle.system_prompt)
+            ]
+            for prior in context.conversation_history:
+                messages.append(Message(role=prior.role, content=prior.content))
+            messages.append(Message(role="user", content=context.user_input))
 
-            invoke_span.set_attribute("agent.iteration_count", iteration_count)
+            cost_total = Decimal("0")
+            iteration = 0
+            response_content = ""
+            termination_reason: TerminationReason | None = None
+            blocked_tool_name = ""
+            blocked_classification = ""
+            iteration_content = ""  # carried across iterations for final response
+
+            try:
+                while iteration < MAX_ITERATIONS:
+                    iteration += 1
+                    iteration_started_at = datetime.now(timezone.utc)
+                    yield IterationStarted(
+                        invocation_id=invocation_id,
+                        iteration_index=iteration,
+                        started_at=iteration_started_at,
+                    )
+
+                    yield LLMCallStarted(
+                        invocation_id=invocation_id,
+                        iteration_index=iteration,
+                        model_name=model_name,
+                        message_count=len(messages),
+                        started_at=datetime.now(timezone.utc),
+                    )
+
+                    # ---- stream LLM ----
+                    content_parts: list[str] = []
+                    terminal_chunk: CompletionChunk | None = None
+                    async for chunk in self._inference_port.stream_complete(
+                        messages=messages,
+                        model=model_name,
+                        tenant_context=context.tenant_context,
+                        tools=tool_definitions_list,
+                    ):
+                        if chunk.is_final:
+                            terminal_chunk = chunk
+                            break
+                        if chunk.text_delta:
+                            content_parts.append(chunk.text_delta)
+                            yield ContentDelta(
+                                invocation_id=invocation_id,
+                                iteration_index=iteration,
+                                text_fragment=chunk.text_delta,
+                            )
+
+                    if terminal_chunk is None:
+                        raise RuntimeError(
+                            "inference stream ended without a terminal chunk"
+                        )
+
+                    iteration_cost = terminal_chunk.cost_usd
+                    cost_total += iteration_cost
+                    iteration_content = "".join(content_parts)
+                    tool_calls = terminal_chunk.tool_calls
+
+                    # ---- branch: content-only iteration ----
+                    if not tool_calls:
+                        response_content = iteration_content
+                        termination_reason = TerminationReason.CONTENT
+                        yield IterationCompleted(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            termination_signal="content",
+                            duration_ms=_ms_since(iteration_started_at),
+                            cost_usd=iteration_cost,
+                        )
+                        break
+
+                    # ---- branch: tool calls in this iteration ----
+                    messages.append(
+                        Message(
+                            role="assistant",
+                            content=iteration_content,
+                            tool_calls=tool_calls,
+                        )
+                    )
+
+                    iteration_terminated_signal: str | None = None
+
+                    for tool_call in tool_calls:
+                        classification = context.tool_classifications.get(
+                            tool_call.name, "unknown"
+                        )
+                        yield ToolCallProposed(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            tool_name=tool_call.name,
+                            arguments=tool_call.arguments_json,
+                            classification=classification,
+                        )
+
+                        tool_started_at = datetime.now(timezone.utc)
+                        result: ToolInvocationResult = await self._tool_invoker(
+                            tool_call=tool_call,
+                            tenant_context=context.tenant_context,
+                        )
+
+                        if result.outcome is InvocationOutcome.INVARIANT_BLOCKED:
+                            blocked_tool_name = tool_call.name
+                            blocked_classification = (
+                                _INVARIANT_INDEX_TO_CLASSIFICATION.get(
+                                    result.invariant_index or 0, classification
+                                )
+                            )
+                            response_content = (
+                                iteration_content
+                                or result.message
+                                or result.payload
+                            )
+                            termination_reason = (
+                                TerminationReason.INVARIANT_BLOCKED
+                            )
+                            iteration_terminated_signal = "invariant_blocked"
+                            break
+
+                        if result.outcome is InvocationOutcome.TOOL_NOT_REGISTERED:
+                            response_content = (
+                                iteration_content
+                                or result.message
+                                or (
+                                    f"(model attempted to call unregistered tool "
+                                    f"{tool_call.name!r})"
+                                )
+                            )
+                            termination_reason = (
+                                TerminationReason.TOOL_NOT_REGISTERED
+                            )
+                            iteration_terminated_signal = "tool_not_registered"
+                            break
+
+                        # OK / ERROR both proceed through the executing/completed
+                        # path; the loop continues regardless. ERROR appends an
+                        # explanation as a tool-role message so the LLM can react.
+                        yield ToolCallExecuting(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            tool_name=tool_call.name,
+                            started_at=tool_started_at,
+                        )
+                        tool_duration_ms = _ms_since(tool_started_at)
+                        yield ToolCallCompleted(
+                            invocation_id=invocation_id,
+                            iteration_index=iteration,
+                            tool_name=tool_call.name,
+                            success=result.outcome is InvocationOutcome.OK,
+                            result_summary=_summarise(result.payload),
+                            duration_ms=tool_duration_ms,
+                        )
+                        messages.append(
+                            Message(
+                                role="tool",
+                                content=result.payload,
+                                tool_call_id=tool_call.id,
+                            )
+                        )
+
+                    iteration_signal_label = (
+                        iteration_terminated_signal or "continue"
+                    )
+                    yield IterationCompleted(
+                        invocation_id=invocation_id,
+                        iteration_index=iteration,
+                        termination_signal=iteration_signal_label,
+                        duration_ms=_ms_since(iteration_started_at),
+                        cost_usd=iteration_cost,
+                    )
+
+                    if iteration_terminated_signal is not None:
+                        break
+                else:
+                    # while-else: max-iteration cap fired
+                    response_content = (
+                        iteration_content
+                        or "(no content produced before the iteration cap fired)"
+                    )
+                    termination_reason = TerminationReason.MAX_ITERATIONS
+            except Exception as exc:  # noqa: BLE001 — runtime error during loop
+                duration_ms = _ms_since(invocation_started_at)
+                yield InvocationFailed(
+                    invocation_id=invocation_id,
+                    error_type=type(exc).__name__,
+                    error_detail=str(exc),
+                    partial_audit_chain_state=(start_event.this_event_hash,),
+                    duration_ms=duration_ms,
+                )
+                return
+
+            assert termination_reason is not None  # set in every loop exit path
+
+            # ---- end audit ----
+            response_hash = _hash_text(response_content)
+            try:
+                end_event = await self._emit_end_audit(
+                    context=context,
+                    input_hash=input_hash,
+                    response_hash=response_hash,
+                    cost_total=cost_total,
+                    iteration_count=iteration,
+                    termination_reason=termination_reason,
+                    correlation_id=correlation_id,
+                )
+            except Exception as exc:  # noqa: BLE001 — end-audit failure
+                duration_ms = _ms_since(invocation_started_at)
+                yield InvocationFailed(
+                    invocation_id=invocation_id,
+                    error_type=type(exc).__name__,
+                    error_detail=str(exc),
+                    partial_audit_chain_state=(start_event.this_event_hash,),
+                    duration_ms=duration_ms,
+                )
+                return
+
+            invoke_span.set_attribute("agent.iteration_count", iteration)
             invoke_span.set_attribute(
                 "agent.termination_reason", termination_reason.value
             )
@@ -156,195 +403,32 @@ class AgentLoopExecutor(AgentExecutor):
                 "agent.cost_total_usd", float(cost_total)
             )
             invoke_span.set_attribute(
-                "agent.early_termination", early_termination
+                "agent.early_termination",
+                termination_reason is not TerminationReason.CONTENT,
             )
 
-            response_hash = _hash_text(response_content)
-            end_event = await self._emit_end_audit(
-                context=context,
-                input_hash=input_hash,
-                response_hash=response_hash,
-                cost_total=cost_total,
-                iteration_count=iteration_count,
-                termination_reason=termination_reason,
-                correlation_id=correlation_id,
+            duration_ms = _ms_since(invocation_started_at)
+            audit_hashes = (
+                start_event.this_event_hash,
+                end_event.this_event_hash,
             )
 
-            return AgentResult(
-                response_content=response_content,
-                signals=tuple(signals),
-                cost_total_usd=cost_total,
-                iteration_count=iteration_count,
-                termination_reason=termination_reason,
-                audit_start_hash=start_event.this_event_hash,
-                audit_end_hash=end_event.this_event_hash,
-                early_termination=early_termination,
-            )
-
-    # ------------------------------------------------------------------
-    # Loop body
-    # ------------------------------------------------------------------
-
-    async def _run_loop(
-        self,
-        *,
-        context: AgentInvocationContext,
-    ) -> tuple[str, list[AgentSignal], Decimal, int, TerminationReason, bool]:
-        bundle = context.effective_bundle
-        messages: list[Message] = [
-            Message(role="system", content=bundle.system_prompt)
-        ]
-        for prior in context.conversation_history:
-            messages.append(Message(role=prior.role, content=prior.content))
-        messages.append(Message(role="user", content=context.user_input))
-
-        # Per D89 commit 5, the tool definitions list arrives on the
-        # invocation context (resolved by ``ToolDefinitionsLookup`` at
-        # ``invoke_agent`` use case time and threaded through here).
-        # The executor passes the list through to the LiteLLM call
-        # verbatim. Empty tuple → loop runs without tools.
-        tools: list[ToolDefinition] = list(context.tool_definitions)
-
-        cost_total = Decimal("0")
-        signals: list[AgentSignal] = []
-        iteration = 0
-        response_content = ""
-        termination_reason: TerminationReason = TerminationReason.ERROR
-        early_termination = False
-
-        while iteration < MAX_ITERATIONS:
-            iteration += 1
-            completion: Completion = await asyncio.to_thread(
-                self._inference_port.complete,
-                messages=messages,
-                model=bundle.model_selection,
-                tenant_context=context.tenant_context,
-                tools=tools,
-            )
-            cost_total += completion.cost_usd
-
-            if not completion.tool_calls:
-                response_content = completion.text
-                termination_reason = TerminationReason.CONTENT
-                break
-
-            messages.append(
-                Message(
-                    role="assistant",
-                    content=completion.text or "",
-                    tool_calls=completion.tool_calls,
+            if termination_reason is TerminationReason.INVARIANT_BLOCKED:
+                yield InvariantBlocked(
+                    invocation_id=invocation_id,
+                    classification=blocked_classification,
+                    blocked_tool_name=blocked_tool_name,
+                    audit_chain_hashes=audit_hashes,
                 )
-            )
-
-            # Per D89 commit 5: dispatch every tool call through the
-            # ``ToolInvoker`` port. The adapter at
-            # ``apps/cli/_cross_context.py`` (commit 7) composes the
-            # tools-context invocation service (classification gating
-            # + defensive invariant check) with per-tool dispatch.
-            # INVARIANT_BLOCKED or TOOL_NOT_REGISTERED outcomes
-            # terminate the loop with the corresponding
-            # ``TerminationReason``; OK appends the formatted tool
-            # result and the loop continues; ERROR surfaces the
-            # message in response content and terminates.
-            early_break = False
-            for tool_call in completion.tool_calls:
-                result: ToolInvocationResult = await self._tool_invoker(
-                    tool_call=tool_call,
-                    tenant_context=context.tenant_context,
+            else:
+                yield InvocationCompleted(
+                    invocation_id=invocation_id,
+                    final_result=response_content,
+                    termination_reason=termination_reason,
+                    total_cost_usd=cost_total,
+                    audit_chain_hashes=audit_hashes,
+                    duration_ms=duration_ms,
                 )
-
-                if result.outcome is InvocationOutcome.INVARIANT_BLOCKED:
-                    response_content = (
-                        completion.text or result.message or result.payload
-                    )
-                    termination_reason = TerminationReason.INVARIANT_BLOCKED
-                    early_termination = True
-                    signals.append(
-                        AgentSignal(
-                            kind="invariant_blocked",
-                            payload={
-                                "tool_name": tool_call.name,
-                                "invariant_index": (
-                                    result.invariant_index
-                                    if result.invariant_index is not None
-                                    else 0
-                                ),
-                                "message": result.message,
-                            },
-                        )
-                    )
-                    early_break = True
-                    break
-
-                if result.outcome is InvocationOutcome.TOOL_NOT_REGISTERED:
-                    response_content = (
-                        completion.text
-                        or result.message
-                        or (
-                            f"(model attempted to call unregistered tool "
-                            f"{tool_call.name!r})"
-                        )
-                    )
-                    termination_reason = TerminationReason.TOOL_NOT_REGISTERED
-                    early_termination = True
-                    signals.append(
-                        AgentSignal(
-                            kind="unregistered_tool_attempted",
-                            payload={"names": (tool_call.name,)},
-                        )
-                    )
-                    early_break = True
-                    break
-
-                # OK or ERROR — both append the payload as a tool-
-                # role message and continue the loop. ERROR carries
-                # an explanatory string in payload so the LLM can
-                # react; OK carries the tool's formatted result.
-                messages.append(
-                    Message(
-                        role="tool",
-                        content=result.payload,
-                        tool_call_id=tool_call.id,
-                    )
-                )
-                signals.append(
-                    AgentSignal(
-                        kind="tool_invoked",
-                        payload={
-                            "tool_name": tool_call.name,
-                            "outcome": result.outcome.value,
-                        },
-                    )
-                )
-
-            if early_break:
-                break
-        else:
-            # The while loop completed iteration MAX_ITERATIONS without
-            # the ``break``: the cap fired. The last completion still
-            # carries content (or an empty string if the model only
-            # produced tool calls); surface what we have.
-            response_content = (
-                completion.text
-                or "(no content produced before the iteration cap fired)"
-            )
-            termination_reason = TerminationReason.MAX_ITERATIONS
-            early_termination = True
-            signals.append(
-                AgentSignal(
-                    kind="max_iterations_terminated",
-                    payload={"cap": MAX_ITERATIONS},
-                )
-            )
-
-        return (
-            response_content,
-            signals,
-            cost_total,
-            iteration,
-            termination_reason,
-            early_termination,
-        )
 
     # ------------------------------------------------------------------
     # Audit emission
@@ -431,6 +515,25 @@ def _correlation_id_for(span, context: AgentInvocationContext) -> str:
     return f"agent-invoke:{context.agent_template_id}:{datetime.now(timezone.utc).isoformat()}"
 
 
+def _ms_since(started_at: datetime) -> int:
+    return int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
+
+
+def _summarise(payload: str, *, max_len: int = 200) -> str:
+    """Truncate a tool's payload for ToolCallCompleted.result_summary.
+
+    The event is observability-shaped, not data-carrying; consumers
+    that need the full payload pull from the audit row or the trace.
+    Truncation keeps event payloads small for renderable surfaces
+    (CLI animation, future UI streams).
+    """
+    if not payload:
+        return ""
+    if len(payload) <= max_len:
+        return payload
+    return payload[: max_len - 1] + "…"
+
+
 def _draft_event(
     *,
     tenant_context,
@@ -476,11 +579,3 @@ def _draft_event(
         previous_event_hash=GENESIS_HASH,
         this_event_hash=draft_hash,
     )
-
-
-# Per D89 commit 5, retrieval-specific parsing
-# (``_parse_retrieval_query``) and chunk-formatting
-# (``_format_chunks_as_tool_result``) relocated to the wiring layer
-# at ``apps/cli/_cross_context.py`` (S28b commit 7), where the
-# ``ToolInvoker`` adapter dispatches each tool to its specific
-# implementation. The executor stays tool-agnostic.
