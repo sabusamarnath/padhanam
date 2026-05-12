@@ -1,34 +1,41 @@
-"""End-to-end test for invoke_agent against the live stack (S27b / D88).
+"""End-to-end test for invoke_agent against the live stack (S27b → S29b).
 
-Exercises the first demonstrable agent invocation: a McKinsey
-ProblemFramer agent (created via create_agent_from_methodology against
-the McKinsey 7-Step methodology landed at S26b's 0008 migration) runs
-end-to-end through the AgentLoopExecutor against the real LiteLLM
-gateway and Qwen 2.5 7B via Ollama per D15. Assertions cover:
+Exercises the agent runtime end-to-end inside the padhanam-api
+container against the real LiteLLM gateway and Qwen 2.5 7B via Ollama.
+The test brings together every S29b commitment:
 
-1. AC #11 — the LiteLLM adapter receives a system message containing
-   both the role's base function-focused system_prompt and the McKinsey
-   ProblemFramer override (the SCQ framework instruction) joined with
-   the augment separator. This is the load-bearing D87 / D88 surface:
-   the runtime composition reaches the LLM call.
-2. AC #10 — the response is non-empty content; AgentResult carries
-   cost_total_usd > 0 (or >= 0 for dev-zero model), iteration_count >= 1,
-   termination_reason == "content".
-3. Two audit rows landed on tenant alpha's audit chain with the
-   start-then-end ordering and intact hash chain.
+- Streaming inference (D90 commit 4): InferencePort.stream_complete
+  drives the LiteLLM gateway with stream=True.
+- AgentEvent vocabulary (D90 commit 2): the executor yields events
+  through the loop.
+- AgentLoopExecutor streaming refactor (D90 commit 5): execute() is
+  an async generator yielding events.
+- Nested OTel span hierarchy (D90 commit 6): agent.invocation →
+  agent.iteration → gen_ai.llm_call spans on each invocation.
+- invoke_agent use case refactor (D90 commit 7): the use case yields
+  the event stream from the executor.
+- collect_to_result helper (D90 commit 3): the test consumes the
+  stream via collect_to_result to assert against the legacy
+  AgentResult fields.
 
-The test runs INSIDE the padhanam-api container via ``docker compose
-exec`` so the LiteLLM gateway resolves at http://litellm:4000 and the
-per-tenant Postgres at postgres-tenant-a:5432 — the same pattern as
-the embedder cost-capture e2e (S20) and the create-from-methodology
-e2e (S26a-2). Skip-on-unreachable behaviour matches that pattern.
+The in-container script:
 
-The test depends on:
-- McKinsey 7-Step methodology + seven roles present on control-plane
-  Postgres (0008 migration applied).
-- Tenant alpha database provisioned with the agent + audit tables
-  (tenant Alembic chain applied).
-- LiteLLM + Ollama running and serving qwen2.5:7b.
+- Wires the LiteLLM adapter with a streaming-capable capture wrapper
+  recording the messages sent to the gateway across stream_complete
+  calls.
+- Wires the agent + audit + methodology + role + tool infrastructure
+  per S28b's ToolInvoker shape (the existing wiring needed S28b's
+  tool_invoker constructor update absorbed at S29b commit 9).
+- Calls create_agent_from_methodology with the McKinsey methodology
+  (which resolves role_refs[0] = ProblemFramer per the brief order).
+- Calls invoke_agent and drives the resulting event stream end-to-end.
+- Captures the full event-type sequence so the host-side assertions
+  can verify D90's commitments.
+- Reads back the agent's audit chain.
+- Emits a single JSON line on stdout carrying the assertion-relevant
+  data.
+
+Host-side parses the JSON and asserts the D88 + D90 contract.
 """
 
 from __future__ import annotations
@@ -78,19 +85,19 @@ def _service_health(probe_url: str) -> bool:
                 probe,
             ],
             capture_output=True,
-            text=True,
             timeout=15,
             check=False,
         )
-        return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
+    return result.returncode == 0
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def stack_ready() -> None:
     if not _docker_available():
-        pytest.skip("docker compose not reachable from test environment")
+        pytest.skip("docker compose not available")
+
     services_run = subprocess.run(
         ["docker", "compose", "ps", "--services", "--filter", "status=running"],
         capture_output=True,
@@ -114,24 +121,16 @@ def stack_ready() -> None:
         pytest.skip("litellm health probe failed; live invocation unreachable")
 
 
-def test_invoke_agent_end_to_end_against_mckinsey_problem_framer(
+def test_invoke_agent_end_to_end_streaming_against_mckinsey_problem_framer(
     stack_ready: None,
 ) -> None:
-    """The whole-flow invocation: create-from-methodology then
-    invoke_agent against a real LiteLLM → Ollama Qwen call.
+    """Streaming whole-flow invocation: create-from-methodology then
+    invoke_agent against a real LiteLLM → Ollama Qwen call (D90, S29b).
 
-    The in-container script:
-    - Wires the LiteLLM adapter with a capture-wrapper recording the
-      messages sent to the gateway.
-    - Wires the agent + audit + methodology + role infrastructure.
-    - Calls create_agent_from_methodology with the McKinsey methodology
-      (which resolves role_refs[0] = ProblemFramer per the brief order).
-    - Calls invoke_agent with a sample user input.
-    - Reads back the agent's audit chain.
-    - Emits a single JSON line on stdout carrying the assertion-relevant
-      data.
-
-    Host-side parses the JSON and asserts the D88 contract.
+    Drives the streaming executor via invoke_agent, captures the full
+    event-type sequence, collapses to AgentResult via collect_to_result
+    for the legacy-shape assertions (response content, cost, audit
+    hashes, termination reason).
     """
     script = r"""
 import asyncio
@@ -146,6 +145,8 @@ from apps.cli._cross_context import (
     MethodologyOverridesLookupAdapter,
     RoleLookupAdapter,
     SourceLookupAdapter,
+    ToolDefinitionsLookupAdapter,
+    ToolInvokerAdapter,
 )
 from apps.cli._runtime import (
     resolve_tenant_context,
@@ -159,18 +160,20 @@ from contexts.agent.application import (
     create_agent_from_methodology,
     invoke_agent,
 )
+from contexts.agent.application.collect import collect_to_result
 from contexts.audit.adapters.outbound.postgres.audit import (
     PostgresAuditAdapter,
     tenant_audit,
 )
 from contexts.audit.domain.events import GENESIS_HASH
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
-from contexts.inference.domain.completion import Completion, Message, ToolDefinition
+from contexts.inference.domain.completion import Completion, CompletionChunk, Message, ToolDefinition
 from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
     RolePostgresRepository,
 )
 from contexts.methodology.application import list_methodology_templates
+from contexts.tools.adapters.outbound.postgres import ToolPostgresRepository
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import create_async_engine
 from padhanam.config import ControlPlaneSettings
@@ -180,7 +183,7 @@ from shared_kernel import TenantContext, TenantId
 
 
 _OPERATOR = Principal(
-    subject="s27b-e2e",
+    subject="s29b-e2e",
     tenant_id=TenantId("operator"),
     roles=frozenset({OPERATOR_ROLE}),
     credential_ref="test-token",
@@ -188,16 +191,47 @@ _OPERATOR = Principal(
 
 
 class _CapturingLiteLLM:
-    '''Wraps LiteLLMAdapter, captures messages sent, delegates to real call.'''
+    '''Wraps LiteLLMAdapter, captures messages and stream-complete chunks.
+
+    Both complete() and stream_complete() forward to the underlying
+    adapter; messages and chunk counts are recorded per call so the
+    host-side assertions can verify the streaming path.
+    '''
 
     def __init__(self, inner):
         self._inner = inner
-        self.captured = []
+        self.captured = []  # one entry per call: {"method", "messages", "chunk_count"}
 
     def complete(self, messages, model, tenant_context, tools=()):
-        # Capture message shapes verbatim for host-side assertion.
         self.captured.append(
-            [
+            {
+                "method": "complete",
+                "messages": [
+                    {
+                        "role": m.role,
+                        "content": m.content,
+                        "tool_calls": [
+                            {"id": tc.id, "name": tc.name}
+                            for tc in m.tool_calls
+                        ],
+                        "tool_call_id": m.tool_call_id,
+                    }
+                    for m in messages
+                ],
+                "chunk_count": 0,
+            }
+        )
+        return self._inner.complete(
+            messages=messages,
+            model=model,
+            tenant_context=tenant_context,
+            tools=tools,
+        )
+
+    async def stream_complete(self, messages, model, tenant_context, tools=()):
+        call_record = {
+            "method": "stream_complete",
+            "messages": [
                 {
                     "role": m.role,
                     "content": m.content,
@@ -208,14 +242,18 @@ class _CapturingLiteLLM:
                     "tool_call_id": m.tool_call_id,
                 }
                 for m in messages
-            ]
-        )
-        return self._inner.complete(
+            ],
+            "chunk_count": 0,
+        }
+        self.captured.append(call_record)
+        async for chunk in self._inner.stream_complete(
             messages=messages,
             model=model,
             tenant_context=tenant_context,
             tools=tools,
-        )
+        ):
+            call_record["chunk_count"] += 1
+            yield chunk
 
 
 class _BoundResolver:
@@ -245,6 +283,9 @@ async def main() -> int:
         settings=cp_settings, security_events=sec
     )
     role_repo = RolePostgresRepository.from_settings(
+        settings=cp_settings, security_events=sec
+    )
+    tool_repo = ToolPostgresRepository.from_settings(
         settings=cp_settings, security_events=sec
     )
 
@@ -298,34 +339,62 @@ async def main() -> int:
         tenant_context=tenant_ctx,
         methodology_template_id=mckinsey.id,
         methodology_version=None,
-        name="s27b-e2e-mckinsey",
+        name="s29b-e2e-mckinsey",
         source_ids=(),
-        actor_user_id="s27b-e2e",
+        actor_user_id="s29b-e2e",
     )
 
     real_inference = LiteLLMAdapter()
     capturing_inference = _CapturingLiteLLM(real_inference)
 
+    # S28b two-thin-ports + S29b streaming: ToolInvokerAdapter dispatches
+    # tool calls; ToolDefinitionsLookupAdapter resolves visible tools at
+    # composition time. The McKinsey roles ship with empty allowlists so
+    # neither port is exercised by this test; the adapters are wired so
+    # the constructor shape matches the executor and use-case ports.
+    tool_definitions_lookup = ToolDefinitionsLookupAdapter(
+        tool_repository=tool_repo,
+    )
+    tool_invoker = ToolInvokerAdapter(
+        tool_repository=tool_repo,
+        retrieval_client=_NoRetrieval(),
+        retrieval_strategy={},
+        filter_tree={},
+        top_k=5,
+        min_score=Decimal("0.5"),
+    )
+
     executor = AgentLoopExecutor(
         inference_port=capturing_inference,
-        retrieval_client=_NoRetrieval(),
+        tool_invoker=tool_invoker,
         audit_port=audit_port,
     )
 
-    result = await invoke_agent(
-        principal=_OPERATOR,
-        repository=agent_repo,
-        role_lookup=role_lookup,
-        methodology_overrides_lookup=overrides_lookup,
-        executor=executor,
-        security_events=sec,
-        tenant_context=tenant_ctx,
-        agent_template_id=template.id,
-        user_input=(
-            "Help me frame the problem of declining customer retention "
-            "in Q3 with explicit scope, complication, and success criteria."
-        ),
-    )
+    # Drive the streaming invocation; collect events for assertion AND
+    # synthesise AgentResult for the legacy-shape audit-and-cost
+    # assertions per D90's collect_to_result helper.
+    event_types_observed = []
+
+    async def event_stream_with_capture():
+        async for event in invoke_agent(
+            principal=_OPERATOR,
+            repository=agent_repo,
+            role_lookup=role_lookup,
+            methodology_overrides_lookup=overrides_lookup,
+            tool_definitions_lookup=tool_definitions_lookup,
+            executor=executor,
+            security_events=sec,
+            tenant_context=tenant_ctx,
+            agent_template_id=template.id,
+            user_input=(
+                "Help me frame the problem of declining customer retention "
+                "in Q3 with explicit scope, complication, and success criteria."
+            ),
+        ):
+            event_types_observed.append(type(event).__name__)
+            yield event
+
+    result = await collect_to_result(event_stream_with_capture())
 
     # Read the audit rows for this template id from tenant a's chain.
     async with tenant_sm() as session:
@@ -352,9 +421,11 @@ async def main() -> int:
     await cp_engine.dispose()
     await methodology_repo.dispose()
     await role_repo.dispose()
+    await tool_repo.dispose()
 
     payload = {
         "captured_calls": capturing_inference.captured,
+        "event_types": event_types_observed,
         "result": {
             "response_content_len": len(result.response_content),
             "response_content_first_chars": result.response_content[:200],
@@ -417,14 +488,48 @@ sys.exit(asyncio.run(main()))
     captured_calls = payload["captured_calls"]
     audit_rows = payload["audit_rows"]
     agent_result = payload["result"]
+    event_types = payload["event_types"]
+
+    # --- D90 streaming-shape assertions ---
+
+    # The executor goes through stream_complete (not complete) per the
+    # S29b refactor.
+    assert all(c["method"] == "stream_complete" for c in captured_calls), (
+        f"executor should call stream_complete only at S29b; "
+        f"captured methods: {[c['method'] for c in captured_calls]}"
+    )
+    # At least one streaming chunk arrived per LLM call.
+    assert all(c["chunk_count"] >= 1 for c in captured_calls), (
+        f"streaming chunks per call: {[c['chunk_count'] for c in captured_calls]}"
+    )
+
+    # Event stream starts with InvocationStarted and ends with one of
+    # the three terminal-event types per D90.
+    assert event_types[0] == "InvocationStarted"
+    assert event_types[-1] in {
+        "InvocationCompleted",
+        "InvariantBlocked",
+        "InvocationFailed",
+    }
+    # The McKinsey ProblemFramer is content-only (no tool allowlist), so
+    # the terminal event is InvocationCompleted.
+    assert event_types[-1] == "InvocationCompleted"
+    # At least one IterationStarted, one LLMCallStarted, and one
+    # ContentDelta arrived between start and terminal.
+    assert "IterationStarted" in event_types
+    assert "LLMCallStarted" in event_types
+    assert "ContentDelta" in event_types
+    assert "IterationCompleted" in event_types
+
+    # --- D87 composition assertions (preserved from S27b) ---
 
     # AC #11: at least one LLM call; the first call's system message
     # contains the role base + McKinsey ProblemFramer SCQ override
     # joined by the two-newline augment separator.
     assert len(captured_calls) >= 1
-    first_call = captured_calls[0]
-    assert first_call[0]["role"] == "system"
-    system_content = first_call[0]["content"]
+    first_call_messages = captured_calls[0]["messages"]
+    assert first_call_messages[0]["role"] == "system"
+    system_content = first_call_messages[0]["content"]
     # Role base fragment (ProblemFramer function-focused prompt).
     assert "frame problems" in system_content.lower(), (
         f"role base not present in composed system prompt; got: "
@@ -442,6 +547,8 @@ sys.exit(asyncio.run(main()))
     role_position = system_content.lower().find("frame problems")
     scq_position = system_content.find("SCQ framework")
     assert role_position < scq_position
+
+    # --- D88 / D90 result-shape assertions ---
 
     # AC #10: response is non-empty content; cost >= 0; iteration_count >= 1.
     assert agent_result["response_content_len"] > 0

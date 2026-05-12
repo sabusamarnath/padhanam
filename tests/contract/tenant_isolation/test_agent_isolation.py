@@ -527,7 +527,12 @@ def test_agent_invocation_audit_isolated_per_tenant(
         tenant_audit,
     )
     from contexts.audit.domain.events import GENESIS_HASH
-    from contexts.inference.domain.completion import Completion, Message, TokenUsage
+    from contexts.inference.domain.completion import (
+        Completion,
+        CompletionChunk,
+        Message,
+        TokenUsage,
+    )
 
     repo, ctx_a, ctx_b, sm_a, sm_b = isolation_setup
 
@@ -557,6 +562,23 @@ def test_agent_invocation_audit_isolated_per_tenant(
                 cost_usd=Decimal("0.0001"),
             )
 
+        async def stream_complete(
+            self, messages, model, tenant_context, tools=()
+        ):
+            # S29b (D90): the executor drives stream_complete. Yield a
+            # one-shot content stream: a text-delta chunk plus a
+            # terminal chunk carrying the per-iteration cost.
+            yield CompletionChunk(text_delta="ok", is_final=False)
+            yield CompletionChunk(
+                text_delta="",
+                is_final=True,
+                finish_reason="stop",
+                model=model or "stub",
+                tool_calls=(),
+                usage=TokenUsage(input_tokens=1, output_tokens=1),
+                cost_usd=Decimal("0.0001"),
+            )
+
     class _UnusedToolInvoker:
         async def __call__(self, **kwargs):  # pragma: no cover
             raise AssertionError(
@@ -582,7 +604,10 @@ def test_agent_invocation_audit_isolated_per_tenant(
     template_b_id = uuid4()
 
     async def run() -> None:
-        await executor.execute(
+        # S29b (D90): executor.execute is an async generator yielding
+        # AgentEvent values; drain each invocation's event stream so
+        # the executor's side-effects (audit emission) run.
+        async for _ in executor.execute(
             AgentInvocationContext(
                 tenant_context=ctx_a,
                 agent_template_id=template_a_id,
@@ -594,8 +619,9 @@ def test_agent_invocation_audit_isolated_per_tenant(
                 effective_bundle=bundle,
                 user_input="hi from A",
             )
-        )
-        await executor.execute(
+        ):
+            pass
+        async for _ in executor.execute(
             AgentInvocationContext(
                 tenant_context=ctx_b,
                 agent_template_id=template_b_id,
@@ -607,7 +633,8 @@ def test_agent_invocation_audit_isolated_per_tenant(
                 effective_bundle=bundle,
                 user_input="hi from B",
             )
-        )
+        ):
+            pass
 
     event_loop.run_until_complete(run())
 
@@ -695,6 +722,7 @@ def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
     from contexts.audit.domain.events import GENESIS_HASH
     from contexts.inference.domain.completion import (
         Completion,
+        CompletionChunk,
         TokenUsage,
         ToolCall,
         ToolDefinition,
@@ -739,6 +767,41 @@ def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
             return Completion(
                 text="done",
                 model=model or "stub",
+                usage=TokenUsage(input_tokens=1, output_tokens=1),
+                cost_usd=Decimal("0.0001"),
+            )
+
+        async def stream_complete(
+            self, messages, model, tenant_context, tools=()
+        ):
+            # S29b (D90): the streaming-aware path. The first call
+            # yields a terminal chunk with a tool call; the second
+            # yields a content stream.
+            self._step += 1
+            if self._step == 1:
+                yield CompletionChunk(
+                    text_delta="",
+                    is_final=True,
+                    finish_reason="tool_calls",
+                    model=model or "stub",
+                    tool_calls=(
+                        ToolCall(
+                            id="c1",
+                            name="retrieval",
+                            arguments_json='{"query": "test"}',
+                        ),
+                    ),
+                    usage=TokenUsage(input_tokens=1, output_tokens=1),
+                    cost_usd=Decimal("0.0001"),
+                )
+                return
+            yield CompletionChunk(text_delta="done", is_final=False)
+            yield CompletionChunk(
+                text_delta="",
+                is_final=True,
+                finish_reason="stop",
+                model=model or "stub",
+                tool_calls=(),
                 usage=TokenUsage(input_tokens=1, output_tokens=1),
                 cost_usd=Decimal("0.0001"),
             )
@@ -791,7 +854,9 @@ def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
             audit_port=audit_adapter,
         )
 
-        await executor_a.execute(
+        # S29b (D90): drain each executor's event stream so loop
+        # side-effects (audit emission, tool invocation) run.
+        async for _ in executor_a.execute(
             AgentInvocationContext(
                 tenant_context=ctx_a,
                 agent_template_id=template_a_id,
@@ -804,8 +869,9 @@ def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
                 user_input="hi from A",
                 tool_definitions=(retrieval_def,),
             )
-        )
-        await executor_b.execute(
+        ):
+            pass
+        async for _ in executor_b.execute(
             AgentInvocationContext(
                 tenant_context=ctx_b,
                 agent_template_id=template_b_id,
@@ -818,7 +884,8 @@ def test_tool_invocation_threads_tenant_context_correctly_per_tenant(
                 user_input="hi from B",
                 tool_definitions=(retrieval_def,),
             )
-        )
+        ):
+            pass
 
     event_loop.run_until_complete(run())
 
