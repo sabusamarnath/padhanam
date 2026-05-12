@@ -28,7 +28,9 @@ from uuid import UUID, uuid4
 import pytest
 
 from apps.cli._cross_context import (
+    AgentRetrievalClientAdapter,
     MethodologyLookupAdapter,
+    MethodologyOverridesLookupAdapter,
     RoleLookupAdapter,
     SourceLookupAdapter,
 )
@@ -583,6 +585,237 @@ def test_role_adapter_propagates_lookup_error(event_loop) -> None:
             adapter(
                 role_id=uuid4(),
                 version=None,
+                principal=_operator_principal(),
+            )
+        )
+
+
+# ----------------------------------------------------------------------
+# AgentRetrievalClientAdapter + MethodologyOverridesLookupAdapter
+# (S27b / D88)
+# ----------------------------------------------------------------------
+
+
+class _FakeIngestionRetrievalClient:
+    """Fake implementing the ingestion RetrievalClient surface."""
+
+    def __init__(self) -> None:
+        self.vector_calls: list[dict] = []
+        self.graph_calls: list[dict] = []
+        self._vector_results: list = []
+        self._graph_results: list = []
+
+    def stub_vector(self, results) -> None:
+        self._vector_results = list(results)
+
+    def stub_graph(self, results) -> None:
+        self._graph_results = list(results)
+
+    async def search_vector(self, *, query, scope, limit):
+        self.vector_calls.append(
+            {"query": query, "scope": scope, "limit": limit}
+        )
+        return list(self._vector_results)
+
+    async def traverse_graph(self, *, seed, scope, depth):
+        self.graph_calls.append(
+            {"seed": seed, "scope": scope, "depth": depth}
+        )
+        return list(self._graph_results)
+
+
+def _make_chunk_result(*, content: str, score: float, source_id: UUID | None = None):
+    """Construct a ChunkResult mirroring ingestion's domain shape."""
+    from contexts.ingestion.domain.chunk_result import ChunkResult
+
+    return ChunkResult(
+        chunk_id=uuid4(),
+        source_id=source_id or uuid4(),
+        tenant_id=_TENANT_A_UUID,
+        jurisdiction="eu-west",
+        content=content,
+        structural_metadata={},
+        similarity_score=score,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def test_agent_retrieval_adapter_vector_primary_filters_by_min_score(event_loop) -> None:
+    """Vector dispatch passes top_k to search_vector; min_score post-filters."""
+    ingestion = _FakeIngestionRetrievalClient()
+    ingestion.stub_vector(
+        [
+            _make_chunk_result(content="high relevance", score=0.91),
+            _make_chunk_result(content="medium relevance", score=0.55),
+            _make_chunk_result(content="below floor", score=0.32),
+        ]
+    )
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="what is LVT",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "vector"},
+            filter_tree={},
+            top_k=5,
+            min_score=Decimal("0.5"),
+        )
+    )
+
+    assert ingestion.vector_calls == [
+        {"query": "what is LVT", "scope": _tenant_context(), "limit": 5}
+    ]
+    # Three raw results; min_score=0.5 admits the 0.91 and 0.55 chunks.
+    assert len(result) == 2
+    assert result[0].text == "high relevance"
+    assert result[0].score == 0.91
+    assert result[1].text == "medium relevance"
+
+
+def test_agent_retrieval_adapter_unknown_strategy_returns_empty(event_loop) -> None:
+    ingestion = _FakeIngestionRetrievalClient()
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="x",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "frobnicate"},
+            filter_tree={},
+            top_k=5,
+            min_score=Decimal("0"),
+        )
+    )
+
+    assert result == ()
+    assert ingestion.vector_calls == []
+    assert ingestion.graph_calls == []
+
+
+def test_agent_retrieval_adapter_zero_results_returns_empty_tuple(event_loop) -> None:
+    """A no-match search returns an empty tuple, which the executor
+    formats as the no-chunks-matched tool-result marker."""
+    ingestion = _FakeIngestionRetrievalClient()
+    ingestion.stub_vector([])
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="nothing matches",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "vector"},
+            filter_tree={},
+            top_k=10,
+            min_score=Decimal("0.5"),
+        )
+    )
+
+    assert result == ()
+
+
+def test_methodology_overrides_adapter_returns_matching_role_overrides(event_loop) -> None:
+    """For a methodology revision with role_refs carrying overrides,
+    the adapter returns the overrides for the matching role_id."""
+    methodology_id = uuid4()
+    role_id = uuid4()
+    other_role_id = uuid4()
+    repo = _FakeMethodologyRepository()
+    repo.templates[methodology_id] = _make_methodology_template(
+        template_id=methodology_id, description="McKinsey 7-Step"
+    )
+    revision = MethodologyRevision(
+        id=uuid4(),
+        methodology_template_id=methodology_id,
+        version=1,
+        role_refs=(
+            RoleRef(
+                role_id=other_role_id,
+                role_version=1,
+                overrides={
+                    "system_prompt": {
+                        "mode": "augment",
+                        "value": "Apply MECE decomposition.",
+                    },
+                },
+            ),
+            RoleRef(
+                role_id=role_id,
+                role_version=1,
+                overrides={
+                    "system_prompt": {
+                        "mode": "augment",
+                        "value": "Apply the SCQ framework.",
+                    },
+                },
+            ),
+        ),
+        created_by_user_id="cli-operator",
+        created_at=datetime.now(timezone.utc),
+        previous_revision_hash=GENESIS_REVISION_HASH,
+        this_revision_hash="m" * 64,
+    )
+    repo.revisions[methodology_id] = [revision]
+    adapter = MethodologyOverridesLookupAdapter(methodology_repository=repo)
+
+    overrides = event_loop.run_until_complete(
+        adapter(
+            methodology_template_id=methodology_id,
+            methodology_version=1,
+            role_id=role_id,
+            principal=_operator_principal(),
+        )
+    )
+
+    assert overrides == {
+        "system_prompt": {
+            "mode": "augment",
+            "value": "Apply the SCQ framework.",
+        },
+    }
+
+
+def test_methodology_overrides_adapter_returns_empty_when_no_matching_role(event_loop) -> None:
+    """When the methodology revision has no role_refs entry for the
+    given role_id, the adapter returns an empty dict (no overrides)."""
+    methodology_id = uuid4()
+    role_id = uuid4()
+    different_role_id = uuid4()
+    repo = _FakeMethodologyRepository()
+    repo.templates[methodology_id] = _make_methodology_template(
+        template_id=methodology_id, description="LVT"
+    )
+    repo.revisions[methodology_id] = [
+        _make_methodology_revision(
+            template_id=methodology_id,
+            version=1,
+            role_id=different_role_id,
+        ),
+    ]
+    adapter = MethodologyOverridesLookupAdapter(methodology_repository=repo)
+
+    overrides = event_loop.run_until_complete(
+        adapter(
+            methodology_template_id=methodology_id,
+            methodology_version=1,
+            role_id=role_id,
+            principal=_operator_principal(),
+        )
+    )
+
+    assert overrides == {}
+
+
+def test_methodology_overrides_adapter_propagates_lookup_error(event_loop) -> None:
+    repo = _FakeMethodologyRepository()
+    adapter = MethodologyOverridesLookupAdapter(methodology_repository=repo)
+
+    with pytest.raises(LookupError):
+        event_loop.run_until_complete(
+            adapter(
+                methodology_template_id=uuid4(),
+                methodology_version=None,
+                role_id=uuid4(),
                 principal=_operator_principal(),
             )
         )

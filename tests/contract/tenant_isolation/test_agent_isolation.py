@@ -495,3 +495,166 @@ def test_role_lineage_persists_isolated_per_tenant(
         event_loop.run_until_complete(
             repo.get_template(template.id, ctx_b)
         )
+
+
+# --------------------------------------------------------------------
+# Layer 3: agent runtime audit emission isolation (S27b / D88).
+# --------------------------------------------------------------------
+
+
+def test_agent_invocation_audit_isolated_per_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """An AgentLoopExecutor invocation in tenant alpha produces audit
+    rows on tenant alpha's audit chain only; tenant beta's audit chain
+    receives nothing. The two-row pattern (agent.invoke.start +
+    agent.invoke.end) lands per D88; tenant_id routing per D26 / D35
+    flows through the new action_verbs unchanged.
+
+    Scope: the AgentLoopExecutor is wired against the real
+    PostgresAuditAdapter (sharing the per-tenant resolver with the
+    agent repository) plus a scripted InferencePort that terminates at
+    iteration 1 with content. Retrieval client is unused (single-turn,
+    no tool calls). Methodology overrides lookup is unused (the
+    executor doesn't consume it directly; invoke_agent does, and this
+    contract test exercises the executor's audit-emission path).
+    """
+    from contexts.agent.adapters.outbound.agent_loop_executor import AgentLoopExecutor
+    from contexts.agent.domain.effective_bundle import EffectiveConstraintBundle
+    from contexts.agent.ports.executor import AgentInvocationContext
+    from contexts.audit.adapters.outbound.postgres.audit import (
+        PostgresAuditAdapter,
+        tenant_audit,
+    )
+    from contexts.audit.domain.events import GENESIS_HASH
+    from contexts.inference.domain.completion import Completion, Message, TokenUsage
+
+    repo, ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+
+    # Share the agent-repo's resolver with the audit adapter so audit
+    # routing uses the same per-tenant sessionmakers.
+    sm_by_id = {ctx_a.tenant_id: sm_a, ctx_b.tenant_id: sm_b}
+
+    async def resolver(tenant_id):
+        sm = sm_by_id.get(str(tenant_id))
+        if sm is None:
+            raise LookupError(f"unexpected tenant_id {tenant_id!r}")
+        return sm
+
+    cp_settings = _cp_settings()
+    cp_engine = create_async_engine(_async_url(cp_settings))
+    audit_adapter = PostgresAuditAdapter(
+        control_plane_engine=cp_engine,
+        per_tenant_sessionmaker_resolver=resolver,
+    )
+
+    class _StubInferencePort:
+        def complete(self, messages, model, tenant_context, tools=()):
+            return Completion(
+                text="ok",
+                model=model or "stub",
+                usage=TokenUsage(input_tokens=1, output_tokens=1),
+                cost_usd=Decimal("0.0001"),
+            )
+
+    class _UnusedRetrievalClient:
+        async def __call__(self, **kwargs):  # pragma: no cover
+            raise AssertionError(
+                "retrieval client unused in single-turn content path"
+            )
+
+    executor = AgentLoopExecutor(
+        inference_port=_StubInferencePort(),
+        retrieval_client=_UnusedRetrievalClient(),
+        audit_port=audit_adapter,
+    )
+
+    bundle = EffectiveConstraintBundle(
+        system_prompt="be helpful",
+        tool_allowlist=(),  # no retrieval tool registered
+        retrieval_strategy={"primary": "vector"},
+        filter_tree={},
+        top_k=5,
+        min_score=Decimal("0.5"),
+        model_selection="qwen2.5:7b",
+    )
+    template_a_id = uuid4()
+    template_b_id = uuid4()
+
+    async def run() -> None:
+        await executor.execute(
+            AgentInvocationContext(
+                tenant_context=ctx_a,
+                agent_template_id=template_a_id,
+                agent_revision_version=1,
+                role_template_id=uuid4(),
+                role_revision_version=1,
+                methodology_template_id=None,
+                methodology_version=None,
+                effective_bundle=bundle,
+                user_input="hi from A",
+            )
+        )
+        await executor.execute(
+            AgentInvocationContext(
+                tenant_context=ctx_b,
+                agent_template_id=template_b_id,
+                agent_revision_version=1,
+                role_template_id=uuid4(),
+                role_revision_version=1,
+                methodology_template_id=None,
+                methodology_version=None,
+                effective_bundle=bundle,
+                user_input="hi from B",
+            )
+        )
+
+    event_loop.run_until_complete(run())
+
+    # Read each tenant's audit chain; assert isolation.
+    async def read_chain(sm):
+        async with sm() as session:
+            result = await session.execute(
+                sa.select(
+                    tenant_audit.c.tenant_id,
+                    tenant_audit.c.action_verb,
+                    tenant_audit.c.resource_id,
+                    tenant_audit.c.previous_event_hash,
+                    tenant_audit.c.this_event_hash,
+                ).order_by(tenant_audit.c.timestamp.asc(), tenant_audit.c.id.asc())
+            )
+            return result.mappings().all()
+
+    a_rows = event_loop.run_until_complete(read_chain(sm_a))
+    b_rows = event_loop.run_until_complete(read_chain(sm_b))
+
+    # Tenant A: exactly two rows (start + end), both tagged with A's
+    # tenant_id, chained from genesis through start to end.
+    assert len(a_rows) == 2
+    assert a_rows[0]["action_verb"] == "agent.invoke.start"
+    assert a_rows[1]["action_verb"] == "agent.invoke.end"
+    assert a_rows[0]["resource_id"] == str(template_a_id)
+    assert a_rows[1]["resource_id"] == str(template_a_id)
+    assert a_rows[0]["tenant_id"] == ctx_a.tenant_id
+    assert a_rows[1]["tenant_id"] == ctx_a.tenant_id
+    assert a_rows[0]["previous_event_hash"] == GENESIS_HASH
+    assert a_rows[1]["previous_event_hash"] == a_rows[0]["this_event_hash"]
+
+    # Tenant B: exactly two rows, all tagged with B's tenant_id only.
+    # Resource ids do not collide with tenant A's because each invocation
+    # used a distinct agent_template_id.
+    assert len(b_rows) == 2
+    assert b_rows[0]["resource_id"] == str(template_b_id)
+    assert b_rows[1]["resource_id"] == str(template_b_id)
+    assert b_rows[0]["tenant_id"] == ctx_b.tenant_id
+    assert b_rows[1]["tenant_id"] == ctx_b.tenant_id
+
+    # Cross-tenant chain hashes are disjoint (the critical isolation
+    # property: B's previous_event_hash never points into A's chain).
+    a_hashes = {r["this_event_hash"] for r in a_rows}
+    b_hashes = {r["this_event_hash"] for r in b_rows}
+    assert a_hashes.isdisjoint(b_hashes)
+    for r in b_rows:
+        assert r["previous_event_hash"] not in a_hashes
+
+    event_loop.run_until_complete(cp_engine.dispose())

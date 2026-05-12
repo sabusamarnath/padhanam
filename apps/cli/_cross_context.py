@@ -1,10 +1,11 @@
-"""Cross-context lookup adapters for the CLI (S25 / D79, S26a-1 / D86, S26a-2 / D86).
+"""Cross-context lookup adapters for the CLI (S25 / D79, S26a-1 / D86, S26a-2 / D86, S27b / D88).
 
-The agent context's create-from-methodology and create-from-role
-flows consume three callable Protocol ports defined at
-``contexts/agent/application/ports/``: MethodologyLookup, RoleLookup,
-and SourceLookup. This module wires the producer contexts'
-application-layer use cases into the consumer-shaped Protocol calls.
+The agent context's create-from-methodology, create-from-role, and
+runtime invocation flows consume five callable Protocol ports defined
+at ``contexts/agent/application/ports/``: MethodologyLookup, RoleLookup,
+SourceLookup, AgentRetrievalClient, and MethodologyOverridesLookup.
+This module wires the producer contexts' application-layer use cases
+(methodology, ingestion) into the consumer-shaped Protocol calls.
 Per D17 the adapters live at the apps/cli wiring layer — that
 boundary is the legitimate seam where one context's public surface
 translates into another's consumer-side abstraction.
@@ -31,6 +32,19 @@ reinforces the pattern's value but the structural duplication is a
 Patterns-observed candidate worth tracking at phase audit time if a
 third cross-context lookup with the same shape lands.
 
+S27b adds two more wiring adapters at the same seam per D88:
+
+- ``AgentRetrievalClientAdapter`` consumes the ingestion context's
+  split ``search_vector`` / ``traverse_graph`` methods and exposes a
+  unified retrieval surface per the role's effective retrieval
+  constraints. Strategy translation lives here at the wiring layer,
+  not in the agent context, per D5 / D65's hybrid-as-agent-layer-concern.
+- ``MethodologyOverridesLookupAdapter`` consumes the methodology
+  context's ``get_methodology_template`` use case and scans the
+  resolved revision's ``role_refs`` for the entry matching the
+  agent's ``source_role_id``, returning that entry's ``overrides``
+  dict for the D87 composition resolver.
+
 Each adapter is constructed per-command invocation by the CLI and
 disposed alongside the engines it closes over. The adapters do not
 own engine lifecycles; the CLI command does.
@@ -38,14 +52,20 @@ own engine lifecycles; the CLI command does.
 
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Any, Mapping
 from uuid import UUID
 
 from contexts.agent.application.ports import (
+    AgentRetrievalClient,
+    MethodologyOverridesLookup,
     MethodologyView,
+    RetrievedChunk,
     RoleView,
     SourceNotFoundError,
 )
 from contexts.ingestion.application.get_source import get_source
+from contexts.ingestion.ports.retrieval_client import RetrievalClient
 from contexts.ingestion.ports.source_repository_port import SourceRepositoryPort
 from contexts.methodology.application.use_cases import (
     get_methodology_template,
@@ -218,3 +238,156 @@ class SourceLookupAdapter:
                 missing.append(sid)
         if missing:
             raise SourceNotFoundError(missing_source_ids=tuple(missing))
+
+
+class AgentRetrievalClientAdapter:
+    """Adapter from ingestion's RetrievalClient to the agent-context
+    ``AgentRetrievalClient`` Protocol (S27b / D88).
+
+    The agent runtime wants a unified retrieval surface: given a query
+    and the role's effective retrieval constraints, return a sequence
+    of chunk results. The ingestion port from D5 / D65 splits retrieval
+    into ``search_vector`` and ``traverse_graph`` with no hybrid method
+    because D5 / D65 explicitly committed hybrid composition as an
+    agent-layer concern. This adapter is where strategy translation
+    lives.
+
+    Phase 1 strategy keys (per D66's three-strategy starter catalogue):
+
+    - ``{"primary": "vector"}``: invoke search_vector only.
+    - ``{"primary": "vector", "secondary": "graph"}``: invoke
+      search_vector primarily; graph is reserved for future expansion
+      but at Phase 1 only the primary executes (graph traversal needs
+      a seed entity which the agent runtime does not yet derive from
+      free-form queries; S30b's full demonstration moment is the
+      forcing function for graph dispatch).
+    - ``{"primary": "graph"}``: invoke traverse_graph with the query
+      as the seed entity name; graph results are mapped to chunk-shaped
+      RetrievedChunks via the entity's text representation. (Phase 1
+      best-effort; the integration test exercises the vector path.)
+
+    ``filter_tree`` is opaque per D67 at Phase 1: the ingestion adapters
+    do not yet honor filter_tree (queued for the data-retrieval design
+    session's full implementation). The adapter accepts and discards;
+    the structural commitment per D88 keeps the port surface stable as
+    ingestion gains filter capability.
+
+    ``top_k`` is honored as the ingestion search limit; ``min_score``
+    filters results post-search so the agent runtime sees only chunks
+    meeting the role's quality floor.
+    """
+
+    def __init__(self, *, retrieval_client: RetrievalClient) -> None:
+        self._retrieval_client = retrieval_client
+
+    async def __call__(
+        self,
+        *,
+        query: str,
+        tenant_context: TenantContext,
+        retrieval_strategy: Mapping[str, Any],
+        filter_tree: Mapping[str, Any],
+        top_k: int,
+        min_score: Decimal,
+    ) -> tuple[RetrievedChunk, ...]:
+        primary = str(retrieval_strategy.get("primary", "vector"))
+
+        if primary == "vector":
+            raw_results = await self._retrieval_client.search_vector(
+                query=query,
+                scope=tenant_context,
+                limit=top_k,
+            )
+            filtered = [
+                r for r in raw_results
+                if Decimal(str(r.similarity_score)) >= min_score
+            ]
+            return tuple(
+                RetrievedChunk(
+                    text=r.content,
+                    source_id=r.source_id,
+                    score=r.similarity_score,
+                )
+                for r in filtered
+            )
+
+        if primary == "graph":
+            # Phase 1: graph dispatch uses the query string as the seed
+            # entity name. Per D66 the three-strategy starter catalogue
+            # acknowledges this is a coarse interpretation; the
+            # data-retrieval design session's full implementation
+            # introduces seed-entity derivation. The agent runtime
+            # surfaces empty results gracefully via the loop's tool-
+            # result formatter.
+            entities = await self._retrieval_client.traverse_graph(
+                seed=query,
+                scope=tenant_context,
+                depth=int(retrieval_strategy.get("depth", 1)),
+            )
+            # Map each entity to a chunk-shaped result. Phase 1 score
+            # is a conventional 1.0; without similarity at the graph
+            # side, min_score filtering is a no-op for graph results.
+            return tuple(
+                RetrievedChunk(
+                    text=str(e.name),
+                    source_id=e.source_ids[0]
+                    if getattr(e, "source_ids", None)
+                    else UUID(int=0),
+                    score=1.0,
+                )
+                for e in entities
+            )
+
+        # Unknown strategy: return empty. The integration evidence at
+        # S30b will surface if this branch fires in practice.
+        return ()
+
+
+class MethodologyOverridesLookupAdapter:
+    """Adapter from the methodology repository to the agent-context
+    ``MethodologyOverridesLookup`` Protocol (S27b / D88).
+
+    Runtime per-role override resolution distinct from the clone-time
+    ``MethodologyLookup``: where clone-time fetches the methodology's
+    first role's content, runtime fetches the methodology revision's
+    ``role_refs`` entry for the agent's specific role and returns just
+    that entry's ``overrides`` dict per D87.
+
+    The adapter reads the methodology revision via the methodology
+    repository, scans ``role_refs`` for the matching role_id, and
+    returns the overrides as-is (D87's structured
+    ``{field: {"mode": <str>, "value": <any>}}`` shape). Returns an
+    empty dict when no entry matches (the agent's role is not part of
+    this methodology) or when the matching entry's ``overrides`` is
+    empty.
+
+    ``LookupError`` propagates from the repository on unknown
+    methodology id or version. The agent runtime's caller handles
+    missing-methodology errors.
+    """
+
+    def __init__(
+        self,
+        *,
+        methodology_repository: MethodologyRepositoryPort,
+    ) -> None:
+        self._methodology_repository = methodology_repository
+
+    async def __call__(
+        self,
+        *,
+        methodology_template_id: UUID,
+        methodology_version: int | None,
+        role_id: UUID,
+        principal: Principal,
+    ) -> dict[str, dict[str, Any]]:
+        _, revision = await get_methodology_template(
+            principal=principal,
+            repository=self._methodology_repository,
+            template_id=methodology_template_id,
+            version=methodology_version,
+        )
+        for ref in revision.role_refs:
+            if ref.role_id == role_id:
+                return dict(ref.overrides)
+        return {}
