@@ -31,6 +31,7 @@ wire shape sent to the gateway.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Sequence
 
 import litellm
@@ -191,11 +192,13 @@ class LiteLLMAdapter:
                 input_usd = float(breakdown.input_usd)
                 output_usd = float(breakdown.output_usd)
                 total_usd = float(breakdown.total_usd)
+                cost_decimal = breakdown.total_usd
                 pricing_status = "table_hit"
             except UnknownModelError:
                 input_usd = 0.0
                 output_usd = 0.0
                 total_usd = 0.0
+                cost_decimal = Decimal("0")
                 pricing_status = "unknown_model"
 
             span.set_attribute("gen_ai.cost.input_usd", input_usd)
@@ -205,7 +208,7 @@ class LiteLLMAdapter:
 
             ctx = span.get_span_context()
             trace_id = format(ctx.trace_id, "032x") if ctx.trace_id else None
-            return _with_trace_id(completion, trace_id)
+            return _with_cost_and_trace(completion, trace_id, cost_decimal)
 
 
 def _message_to_payload(m: Message) -> dict[str, Any]:
@@ -311,9 +314,18 @@ def _completion_from_litellm_response(
     )
 
 
-def _with_trace_id(completion: Completion, trace_id: str | None) -> Completion:
-    if trace_id is None:
-        return completion
+def _with_cost_and_trace(
+    completion: Completion,
+    trace_id: str | None,
+    cost_usd: Decimal,
+) -> Completion:
+    """Return a new Completion enriched with trace_id and cost_usd.
+
+    Both are adapter-derived (trace_id from the open OTel span context;
+    cost_usd from the pricing-table lookup) so they land here rather
+    than on the initial Completion construction in
+    ``_completion_from_litellm_response``.
+    """
     return Completion(
         text=completion.text,
         model=completion.model,
@@ -322,4 +334,5 @@ def _with_trace_id(completion: Completion, trace_id: str | None) -> Completion:
         finish_reason=completion.finish_reason,
         metadata=completion.metadata,
         tool_calls=completion.tool_calls,
+        cost_usd=cost_usd,
     )

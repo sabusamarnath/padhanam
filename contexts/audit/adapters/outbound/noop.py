@@ -17,7 +17,7 @@ _log = logging.getLogger("contexts.audit.noop")
 
 
 class NoOpAuditAdapter:
-    async def emit(self, event: AuditEvent) -> None:
+    async def emit(self, event: AuditEvent) -> AuditEvent:
         _log.info(
             "audit_event tenant=%s actor=%s action=%s resource=%s/%s hash=%s",
             event.tenant_id,
@@ -27,6 +27,7 @@ class NoOpAuditAdapter:
             event.resource_id,
             event.this_event_hash[:12],
         )
+        return event
 
     async def verify_chain(self, tenant_id: TenantId) -> ChainVerificationResult:
         raise NotImplementedError(

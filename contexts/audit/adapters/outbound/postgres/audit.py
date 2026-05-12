@@ -147,7 +147,7 @@ class PostgresAuditAdapter:
     # AuditPort implementation
     # ------------------------------------------------------------------
 
-    async def emit(self, event: AuditEvent) -> None:
+    async def emit(self, event: AuditEvent) -> AuditEvent:
         """Write the event to its routed destination, chained against
         the destination's tail.
 
@@ -157,6 +157,11 @@ class PostgresAuditAdapter:
         concurrent writers cannot produce a divergent chain (D37).
         Callers compose ``AuditEvent`` for content; the chain hashes
         are an adapter-side derivation.
+
+        Returns the persisted event with the authoritative
+        ``previous_event_hash`` and ``this_event_hash`` set per D88;
+        callers needing to surface the chain hash (e.g. agent runtime
+        ``AgentResult``) capture the return.
         """
         sessionmaker = await self._resolve_sessionmaker(event.tenant_id)
         async with sessionmaker() as session:
@@ -208,6 +213,20 @@ class PostgresAuditAdapter:
                         this_event_hash=this_hash,
                     )
                 )
+        return AuditEvent(
+            actor=event.actor,
+            tenant_id=event.tenant_id,
+            jurisdiction=event.jurisdiction,
+            timestamp=event.timestamp,
+            action_verb=event.action_verb,
+            resource_type=event.resource_type,
+            resource_id=event.resource_id,
+            before_state=event.before_state,
+            after_state=event.after_state,
+            correlation_id=event.correlation_id,
+            previous_event_hash=previous,
+            this_event_hash=this_hash,
+        )
 
     async def verify_chain(
         self, tenant_id: TenantId

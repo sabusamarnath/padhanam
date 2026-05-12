@@ -21,6 +21,7 @@ gateway-side wire shape.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 
@@ -113,3 +114,8 @@ class Completion:
     finish_reason: str | None = None
     metadata: dict[str, str] = field(default_factory=dict)
     tool_calls: tuple[ToolCall, ...] = ()
+    # Per D88, the adapter surfaces per-call cost on Completion so the
+    # agent runtime can aggregate per-invocation cost without OTel-span
+    # introspection. Default Decimal("0") covers the unknown-model
+    # (pricing-status drift) and dev-zero-cost paths uniformly.
+    cost_usd: Decimal = field(default_factory=lambda: Decimal("0"))
