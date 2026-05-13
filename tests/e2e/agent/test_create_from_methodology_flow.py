@@ -152,10 +152,22 @@ def _truncate_agents(label: str) -> None:
 
 
 def _truncate_methodology_and_role() -> None:
-    _exec_psql_control_plane(
-        "TRUNCATE TABLE methodology_revisions, methodology_templates, "
-        "role_revisions, role_templates;"
-    )
+    # Filter to non-migration actors so migration-seeded rows
+    # (McKinsey 7-Step's methodology + 7 roles, LVT's methodology +
+    # LVTGuide role) survive cross-test ordering. TRUNCATE cannot
+    # carry a WHERE clause so the four tables clear via DELETE per the
+    # S26b filter pattern. Children (revisions) clear before parents
+    # (templates) to satisfy FK constraints.
+    for table in (
+        "methodology_revisions",
+        "methodology_templates",
+        "role_revisions",
+        "role_templates",
+    ):
+        _exec_psql_control_plane(
+            f"DELETE FROM {table} "
+            "WHERE created_by_user_id NOT LIKE 'migration:%';"
+        )
 
 
 def _write_file_in_container(path: str, content: str) -> None:

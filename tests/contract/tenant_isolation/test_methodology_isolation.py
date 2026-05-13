@@ -131,8 +131,25 @@ def repo_with_template(
 
     async def setup() -> MethodologyTemplate:
         async with repo._sessionmaker() as session:
-            await session.execute(sa.delete(methodology_revisions))
-            await session.execute(sa.delete(methodology_templates))
+            # Filter to non-migration actors so migration-seeded rows
+            # (McKinsey 7-Step, LVT after their respective Alembic
+            # migrations) survive cross-test ordering. Matches the
+            # pattern S26b applied to the methodology integration
+            # fixtures; this contract test was missed at that pass.
+            await session.execute(
+                sa.delete(methodology_revisions).where(
+                    methodology_revisions.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
+            await session.execute(
+                sa.delete(methodology_templates).where(
+                    methodology_templates.c.created_by_user_id.notlike(
+                        "migration:%"
+                    )
+                )
+            )
             await session.commit()
         # Seed one template by the operator so tenant-context reads
         # have something to fetch.
@@ -155,8 +172,20 @@ def repo_with_template(
     finally:
         async def teardown() -> None:
             async with repo._sessionmaker() as session:
-                await session.execute(sa.delete(methodology_revisions))
-                await session.execute(sa.delete(methodology_templates))
+                await session.execute(
+                    sa.delete(methodology_revisions).where(
+                        methodology_revisions.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
+                await session.execute(
+                    sa.delete(methodology_templates).where(
+                        methodology_templates.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
                 await session.commit()
             await repo.dispose()
         event_loop.run_until_complete(teardown())
