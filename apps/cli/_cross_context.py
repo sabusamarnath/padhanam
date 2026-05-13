@@ -56,7 +56,7 @@ import json
 import logging
 from decimal import Decimal
 from typing import Any, Awaitable, Callable, Mapping, Sequence
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from contexts.agent.application.ports import (
     AgentRetrievalClient,
@@ -94,7 +94,11 @@ from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
 )
 from contexts.run_history.api import record_run as _record_run_use_case
-from contexts.run_history.domain import RunRecord
+from contexts.run_history.domain import (
+    ChunkCitationRecord,
+    EntityCitationRecord,
+    RunRecord,
+)
 from contexts.tools.application.tool_invocation_service import (
     InvocationCheckOutcome,
     check_invocation_admissibility,
@@ -733,6 +737,38 @@ class RunHistoryWriterAdapter:
             per_tenant_sessionmaker_resolver=_resolver,
             bound_tenant_id=TenantId(record.tenant_id),
         )
+
+        # D96 / S32: translate agent-context citation candidates to
+        # run-history-context citation records one-for-one. The
+        # mirror-types-at-context-boundaries pattern (D54) keeps the
+        # producer context's domain shape independent of the
+        # consumer context's; the wiring adapter does the
+        # field-for-field translation including the run_id binding.
+        chunk_records = tuple(
+            ChunkCitationRecord(
+                id=uuid4(),
+                run_id=record.id,
+                chunk_id=candidate.chunk_id,
+                tenant_id=candidate.tenant_id,
+                jurisdiction=candidate.jurisdiction,
+                chunk_excerpt=candidate.content_snapshot,
+                source_snapshot=dict(candidate.source_snapshot),
+            )
+            for candidate in record.chunk_citations
+        )
+        entity_records = tuple(
+            EntityCitationRecord(
+                id=uuid4(),
+                run_id=record.id,
+                entity_tenant_id=candidate.entity_tenant_id,
+                entity_name=candidate.entity_name,
+                entity_type=candidate.entity_type,
+                tenant_id=candidate.tenant_id,
+                source_chunk_ids=candidate.source_chunk_ids,
+            )
+            for candidate in record.entity_citations
+        )
+
         run_record = RunRecord(
             id=record.id,
             tenant_id=record.tenant_id,
@@ -750,6 +786,8 @@ class RunHistoryWriterAdapter:
             audit_start_hash=record.audit_start_hash,
             audit_end_hash=record.audit_end_hash,
             created_at=record.created_at,
+            chunk_citations=chunk_records,
+            entity_citations=entity_records,
         )
         await _record_run_use_case(
             principal=principal,

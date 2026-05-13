@@ -37,6 +37,11 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
+from contexts.run_history.domain.citation_records import (
+    ChunkCitationRecord,
+    EntityCitationRecord,
+)
+
 
 # Six values per D95: the five TerminationReason enum values plus
 # synthesised `failed` for InvocationFailed terminal events. The
@@ -88,6 +93,13 @@ class RunRecord:
     audit_start_hash: str
     audit_end_hash: str | None
     created_at: datetime
+    # D96 / S32: citation records aggregated on the run record so
+    # the adapter writes runs + chunk citations + entity citations
+    # within a single transaction. Defaults preserve backwards
+    # compatibility for callers (tests, intermediate-state code)
+    # that construct a RunRecord without citation context.
+    chunk_citations: tuple[ChunkCitationRecord, ...] = ()
+    entity_citations: tuple[EntityCitationRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.tenant_id:
