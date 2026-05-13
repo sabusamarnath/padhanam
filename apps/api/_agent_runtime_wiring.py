@@ -84,6 +84,7 @@ from apps.api.routers.agent import AgentRuntimeComposition
 from apps.cli._cross_context import (
     MethodologyOverridesLookupAdapter,
     RoleLookupAdapter,
+    RunHistoryReaderAdapter,
     RunHistoryWriterAdapter,
     ToolDefinitionsLookupAdapter,
     ToolInvokerAdapter,
@@ -296,7 +297,46 @@ def build_agent_runtime_composition(
     )
 
 
+def build_run_history_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> RunHistoryReaderAdapter:
+    """Wire the run-history read surface for the production composition (S33, D97).
+
+    Mirrors the writer wiring shape: the adapter holds a callable
+    that resolves the per-tenant session factory at call time via
+    the existing ``TenantSessionFactoryCache``. No consumer at S33
+    calls the returned adapter; the wiring is the substrate the
+    HTTP layer at S34/S35 dependency-injects against.
+
+    Per D97's port-location call, the read surface is a producer-
+    side port at ``contexts.run_history.ports.reader`` consumed by
+    a composition surface (apps/api) rather than a bounded context.
+    The wiring lives alongside ``build_agent_runtime_composition``
+    in this module because the same session-factory cache,
+    operator principal, and security-events logger compose both
+    the write surface (on the agent runtime) and the read surface
+    (off-runtime, for the future HTTP layer).
+    """
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return RunHistoryReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
 __all__ = [
     "TenantRoutingRetrievalClient",
     "build_agent_runtime_composition",
+    "build_run_history_reader",
 ]

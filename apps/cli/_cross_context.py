@@ -92,13 +92,17 @@ from contexts.methodology.ports import (
 )
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
+    PostgresRunHistoryReader,
 )
 from contexts.run_history.api import record_run as _record_run_use_case
 from contexts.run_history.domain import (
     ChunkCitationRecord,
     EntityCitationRecord,
+    RunListCursor,
+    RunListFilters,
     RunRecord,
 )
+from contexts.run_history.ports import RunListPage
 from contexts.tools.application.tool_invocation_service import (
     InvocationCheckOutcome,
     check_invocation_admissibility,
@@ -794,6 +798,80 @@ class RunHistoryWriterAdapter:
             repository=repository,
             security_events=self._security_events,
             run_record=run_record,
+        )
+
+
+class RunHistoryReaderAdapter:
+    """Adapter wiring for the run-history read surface (S33 commit 4, D97).
+
+    Mirrors the ``RunHistoryWriterAdapter`` shape at composition-root
+    altitude: a single instance constructed at app startup, holding a
+    callable that resolves the per-tenant ``async_sessionmaker`` at
+    call time. Each method invocation routes to the request's tenant
+    through ``session_factory_for_tenant`` and constructs a per-call
+    ``PostgresRunHistoryReader`` bound to that tenant.
+
+    The adapter implements ``RunHistoryReader`` (Protocol satisfaction
+    is structural; no inheritance needed). The HTTP layer at S34/S35
+    will dependency-inject this adapter through the port type without
+    needing to know about session-factory resolution.
+
+    No consumer at S33 calls this adapter; the wiring is the substrate
+    the future HTTP routes for run history dependency-inject against.
+    Symmetry with ``RunHistoryWriterAdapter`` keeps the future
+    reading-and-writing patterns visually parallel per D97.
+
+    This is the ninth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def get_run(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+    ) -> RunRecord | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_run(
+            tenant_context=tenant_context, run_id=run_id
+        )
+
+    async def list_runs_with_filters(
+        self,
+        *,
+        tenant_context: TenantContext,
+        filters: RunListFilters,
+        cursor: RunListCursor | None,
+    ) -> RunListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_runs_with_filters(
+            tenant_context=tenant_context,
+            filters=filters,
+            cursor=cursor,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresRunHistoryReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresRunHistoryReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
         )
 
 
