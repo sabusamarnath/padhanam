@@ -50,6 +50,7 @@ from sqlalchemy.ext.asyncio import (
 
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
+    PostgresRunHistoryReader,
     run_chunk_citations,
     run_entity_citations,
     runs,
@@ -58,9 +59,10 @@ from contexts.run_history.domain.citation_records import (
     ChunkCitationRecord,
     EntityCitationRecord,
 )
+from contexts.run_history.domain.query_filters import RunListFilters
 from contexts.run_history.domain.run_record import RunRecord
 from padhanam.config import ControlPlaneSettings
-from shared_kernel import TenantId
+from shared_kernel import TenantContext, TenantId
 
 
 _RUN_HISTORY_TABLES = (
@@ -637,3 +639,161 @@ def test_citation_rows_cascade_when_parent_run_deleted(
     assert _row_count(event_loop, sm_a) == 0
     # CASCADE removed both citation children.
     assert _citation_row_counts(event_loop, sm_a) == (0, 0)
+
+
+# --------------------------------------------------------------------
+# D97 / S33: read-side tenant-isolation scenarios.
+# --------------------------------------------------------------------
+
+
+def _build_reader(
+    *, bound_tenant_id: TenantId, sm_a, sm_b, ctx_a, ctx_b
+) -> PostgresRunHistoryReader:
+    sm_by_id = {str(ctx_a): sm_a, str(ctx_b): sm_b}
+
+    async def resolver(tenant_id: TenantId):
+        sm = sm_by_id.get(str(tenant_id))
+        if sm is None:
+            raise LookupError(f"unexpected tenant_id {tenant_id!r}")
+        return sm
+
+    return PostgresRunHistoryReader(
+        per_tenant_sessionmaker_resolver=resolver,
+        bound_tenant_id=bound_tenant_id,
+    )
+
+
+def _tc(tenant_id: TenantId) -> TenantContext:
+    """Build a TenantContext for the read calls. The tenant_id type
+    on TenantContext is the shared-kernel TenantId; the synthetic
+    fixture's TenantId values flow through unchanged."""
+    return TenantContext(
+        tenant_id=tenant_id,
+        jurisdiction="eu-west",
+        cost_attribution_id=str(tenant_id),
+    )
+
+
+def test_get_run_returns_none_for_run_on_other_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """D97 / D24 scenario 14: a run-id that exists on tenant_b is
+    invisible to a reader bound to tenant_a. get_run returns None.
+    Cross-tenant read isolation at the row-id level."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    writer_b = _build_adapter(
+        bound_tenant_id=ctx_b, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    # Persist a run on tenant_b.
+    run_id_on_b = uuid4()
+    record_b = _make_record(tenant_id=str(ctx_b), run_id=run_id_on_b)
+    event_loop.run_until_complete(writer_b.persist(record_b))
+    assert _row_count(event_loop, sm_b) == 1
+
+    # Read tenant_a-side for the run-id that lives on tenant_b.
+    reader_a = _build_reader(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    async def get_run():
+        return await reader_a.get_run(
+            tenant_context=_tc(ctx_a), run_id=run_id_on_b
+        )
+
+    result = event_loop.run_until_complete(get_run())
+    assert result is None
+
+
+def test_list_runs_returns_empty_for_filters_matching_other_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """D97 / D24 scenario 15: filter values that would match runs on
+    tenant_b return empty when queried through a tenant_a-bound
+    reader. Cross-tenant read isolation at the filter level."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    writer_b = _build_adapter(
+        bound_tenant_id=ctx_b, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    # Persist a tenant_b run with a known agent_template_id; the
+    # filter below would match this run if cross-tenant read leaked.
+    target_template_id = uuid4()
+    run_id = uuid4()
+    record = _make_record(tenant_id=str(ctx_b), run_id=run_id)
+    # _make_record creates a fresh agent_template_id; override to the
+    # known one so the filter has a real target on tenant_b.
+    record_with_known_template = RunRecord(
+        id=run_id,
+        tenant_id=record.tenant_id,
+        jurisdiction=record.jurisdiction,
+        agent_template_id=target_template_id,
+        agent_template_version=record.agent_template_version,
+        input_message=record.input_message,
+        output_content=record.output_content,
+        started_at=record.started_at,
+        completed_at=record.completed_at,
+        termination_reason=record.termination_reason,
+        iteration_count=record.iteration_count,
+        total_cost_usd=record.total_cost_usd,
+        trace_id=record.trace_id,
+        audit_start_hash=record.audit_start_hash,
+        audit_end_hash=record.audit_end_hash,
+        created_at=record.created_at,
+    )
+    event_loop.run_until_complete(writer_b.persist(record_with_known_template))
+    assert _row_count(event_loop, sm_b) == 1
+
+    # Read tenant_a-side with a filter that matches the tenant_b run.
+    reader_a = _build_reader(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+    filters = RunListFilters(agent_template_ids=(target_template_id,))
+
+    async def list_runs():
+        return await reader_a.list_runs_with_filters(
+            tenant_context=_tc(ctx_a), filters=filters, cursor=None
+        )
+
+    page = event_loop.run_until_complete(list_runs())
+    assert page.runs == ()
+    assert page.next_cursor is None
+
+
+def test_reader_rejects_tenant_context_mismatch_pre_routing(
+    event_loop, isolation_setup
+) -> None:
+    """D97 / D24 scenario 16: a read call with a TenantContext whose
+    tenant_id does not match the reader's bound tenant raises
+    ValueError before any SQL is issued. Defence-in-depth on both
+    get_run and list_runs_with_filters."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    reader_a = _build_reader(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    foreign_ctx = _tc(ctx_b)
+
+    async def call_get_run():
+        return await reader_a.get_run(
+            tenant_context=foreign_ctx, run_id=uuid4()
+        )
+
+    with pytest.raises(ValueError, match="tenant"):
+        event_loop.run_until_complete(call_get_run())
+
+    async def call_list():
+        return await reader_a.list_runs_with_filters(
+            tenant_context=foreign_ctx,
+            filters=RunListFilters(),
+            cursor=None,
+        )
+
+    with pytest.raises(ValueError, match="tenant"):
+        event_loop.run_until_complete(call_list())
+
+    # Neither tenant DB should have been touched (no writes; the
+    # pre-routing defence fires before any session opens). Verify
+    # the runs tables are empty.
+    assert _row_count(event_loop, sm_a) == 0
+    assert _row_count(event_loop, sm_b) == 0
