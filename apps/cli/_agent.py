@@ -1,10 +1,19 @@
-"""Agent CLI orchestration (S24 / D75, S25 / D79, S26a-2 / D86).
+"""Agent CLI orchestration (S24 / D75, S25 / D79, S26a-2 / D86, S30b / D90).
 
-Seven subcommands at the ``padhanam agent`` namespace: ``create``,
+Eight subcommands at the ``padhanam agent`` namespace: ``create``,
 ``create-from-methodology``, ``create-from-role``, ``get``,
-``list``, ``update``, ``archive``. Operator-context resolution at
+``list``, ``update``, ``archive``, ``run``. Operator-context resolution at
 the command boundary mirrors the S23 methodology CLI pattern;
 production CLI auth lands at Phase 2.
+
+S30b adds ``run`` as the first product-form transport consumer of the
+SSE endpoint at ``POST /agents/{agent_id}/invoke`` per D90. The
+consumer posts to the endpoint, parses the SSE event stream from
+``apps/api/adapters/sse_event_translator.py``, and renders each of the
+eleven D90 event types to terminal. Exit-code mapping per the three
+terminal events: ``InvocationCompleted`` → 0, ``InvariantBlocked`` → 2,
+``InvocationFailed`` (or protocol failure) → 1. Wire-side work lives
+at ``apps/cli/_agent_run.py``.
 
 S25 adds ``create-from-methodology``, the cross-context clone flow
 per D79. The command resolves three engines — control-plane
@@ -98,6 +107,7 @@ from padhanam.observability.security_events import (
 )
 from shared_kernel import TenantContext, TenantId
 
+from apps.cli._agent_run import DEFAULT_API_URL, run_invocation
 from apps.cli._cross_context import (
     MethodologyLookupAdapter,
     RoleLookupAdapter,
@@ -792,6 +802,71 @@ def agent_create_from_methodology(
         f"source_role_id={template.source_role_id} "
         f"source_role_version={template.source_role_version}\n"
     )
+
+
+@agent_app.command("run")
+def agent_run(
+    tenant: Annotated[
+        str,
+        typer.Option(
+            "--tenant",
+            help="Tenant short label ('a', 'b') or UUID.",
+        ),
+    ],
+    agent: Annotated[
+        UUID,
+        typer.Option(
+            "--agent",
+            help="The agent template id to invoke.",
+        ),
+    ],
+    user_input: Annotated[
+        str,
+        typer.Option(
+            "--input",
+            help="The user message to send to the agent.",
+        ),
+    ],
+    api_url: Annotated[
+        str,
+        typer.Option(
+            "--api-url",
+            help=(
+                "Padhanam API base URL. Default targets the in-container "
+                "uvicorn at http://localhost:8000."
+            ),
+        ),
+    ] = DEFAULT_API_URL,
+    output_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--output-file",
+            help="Tee the rendered stream to this file (in addition to stdout).",
+        ),
+    ] = None,
+) -> None:
+    """Invoke an agent through the SSE endpoint and render the stream.
+
+    Posts to ``POST {api-url}/agents/{agent_id}/invoke`` with a dev
+    token carrying the resolved tenant UUID and the ``agent.invoke``
+    role, parses the SSE event stream (D90 vocabulary), and renders
+    each event to stdout. Exit code maps to the observed terminal
+    event per D90:
+
+    - ``InvocationCompleted`` → 0
+    - ``InvariantBlocked`` → 2
+    - ``InvocationFailed`` (or protocol failure) → 1
+    """
+    exit_code = asyncio.run(
+        run_invocation(
+            tenant_label=tenant,
+            agent_id=str(agent),
+            user_input=user_input,
+            api_url=api_url,
+            output_file=output_file,
+        )
+    )
+    raise typer.Exit(code=exit_code)
 
 
 @agent_app.command("create-from-role")
