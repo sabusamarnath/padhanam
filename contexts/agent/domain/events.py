@@ -39,6 +39,7 @@ from decimal import Decimal
 from typing import Union
 from uuid import UUID
 
+from contexts.agent.domain.citation_candidates import CitationCandidate
 from contexts.agent.domain.termination import TerminationReason
 from shared_kernel import TenantContext
 
@@ -137,13 +138,23 @@ class ToolCallExecuting:
 
 @dataclass(frozen=True)
 class ToolCallCompleted:
-    """Emitted after a tool's invocation returns (D90).
+    """Emitted after a tool's invocation returns (D90, D96).
 
     ``success`` distinguishes ``InvocationOutcome.OK`` from
     ``InvocationOutcome.ERROR`` per the D89 ``ToolInvoker`` contract;
     ``TOOL_NOT_REGISTERED`` and ``INVARIANT_BLOCKED`` outcomes do not
     emit this event because they terminate the loop with their own
     terminal events.
+
+    ``citation_candidates`` carries the attribution surface the tool
+    produced per D96. Default empty preserves backwards compatibility
+    for tools that produce no citations (Phase 1: only the retrieval
+    tool populates it; future tools — web fetch, document parse,
+    structured extraction — extend the same field without event-
+    vocabulary change). The accumulator at ``invoke_agent`` reads
+    this field across the run and passes the deduplicated set to
+    ``writer.record_run`` per D96's single-transaction multi-table
+    write commitment.
     """
 
     invocation_id: UUID
@@ -152,6 +163,7 @@ class ToolCallCompleted:
     success: bool
     result_summary: str
     duration_ms: int
+    citation_candidates: tuple[CitationCandidate, ...] = ()
 
 
 @dataclass(frozen=True)

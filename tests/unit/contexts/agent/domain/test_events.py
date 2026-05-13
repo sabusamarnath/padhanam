@@ -125,6 +125,72 @@ def test_tool_call_completed_records_success_and_duration() -> None:
     assert event.success is True
     assert event.duration_ms == 42
     assert event.result_summary == "3 chunks retrieved"
+    # D96: citation_candidates defaults to empty tuple, preserving
+    # backwards compatibility for tools that produce no citations.
+    assert event.citation_candidates == ()
+
+
+def test_tool_call_completed_accepts_chunk_citation_candidates() -> None:
+    from contexts.agent.domain.citation_candidates import (
+        ChunkCitationCandidate,
+    )
+
+    candidate = ChunkCitationCandidate(
+        chunk_id=UUID("11111111-1111-4111-8111-111111111111"),
+        source_id=UUID("22222222-2222-4222-8222-222222222222"),
+        chunk_index=0,
+        content_snapshot="some content",
+        source_snapshot={"file_name": "doc.pdf", "file_type": "application/pdf"},
+        tenant_id="tenant-a",
+        jurisdiction="eu-west",
+    )
+    event = ToolCallCompleted(
+        invocation_id=_INVOCATION_ID,
+        iteration_index=2,
+        tool_name="retrieval",
+        success=True,
+        result_summary="1 chunk retrieved",
+        duration_ms=42,
+        citation_candidates=(candidate,),
+    )
+    assert event.citation_candidates == (candidate,)
+
+
+def test_tool_call_completed_accepts_mixed_chunk_and_entity_candidates() -> None:
+    from contexts.agent.domain.citation_candidates import (
+        ChunkCitationCandidate,
+        EntityCitationCandidate,
+    )
+
+    chunk = ChunkCitationCandidate(
+        chunk_id=UUID("11111111-1111-4111-8111-111111111111"),
+        source_id=UUID("22222222-2222-4222-8222-222222222222"),
+        chunk_index=0,
+        content_snapshot="content",
+        source_snapshot={},
+        tenant_id="tenant-a",
+        jurisdiction="eu-west",
+    )
+    entity = EntityCitationCandidate(
+        entity_tenant_id="tenant-a",
+        entity_name="Acme",
+        entity_type="Organization",
+        source_chunk_ids=(chunk.chunk_id,),
+        tenant_id="tenant-a",
+        jurisdiction="eu-west",
+    )
+    event = ToolCallCompleted(
+        invocation_id=_INVOCATION_ID,
+        iteration_index=2,
+        tool_name="retrieval",
+        success=True,
+        result_summary="mixed",
+        duration_ms=42,
+        citation_candidates=(chunk, entity),
+    )
+    assert len(event.citation_candidates) == 2
+    assert event.citation_candidates[0] is chunk
+    assert event.citation_candidates[1] is entity
 
 
 def test_iteration_completed_carries_cost_decimal_and_signal() -> None:
