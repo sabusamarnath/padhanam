@@ -4,6 +4,8 @@ The live brand specification Padhanam uses across charter artefacts, the platfor
 
 The brand is Padhanam's going forward.
 
+These brand guidelines were transplanted from karma, a prior project whose brand artefacts the operator adopted as Padhanam's own at the karma transplant strategic block on 2026-05-12. Padhanam's visual identity is karma's visual identity by operator decision; future brand evolution lands as commits to this file and to `charter/brand/tokens.css` per D91's charter-grade placement. The karma origin is recorded here to preserve the audit trail.
+
 ## Colours
 
 | Token | Hex | Usage |

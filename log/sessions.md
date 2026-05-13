@@ -1283,3 +1283,18 @@ Open threads:
 - **Customer brand customisation as configuration — settled position carryover.** Operator position at session-close: customer rebrand is configuration, never fork. When the "Forkable-vs-non-forkable architecture for commercial deployment" deferred-decisions entry activates at Phase 2, that entry should record this settled position: tenant brand customisation is configuration through whatever theming mechanism Phase 2 commits to (CSS variable overrides, per-tenant theme files, runtime injection), not forking. The position is consistent with the existing Architectural principle that customer-specific behaviour is configuration (per D-line in `principles.md`); brand customisation extends the same shape. No Phase 1 action; recorded as a settled-position carryover for the Phase 2 strategic block to pick up.
 - **Block 3 (deck v1 draft) still queued.** The third strategic block from the original karma-transplant sequence (`charter/deck.html` v1 draft against the brand guidelines) remains open; opens when the operator names it.
 - **Lineage paragraph carryover from Block 2 closure remains open.** The Block 2 closure session-log entry flagged the missing lineage paragraph in `charter/brand-guidelines.md` (naming karma as brand source) for the next brand-touching strategic block. This strategic block touched the charter audit trail for the placement decision but did not touch the brand-guidelines.md document itself; the lineage thread remains open for a subsequent brand-touching block.
+
+## Karma transplant — lineage paragraph closure (2026-05-13)
+
+roles: technical writer
+mode: strategic
+
+Follow-on to the brand-as-charter-grade D91 closure earlier the same day. Closes the lineage-paragraph open thread first flagged at karma transplant Block 2 verification (where the brand-guidelines.md commit landed without a lineage paragraph naming karma as source) and carried forward through the D91 closure session-log entry.
+
+Inserted the lineage paragraph into the preamble of `charter/brand-guidelines.md` immediately after the existing "The brand is Padhanam's going forward." one-liner and before the `## Colours` section heading. The paragraph names the karma transplant strategic block on 2026-05-12 as the moment Padhanam adopted karma's brand artefacts, states the visual-identity equivalence as operator decision, points future brand evolution at this file and `charter/brand/tokens.css` per D91, and frames the entry as an audit-trail preservation rather than a substantive brand change. No D-entry required: the placement of the paragraph is documentation hygiene against the existing structural commitment recorded at D91, not a new structural choice.
+
+Open threads after this commit:
+
+- **methodology.md "Charter structure" extension still open.** Next methodology.md refresh or Phase 1 close audit.
+- **Customer-rebrand-as-configuration carryover still queued for Phase 2.** The deferred-decisions entry on forkable-vs-non-forkable architecture for commercial deployment carries the settled position when it activates.
+- **Block 3 (deck v1 draft) now ready to open as the next strategic block.** With both Block 2 carryovers (brand-as-charter-grade audit trail at D91, lineage paragraph in brand-guidelines.md) closed, the deck v1 draft against the brand guidelines is unblocked. Opens when the operator names it.
