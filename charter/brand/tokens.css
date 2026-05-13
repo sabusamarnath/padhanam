@@ -1,0 +1,121 @@
+/* charter/brand/tokens.css
+   Padhanam design tokens. */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap');
+
+:root {
+  /* ── Backgrounds ── */
+  --color-background-primary:   #1c1c1a;
+  --color-background-secondary: #252523;
+  --color-background-tertiary:  #2c2c2a;
+  --color-background-info:      #042c53;
+  --color-background-success:   #173404;
+  --color-background-warning:   #412402;
+  --color-background-danger:    #501313;
+
+  /* ── Text ── */
+  --color-text-primary:   #f0eeea;
+  --color-text-secondary: #b4b2a9;
+  --color-text-tertiary:  #888780;
+  --color-text-info:      #85b7eb;
+  --color-text-success:   #97c459;
+  --color-text-warning:   #ef9f27;
+  --color-text-danger:    #f09595;
+
+  /* ── Borders ── */
+  --color-border-primary:   rgba(240, 238, 234, 0.40);
+  --color-border-secondary: rgba(240, 238, 234, 0.25);
+  --color-border-tertiary:  rgba(240, 238, 234, 0.12);
+  --color-border-info:      #85b7eb;
+  --color-border-success:   #97c459;
+  --color-border-warning:   #ef9f27;
+  --color-border-danger:    #f09595;
+
+  /* ── Brand ── */
+  --color-brand-navy:          #2E3264;
+  --color-brand-teal:          #2BA692;
+  --color-brand-teal-accessible: #1A8070;
+  --color-brand-teal-light:    #E8F7F5;
+  --color-brand-charcoal:      #383F47;
+  --color-brand-mid-grey:      #636A72;
+  --color-brand-light-grey:    #DCDCDC;
+
+  /* ── Accent ── */
+  --color-accent:         #2E3264;
+  --color-accent-hover:   #1A8070;
+  --color-accent-text:    #FFFFFF;
+  --color-accent-subtle:  #E8F7F5;
+  --color-accent-border:  #1A8070;
+
+  /* ── Layout ── */
+  --topbar-height: 48px;
+
+  /* ── Typography ── */
+  --font-sans:  'Plus Jakarta Sans', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono:  'SF Mono', Consolas, 'Cascadia Code', 'Fira Code', monospace;
+
+  /* ── Spacing ── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  16px;
+  --space-xl:  20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* ── Radius ── */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+  --border-radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.20);
+}
+
+/* ── Light mode ── */
+[data-theme="light"] {
+  --color-background-primary:   #ffffff;
+  --color-background-secondary: #f5f5f3;
+  --color-background-tertiary:  #eeede8;
+  --color-background-info:      #e6f1fb;
+  --color-background-success:   #eaf3de;
+  --color-background-warning:   #faeeda;
+  --color-background-danger:    #fcebeb;
+
+  --color-text-primary:   #1c1c1a;
+  --color-text-secondary: #5f5e5a;
+  --color-text-tertiary:  #888780;
+  --color-text-info:      #185fa5;
+  --color-text-success:   #3b6d11;
+  --color-text-warning:   #854f0b;
+  --color-text-danger:    #a32d2d;
+
+  --color-border-primary:   rgba(26, 26, 25, 0.40);
+  --color-border-secondary: rgba(26, 26, 25, 0.30);
+  --color-border-tertiary:  rgba(26, 26, 25, 0.15);
+}
+
+/* ── Base reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background: var(--color-background-tertiary);
+  -webkit-font-smoothing: antialiased;
+}
