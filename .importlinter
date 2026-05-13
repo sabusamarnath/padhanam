@@ -104,6 +104,15 @@ layers =
     contexts.tools.ports
     contexts.tools.domain
 
+[importlinter:contract:layers-run-history]
+name = Run history layers (hexagonal)
+type = layers
+layers =
+    contexts.run_history.adapters
+    contexts.run_history.application
+    contexts.run_history.ports
+    contexts.run_history.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -130,6 +139,7 @@ modules =
     contexts.methodology.domain
     contexts.agent.domain
     contexts.tools.domain
+    contexts.run_history.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -149,6 +159,7 @@ modules =
     contexts.methodology.application
     contexts.agent.application
     contexts.tools.application
+    contexts.run_history.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -167,6 +178,7 @@ modules =
     contexts.methodology.adapters
     contexts.agent.adapters
     contexts.tools.adapters
+    contexts.run_history.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -200,6 +212,7 @@ source_modules =
     contexts.methodology.domain
     contexts.agent.domain
     contexts.tools.domain
+    contexts.run_history.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -275,6 +288,7 @@ source_modules =
     contexts.methodology
     contexts.agent
     contexts.tools
+    contexts.run_history
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -302,6 +316,7 @@ source_modules =
     contexts.methodology
     contexts.agent
     contexts.tools
+    contexts.run_history
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -367,6 +382,7 @@ source_modules =
     contexts.methodology
     contexts.agent
     contexts.tools
+    contexts.run_history
 forbidden_modules =
     neo4j
 allow_indirect_imports = false
