@@ -12,9 +12,9 @@ The work breakdown for Phase 1. Order reflects dependency and learning value.
 - **P6: Source ingestion.** Upload, two-track pipeline (vector to pgvector, entity extraction to Neo4j), retrieval interfaces.
 - **P7: Agent CRUD.** Name, system prompt, source IDs, tool allowlist, retrieval strategy, model selection.
 - **P8: Agent runtime.** AgentLoopExecutor behind AgentExecutor interface. SSE-streamed responses. Full instrumentation. Workflow context architecture committed for Phase 2 implementation per D83.
-- **P9: Run history.** Replay UI, citation linking back to source chunks and graph entities.
-- **P10: Audit log viewer.** Tenant-owner UI for the audit log.
-- **P11: Optimization dashboard.** Trace inspection, evaluation results, active test reports. Recommendation-shaped, with cost-aware recommendations as a first-class surface per D41.
-- **P12: Active testing scheduler.** Cron-driven model substitution, prompt ablation, context compression tests. Weekly per-agent reports.
+- **P9: Run history (backend-only).** Run history data substrate, query APIs, citation linking back to source chunks and graph entities at the data layer. Replay UI deferred to Phase 2 per D92.
+- **P10: Audit log viewer (backend-only).** Audit log query infrastructure and APIs. Tenant-owner UI deferred to Phase 2 per D92.
+- **P11: Optimization dashboard (backend-only).** Recommendation engine, trace inspection APIs, evaluation results and active test report APIs. Recommendation-shaped, with cost-aware recommendations as a first-class surface per D41. Dashboard UI deferred to Phase 2 per D92.
+- **P12: Active testing scheduler.** Cron-driven model substitution, prompt ablation, context compression tests. Weekly per-agent reports as data. UI rendering deferred to Phase 2 per D92.
 
-Phase 1 ends after P12 with a phase audit. Phase 2 direction decided at the audit.
+Phase 1 ends after P12 with a phase audit per `charter/methodology.md`. Phase 2 direction is methodology-as-product per D93, with focus purely on UX/UI on top of Phase 1's complete substrate. Specific Phase 2 package shape decided at the Phase 1 close audit.

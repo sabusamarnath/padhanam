@@ -6,7 +6,9 @@ Active package details. Updated when a new package starts. Archived to `docs/arc
 
 P8 closed on 2026-05-13. Archive at [docs/archive/packages/p8.md](../docs/archive/packages/p8.md); measured outcomes appended to [log/packages.md](../log/packages.md). Seven sessions (S26a-1, S26a-2, S26b, S27b, S28b, S29b, S30b) shipped the agent runtime substrate per D86 (role-first model), D87 (override-mode space), D88 (agent runtime architecture), D89 (tool registry), and D90 (streaming runtime), plus D91 from the parallel brand-transplant strategic block. P8's contribution is the agent runtime substrate that makes the platform demonstrable in product form: roles as first-class primary aggregates composing into methodologies via `role_refs`; a streaming runtime exposing eleven domain-layer events through transport-neutral ports; an SSE transport at `apps/api/routers/agent.py` consumed end-to-end by the `padhanam agent run` CLI at S30b; production wiring of the runtime composition at `apps/api/_agent_runtime_wiring.py` including a per-tenant retrieval router. Two end-to-end demonstrations close P8 in product form: Flowstate-McKinsey ProblemFramer on tenant alpha producing a SMART problem statement (narrow artifact, 76s); Forgepath-LVT LVTGuide on tenant beta producing a full Lean Value Tree (broad artifact, 271s). Same substrate, two artifact scales — the bet's intelligence-layer commitment per D82 exercised in product form. Pattern reinforcements that solidified Phase 1 architectural norms during P8: the consumer-port-plus-wiring-adapter pattern reached four reinforcements across five sessions in a row with three-altitude generality (cross-context, intra-context wiring, transport) and a fourth observation (same-altitude cross-composition-root re-use at S30b); pre-write reconciliation as architectural discovery reached six-plus reinforcements with the new sub-observation that pre-session operator setup is itself a pre-write reconciliation moment. Both promotion candidates for the Phase 1 close audit window.
 
-**P9 next.** Run history and replay infrastructure per [charter/packages.md](packages.md): a replay UI surface with citation linking back to source chunks and graph entities. P9 inherits from P8's substrate: the S29b nested OTel span hierarchy plus the eleven-event vocabulary plus the per-tenant audit chain together provide the substrate P9 builds the run-history surface against. P11's recommendation engine (further out in Phase 1) inherits from P9's run-history infrastructure. Framing strategic block opens at operator discretion.
+**Phase 1 / Phase 2 boundary committed.** D92 confirms Phase 1 scope at P1 through P12 with P9-P12 reframed as backend-only substrate. D93 commits Phase 2 direction to methodology-as-product positioning with focus purely on UX/UI. The Phase 1 close audit lands at P12 close per `charter/methodology.md`'s audit posture; mid-phase audit work that would have captured methodology promotions and PRFAQ revoice defers to that audit. The new carryover entries below name the substrate-readiness items Phase 1 absorbs so Phase 2 UX work runs cleanly.
+
+**P9 next, backend-only.** Run history backend infrastructure per [charter/packages.md](packages.md): the run-history data substrate (record storage, citation linking back to source chunks and graph entities at the data layer, query APIs for the consumer-UX consumers landing in Phase 2). UI elements (the replay UI named in the original packages.md line) defer to Phase 2 per D92. P9 inherits from P8's substrate: the S29b nested OTel span hierarchy plus the eleven-event vocabulary plus the per-tenant audit chain together provide the substrate P9 builds the run-history surface against. P11's recommendation engine (further out in Phase 1) inherits from P9's run-history infrastructure. Framing strategic block opens at operator discretion.
 
 ## Carryovers active across the P8→P9 boundary
 
@@ -48,13 +50,7 @@ P8 closed on 2026-05-13. Archive at [docs/archive/packages/p8.md](../docs/archiv
 - **Multi-baseline regression reports.** Deferred per D58;
   single-baseline at S18. Activates at P11's recommendation
   engine when run-history infrastructure exists from P9.
-- **PRFAQ phase-audit refresh.** Cadence per D45 (every phase
-  audit). The v2 PRFAQ from the P4-post carryover-cleanup
-  strategic session stands until the Phase 1 close audit. The
-  Phase 1 close audit refresh additionally absorbs the dogfooding
-  scenario acknowledgment per D77 and D78 (operator runs a private
-  deployment for personal use as evidence of D14's customer-
-  deployment scenario).
+- **PRFAQ phase-audit refresh.** Cadence per D45 (every phase audit). The v2 PRFAQ from the P4-post carryover-cleanup strategic session stands until the Phase 1 close audit at P12 close. The Phase 1 close audit refresh absorbs the dogfooding scenario acknowledgment per D77 and D78 (operator runs a private deployment for personal use as evidence of D14's customer-deployment scenario), and supersedes D51's voice-and-audience choice per D93 (PRFAQ v3 voice realigns to methodology-as-product audience: senior product leaders, CPOs, consultancies per `bet.md` line 57).
 - **Personal-use deployment of public Padhanam (Phase C).**
   Operator-controlled deployment of public Padhanam as a real
   instance of the customer-deployment scenario per D78, exercising
@@ -78,6 +74,10 @@ P8 closed on 2026-05-13. Archive at [docs/archive/packages/p8.md](../docs/archiv
   daily-review-style triggers, whichever comes first. Two
   implementation candidates (platform primitive versus external
   trigger); choice settles when implementation begins.
+- **HTTP API for ingestion management.** Was deferred per the P6 out-of-scope to "when a UI consumer arrives at P9 or P10." Under D93 the UI consumer is Phase 2 consumer UX. The API surface lands at P9 or earlier as Phase 1 substrate completion so Phase 2 UX consumes it directly.
+- **HTTP API for evaluation management.** Same shape; was deferred until a UI consumer arrives at P10 or P11; under D93 lands as Phase 1 substrate completion at P10 or P11.
+- **Browser-based authentication.** Cookies, CSRF, session management. D23's signed-token backend is operator-only; consumer UX needs proper session handling. Lands as Phase 1 close substrate-completion session.
+- **Frontend stack decision.** React 19 / Vite 6 / React Router 7 are pinned at D10 as pre-S1 baseline; Phase 2 open confirms or revisits, plus chooses a UI library or commits to an in-house design system grounded in `charter/brand-guidelines.md` and `charter/brand/tokens.css`. Could land at Phase 1 close or at Phase 2 open; cheap either way.
 
 ## Deferred items remaining visible
 
