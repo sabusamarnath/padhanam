@@ -20,6 +20,7 @@ joins the two at __call__ time.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -624,8 +625,15 @@ class _FakeIngestionRetrievalClient:
         return list(self._graph_results)
 
 
-def _make_chunk_result(*, content: str, score: float, source_id: UUID | None = None):
-    """Construct a ChunkResult mirroring ingestion's domain shape."""
+def _make_chunk_result(
+    *,
+    content: str,
+    score: float,
+    source_id: UUID | None = None,
+    chunk_index: int = 0,
+    source_snapshot: dict | None = None,
+):
+    """Construct a ChunkResult mirroring ingestion's domain shape (D96)."""
     from contexts.ingestion.domain.chunk_result import ChunkResult
 
     return ChunkResult(
@@ -637,6 +645,9 @@ def _make_chunk_result(*, content: str, score: float, source_id: UUID | None = N
         structural_metadata={},
         similarity_score=score,
         created_at=datetime.now(timezone.utc),
+        chunk_index=chunk_index,
+        source_snapshot=source_snapshot
+        or {"file_name": "doc.pdf", "file_type": "application/pdf"},
     )
 
 
@@ -667,10 +678,15 @@ def test_agent_retrieval_adapter_vector_primary_filters_by_min_score(event_loop)
         {"query": "what is LVT", "scope": _tenant_context(), "limit": 5}
     ]
     # Three raw results; min_score=0.5 admits the 0.91 and 0.55 chunks.
-    assert len(result) == 2
-    assert result[0].text == "high relevance"
-    assert result[0].score == 0.91
-    assert result[1].text == "medium relevance"
+    # D96: result is now a RetrievalResult envelope carrying both
+    # chunks (LLM-facing) and citation_candidates.
+    assert len(result.chunks) == 2
+    assert result.chunks[0].text == "high relevance"
+    assert result.chunks[0].score == 0.91
+    assert result.chunks[1].text == "medium relevance"
+    # Citation candidates mirror the filtered chunk set one-for-one
+    # at vector dispatch.
+    assert len(result.citation_candidates) == 2
 
 
 def test_agent_retrieval_adapter_unknown_strategy_returns_empty(event_loop) -> None:
@@ -688,7 +704,8 @@ def test_agent_retrieval_adapter_unknown_strategy_returns_empty(event_loop) -> N
         )
     )
 
-    assert result == ()
+    assert result.chunks == ()
+    assert result.citation_candidates == ()
     assert ingestion.vector_calls == []
     assert ingestion.graph_calls == []
 
@@ -711,7 +728,141 @@ def test_agent_retrieval_adapter_zero_results_returns_empty_tuple(event_loop) ->
         )
     )
 
-    assert result == ()
+    assert result.chunks == ()
+    assert result.citation_candidates == ()
+
+
+# --------------------------------------------------------------------------
+# D96 / S32: citation candidate translation through AgentRetrievalClientAdapter
+# --------------------------------------------------------------------------
+
+
+def test_agent_retrieval_adapter_translates_chunk_results_to_candidates(event_loop) -> None:
+    """Vector dispatch returns one ChunkCitationCandidate per filtered
+    ChunkResult, populated with chunk_id, source_id, chunk_index,
+    content snapshot, source snapshot (file_name + file_type),
+    tenant_id, and jurisdiction per D96."""
+    from contexts.agent.domain.citation_candidates import ChunkCitationCandidate
+
+    chunk_one_id = uuid4()
+    source_one_id = uuid4()
+    ingestion = _FakeIngestionRetrievalClient()
+    ingestion.stub_vector(
+        [
+            _make_chunk_result(
+                content="LVT is a Lean Value Tree",
+                score=0.91,
+                source_id=source_one_id,
+                chunk_index=3,
+                source_snapshot={"file_name": "lvt.pdf", "file_type": "application/pdf"},
+            ),
+        ]
+    )
+    # Override the chunk_id to a predictable value.
+    ingestion._vector_results[0] = dataclasses.replace(
+        ingestion._vector_results[0], chunk_id=chunk_one_id
+    )
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="what is LVT",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "vector"},
+            filter_tree={},
+            top_k=5,
+            min_score=Decimal("0.5"),
+        )
+    )
+
+    assert len(result.citation_candidates) == 1
+    candidate = result.citation_candidates[0]
+    assert isinstance(candidate, ChunkCitationCandidate)
+    assert candidate.chunk_id == chunk_one_id
+    assert candidate.source_id == source_one_id
+    assert candidate.chunk_index == 3
+    assert candidate.content_snapshot == "LVT is a Lean Value Tree"
+    assert candidate.source_snapshot == {
+        "file_name": "lvt.pdf",
+        "file_type": "application/pdf",
+    }
+    assert candidate.tenant_id == _TENANT_A_UUID
+    assert candidate.jurisdiction == "eu-west"
+
+
+def test_agent_retrieval_adapter_translates_entity_results_to_candidates(event_loop) -> None:
+    """Graph dispatch returns one EntityCitationCandidate per
+    EntityResult with the source_chunk_ids provenance snapshot
+    preserved per D96."""
+    from contexts.agent.domain.citation_candidates import EntityCitationCandidate
+    from contexts.ingestion.domain.entity_result import EntityResult
+
+    chunk_a = uuid4()
+    chunk_b = uuid4()
+    ingestion = _FakeIngestionRetrievalClient()
+    ingestion.stub_graph(
+        [
+            EntityResult(
+                tenant_id=_TENANT_A_UUID,
+                jurisdiction="eu-west",
+                name="Acme Corp",
+                entity_type="Organization",
+                source_chunk_ids=(chunk_a, chunk_b),
+                relationship_path=(),
+                created_at=datetime.now(timezone.utc),
+            )
+        ]
+    )
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="Acme Corp",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "graph", "depth": 1},
+            filter_tree={},
+            top_k=5,
+            min_score=Decimal("0"),
+        )
+    )
+
+    assert len(result.citation_candidates) == 1
+    candidate = result.citation_candidates[0]
+    assert isinstance(candidate, EntityCitationCandidate)
+    assert candidate.entity_tenant_id == _TENANT_A_UUID
+    assert candidate.entity_name == "Acme Corp"
+    assert candidate.entity_type == "Organization"
+    assert candidate.source_chunk_ids == (chunk_a, chunk_b)
+    assert candidate.tenant_id == _TENANT_A_UUID
+    assert candidate.jurisdiction == "eu-west"
+
+
+def test_agent_retrieval_adapter_skips_candidates_for_below_floor_chunks(event_loop) -> None:
+    """min_score filters both chunks and citation candidates; a chunk
+    below the floor produces neither a RetrievedChunk nor a candidate."""
+    ingestion = _FakeIngestionRetrievalClient()
+    ingestion.stub_vector(
+        [
+            _make_chunk_result(content="above", score=0.9),
+            _make_chunk_result(content="below", score=0.1),
+        ]
+    )
+    adapter = AgentRetrievalClientAdapter(retrieval_client=ingestion)
+
+    result = event_loop.run_until_complete(
+        adapter(
+            query="x",
+            tenant_context=_tenant_context(),
+            retrieval_strategy={"primary": "vector"},
+            filter_tree={},
+            top_k=10,
+            min_score=Decimal("0.5"),
+        )
+    )
+
+    assert len(result.chunks) == 1
+    assert len(result.citation_candidates) == 1
+    assert result.chunks[0].text == "above"
 
 
 def test_methodology_overrides_adapter_returns_matching_role_overrides(event_loop) -> None:

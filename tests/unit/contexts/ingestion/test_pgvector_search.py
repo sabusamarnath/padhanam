@@ -170,9 +170,12 @@ def test_search_vector_maps_rows_to_chunk_results() -> None:
             "jurisdiction": _TENANT_A.jurisdiction,
             "content": "ACME Corp is in London",
             "structural_metadata": {"heading_text": "Intro"},
+            "chunk_index": 4,
             "created_at": __import__("datetime").datetime.now(
                 tz=__import__("datetime").timezone.utc
             ),
+            "source_file_name": "acme.pdf",
+            "source_file_type": "application/pdf",
             "similarity_score": 0.91,
         }
     ]
@@ -190,3 +193,11 @@ def test_search_vector_maps_rows_to_chunk_results() -> None:
     assert r.content == "ACME Corp is in London"
     assert r.similarity_score == 0.91
     assert r.structural_metadata == {"heading_text": "Intro"}
+    # D96 / S32: chunk_index and source_snapshot surfaced from the
+    # SQL join so the agent-context adapter can build citation
+    # candidates single-pass.
+    assert r.chunk_index == 4
+    assert r.source_snapshot == {
+        "file_name": "acme.pdf",
+        "file_type": "application/pdf",
+    }

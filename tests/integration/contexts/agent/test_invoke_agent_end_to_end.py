@@ -324,9 +324,11 @@ async def main() -> int:
     source_lookup = _NoSourcesLookup()
 
     # Retrieval client unused too (empty tool_allowlist on McKinsey roles).
+    from contexts.agent.application.ports import RetrievalResult
+
     class _NoRetrieval:
         async def __call__(self, **kwargs):
-            return ()
+            return RetrievalResult()
 
     # Create the agent from McKinsey methodology. The MethodologyLookup
     # adapter resolves role_refs[0] = ProblemFramer per the brief order.

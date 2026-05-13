@@ -29,6 +29,7 @@ from contexts.agent.application.ports.methodology_overrides_lookup import (
 )
 from contexts.agent.application.ports.retrieval_client import (
     AgentRetrievalClient,
+    RetrievalResult,
     RetrievedChunk,
 )
 from contexts.agent.application.ports.role_lookup import (
@@ -59,6 +60,7 @@ __all__ = [
     "MethodologyLookup",
     "MethodologyOverridesLookup",
     "MethodologyView",
+    "RetrievalResult",
     "RetrievedChunk",
     "RoleLookup",
     "RoleView",

@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from contexts.agent.domain.citation_candidates import CitationCandidate
 from contexts.inference.domain.completion import ToolCall
 from shared_kernel import TenantContext
 
@@ -73,12 +74,19 @@ class ToolInvocationResult:
       numbering per D89's classification-to-invariant mapping
       (financial→1, communication→2, legal→3). The executor surfaces
       this on audit so the chain row carries the named invariant.
+    - ``citation_candidates`` carries the attribution surface the
+      tool produced per D96. Default empty preserves backwards
+      compatibility for tools that produce no citations (Phase 1:
+      only the retrieval tool populates it). The executor reads
+      this field and copies it onto ``ToolCallCompleted`` for the
+      runtime event stream and the ``invoke_agent`` accumulator.
     """
 
     outcome: InvocationOutcome
     payload: str
     message: str = ""
     invariant_index: int | None = None
+    citation_candidates: tuple[CitationCandidate, ...] = ()
 
 
 class ToolInvoker(Protocol):

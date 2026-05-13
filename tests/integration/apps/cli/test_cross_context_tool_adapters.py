@@ -114,13 +114,22 @@ class _FakeToolRepository:
 
 
 class _ScriptedRetrievalClient:
-    def __init__(self, chunks: tuple[RetrievedChunk, ...]) -> None:
+    def __init__(
+        self,
+        chunks: tuple[RetrievedChunk, ...],
+        citation_candidates: tuple = (),
+    ) -> None:
         self._chunks = chunks
+        self._candidates = citation_candidates
         self.calls: list[dict] = []
 
-    async def __call__(self, **kwargs) -> tuple[RetrievedChunk, ...]:
+    async def __call__(self, **kwargs):
+        from contexts.agent.application.ports import RetrievalResult
+
         self.calls.append(kwargs)
-        return self._chunks
+        return RetrievalResult(
+            chunks=self._chunks, citation_candidates=self._candidates
+        )
 
 
 class TestToolDefinitionsLookupAdapter:

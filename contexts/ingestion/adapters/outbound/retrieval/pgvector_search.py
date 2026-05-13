@@ -55,7 +55,10 @@ _SEARCH_SQL = sa.text(
         c.jurisdiction AS jurisdiction,
         c.content AS content,
         c.structural_metadata AS structural_metadata,
+        c.chunk_index AS chunk_index,
         c.created_at AS created_at,
+        s.file_name AS source_file_name,
+        s.file_type AS source_file_type,
         1.0 - (c.embedding <=> CAST(:query_vec AS vector)) AS similarity_score
     FROM chunks c
     JOIN sources s ON s.id = c.source_id
@@ -118,6 +121,11 @@ class PgVectorSearch:
                 structural_metadata=row["structural_metadata"] or {},
                 similarity_score=float(row["similarity_score"]),
                 created_at=row["created_at"],
+                chunk_index=int(row["chunk_index"]),
+                source_snapshot={
+                    "file_name": row["source_file_name"],
+                    "file_type": row["source_file_type"],
+                },
             )
             for row in rows
         ]

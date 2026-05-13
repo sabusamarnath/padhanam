@@ -64,10 +64,16 @@ from contexts.agent.application.ports import (
     InvocationOutcome,
     MethodologyOverridesLookup,
     MethodologyView,
+    RetrievalResult,
     RetrievedChunk,
     RoleView,
     SourceNotFoundError,
     ToolInvocationResult,
+)
+from contexts.agent.domain.citation_candidates import (
+    ChunkCitationCandidate,
+    CitationCandidate,
+    EntityCitationCandidate,
 )
 from contexts.inference.domain.completion import (
     ToolCall,
@@ -323,7 +329,7 @@ class AgentRetrievalClientAdapter:
         filter_tree: Mapping[str, Any],
         top_k: int,
         min_score: Decimal,
-    ) -> tuple[RetrievedChunk, ...]:
+    ) -> RetrievalResult:
         primary = str(retrieval_strategy.get("primary", "vector"))
 
         if primary == "vector":
@@ -336,7 +342,7 @@ class AgentRetrievalClientAdapter:
                 r for r in raw_results
                 if Decimal(str(r.similarity_score)) >= min_score
             ]
-            return tuple(
+            chunks = tuple(
                 RetrievedChunk(
                     text=r.content,
                     source_id=r.source_id,
@@ -344,6 +350,24 @@ class AgentRetrievalClientAdapter:
                 )
                 for r in filtered
             )
+            # D96: produce ChunkCitationCandidate per retrieved chunk
+            # from the same ChunkResult set so the citation surface
+            # is single-pass. The source_snapshot dict carries the
+            # file_name and file_type joined from sources at retrieval
+            # time per D96's Phase 1 snapshot key set.
+            candidates: tuple[CitationCandidate, ...] = tuple(
+                ChunkCitationCandidate(
+                    chunk_id=r.chunk_id,
+                    source_id=r.source_id,
+                    chunk_index=r.chunk_index,
+                    content_snapshot=r.content,
+                    source_snapshot=dict(r.source_snapshot),
+                    tenant_id=r.tenant_id,
+                    jurisdiction=r.jurisdiction,
+                )
+                for r in filtered
+            )
+            return RetrievalResult(chunks=chunks, citation_candidates=candidates)
 
         if primary == "graph":
             # Phase 1: graph dispatch uses the query string as the seed
@@ -358,23 +382,45 @@ class AgentRetrievalClientAdapter:
                 scope=tenant_context,
                 depth=int(retrieval_strategy.get("depth", 1)),
             )
-            # Map each entity to a chunk-shaped result. Phase 1 score
-            # is a conventional 1.0; without similarity at the graph
-            # side, min_score filtering is a no-op for graph results.
-            return tuple(
+            # Map each entity to a chunk-shaped result for the LLM
+            # surface. Phase 1 score is a conventional 1.0; without
+            # similarity at the graph side, min_score filtering is a
+            # no-op for graph results.
+            chunks = tuple(
                 RetrievedChunk(
                     text=str(e.name),
-                    source_id=e.source_ids[0]
-                    if getattr(e, "source_ids", None)
-                    else UUID(int=0),
+                    source_id=(
+                        e.source_chunk_ids[0]
+                        if getattr(e, "source_chunk_ids", None)
+                        else UUID(int=0)
+                    ),
                     score=1.0,
                 )
                 for e in entities
             )
+            # D96: produce EntityCitationCandidate per entity. The
+            # source_chunk_ids snapshot preserves the entity's
+            # provenance trail back to per-tenant Postgres chunks per
+            # D96; the (entity_tenant_id, entity_name, entity_type)
+            # composite is the documented join key per D64.
+            entity_candidates: tuple[CitationCandidate, ...] = tuple(
+                EntityCitationCandidate(
+                    entity_tenant_id=e.tenant_id,
+                    entity_name=e.name,
+                    entity_type=e.entity_type,
+                    source_chunk_ids=tuple(e.source_chunk_ids or ()),
+                    tenant_id=e.tenant_id,
+                    jurisdiction=e.jurisdiction,
+                )
+                for e in entities
+            )
+            return RetrievalResult(
+                chunks=chunks, citation_candidates=entity_candidates
+            )
 
         # Unknown strategy: return empty. The integration evidence at
         # S30b will surface if this branch fires in practice.
-        return ()
+        return RetrievalResult()
 
 
 class MethodologyOverridesLookupAdapter:
@@ -586,7 +632,7 @@ class ToolInvokerAdapter:
 
         query = _parse_retrieval_query(tool_call.arguments_json)
         try:
-            chunks = await self._retrieval_client(
+            result = await self._retrieval_client(
                 query=query,
                 tenant_context=tenant_context,
                 retrieval_strategy=self._retrieval_strategy,
@@ -602,9 +648,15 @@ class ToolInvokerAdapter:
                 message=str(exc),
             )
 
+        # D96: thread citation candidates from the retrieval envelope
+        # onto ToolInvocationResult so the executor can populate the
+        # ToolCallCompleted event's citation_candidates field. The
+        # LLM-facing payload remains the formatted-text projection
+        # over result.chunks.
         return ToolInvocationResult(
             outcome=InvocationOutcome.OK,
-            payload=_format_chunks_as_tool_result(tuple(chunks)),
+            payload=_format_chunks_as_tool_result(result.chunks),
+            citation_candidates=result.citation_candidates,
         )
 
 
