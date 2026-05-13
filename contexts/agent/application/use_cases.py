@@ -67,15 +67,25 @@ from contexts.agent.application.composition import (
     compose_effective_constraint_bundle,
 )
 from contexts.agent.application.ports import (
+    AgentRunRecord,
     MethodologyLookup,
     MethodologyOverridesLookup,
     RoleLookup,
     RoleView,
+    RunHistoryWriter,
     SourceLookup,
     ToolDefinitionsLookup,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
-from contexts.agent.domain.events import AgentEvent
+from contexts.agent.domain.events import (
+    AgentEvent,
+    InvariantBlocked,
+    InvocationCompleted,
+    InvocationFailed,
+    InvocationStarted,
+    IterationCompleted,
+    IterationStarted,
+)
 from contexts.agent.ports import (
     AgentExecutor,
     AgentInvocationContext,
@@ -702,12 +712,13 @@ async def invoke_agent(
     methodology_overrides_lookup: MethodologyOverridesLookup,
     tool_definitions_lookup: ToolDefinitionsLookup,
     executor: AgentExecutor,
+    writer: RunHistoryWriter,
     security_events: SecurityEventLogger,
     tenant_context: TenantContext,
     agent_template_id: UUID,
     user_input: str,
 ) -> AsyncIterator[AgentEvent]:
-    """Run a single agent invocation end-to-end (D88, D90; S27b → S29b).
+    """Run a single agent invocation end-to-end (D88, D90, D95; S27b → S29b → S31).
 
     S29b (D90): the use case is an async generator yielding ``AgentEvent``
     values from the executor's stream. The use case resolves lineage,
@@ -721,6 +732,35 @@ async def invoke_agent(
     at the terminal event (before the terminal AgentEvent yields).
     The terminal event carries both hashes so callers (and the
     collect_to_result helper) can deep-link into the audit chain.
+
+    S31 (D95): the use case accumulates run-record-shaped state from
+    the event stream and calls ``writer.record_run`` AFTER yielding
+    the terminal event per D95's write-timing commitment (shape B).
+    The runs row is the rendering projection over the canonical audit
+    chain. Mapping per terminal event class per D95's audit-chain
+    partial-state shape:
+
+    - ``InvocationCompleted``: termination_reason from event enum
+      value; both audit hashes from event.audit_chain_hashes;
+      output_content from event.final_result; total_cost_usd from
+      event.total_cost_usd.
+    - ``InvariantBlocked``: termination_reason='invariant_blocked';
+      both audit hashes from event.audit_chain_hashes; output_content
+      empty; total_cost_usd from accumulated IterationCompleted.cost_usd.
+    - ``InvocationFailed`` with 0-hash ``partial_audit_chain_state``
+      (pre-start-audit failure): skip the writer call entirely. No
+      runs row exists because no audit evidence exists; consistent
+      with the projection-over-recorded-activity framing.
+    - ``InvocationFailed`` with 1-hash ``partial_audit_chain_state``
+      (post-start-audit failure, the loop-body-exception and
+      end-audit-emission-failure sites in agent_loop_executor.py):
+      termination_reason='failed'; audit_start_hash from
+      partial[0]; audit_end_hash=None (signalling chain-incomplete);
+      output_content empty.
+    - ``InvocationFailed`` with 2-hash ``partial_audit_chain_state``
+      (forward-affordance, currently not fired by the executor):
+      termination_reason='failed'; both audit hashes from partial;
+      output_content empty.
 
     Three lineage paths land here as parallel flows:
 
@@ -806,8 +846,119 @@ async def invoke_agent(
         tool_classifications={},
     )
 
+    # Accumulators for the run record (D95 shape-B write-timing).
+    invocation_id: UUID | None = None
+    started_at: datetime | None = None
+    iteration_count: int = 0
+    cost_accumulator: Decimal = Decimal("0")
+
     async for event in executor.execute(context):
+        # Update accumulators per event type before yielding.
+        if isinstance(event, InvocationStarted):
+            invocation_id = event.invocation_id
+            started_at = event.started_at
+        elif isinstance(event, IterationStarted):
+            # iteration_index is 1-based per D90; iteration_count
+            # tracks the highest started iteration so partial-state
+            # failures still record the count attempted.
+            iteration_count = max(iteration_count, event.iteration_index)
+        elif isinstance(event, IterationCompleted):
+            cost_accumulator += event.cost_usd
+
         yield event
+
+        # After yielding the terminal event, assemble the run record
+        # and write per D95 shape B (terminal yield first, then write,
+        # then generator returns).
+        if isinstance(event, (InvocationCompleted, InvocationFailed, InvariantBlocked)):
+            run_record = _assemble_agent_run_record(
+                terminal_event=event,
+                invocation_id=invocation_id,
+                started_at=started_at,
+                iteration_count=iteration_count,
+                cost_accumulator=cost_accumulator,
+                template=template,
+                revision=revision,
+                tenant_context=tenant_context,
+                user_input=user_input,
+            )
+            if run_record is not None:
+                await writer.record_run(run_record, principal=principal)
+            return
+
+
+def _assemble_agent_run_record(
+    *,
+    terminal_event: InvocationCompleted | InvocationFailed | InvariantBlocked,
+    invocation_id: UUID | None,
+    started_at: datetime | None,
+    iteration_count: int,
+    cost_accumulator: Decimal,
+    template: AgentTemplate,
+    revision: AgentRevision,
+    tenant_context: TenantContext,
+    user_input: str,
+) -> AgentRunRecord | None:
+    """Assemble the run record from accumulator state + terminal event (D95).
+
+    Returns ``None`` when the terminal event is ``InvocationFailed``
+    with empty ``partial_audit_chain_state`` (pre-start-audit
+    failure); the caller skips the writer call. Returns an
+    ``AgentRunRecord`` otherwise.
+
+    Mapping per terminal event class follows D95's audit-chain
+    partial-state shape. See ``invoke_agent`` docstring for details.
+    """
+    # InvocationFailed with 0-hash partial state: no projection target.
+    if isinstance(terminal_event, InvocationFailed):
+        if len(terminal_event.partial_audit_chain_state) == 0:
+            return None
+
+    # InvocationStarted should have set these; assert defensively.
+    if invocation_id is None or started_at is None:
+        return None
+
+    if isinstance(terminal_event, InvocationCompleted):
+        audit_start_hash = terminal_event.audit_chain_hashes[0]
+        audit_end_hash: str | None = terminal_event.audit_chain_hashes[1]
+        termination_reason = terminal_event.termination_reason.value
+        output_content = terminal_event.final_result
+        total_cost_usd = terminal_event.total_cost_usd
+    elif isinstance(terminal_event, InvariantBlocked):
+        audit_start_hash = terminal_event.audit_chain_hashes[0]
+        audit_end_hash = terminal_event.audit_chain_hashes[1]
+        termination_reason = "invariant_blocked"
+        output_content = ""
+        total_cost_usd = cost_accumulator
+    else:
+        # InvocationFailed with 1-hash (currently fired) or 2-hash
+        # (forward-affordance) partial_audit_chain_state.
+        partial = terminal_event.partial_audit_chain_state
+        audit_start_hash = partial[0]
+        audit_end_hash = partial[1] if len(partial) >= 2 else None
+        termination_reason = "failed"
+        output_content = ""
+        total_cost_usd = cost_accumulator
+
+    now = datetime.now(timezone.utc)
+    return AgentRunRecord(
+        id=invocation_id,
+        tenant_id=str(tenant_context.tenant_id),
+        jurisdiction=tenant_context.jurisdiction,
+        agent_template_id=template.id,
+        agent_template_version=revision.version,
+        input_message=user_input,
+        output_content=output_content,
+        started_at=started_at,
+        completed_at=now,
+        termination_reason=termination_reason,
+        iteration_count=iteration_count,
+        total_cost_usd=total_cost_usd,
+        trace_id=None,
+        audit_start_hash=audit_start_hash,
+        audit_end_hash=audit_end_hash,
+        created_at=now,
+    )
 
 
 async def _resolve_role_view(

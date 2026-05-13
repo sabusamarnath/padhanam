@@ -264,6 +264,22 @@ class _FakeSecurityEventLogger:
         self.events.append(event)
 
 
+class _FakeRunHistoryWriter:
+    """Captures record_run calls for S31 D95 invoke_agent extension.
+
+    Used by the existing lineage / composition / executor tests to
+    satisfy the new ``writer`` parameter. Tests that specifically
+    exercise the run-record assembly seam live in
+    ``test_invoke_agent_run_record_assembly.py``.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    async def record_run(self, record, *, principal: Principal) -> None:
+        self.calls.append({"record": record, "principal": principal})
+
+
 def _mckinsey_role_view(role_id: UUID, version: int) -> RoleView:
     return RoleView(
         role_id=role_id,
@@ -302,6 +318,7 @@ def test_unauthenticated_principal_raises_authorization_error() -> None:
                 methodology_overrides_lookup=overrides_lookup,
                 tool_definitions_lookup=_empty_tool_definitions_lookup,
                 executor=executor,
+                writer=_FakeRunHistoryWriter(),
                 security_events=security_events,
                 tenant_context=_tenant_context(),
                 agent_template_id=template.id,
@@ -333,6 +350,7 @@ def test_blank_created_agent_uses_revision_content_as_role_view() -> None:
             methodology_overrides_lookup=overrides_lookup,
                 tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
+            writer=_FakeRunHistoryWriter(),
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
             agent_template_id=template.id,
@@ -373,6 +391,7 @@ def test_role_cloned_agent_refetches_role_no_methodology_overrides() -> None:
             methodology_overrides_lookup=overrides_lookup,
                 tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
+            writer=_FakeRunHistoryWriter(),
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
             agent_template_id=template.id,
@@ -432,6 +451,7 @@ def test_methodology_cloned_agent_applies_augment_override() -> None:
             methodology_overrides_lookup=overrides_lookup,
                 tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
+            writer=_FakeRunHistoryWriter(),
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
             agent_template_id=template.id,
@@ -484,6 +504,7 @@ def test_methodology_cloned_with_empty_overrides_returns_role_base() -> None:
             methodology_overrides_lookup=overrides_lookup,
                 tool_definitions_lookup=_empty_tool_definitions_lookup,
             executor=executor,
+            writer=_FakeRunHistoryWriter(),
             security_events=_FakeSecurityEventLogger(),
             tenant_context=_tenant_context(),
             agent_template_id=template.id,

@@ -375,6 +375,19 @@ async def main() -> int:
     # assertions per D90's collect_to_result helper.
     event_types_observed = []
 
+    # Fake writer satisfies the S31 D95 writer parameter without
+    # exercising a live Postgres write at this integration test;
+    # the live-stack smoke at S31 commit 8 exercises the writer
+    # against the per-tenant runs table.
+    class _CapturingWriter:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        async def record_run(self, record, *, principal) -> None:
+            self.calls.append(record)
+
+    writer = _CapturingWriter()
+
     async def event_stream_with_capture():
         async for event in invoke_agent(
             principal=_OPERATOR,
@@ -383,6 +396,7 @@ async def main() -> int:
             methodology_overrides_lookup=overrides_lookup,
             tool_definitions_lookup=tool_definitions_lookup,
             executor=executor,
+            writer=writer,
             security_events=sec,
             tenant_context=tenant_ctx,
             agent_template_id=template.id,

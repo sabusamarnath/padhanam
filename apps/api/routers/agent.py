@@ -126,6 +126,7 @@ async def invoke_agent_endpoint(
             methodology_overrides_lookup=runtime.methodology_overrides_lookup,
             tool_definitions_lookup=runtime.tool_definitions_lookup,
             executor=runtime.executor,
+            writer=runtime.run_history_writer,
             security_events=runtime.security_events,
             tenant_context=tenant_context,
             agent_template_id=agent_id,
