@@ -697,3 +697,83 @@ The partial-unique-index on `name` where `archived_at IS NULL` enforces unique a
 Name and description are read from the parent `agent_templates` row at hash-compute time per D75 and are not persisted as columns on `agent_revisions`; the canonical-JSON payload pulls them from the template, mirroring the methodology context's actual implementation from S23.
 
 `UNIQUE(agent_template_id, version)` — `agent_revisions_template_version_unique`. Revisions are immutable per D31; updates create new revision rows. Hash chain is per template; chains are independent per agent template, mirroring the methodology revision pattern from D74.
+
+## Run history tables
+
+Per-tenant track, lands at S31 via Alembic revision
+`0011_create_run_history` per D95. Three tables comprise the
+surface: `runs` (the structured run record), `run_chunk_citations`
+(run-to-chunk linkage), `run_entity_citations` (run-to-Neo4j-entity
+linkage). All three live on the tenant's data plane per D32.
+
+### `runs`
+
+| Column                    | Type            | Constraints                                                                                                                                          |
+|---------------------------|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `id`                      | `uuid`          | primary key; default `gen_random_uuid()`                                                                                                             |
+| `tenant_id`               | `text`          | not null; CHECK `tenant_id <> ''` (denormalised per D22)                                                                                             |
+| `jurisdiction`            | `text`          | not null                                                                                                                                             |
+| `agent_template_id`       | `uuid`          | not null; FK-equivalent to `agent_templates.id` (no enforced FK because `agent_templates` is append-only per D75; references survive archived state) |
+| `agent_template_version`  | `integer`       | not null                                                                                                                                             |
+| `input_message`           | `text`          | not null; the user-supplied input echoed for audit and rendering                                                                                     |
+| `output_content`          | `text`          | not null; the agent's final content; empty string for `InvocationFailed` and `InvariantBlocked` terminations                                          |
+| `started_at`              | `timestamptz`   | not null                                                                                                                                             |
+| `completed_at`            | `timestamptz`   | not null                                                                                                                                             |
+| `termination_reason`      | `text`          | not null; CHECK ∈ {`content`, `max_iterations`, `tool_not_registered`, `error`, `invariant_blocked`, `failed`} (the five `TerminationReason` enum values plus synthesised `failed` for the `InvocationFailed` terminal event class per D95) |
+| `iteration_count`         | `integer`       | not null; CHECK `>= 0`                                                                                                                               |
+| `total_cost_usd`          | `numeric`       | not null; CHECK `>= 0`                                                                                                                               |
+| `trace_id`                | `text`          | nullable; OTel trace identifier per D27; join key to the trace store                                                                                  |
+| `audit_start_hash`        | `text`          | not null; CHECK length 64; `this_event_hash` from the audit row at `InvocationStarted` per S29b                                                       |
+| `audit_end_hash`          | `text`          | nullable; CHECK `audit_end_hash IS NULL OR length(audit_end_hash) = 64`; additional CHECK `(termination_reason = 'failed') OR (audit_end_hash IS NOT NULL)`; NULL only for `InvocationFailed` events with 1-hash `partial_audit_chain_state` (start audit landed, end audit did not) per D95 |
+| `created_at`              | `timestamptz`   | not null; default `now()`                                                                                                                            |
+
+Indices: `ix_runs_agent_template_id` on `agent_template_id`;
+`ix_runs_started_at` on `started_at`; partial index
+`ix_runs_trace_id` on `trace_id WHERE trace_id IS NOT NULL`.
+
+The runs row is the rendering projection over the canonical audit
+chain per D94 and D95's write-timing commitment. `invoke_agent`
+yields the terminal event before calling `writer.record_run`, so
+writer-failure post-yield leaves a missing-row condition
+reconcilable from the audit chain via `audit_end_hash` rather than
+collapsing the audit-versus-projection asymmetry into the
+runtime's terminal-event contract. `InvocationFailed` events with
+empty `partial_audit_chain_state` (pre-start-audit failure) skip
+the writer call entirely so no runs row exists for invocations
+with no audit evidence per D95.
+
+### `run_chunk_citations`
+
+| Column           | Type            | Constraints                                                                            |
+|------------------|-----------------|----------------------------------------------------------------------------------------|
+| `id`             | `uuid`          | primary key; default `gen_random_uuid()`                                               |
+| `run_id`         | `uuid`          | not null; FK → `runs.id` ON DELETE CASCADE                                             |
+| `chunk_id`       | `uuid`          | nullable; FK → `chunks.id` ON DELETE SET NULL (snapshot survives source removal per D94) |
+| `tenant_id`      | `text`          | not null; CHECK `tenant_id <> ''`                                                      |
+| `jurisdiction`   | `text`          | not null                                                                               |
+| `chunk_excerpt`  | `text`          | not null; snapshot of chunk content for rendering; population semantics at S32          |
+| `source_citation`| `text`          | not null; snapshot of source identification for rendering                              |
+| `created_at`     | `timestamptz`   | not null; default `now()`                                                              |
+
+Indices: `ix_run_chunk_citations_run_id` on `run_id`.
+
+### `run_entity_citations`
+
+| Column                  | Type            | Constraints                                                                                                              |
+|-------------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`          | primary key; default `gen_random_uuid()`                                                                                 |
+| `run_id`                | `uuid`          | not null; FK → `runs.id` ON DELETE CASCADE                                                                               |
+| `entity_tenant_id`      | `text`          | not null; CHECK `entity_tenant_id <> ''`; matches Neo4j entity's `tenant_id` property per D63                            |
+| `entity_name`           | `text`          | not null; matches Neo4j entity's `name` property                                                                          |
+| `entity_type`           | `text`          | not null; matches Neo4j entity's `entity_type` property; free-form per D64                                                |
+| `tenant_id`             | `text`          | not null; CHECK `tenant_id <> ''`; denormalised on the row per D22                                                       |
+| `entity_display_label`  | `text`          | not null; snapshot of entity rendering label; population semantics at S32                                                 |
+| `created_at`            | `timestamptz`   | not null; default `now()`                                                                                                |
+
+Indices: `ix_run_entity_citations_run_id` on `run_id`.
+
+The `(entity_tenant_id, entity_name, entity_type)` composite is
+the join key back to the Neo4j entity per D64's uniqueness
+commitment. No Postgres foreign key to Neo4j is possible; the
+snapshot columns carry the rendering payload that survives entity
+merge or removal per D94's audit-evidence claim.
