@@ -33,7 +33,7 @@ from padhanam.security import OPERATOR_ROLE, Principal
 from shared_kernel import TenantId
 
 
-_D95_FIELD_NAMES = {
+_D95_D96_FIELD_NAMES = {
     "id",
     "tenant_id",
     "jurisdiction",
@@ -50,6 +50,12 @@ _D95_FIELD_NAMES = {
     "audit_start_hash",
     "audit_end_hash",
     "created_at",
+    # D96 / S32 extensions: citation candidates flow through the
+    # AgentRunRecord DTO from invoke_agent's accumulator to the
+    # writer adapter, which routes them onto run-history-context
+    # record types at the wiring layer.
+    "chunk_citations",
+    "entity_citations",
 }
 
 
@@ -83,12 +89,12 @@ def test_agent_run_record_is_frozen_dataclass() -> None:
         record.tenant_id = "tenant-b"  # type: ignore[misc]
 
 
-def test_agent_run_record_field_set_matches_d95() -> None:
+def test_agent_run_record_field_set_matches_d95_d96() -> None:
     actual = {f.name for f in fields(AgentRunRecord)}
-    assert actual == _D95_FIELD_NAMES, (
-        f"AgentRunRecord fields drifted from D95: "
-        f"unexpected={actual - _D95_FIELD_NAMES}, "
-        f"missing={_D95_FIELD_NAMES - actual}"
+    assert actual == _D95_D96_FIELD_NAMES, (
+        f"AgentRunRecord fields drifted from D95/D96: "
+        f"unexpected={actual - _D95_D96_FIELD_NAMES}, "
+        f"missing={_D95_D96_FIELD_NAMES - actual}"
     )
 
 

@@ -535,3 +535,278 @@ def test_terminal_event_yields_before_writer_called() -> None:
 
     # Terminal event reaches the consumer before the writer call.
     assert ordering == ["consumer:InvocationCompleted", "writer.record_run"]
+
+
+# ---------------------------------------------------------------------------
+# D96 / S32: citation accumulator + within-run deduplication
+# ---------------------------------------------------------------------------
+
+
+def _chunk_candidate(*, chunk_id: UUID, content: str = "content"):
+    from contexts.agent.domain.citation_candidates import ChunkCitationCandidate
+
+    return ChunkCitationCandidate(
+        chunk_id=chunk_id,
+        source_id=UUID(int=99),
+        chunk_index=0,
+        content_snapshot=content,
+        source_snapshot={"file_name": "doc.pdf", "file_type": "application/pdf"},
+        tenant_id=_TENANT_A,
+        jurisdiction="eu-west",
+    )
+
+
+def _entity_candidate(*, name: str, etype: str = "Organization"):
+    from contexts.agent.domain.citation_candidates import EntityCitationCandidate
+
+    return EntityCitationCandidate(
+        entity_tenant_id=_TENANT_A,
+        entity_name=name,
+        entity_type=etype,
+        source_chunk_ids=(UUID(int=10),),
+        tenant_id=_TENANT_A,
+        jurisdiction="eu-west",
+    )
+
+
+def _tool_completed(*, idx: int, candidates: tuple = ()):
+    from contexts.agent.domain.events import ToolCallCompleted
+
+    return ToolCallCompleted(
+        invocation_id=_INVOCATION_ID,
+        iteration_index=idx,
+        tool_name="retrieval",
+        success=True,
+        result_summary="ok",
+        duration_ms=10,
+        citation_candidates=candidates,
+    )
+
+
+def test_invoke_agent_accumulator_passes_citations_to_writer() -> None:
+    """D96: a single ToolCallCompleted with three chunk candidates
+    produces three rows in writer.record_run's chunk_citations."""
+    template = _agent_template()
+    revision = _agent_revision(template.id)
+    repository = _FakeAgentRepository(template, revision)
+    writer = _FakeRunHistoryWriter()
+    chunk_a = _chunk_candidate(chunk_id=UUID(int=1), content="A")
+    chunk_b = _chunk_candidate(chunk_id=UUID(int=2), content="B")
+    chunk_c = _chunk_candidate(chunk_id=UUID(int=3), content="C")
+    executor = _ScriptedExecutor([
+        _start_event(template.id),
+        _iter_started(1),
+        _tool_completed(idx=1, candidates=(chunk_a, chunk_b, chunk_c)),
+        _iter_completed(1, Decimal("0.001")),
+        InvocationCompleted(
+            invocation_id=_INVOCATION_ID,
+            final_result="ok",
+            termination_reason=TerminationReason.CONTENT,
+            total_cost_usd=Decimal("0.001"),
+            audit_chain_hashes=(_START_HASH, _END_HASH),
+            duration_ms=100,
+        ),
+    ])
+
+    _drive(invoke_agent(
+        principal=_operator_principal(),
+        repository=repository,
+        role_lookup=_NoopRoleLookup(),
+        methodology_overrides_lookup=_NoopOverridesLookup(),
+        tool_definitions_lookup=_empty_tool_definitions_lookup,
+        executor=executor,
+        writer=writer,
+        security_events=_FakeSecurityEventLogger(),
+        tenant_context=_tenant_context(),
+        agent_template_id=template.id,
+        user_input="q",
+    ))
+
+    assert len(writer.calls) == 1
+    record = writer.calls[0]
+    assert len(record.chunk_citations) == 3
+    assert record.chunk_citations[0] is chunk_a
+    assert record.chunk_citations[1] is chunk_b
+    assert record.chunk_citations[2] is chunk_c
+    assert record.entity_citations == ()
+
+
+def test_invoke_agent_accumulator_deduplicates_chunks_within_run() -> None:
+    """D96: a chunk retrieved by two ToolCallCompleted events within
+    the same run produces one row; first-seen-wins."""
+    template = _agent_template()
+    revision = _agent_revision(template.id)
+    repository = _FakeAgentRepository(template, revision)
+    writer = _FakeRunHistoryWriter()
+    shared_id = UUID(int=42)
+    first_seen = _chunk_candidate(chunk_id=shared_id, content="FIRST")
+    second_seen = _chunk_candidate(chunk_id=shared_id, content="SECOND")
+    executor = _ScriptedExecutor([
+        _start_event(template.id),
+        _iter_started(1),
+        _tool_completed(idx=1, candidates=(first_seen,)),
+        _iter_completed(1, Decimal("0.001")),
+        _iter_started(2),
+        _tool_completed(idx=2, candidates=(second_seen,)),
+        _iter_completed(2, Decimal("0.001")),
+        InvocationCompleted(
+            invocation_id=_INVOCATION_ID,
+            final_result="ok",
+            termination_reason=TerminationReason.CONTENT,
+            total_cost_usd=Decimal("0.002"),
+            audit_chain_hashes=(_START_HASH, _END_HASH),
+            duration_ms=100,
+        ),
+    ])
+
+    _drive(invoke_agent(
+        principal=_operator_principal(),
+        repository=repository,
+        role_lookup=_NoopRoleLookup(),
+        methodology_overrides_lookup=_NoopOverridesLookup(),
+        tool_definitions_lookup=_empty_tool_definitions_lookup,
+        executor=executor,
+        writer=writer,
+        security_events=_FakeSecurityEventLogger(),
+        tenant_context=_tenant_context(),
+        agent_template_id=template.id,
+        user_input="q",
+    ))
+
+    record = writer.calls[0]
+    assert len(record.chunk_citations) == 1
+    # First-seen wins: the FIRST snapshot persisted, not the SECOND.
+    assert record.chunk_citations[0].content_snapshot == "FIRST"
+
+
+def test_invoke_agent_accumulator_deduplicates_entities_by_composite_key() -> None:
+    """D96: entity dedup keys on (entity_tenant_id, entity_name,
+    entity_type); same composite seen twice yields one row."""
+    template = _agent_template()
+    revision = _agent_revision(template.id)
+    repository = _FakeAgentRepository(template, revision)
+    writer = _FakeRunHistoryWriter()
+    acme_v1 = _entity_candidate(name="Acme")
+    acme_v2 = _entity_candidate(name="Acme")  # same composite key
+    different = _entity_candidate(name="Acme", etype="Person")  # different etype
+    executor = _ScriptedExecutor([
+        _start_event(template.id),
+        _iter_started(1),
+        _tool_completed(idx=1, candidates=(acme_v1, acme_v2, different)),
+        _iter_completed(1, Decimal("0.001")),
+        InvocationCompleted(
+            invocation_id=_INVOCATION_ID,
+            final_result="ok",
+            termination_reason=TerminationReason.CONTENT,
+            total_cost_usd=Decimal("0.001"),
+            audit_chain_hashes=(_START_HASH, _END_HASH),
+            duration_ms=100,
+        ),
+    ])
+
+    _drive(invoke_agent(
+        principal=_operator_principal(),
+        repository=repository,
+        role_lookup=_NoopRoleLookup(),
+        methodology_overrides_lookup=_NoopOverridesLookup(),
+        tool_definitions_lookup=_empty_tool_definitions_lookup,
+        executor=executor,
+        writer=writer,
+        security_events=_FakeSecurityEventLogger(),
+        tenant_context=_tenant_context(),
+        agent_template_id=template.id,
+        user_input="q",
+    ))
+
+    record = writer.calls[0]
+    # The (Acme, Organization) composite collapses to one; (Acme, Person)
+    # is a distinct composite so it lands as a second row.
+    assert len(record.entity_citations) == 2
+    assert record.entity_citations[0].entity_name == "Acme"
+    assert record.entity_citations[0].entity_type == "Organization"
+    assert record.entity_citations[1].entity_type == "Person"
+
+
+def test_invoke_agent_accumulator_passes_chunks_and_entities_together() -> None:
+    """D96: mixed candidates split correctly between the two
+    accumulator surfaces."""
+    template = _agent_template()
+    revision = _agent_revision(template.id)
+    repository = _FakeAgentRepository(template, revision)
+    writer = _FakeRunHistoryWriter()
+    chunk = _chunk_candidate(chunk_id=UUID(int=1))
+    entity = _entity_candidate(name="Acme")
+    executor = _ScriptedExecutor([
+        _start_event(template.id),
+        _iter_started(1),
+        _tool_completed(idx=1, candidates=(chunk, entity)),
+        _iter_completed(1, Decimal("0.001")),
+        InvocationCompleted(
+            invocation_id=_INVOCATION_ID,
+            final_result="ok",
+            termination_reason=TerminationReason.CONTENT,
+            total_cost_usd=Decimal("0.001"),
+            audit_chain_hashes=(_START_HASH, _END_HASH),
+            duration_ms=100,
+        ),
+    ])
+
+    _drive(invoke_agent(
+        principal=_operator_principal(),
+        repository=repository,
+        role_lookup=_NoopRoleLookup(),
+        methodology_overrides_lookup=_NoopOverridesLookup(),
+        tool_definitions_lookup=_empty_tool_definitions_lookup,
+        executor=executor,
+        writer=writer,
+        security_events=_FakeSecurityEventLogger(),
+        tenant_context=_tenant_context(),
+        agent_template_id=template.id,
+        user_input="q",
+    ))
+
+    record = writer.calls[0]
+    assert len(record.chunk_citations) == 1
+    assert len(record.entity_citations) == 1
+    assert record.chunk_citations[0] is chunk
+    assert record.entity_citations[0] is entity
+
+
+def test_invoke_agent_no_tool_calls_yields_empty_citation_lists() -> None:
+    """D96: a content-only invocation (no ToolCallCompleted events)
+    produces empty citation tuples on the run record."""
+    template = _agent_template()
+    revision = _agent_revision(template.id)
+    repository = _FakeAgentRepository(template, revision)
+    writer = _FakeRunHistoryWriter()
+    executor = _ScriptedExecutor([
+        _start_event(template.id),
+        _iter_started(1),
+        _iter_completed(1, Decimal("0.0005")),
+        InvocationCompleted(
+            invocation_id=_INVOCATION_ID,
+            final_result="ok",
+            termination_reason=TerminationReason.CONTENT,
+            total_cost_usd=Decimal("0.0005"),
+            audit_chain_hashes=(_START_HASH, _END_HASH),
+            duration_ms=100,
+        ),
+    ])
+
+    _drive(invoke_agent(
+        principal=_operator_principal(),
+        repository=repository,
+        role_lookup=_NoopRoleLookup(),
+        methodology_overrides_lookup=_NoopOverridesLookup(),
+        tool_definitions_lookup=_empty_tool_definitions_lookup,
+        executor=executor,
+        writer=writer,
+        security_events=_FakeSecurityEventLogger(),
+        tenant_context=_tenant_context(),
+        agent_template_id=template.id,
+        user_input="q",
+    ))
+
+    record = writer.calls[0]
+    assert record.chunk_citations == ()
+    assert record.entity_citations == ()

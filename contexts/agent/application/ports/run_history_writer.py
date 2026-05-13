@@ -42,6 +42,10 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
+from contexts.agent.domain.citation_candidates import (
+    ChunkCitationCandidate,
+    EntityCitationCandidate,
+)
 from padhanam.security import Principal
 
 
@@ -67,6 +71,14 @@ class AgentRunRecord:
     ``audit_end_hash`` is nullable; ``invoke_agent``'s assembly
     logic sets it to None for the 1-hash InvocationFailed case
     per D95's write-time mapping.
+
+    D96 / S32: the DTO carries ``chunk_citations`` and
+    ``entity_citations`` tuples (default empty). The wiring adapter
+    at ``apps/cli/_cross_context.py`` translates them into the
+    run-history-context ``ChunkCitationRecord`` / ``EntityCitationRecord``
+    domain types and persists them within the same single transaction
+    as the runs row per D96's single-transaction multi-table write
+    commitment.
     """
 
     id: UUID
@@ -85,6 +97,8 @@ class AgentRunRecord:
     audit_start_hash: str
     audit_end_hash: str | None
     created_at: datetime
+    chunk_citations: tuple[ChunkCitationCandidate, ...] = ()
+    entity_citations: tuple[EntityCitationCandidate, ...] = ()
 
 
 class RunHistoryWriter(Protocol):

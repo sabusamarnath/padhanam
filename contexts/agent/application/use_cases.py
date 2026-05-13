@@ -77,6 +77,10 @@ from contexts.agent.application.ports import (
     ToolDefinitionsLookup,
 )
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
+from contexts.agent.domain.citation_candidates import (
+    ChunkCitationCandidate,
+    EntityCitationCandidate,
+)
 from contexts.agent.domain.events import (
     AgentEvent,
     InvariantBlocked,
@@ -85,6 +89,7 @@ from contexts.agent.domain.events import (
     InvocationStarted,
     IterationCompleted,
     IterationStarted,
+    ToolCallCompleted,
 )
 from contexts.agent.ports import (
     AgentExecutor,
@@ -852,6 +857,18 @@ async def invoke_agent(
     iteration_count: int = 0
     cost_accumulator: Decimal = Decimal("0")
 
+    # D96 / S32: citation accumulators absorb ToolCallCompleted
+    # citation_candidates across the run with within-run deduplication
+    # (first-seen-wins) by (chunk_id) for chunks and
+    # (entity_tenant_id, entity_name, entity_type) for entities.
+    # Run identity is implicit because the accumulator is per-
+    # invocation; the deduplication keys collapse to the in-run-unique
+    # identity surface per D96.
+    chunk_citation_accumulator: list[ChunkCitationCandidate] = []
+    entity_citation_accumulator: list[EntityCitationCandidate] = []
+    seen_chunk_ids: set = set()
+    seen_entity_keys: set = set()
+
     async for event in executor.execute(context):
         # Update accumulators per event type before yielding.
         if isinstance(event, InvocationStarted):
@@ -864,6 +881,25 @@ async def invoke_agent(
             iteration_count = max(iteration_count, event.iteration_index)
         elif isinstance(event, IterationCompleted):
             cost_accumulator += event.cost_usd
+        elif isinstance(event, ToolCallCompleted):
+            # D96: absorb citation candidates, deduplicating within
+            # the run. First-seen snapshot wins; later duplicates
+            # discard. The split by candidate type at accumulation
+            # avoids isinstance dispatch at write time.
+            for candidate in event.citation_candidates:
+                if isinstance(candidate, ChunkCitationCandidate):
+                    if candidate.chunk_id not in seen_chunk_ids:
+                        seen_chunk_ids.add(candidate.chunk_id)
+                        chunk_citation_accumulator.append(candidate)
+                elif isinstance(candidate, EntityCitationCandidate):
+                    key = (
+                        candidate.entity_tenant_id,
+                        candidate.entity_name,
+                        candidate.entity_type,
+                    )
+                    if key not in seen_entity_keys:
+                        seen_entity_keys.add(key)
+                        entity_citation_accumulator.append(candidate)
 
         yield event
 
@@ -881,6 +917,8 @@ async def invoke_agent(
                 revision=revision,
                 tenant_context=tenant_context,
                 user_input=user_input,
+                chunk_citations=tuple(chunk_citation_accumulator),
+                entity_citations=tuple(entity_citation_accumulator),
             )
             if run_record is not None:
                 await writer.record_run(run_record, principal=principal)
@@ -898,6 +936,8 @@ def _assemble_agent_run_record(
     revision: AgentRevision,
     tenant_context: TenantContext,
     user_input: str,
+    chunk_citations: tuple[ChunkCitationCandidate, ...] = (),
+    entity_citations: tuple[EntityCitationCandidate, ...] = (),
 ) -> AgentRunRecord | None:
     """Assemble the run record from accumulator state + terminal event (D95).
 
@@ -958,6 +998,8 @@ def _assemble_agent_run_record(
         audit_start_hash=audit_start_hash,
         audit_end_hash=audit_end_hash,
         created_at=now,
+        chunk_citations=chunk_citations,
+        entity_citations=entity_citations,
     )
 
 
