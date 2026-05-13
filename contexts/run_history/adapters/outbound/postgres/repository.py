@@ -74,7 +74,7 @@ run_chunk_citations = sa.Table(
     sa.Column("tenant_id", sa.Text, nullable=False),
     sa.Column("jurisdiction", sa.Text, nullable=False),
     sa.Column("chunk_excerpt", sa.Text, nullable=False),
-    sa.Column("source_citation", sa.Text, nullable=False),
+    sa.Column("source_snapshot", pg.JSONB(), nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
 )
 
@@ -88,7 +88,7 @@ run_entity_citations = sa.Table(
     sa.Column("entity_name", sa.Text, nullable=False),
     sa.Column("entity_type", sa.Text, nullable=False),
     sa.Column("tenant_id", sa.Text, nullable=False),
-    sa.Column("entity_display_label", sa.Text, nullable=False),
+    sa.Column("source_chunk_ids", pg.ARRAY(sa.Text), nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
 )
 
