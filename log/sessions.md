@@ -1359,3 +1359,34 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## Strategic block: Phase 1 / Phase 2 boundary — D92, D93 (2026-05-13)
+
+roles: analyst, PM, architect, technical writer
+mode: strategic
+
+Produced: One charter-only commit (`66a650a`, `docs(charter): D92 D93 phase 1 phase 2 boundary`) with four file edits. (a) `charter/decisions.md` appends D92 (Phase 1 scope confirmed at P1 through P12 with P9-P12 reframed as backend-only substrate) and D93 (Phase 2 direction is methodology-as-product positioning with focus purely on UX/UI); D91 remains the prior latest entry, byte-for-byte unchanged. (b) `charter/roadmap.md` appends v5 to the version log with reasoning category **discovery + signal**; RICE table unchanged. (c) `charter/current-package.md` inserts the boundary-committed paragraph between the P8 close paragraph and the P9 next paragraph, rewrites the P9 next paragraph for backend-only scope, appends four new carryover entries (HTTP API for ingestion, HTTP API for evaluation, browser-based authentication, frontend stack decision), and updates the PRFAQ phase-audit refresh carryover to absorb D93's voice-and-audience supersession of D51. (d) `charter/packages.md` rewrites P9 through P12 lines for backend-only scope and replaces the closing line with the Phase 2 direction header note. Lint passes (24 import-linter contracts kept); `tests/_enforcement/` 9/9 pass. Working tree clean post-commit.
+
+Decisions: D92 confirms Phase 1 scope at P1 through P12 with P9-P12 reframed as backend-only substrate; UI elements deferred to Phase 2. D93 commits Phase 2 direction to methodology-as-product positioning with focus purely on UX/UI on top of Phase 1's complete substrate. Both Kano must-have. The two entries land paired because each one's reasoning depends on the other's framing.
+
+Reflection (three prompts per the brief):
+
+1. **Pre-write reconciliation outcome.** Confirmed live state matched the brief's assumptions at every check: D91 was the most recent D-entry at `charter/decisions.md` line 890, v4 was the most recent roadmap version, `charter/current-package.md` was at the "## P9 active — opening" header. No renumbering needed; no user-question moment required. Pre-write reconciliation now at its eighth-plus instance across the project; in this case the reconciliation surfaced no drift, which is itself signal — the strategic-block authoring sequence from karma transplant Block 2 (`d3ed43f`) through brand-as-charter-grade D91 closure through lineage paragraph closure through this Phase 1 / Phase 2 boundary block has produced four sequential strategic commits without inter-block drift. The pattern's value at low-drift moments is the cost of the check (one minute of greps and reads) versus the cost of a wrong-numbering commit (rewrites the D-entry, the roadmap version, and the cross-references); the asymmetry continues to justify the discipline.
+
+2. **Two D-entries in one commit.** D92 (Phase 1 scope at P12 with P9-P12 backend-only) and D93 (Phase 2 direction methodology-as-product, UX-only) land together because D93's reasoning depends on D92's substrate-completeness framing (without P9-P12 backend complete, Phase 2 UX has partial substrate to build against) and D92's reasoning depends on D93's UX-purity commitment (without Phase 2 being UX-only, P9-P12 UI elements have no consistent home for deferral). The structural symmetry is worth noting: when two decisions are mutually load-bearing on each other's reasoning, they belong in one commit so the audit trail records them as a single structural choice rather than as a sequence that could be misread as two independent decisions. Pattern candidate name: paired-decision-shape. One-off vs. recurring is open; the deferred-decisions cluster at P4 close also landed multiple D-entries together but as a clearance shape rather than a mutual-load-bearing shape, so the patterns are distinct. Recording as a methodology-promotion candidate for the Phase 1 close audit; if a second instance surfaces in P9-P12 it earns prescriptive status, if not it stays as observed-pattern.
+
+3. **The audit's role this conversation.** The conversation opened to scope-and-run the Phase 1 close audit. The audit-framing conversation surfaced the Phase 1 scope question, which reversed direction twice (initially proposing P8 close, then operator extended to P12 original scope with P9-P12 reframed). The audit itself defers to P12 close per D92. The conversation's deliverable is the boundary commitment, not the audit. The pattern worth recording: a Phase 1 close audit conversation can produce phase-boundary-shape outputs even when the audit itself defers. The general principle the pattern points at: audit-framing conversations are themselves load-bearing strategic conversations, not pure scheduling work; the framing surfaces the questions the audit needs to answer, and sometimes those questions have answers that should land before the audit rather than at it. Methodology-promotion candidate for the Phase 1 close audit: "audit-framing conversations can produce boundary-shape commits; the audit itself defers what genuinely needs the audit's compounding evidence."
+
+```
+metrics:
+  classification: strategic
+  session_started: 2026-05-13
+  session_closed: 2026-05-13
+  merged: 2026-05-13
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects:
+  corrected_by:
+```
