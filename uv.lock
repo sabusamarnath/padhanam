@@ -14,6 +14,7 @@ members = [
     "padhanam-ingestion",
     "padhanam-methodology",
     "padhanam-observability",
+    "padhanam-run-history",
     "padhanam-tenancy",
     "padhanam-tools",
 ]
@@ -1191,6 +1192,7 @@ dependencies = [
     { name = "padhanam-ingestion" },
     { name = "padhanam-methodology" },
     { name = "padhanam-observability" },
+    { name = "padhanam-run-history" },
     { name = "padhanam-tenancy" },
     { name = "padhanam-tools" },
     { name = "psycopg", extra = ["binary"] },
@@ -1222,6 +1224,7 @@ requires-dist = [
     { name = "padhanam-ingestion", virtual = "contexts/ingestion" },
     { name = "padhanam-methodology", virtual = "contexts/methodology" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
+    { name = "padhanam-run-history", virtual = "contexts/run_history" },
     { name = "padhanam-tenancy", virtual = "contexts/tenancy" },
     { name = "padhanam-tools", virtual = "contexts/tools" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -1403,6 +1406,11 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "langfuse", specifier = ">=2.50,<3" }]
+
+[[package]]
+name = "padhanam-run-history"
+version = "0.0.0"
+source = { virtual = "contexts/run_history" }
 
 [[package]]
 name = "padhanam-tenancy"

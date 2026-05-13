@@ -35,6 +35,10 @@ from contexts.agent.application.ports.role_lookup import (
     RoleLookup,
     RoleView,
 )
+from contexts.agent.application.ports.run_history_writer import (
+    AgentRunRecord,
+    RunHistoryWriter,
+)
 from contexts.agent.application.ports.source_lookup import (
     SourceLookup,
     SourceNotFoundError,
@@ -50,6 +54,7 @@ from contexts.agent.application.ports.tool_invoker import (
 
 __all__ = [
     "AgentRetrievalClient",
+    "AgentRunRecord",
     "InvocationOutcome",
     "MethodologyLookup",
     "MethodologyOverridesLookup",
@@ -57,6 +62,7 @@ __all__ = [
     "RetrievedChunk",
     "RoleLookup",
     "RoleView",
+    "RunHistoryWriter",
     "SourceLookup",
     "SourceNotFoundError",
     "ToolDefinitionsLookup",
