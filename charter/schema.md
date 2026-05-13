@@ -751,11 +751,21 @@ with no audit evidence per D95.
 | `chunk_id`       | `uuid`          | nullable; FK → `chunks.id` ON DELETE SET NULL (snapshot survives source removal per D94) |
 | `tenant_id`      | `text`          | not null; CHECK `tenant_id <> ''`                                                      |
 | `jurisdiction`   | `text`          | not null                                                                               |
-| `chunk_excerpt`  | `text`          | not null; snapshot of chunk content for rendering; population semantics at S32          |
-| `source_citation`| `text`          | not null; snapshot of source identification for rendering                              |
+| `chunk_excerpt`  | `text`          | not null; snapshot of chunk content for rendering per D96                              |
+| `source_snapshot`| `jsonb`         | not null; default `'{}'::jsonb`; structured snapshot of source-level metadata available at retrieval time (Phase 1 carries `file_name` and `file_type`; grows additively with ingestion enrichment per D96) |
 | `created_at`     | `timestamptz`   | not null; default `now()`                                                              |
 
 Indices: `ix_run_chunk_citations_run_id` on `run_id`.
+
+S32 revision per D96 (Alembic `0012_revise_citation_snapshots`):
+drops `source_citation text NOT NULL` and adds `source_snapshot
+jsonb NOT NULL DEFAULT '{}'::jsonb` so render shape (Harvard,
+footnote, hover card, et al.) stays a Phase 2 read-time concern
+over a structured input snapshot. Citation rows accumulate at
+write time through `invoke_agent`'s within-run deduplication
+(`(chunk_id, run_id)` first-seen-wins) and land alongside the
+runs row within `async with session.begin()` per D96's single-
+transaction multi-table write commitment.
 
 ### `run_entity_citations`
 
@@ -767,7 +777,7 @@ Indices: `ix_run_chunk_citations_run_id` on `run_id`.
 | `entity_name`           | `text`          | not null; matches Neo4j entity's `name` property                                                                          |
 | `entity_type`           | `text`          | not null; matches Neo4j entity's `entity_type` property; free-form per D64                                                |
 | `tenant_id`             | `text`          | not null; CHECK `tenant_id <> ''`; denormalised on the row per D22                                                       |
-| `entity_display_label`  | `text`          | not null; snapshot of entity rendering label; population semantics at S32                                                 |
+| `source_chunk_ids`      | `text[]`        | not null; default `'{}'::text[]`; snapshot of the Neo4j entity's `source_chunk_ids` array preserving provenance back to per-tenant Postgres chunks per D96 |
 | `created_at`            | `timestamptz`   | not null; default `now()`                                                                                                |
 
 Indices: `ix_run_entity_citations_run_id` on `run_id`.
@@ -777,3 +787,13 @@ the join key back to the Neo4j entity per D64's uniqueness
 commitment. No Postgres foreign key to Neo4j is possible; the
 snapshot columns carry the rendering payload that survives entity
 merge or removal per D94's audit-evidence claim.
+
+S32 revision per D96 (Alembic `0012_revise_citation_snapshots`):
+drops `entity_display_label text NOT NULL` (display label
+synthesised from name plus type at render time) and adds
+`source_chunk_ids text[] NOT NULL DEFAULT '{}'::text[]` so the
+entity provenance trail back to per-tenant Postgres chunks is
+load-bearing audit evidence rather than a pre-rendered display
+field. The audit-evidence-fidelity claim from D94 holds for entity
+provenance the same way it holds for chunk content. Citation rows
+land within the same single transaction as the runs row per D96.
