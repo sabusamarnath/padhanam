@@ -55,11 +55,12 @@ from __future__ import annotations
 import json
 import logging
 from decimal import Decimal
-from typing import Any, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Sequence
 from uuid import UUID
 
 from contexts.agent.application.ports import (
     AgentRetrievalClient,
+    AgentRunRecord,
     InvocationOutcome,
     MethodologyOverridesLookup,
     MethodologyView,
@@ -83,14 +84,21 @@ from contexts.methodology.ports import (
     MethodologyRepositoryPort,
     RoleRepositoryPort,
 )
+from contexts.run_history.adapters.outbound.postgres import (
+    PostgresRunHistoryAdapter,
+)
+from contexts.run_history.api import record_run as _record_run_use_case
+from contexts.run_history.domain import RunRecord
 from contexts.tools.application.tool_invocation_service import (
     InvocationCheckOutcome,
     check_invocation_admissibility,
     list_visible_definitions as tools_list_visible_definitions,
 )
 from contexts.tools.ports import ToolRepositoryPort
+from padhanam.observability.security_events import SecurityEventLogger
 from padhanam.security import Principal
-from shared_kernel import TenantContext, ToolAllowlistEntry
+from shared_kernel import TenantContext, TenantId, ToolAllowlistEntry
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 _log = logging.getLogger("apps.cli.cross_context")
@@ -597,6 +605,105 @@ class ToolInvokerAdapter:
         return ToolInvocationResult(
             outcome=InvocationOutcome.OK,
             payload=_format_chunks_as_tool_result(tuple(chunks)),
+        )
+
+
+class RunHistoryWriterAdapter:
+    """Adapter from run-history's record_run use case to the agent-
+    context ``RunHistoryWriter`` Protocol (S31 commit 5, D95).
+
+    The agent runtime's ``invoke_agent`` use case calls this after
+    yielding the terminal event per D95's shape-B write-timing
+    commitment. The adapter:
+
+    1. Translates the agent-context ``AgentRunRecord`` DTO into the
+       run-history domain ``RunRecord``. The translation is field-
+       for-field; the DTO-versus-domain boundary keeps the agent
+       context independent of ``contexts.run_history.domain`` per
+       D17.
+    2. Resolves a tenant-bound ``async_sessionmaker`` via the
+       injected ``session_factory_for_tenant`` callable; the
+       resolution per call rather than per construction matches
+       the existing apps/api retrieval-client cross-tenant pattern
+       from S30b.
+    3. Constructs a per-call ``PostgresRunHistoryAdapter`` bound to
+       the runtime's tenant_id and calls
+       ``contexts.run_history.api.record_run`` with the
+       authenticated principal threaded through from
+       ``invoke_agent``.
+
+    The adapter does not own engine lifecycles; the
+    ``session_factory_for_tenant`` callable opaquely returns the
+    tenant's existing ``async_sessionmaker``. The CLI command
+    binds a dev-shape resolver via ``apps/cli/_runtime.py``;
+    ``apps/api/_agent_runtime_wiring.py`` binds the tenancy
+    context's session-factory cache per the S30b cross-app
+    re-use pattern.
+
+    This is the eighth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py (after MethodologyLookup,
+    RoleLookup, SourceLookup, AgentRetrievalClient,
+    MethodologyOverridesLookup, ToolDefinitionsLookup,
+    ToolInvoker) — the pattern's altitude-agnostic shape continues
+    to do load-bearing work per D95.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+        security_events: SecurityEventLogger,
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+        self._security_events = security_events
+
+    async def record_run(
+        self,
+        record: AgentRunRecord,
+        *,
+        principal: Principal,
+    ) -> None:
+        tenant_context = TenantContext(
+            tenant_id=record.tenant_id,
+            jurisdiction=record.jurisdiction,
+            cost_attribution_id=record.tenant_id,
+        )
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        repository = PostgresRunHistoryAdapter(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(record.tenant_id),
+        )
+        run_record = RunRecord(
+            id=record.id,
+            tenant_id=record.tenant_id,
+            jurisdiction=record.jurisdiction,
+            agent_template_id=record.agent_template_id,
+            agent_template_version=record.agent_template_version,
+            input_message=record.input_message,
+            output_content=record.output_content,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            termination_reason=record.termination_reason,
+            iteration_count=record.iteration_count,
+            total_cost_usd=record.total_cost_usd,
+            trace_id=record.trace_id,
+            audit_start_hash=record.audit_start_hash,
+            audit_end_hash=record.audit_end_hash,
+            created_at=record.created_at,
+        )
+        await _record_run_use_case(
+            principal=principal,
+            repository=repository,
+            security_events=self._security_events,
+            run_record=run_record,
         )
 
 

@@ -38,6 +38,7 @@ from contexts.agent.application.ports import (
     RoleLookup,
     ToolDefinitionsLookup,
 )
+from contexts.agent.application.ports import RunHistoryWriter
 from contexts.agent.ports import AgentExecutor, AgentRepositoryPort
 from padhanam.observability.security_events import (
     SecurityEventLogger,
@@ -67,6 +68,7 @@ class AgentRuntimeComposition:
     methodology_overrides_lookup: MethodologyOverridesLookup
     tool_definitions_lookup: ToolDefinitionsLookup
     executor: AgentExecutor
+    run_history_writer: RunHistoryWriter
     security_events: SecurityEventLogger
 
 

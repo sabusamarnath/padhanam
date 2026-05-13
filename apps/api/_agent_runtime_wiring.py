@@ -84,6 +84,7 @@ from apps.api.routers.agent import AgentRuntimeComposition
 from apps.cli._cross_context import (
     MethodologyOverridesLookupAdapter,
     RoleLookupAdapter,
+    RunHistoryWriterAdapter,
     ToolDefinitionsLookupAdapter,
     ToolInvokerAdapter,
 )
@@ -267,12 +268,30 @@ def build_agent_runtime_composition(
         audit_port=audit_port,
     )
 
+    # RunHistoryWriterAdapter resolves the per-tenant session
+    # factory at call time via the existing
+    # TenantSessionFactoryCache; matches the
+    # TenantRoutingRetrievalClient pattern above.
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    run_history_writer = RunHistoryWriterAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+        security_events=security_events,
+    )
+
     return AgentRuntimeComposition(
         agent_repository=agent_repository,
         role_lookup=role_lookup,
         methodology_overrides_lookup=methodology_overrides_lookup,
         tool_definitions_lookup=tool_definitions_lookup,
         executor=executor,
+        run_history_writer=run_history_writer,
         security_events=security_events,
     )
 
