@@ -390,6 +390,7 @@ class AgentLoopExecutor(AgentExecutor):
                                 success=result.outcome is InvocationOutcome.OK,
                                 result_summary=_summarise(result.payload),
                                 duration_ms=tool_duration_ms,
+                                citation_candidates=result.citation_candidates,
                             )
                             messages.append(
                                 Message(

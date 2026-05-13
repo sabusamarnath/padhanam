@@ -752,3 +752,129 @@ def test_llm_call_started_event_per_iteration() -> None:
     assert llm_call_events[1].iteration_index == 2
     # Second iteration's message_count is greater (assistant + tool messages).
     assert llm_call_events[1].message_count > llm_call_events[0].message_count
+
+
+# ----------------------------------------------------------------------------
+# D96 / S32: ToolCallCompleted carries citation_candidates from the tool
+# invocation result.
+# ----------------------------------------------------------------------------
+
+
+def _make_chunk_candidate(chunk_id_hex: str = "1" * 32):
+    from contexts.agent.domain.citation_candidates import ChunkCitationCandidate
+    from uuid import UUID as _UUID
+
+    return ChunkCitationCandidate(
+        chunk_id=_UUID(int=int(chunk_id_hex, 16) if isinstance(chunk_id_hex, str) and len(chunk_id_hex) == 32 else 1),
+        source_id=_UUID(int=2),
+        chunk_index=0,
+        content_snapshot="cited content",
+        source_snapshot={"file_name": "doc.pdf", "file_type": "application/pdf"},
+        tenant_id="00000000-0000-4000-8000-0000000000aa",
+        jurisdiction="EU",
+    )
+
+
+def _make_entity_candidate(name: str = "Acme"):
+    from contexts.agent.domain.citation_candidates import EntityCitationCandidate
+    from uuid import UUID as _UUID
+
+    return EntityCitationCandidate(
+        entity_tenant_id="00000000-0000-4000-8000-0000000000aa",
+        entity_name=name,
+        entity_type="Organization",
+        source_chunk_ids=(_UUID(int=3),),
+        tenant_id="00000000-0000-4000-8000-0000000000aa",
+        jurisdiction="EU",
+    )
+
+
+def test_tool_call_completed_carries_chunk_citation_candidates() -> None:
+    """D96: a retrieval tool result with chunk citation candidates
+    propagates to the emitted ToolCallCompleted event."""
+    candidate = _make_chunk_candidate()
+    inference = _ScriptedStreamingInferencePort(
+        [
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="retrieval", arguments_json='{"query": "x"}'),),
+                cost="0.001",
+            ),
+            _chunks_for_content("answer", cost="0.001"),
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.OK,
+                payload="[score=0.9] cited content",
+                citation_candidates=(candidate,),
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    events = asyncio.run(_collect_events(executor, _context()))
+    completed = next(e for e in events if isinstance(e, ToolCallCompleted))
+    assert completed.citation_candidates == (candidate,)
+
+
+def test_tool_call_completed_carries_mixed_chunk_and_entity_candidates() -> None:
+    """D96: mixed chunk and entity citation candidates flow through
+    the same ToolCallCompleted field."""
+    chunk = _make_chunk_candidate()
+    entity = _make_entity_candidate()
+    inference = _ScriptedStreamingInferencePort(
+        [
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="retrieval", arguments_json='{"query": "x"}'),),
+                cost="0.001",
+            ),
+            _chunks_for_content("done", cost="0.001"),
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.OK,
+                payload="payload",
+                citation_candidates=(chunk, entity),
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    events = asyncio.run(_collect_events(executor, _context()))
+    completed = next(e for e in events if isinstance(e, ToolCallCompleted))
+    assert len(completed.citation_candidates) == 2
+    assert completed.citation_candidates[0] is chunk
+    assert completed.citation_candidates[1] is entity
+
+
+def test_tool_call_completed_defaults_to_empty_for_no_candidate_tool_results() -> None:
+    """D96: a tool result without citation candidates yields an empty
+    tuple on ToolCallCompleted (backwards compatibility preserved)."""
+    inference = _ScriptedStreamingInferencePort(
+        [
+            _chunks_for_tool_calls(
+                (ToolCall(id="c1", name="retrieval", arguments_json='{"query": "x"}'),),
+                cost="0.001",
+            ),
+            _chunks_for_content("done", cost="0.001"),
+        ]
+    )
+    invoker = _ScriptedToolInvoker(
+        [
+            ToolInvocationResult(
+                outcome=InvocationOutcome.OK,
+                payload="(no chunks matched the query)",
+            )
+        ]
+    )
+    audit = _ChainingFakeAuditPort()
+    executor = _executor(inference=inference, invoker=invoker, audit=audit)
+
+    events = asyncio.run(_collect_events(executor, _context()))
+    completed = next(e for e in events if isinstance(e, ToolCallCompleted))
+    assert completed.citation_candidates == ()
