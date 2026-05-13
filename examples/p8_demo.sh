@@ -14,10 +14,14 @@
 #
 # Pre-requisites:
 #   - padhanam-api container running and rebuilt to the post-S28b image.
-#   - Six Flowstate markdown files placed at examples/sources/flowstate/
-#     01_ceo_memo.md through 06_competitive_intel.md.
-#   - Seven Forgepath markdown files placed at examples/sources/forgepath/
-#     01_ceo_pre_read.md through 07_initiative_inventory.md.
+#   - Six Flowstate markdown files at examples/sources/flowstate/:
+#     01_ceo_memo.md, 02_analyst_brief.md, 03_customer_interviews.md,
+#     04_sales_sync_notes.md, 05_internal_metrics.md,
+#     06_competitive_intel.md.
+#   - Seven Forgepath markdown files at examples/sources/forgepath/:
+#     01_ceo_pre_read.md, 02_market_landscape.md, 03_customer_segments.md,
+#     04_financial_model.md, 05_org_design_notes.md, 06_prior_strategy.md,
+#     07_initiative_inventory.md.
 #   - McKinsey 7-Step methodology and LVT methodology authored on the
 #     control plane (seeded by Alembic migrations 0007 and 0008).
 #
@@ -125,10 +129,10 @@ echo "[ingest] Flowstate pack into tenant alpha (label 'a')"
 FLOWSTATE_SOURCE_IDS=()
 for file in \
     examples/sources/flowstate/01_ceo_memo.md \
-    examples/sources/flowstate/02_q3_review_deck.md \
-    examples/sources/flowstate/03_metrics_appendix.md \
-    examples/sources/flowstate/04_team_lead_interviews.md \
-    examples/sources/flowstate/05_customer_research_notes.md \
+    examples/sources/flowstate/02_analyst_brief.md \
+    examples/sources/flowstate/03_customer_interviews.md \
+    examples/sources/flowstate/04_sales_sync_notes.md \
+    examples/sources/flowstate/05_internal_metrics.md \
     examples/sources/flowstate/06_competitive_intel.md
 do
     source_id="$(ingest_source a "$file")"
@@ -151,7 +155,7 @@ for file in \
     examples/sources/forgepath/03_customer_segments.md \
     examples/sources/forgepath/04_financial_model.md \
     examples/sources/forgepath/05_org_design_notes.md \
-    examples/sources/forgepath/06_prior_strategy_artefacts.md \
+    examples/sources/forgepath/06_prior_strategy.md \
     examples/sources/forgepath/07_initiative_inventory.md
 do
     source_id="$(ingest_source b "$file")"

@@ -10,16 +10,15 @@ split from the operator's PDF pack at pre-session setup per
 | File | Pack origin |
 | --- | --- |
 | [01_ceo_memo.md](01_ceo_memo.md) | CEO memo framing the Q3 growth-miss problem |
-| [02_q3_review_deck.md](02_q3_review_deck.md) | Q3 board-level review deck content |
-| [03_metrics_appendix.md](03_metrics_appendix.md) | Cohort metrics appendix |
-| [04_team_lead_interviews.md](04_team_lead_interviews.md) | Synthesised team-lead interviews |
-| [05_customer_research_notes.md](05_customer_research_notes.md) | Customer research notes |
-| [06_competitive_intel.md](06_competitive_intel.md) | Competitive intelligence summary |
+| [02_analyst_brief.md](02_analyst_brief.md) | Analyst brief on the growth shortfall |
+| [03_customer_interviews.md](03_customer_interviews.md) | Customer interview synthesis |
+| [04_sales_sync_notes.md](04_sales_sync_notes.md) | Sales sync notes + Slack experts |
+| [05_internal_metrics.md](05_internal_metrics.md) | Internal metrics snapshot |
+| [06_competitive_intel.md](06_competitive_intel.md) | Competitive intelligence brief |
 
 The brief's pre-session step 3 expects these six files to exist at
-DOCUMENT boundaries (CEO memo, deck, appendix, interviews, research,
-intel). The PDF split lands actual prose at each path before the demo
-script runs.
+DOCUMENT boundaries; the PDF split lands actual prose at each path
+before the demo script runs.
 
 ## Demo invocation
 

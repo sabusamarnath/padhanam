@@ -14,7 +14,7 @@ split from the operator's PDF pack at pre-session setup per
 | [03_customer_segments.md](03_customer_segments.md) | Customer segment definitions |
 | [04_financial_model.md](04_financial_model.md) | Financial model summary |
 | [05_org_design_notes.md](05_org_design_notes.md) | Org-design notes |
-| [06_prior_strategy_artefacts.md](06_prior_strategy_artefacts.md) | Prior strategy artefacts |
+| [06_prior_strategy.md](06_prior_strategy.md) | Prior strategy artefacts |
 | [07_initiative_inventory.md](07_initiative_inventory.md) | Initiative inventory |
 
 The brief's pre-session step 3 expects these seven files to exist at
