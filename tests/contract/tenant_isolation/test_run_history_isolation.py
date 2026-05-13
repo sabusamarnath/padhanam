@@ -50,7 +50,13 @@ from sqlalchemy.ext.asyncio import (
 
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
+    run_chunk_citations,
+    run_entity_citations,
     runs,
+)
+from contexts.run_history.domain.citation_records import (
+    ChunkCitationRecord,
+    EntityCitationRecord,
 )
 from contexts.run_history.domain.run_record import RunRecord
 from padhanam.config import ControlPlaneSettings
@@ -251,7 +257,13 @@ def _async_url(settings: ControlPlaneSettings, db: str | None = None) -> str:
     )
 
 
-def _make_record(*, tenant_id: str, run_id: uuid.UUID | None = None) -> RunRecord:
+def _make_record(
+    *,
+    tenant_id: str,
+    run_id: uuid.UUID | None = None,
+    chunk_citations: tuple = (),
+    entity_citations: tuple = (),
+) -> RunRecord:
     return RunRecord(
         id=run_id or uuid4(),
         tenant_id=tenant_id,
@@ -269,6 +281,34 @@ def _make_record(*, tenant_id: str, run_id: uuid.UUID | None = None) -> RunRecor
         audit_start_hash="0" * 64,
         audit_end_hash="1" * 64,
         created_at=datetime(2026, 5, 13, 12, 1, 5, tzinfo=timezone.utc),
+        chunk_citations=chunk_citations,
+        entity_citations=entity_citations,
+    )
+
+
+def _make_chunk_citation(*, run_id: uuid.UUID, tenant_id: str) -> ChunkCitationRecord:
+    return ChunkCitationRecord(
+        id=uuid4(),
+        run_id=run_id,
+        chunk_id=None,  # nullable per D95 ON DELETE SET NULL
+        tenant_id=tenant_id,
+        jurisdiction="eu-west",
+        chunk_excerpt="isolation-test cited content",
+        source_snapshot={"file_name": "iso.pdf", "file_type": "application/pdf"},
+    )
+
+
+def _make_entity_citation(
+    *, run_id: uuid.UUID, tenant_id: str
+) -> EntityCitationRecord:
+    return EntityCitationRecord(
+        id=uuid4(),
+        run_id=run_id,
+        entity_tenant_id=tenant_id,
+        entity_name="IsolatedCo",
+        entity_type="Organization",
+        tenant_id=tenant_id,
+        source_chunk_ids=(),
     )
 
 
@@ -447,3 +487,153 @@ def test_adapter_rejects_tenant_id_mismatch_pre_routing(
 
     assert _row_count(event_loop, sm_a) == 0
     assert _row_count(event_loop, sm_b) == 0
+
+
+# --------------------------------------------------------------------
+# D96 / S32: citation-row tenant-isolation scenarios.
+# --------------------------------------------------------------------
+
+
+def _citation_row_counts(event_loop, sm):
+    async def run():
+        async with sm() as session:
+            chunk_count = (
+                await session.execute(
+                    sa.select(sa.func.count()).select_from(run_chunk_citations)
+                )
+            ).scalar() or 0
+            entity_count = (
+                await session.execute(
+                    sa.select(sa.func.count()).select_from(run_entity_citations)
+                )
+            ).scalar() or 0
+            return chunk_count, entity_count
+
+    return event_loop.run_until_complete(run())
+
+
+def test_record_run_with_citations_isolated_per_tenant(
+    event_loop, isolation_setup
+) -> None:
+    """D96: a tenant-A persist with chunk + entity citations lands
+    all three table rows on tenant_a only; tenant_b stays empty
+    across all three tables."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    adapter = _build_adapter(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    run_id = uuid4()
+    record = _make_record(
+        tenant_id=str(ctx_a),
+        run_id=run_id,
+        chunk_citations=(
+            _make_chunk_citation(run_id=run_id, tenant_id=str(ctx_a)),
+            _make_chunk_citation(run_id=run_id, tenant_id=str(ctx_a)),
+        ),
+        entity_citations=(
+            _make_entity_citation(run_id=run_id, tenant_id=str(ctx_a)),
+        ),
+    )
+    event_loop.run_until_complete(adapter.persist(record))
+
+    assert _row_count(event_loop, sm_a) == 1
+    assert _row_count(event_loop, sm_b) == 0
+    a_chunks, a_entities = _citation_row_counts(event_loop, sm_a)
+    b_chunks, b_entities = _citation_row_counts(event_loop, sm_b)
+    assert a_chunks == 2
+    assert a_entities == 1
+    assert b_chunks == 0
+    assert b_entities == 0
+
+
+def test_chunk_citation_with_foreign_tenant_id_raises_pre_routing(
+    event_loop, isolation_setup
+) -> None:
+    """D96 / D24: a chunk citation row whose tenant_id is tenant-B
+    submitted through a tenant-A-bound adapter raises ValueError
+    before any session opens; neither tenant's DB is touched."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    adapter_for_a = _build_adapter(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    run_id = uuid4()
+    foreign_chunk = _make_chunk_citation(run_id=run_id, tenant_id=str(ctx_b))
+    record = _make_record(
+        tenant_id=str(ctx_a),
+        run_id=run_id,
+        chunk_citations=(foreign_chunk,),
+    )
+
+    with pytest.raises(ValueError, match="ChunkCitationRecord.tenant_id"):
+        event_loop.run_until_complete(adapter_for_a.persist(record))
+
+    assert _row_count(event_loop, sm_a) == 0
+    assert _row_count(event_loop, sm_b) == 0
+    assert _citation_row_counts(event_loop, sm_a) == (0, 0)
+    assert _citation_row_counts(event_loop, sm_b) == (0, 0)
+
+
+def test_entity_citation_with_foreign_tenant_id_raises_pre_routing(
+    event_loop, isolation_setup
+) -> None:
+    """D96 / D24: same defence applies to entity citation rows."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    adapter_for_a = _build_adapter(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    run_id = uuid4()
+    foreign_entity = _make_entity_citation(run_id=run_id, tenant_id=str(ctx_b))
+    record = _make_record(
+        tenant_id=str(ctx_a),
+        run_id=run_id,
+        entity_citations=(foreign_entity,),
+    )
+
+    with pytest.raises(ValueError, match="EntityCitationRecord.tenant_id"):
+        event_loop.run_until_complete(adapter_for_a.persist(record))
+
+    assert _row_count(event_loop, sm_a) == 0
+    assert _row_count(event_loop, sm_b) == 0
+    assert _citation_row_counts(event_loop, sm_a) == (0, 0)
+    assert _citation_row_counts(event_loop, sm_b) == (0, 0)
+
+
+def test_citation_rows_cascade_when_parent_run_deleted(
+    event_loop, isolation_setup
+) -> None:
+    """D95: FK ON DELETE CASCADE on run_id for both citation tables
+    means deleting the parent runs row removes all its citation
+    rows. Smoke-tests the CASCADE behaviour on tenant_a."""
+    ctx_a, ctx_b, sm_a, sm_b = isolation_setup
+    adapter = _build_adapter(
+        bound_tenant_id=ctx_a, sm_a=sm_a, sm_b=sm_b, ctx_a=ctx_a, ctx_b=ctx_b
+    )
+
+    run_id = uuid4()
+    record = _make_record(
+        tenant_id=str(ctx_a),
+        run_id=run_id,
+        chunk_citations=(
+            _make_chunk_citation(run_id=run_id, tenant_id=str(ctx_a)),
+        ),
+        entity_citations=(
+            _make_entity_citation(run_id=run_id, tenant_id=str(ctx_a)),
+        ),
+    )
+    event_loop.run_until_complete(adapter.persist(record))
+    assert _citation_row_counts(event_loop, sm_a) == (1, 1)
+
+    async def delete_run():
+        async with sm_a() as session:
+            await session.execute(
+                sa.delete(runs).where(runs.c.id == str(run_id))
+            )
+            await session.commit()
+
+    event_loop.run_until_complete(delete_run())
+    assert _row_count(event_loop, sm_a) == 0
+    # CASCADE removed both citation children.
+    assert _citation_row_counts(event_loop, sm_a) == (0, 0)
