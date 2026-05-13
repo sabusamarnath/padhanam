@@ -110,6 +110,21 @@ Database-per-tenant: every tenant has its own Postgres instance with per-tenant 
 
 ---
 
+## v2 in-flight correction (Phase 1 / Phase 2 boundary strategic block, 2026-05-13)
+
+D93 (the Phase 1 / Phase 2 boundary strategic block) commits Phase 2 direction to methodology-as-product positioning with focus purely on UX/UI. The commitment supersedes D51's voice-and-audience choice for PRFAQ v3 at the Phase 1 close audit at P12 close per D45's living-artefact cadence.
+
+v2 content reflects D51's voice and audience: vendor product-launch voice; AI Labs teams and procurement audience. Specific elements now misaligned with D93's direction:
+
+- **Press release framing.** v2 announces Padhanam as a platform for AI Labs teams ("Padhanam is available now for evaluation deployments with AI Labs teams"). D93 commits methodology-as-product positioning; v3's press release reframes around the methodology and the discipline pattern productised for senior product leaders, CPOs, and consultancies per `bet.md` line 57.
+- **Customer quote.** v2's customer quote is attributed to "Head of Platform Engineering at a frontier AI Labs customer" focused on observability dashboards and per-tenant cost attribution at the trace level. D93's audience is senior product leaders; v3's customer-equivalent quote reframes around methodology adoption and the productised discipline.
+- **Founder quote.** v2's founder quote names Phase 2 production deployment with federated identity, multi-region operation, and SLA commitments as the path. D93's Phase 2 path is purely UX/UI on top of complete Phase 1 substrate, with the methodology-as-product commercialisation path per `bet.md` line 67 ("L&D, advisory, content, and senior-role positioning rather than a product company"). v3's founder-equivalent quote reframes around methodology-as-product positioning rather than platform-as-product.
+- **FAQ orientation.** v2's eight FAQ questions answer procurement-shaped concerns (vs Datadog/Honeycomb, deployment, data residency, cost model, SLA, evaluation integration, identity integration, multi-tenant architecture). D93's audience asks methodology-shaped questions: what methodology does this productise, what does adoption look like, how does the discipline pattern travel, what's the L&D and advisory path. v3's FAQ reframes around the methodology-as-product audience's questions.
+
+v2 body preserved verbatim above per D43's append-only-at-version-level discipline; this correction is recorded as a separate section rather than as an in-place edit to v2. v3 revoice lands at the Phase 1 close audit at P12 close per D45's living-artefact cadence (every phase audit produces a new PRFAQ version). The Phase 1 close audit refresh also absorbs the dogfooding scenario acknowledgment per D77 and D78 per the existing carryover entry in `charter/current-package.md`.
+
+---
+
 ## Version log
 
 - **v1** (P3 post-close strategic session). Initial draft. Press-release and FAQ sections drafted in case-study framing per D39's reframe. Operator rewrite required before this version is read as load-bearing.
