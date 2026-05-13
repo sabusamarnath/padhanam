@@ -1,0 +1,53 @@
+# P9 Epic — Run history (backend-only)
+
+## Goal
+
+P9 ships the run-history backend substrate that closes Phase 1's substrate-completeness story per D92 and that Phase 2 UX consumes directly per D93. At P9 close, every agent invocation through the P8 streaming runtime persists a structured run record and citation surface on the tenant's data plane, the audit chain from S29b links cleanly to the run record via shared hashes, the citation surface preserves what the agent saw at run time even if underlying sources later change, and Phase 2 UX can consume a consumer-defined query port that renders runs, lists runs with filters, and surfaces citations without back-joining to the trace store or Neo4j.
+
+## Scope at P9 close
+
+A new `contexts/run_history/` bounded context owns the run-history surface. The substrate is three per-tenant Postgres tables per D94: `runs` (the structured run record), `run_chunk_citations` (run-to-chunk linkage via real foreign key plus rendering-grade snapshot columns), `run_entity_citations` (run-to-Neo4j-entity linkage via composite key plus rendering-grade snapshot columns). All three tables sit on the tenant's data plane per D32.
+
+The write path triggers at invocation completion in `contexts/agent/`. The executor derives the run record plus citation rows from the in-flight event stream from S29b and writes them in a single transaction. The cross-context call from agent to run-history follows the consumer-port-plus-wiring-adapter pattern reinforced across S26a through S29b.
+
+The read-side surface is one consumer-defined query port shaped to Phase 2 UX consumption: get_run, list_runs_with_filters, get_citations_for_run. The Postgres adapter implements it against the new tables. P11's aggregation-shaped read port is explicitly out of scope at P9 and lands at P11 framing per the consumer-defined-ports precedent.
+
+The HTTP API for ingestion management absorbed from the P6 deferred carryover lands inside P9. The API surface exposes existing ingestion use cases at `contexts/ingestion/application/` over FastAPI routes following the principal-derived tenant context convention from S29b's agent SSE endpoint.
+
+Tenant-isolation contract tests extend the existing `tests/contract/tenant_isolation/` harness per D24 to cover the new per-tenant tables. Cross-tenant read and write access through the query port and the write path must fail.
+
+The trace store (Langfuse via OTel) stays as operational observability per D27. The run record's `trace_id` column is the join key for ops deep-dives; product surfaces do not query the trace store directly.
+
+## Sessions forecast
+
+Four sessions most likely, possibly five. P9 inherits substantial substrate from P8 (the eleven-event vocabulary, the streaming runtime, the audit chain, the nested OTel span hierarchy) and adds storage and query surface rather than new architectural primitives. Session boundaries settle session-by-session per the established discipline. Indicative shape:
+
+- **S31** opens `contexts/run_history/`, lands the first Alembic migration creating the three per-tenant tables, ships the write-path skeleton from the agent runtime to run-history via the wiring adapter, and extends the tenant-isolation contract harness.
+- **S32** lands the citation linking with snapshot population at write time and the single-transaction completion seam wired end-to-end (run record plus chunk citations plus entity citations committed together).
+- **S33** lands the UX-shaped query port and the Postgres adapter implementing it.
+- **S34** lands the HTTP API for ingestion management. Could fold into S33 if light enough.
+- **S35** if needed lands P9 close with an end-to-end demonstration exercising the full path: agent invocation through streaming runtime, run completion writes record and citations, query port retrieves the rendered surface.
+
+## D-entries forecast
+
+Two to four D-entries beyond D94, depending on what implementation surfaces. Forecast at framing:
+
+- Concrete schema (column lists, indexes, constraints, foreign-key deletion behaviors) for the three per-tenant tables. The schema-discipline norm puts this at the implementing session.
+- The UX-shaped query port surface (method signatures, DTO shapes, filtering vocabulary). Consumer-defined per D5; specifics settle at S33.
+- HTTP API endpoint shape for ingestion management at S34 (or wherever the carryover lands). Endpoint shape was deferred at D60's framing for the implementing session.
+- Possibly: any architectural commitment that surfaces at build per the framing-prompt-as-recommendation pattern.
+
+## Out of scope
+
+- **P11's aggregation-shaped read port.** Lands at P11 framing per the consumer-defined-ports precedent. P11 reads the same per-tenant tables through its own adapter.
+- **Replay UI.** Deferred to Phase 2 per D92.
+- **Eager projection of run records into Neo4j.** Phase 2 forward-affordance per D94 alternative (h); activates if Phase 2 UX surfaces a real traversal query requirement.
+- **HTTP API for evaluation management.** Lands at P10 or P11 per the existing carryover.
+- **Browser-based authentication, frontend stack decision.** Phase 1 close substrate-completion territory.
+
+## Open questions surfaced at framing
+
+- Concrete column lists across the three tables. Framing settles the shape; implementation settles the schema per the project's discipline.
+- Snapshot field choices on each citation table (chunk excerpt verbatim versus summary; whether `run_entity_citations` snapshots the entity's `source_chunk_ids` array as well as the display label). Settle at S32.
+- HTTP API endpoint shape for ingestion management. Settle at the session that lands the carryover.
+- Query port filtering vocabulary (which run fields are filterable, which sort orders, which pagination shape). Settle at S33 with Phase 2 UX needs as the consumer reference.

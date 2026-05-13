@@ -329,3 +329,47 @@ Activates when the first BC-passed revision lands in production with an existing
 **Designs the adoption UX that consumes the `RoleToolBinding.can_auto_adopt` signal D89 commits as substrate.** Three candidate flows: auto-adopt on BC pass with notification (binding silently updates to the new revision; user gets a digest notification listing what changed); review-required on BC fail (binding does not auto-adopt; user sees a review queue with the BC failure reason and decides per binding); opt-in adoption with BC result as recommendation strength (binding does not auto-update; the recommendation surface shows "BC passed — safe to adopt" or "BC failed — review required" with the user explicitly choosing every adoption). The trade-off is between notification fatigue (auto-adopt is the lowest-touch but bypasses user awareness), review fatigue (review-required is the highest-touch but ensures intentionality), and recommendation-quality dependence (opt-in lives or dies on whether the recommendation strength is well-calibrated).
 
 D89 commits the `list_roles_using_tool` query surface and the `can_auto_adopt` signal at the binding DTO. The activating session's D-entry commits the adoption UX based on the consumer surface (CLI, future UI) and the operator's preference for autonomy versus review.
+
+## Multi-scope monitoring architecture
+
+Activates at the Phase 2 framing strategic block, when workspace and authoring substrates land alongside multi-tenant deployment.
+
+**Substrate is largely in place from Phase 1.** OTel trace attributes carry scope identifiers (tenant_id at minimum; workspace_id, agent_id, user_id once Phase 2's authoring and workspace substrates land), the trace store at P9 is the canonical event source, the structured event vocabulary from S29b's agent runtime carries per-iteration data, and the cost-per-task dimension from D41+D49 is wired through every LLM call. The monitoring surface itself, how that substrate gets aggregated and presented per scope, is the Phase 2 design surface.
+
+**Scope hierarchy is explicit:** platform > client (tenant) > workspace > agent/workflow > user. Each scope has owner/admin views covering their scope and below, plus self views covering only themselves. The user-scope view is the smallest scope; what was previously framed as a separate "end-user-facing monitoring" surface is the user-scope view in this hierarchy, not a parallel architecture.
+
+**Three architectural commitments anticipated.**
+
+First: per-scope aggregation, shared substrate. The trace store is the canonical surface; per-scope monitoring is a subscriber pattern filtering the same event stream by scope attributes. Aggregation logic is scope-parameterised, not duplicated per surface. Cost-per-task at client scope sums across workspaces; at workspace scope, per-agent; at agent scope, per-invocation; at user scope, per-session.
+
+Second: RBAC follows scope hierarchy. Permission to view monitoring at a given scope inherits from the existing tenancy model. A client admin sees client-and-below; a workspace admin sees workspace-and-below; users see only their own invocations.
+
+Third: CLI-first, web-dashboard-later. The `padhanam monitor` shape gains scope flags (`--scope workspace --id <uuid>`). The web dashboard sits downstream of the CLI substrate and lands as part of the Phase 2 product UI surface.
+
+**Four open architectural questions resolve at adoption.**
+
+First: metric-to-scope mapping. Cost-per-task probably appears at all scopes. Per-LLM-call latency probably useful only at agent/workflow scope and below. Queue depths probably only at platform scope. The explicit mapping needs framing at the design block.
+
+Second: cross-scope views. A workspace admin sometimes wants to compare two agents within their workspace; a client admin sometimes wants to compare two workspaces. Cross-scope-comparison is a separate surface from filter-and-aggregate; whether it gets a first-class shape or composes from existing scope views is open.
+
+Third: end-user UX commitments at user-scope. Progress indicators with ETA, "what's happening right now" views, transparent failure messaging are product features that depend on Phase 2's UI commitments. The substrate (SSE event stream from S29b) is in place; the product UX surface isn't.
+
+Fourth: relationship to P11 optimization recommendations. P11 currently consumes trace data and produces recommendations at single-scope. Multi-scope monitoring implies P11 also gains scope-awareness; the recommendation engine becomes scope-parameterised. This is a non-trivial extension of P11's current shape and may itself merit a separate deferred-decisions entry once the monitoring framing is settled.
+
+**Design reference.** Karma's scope-attached-resource framework provides the structural precedent for how monitoring views attach to specific scopes; the same shape that informs the user-authored-taps and multi-stage-gates deferred entries extends to scope-attached-monitoring-views. The CLI shape mirrors `padhanam monitor` against the existing `padhanam agent`, `padhanam role`, and `padhanam methodology` command family.
+
+**The specific D-entries land at the Phase 2 framing strategic block** when the workspace and authoring substrates land. The architectural commitments above anticipate the substrate; the four open questions resolve at adoption.
+
+## API mediation layer at the consumer boundary
+
+Activates at Phase 2 framing if any of the following surface: heterogeneous consumer surfaces (mobile alongside web alongside partner integrations), third-party API consumers, or scale where systematic demand-supply visibility across producers and consumers becomes operationally useful.
+
+**The pattern is real and has names.** Anti-corruption layer in domain-driven design, API gateway at the infrastructure level, backend-for-frontend when one mediator serves each consumer surface, GraphQL as the fully-realized exchange (producer publishes a schema, consumers query what they want, resolvers match demand to supply), and CQRS read models when each consumer projects its own view of producer events.
+
+**Padhanam already uses a lightweight version of this.** The consumer-port-plus-wiring-adapter pattern, reinforced four-plus times across S26a through S29b and on the candidate list for methodology promotion, is itself a mediation layer at the cross-context boundary. The consumer defines a port shaped to its DTO; the producer exposes use cases at its `api.py`; the wiring adapter at the application layer matches between them. What this lightweight version does not provide is the demand-supply visibility surface a formal mediation layer offers: there is no queryable artefact for "what each context publishes versus what consumers actually use." That visibility is currently a code-review concern, not a first-class output.
+
+**Why the formal mediation layer does not earn its place at Phase 1.** The market dynamics that justify it do not apply: one team building both sides, six bounded contexts not sixty, one main consumer surface (CLI now, Phase 2 UX next). The slowdown identified in the framing conversation (three parties to align instead of two, every change touching the mediator) would be a real tax against thin benefit at this scale. Schema drift is not yet a real problem because the codebase is young and refactoring is fast.
+
+**Where the formal mediation layer might earn its place at Phase 2.** The HTTP API surface that Phase 2 UX consumes is producer-defined by necessity, and a GraphQL-shaped surface there gives Phase 2 the demand-supply matching property explicitly: producer publishes a schema, consumers query exactly what they need, resolvers handle the match. BFF-per-consumer is the alternative if heterogeneous consumer surfaces materialize (mobile and web wanting different shapes of the same data). Both shapes sit cleanly on top of the per-tenant Postgres substrate P9 ships, so no Phase 1 commitment forecloses either path.
+
+**The specific D-entry lands at Phase 2 framing when the actual consumer surface is concrete.** Premature commitment ahead of that context is paper architecture.
