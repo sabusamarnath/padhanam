@@ -1247,3 +1247,21 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## Karma transplant — Block 2 closure (2026-05-13)
+
+roles: architect, technical writer
+mode: strategic
+
+Closure of Block 2 of the three-block sequence queued after S26b at the 2026-05-12 strategic conversation on karma transplant. Block 1 (Apache 2.0 framing plus gate-and-tap deferred-decisions entries) closed separately; Block 2 is this work; Block 3 (`charter/deck.html` v1 draft against the brand guidelines) remains queued and opens when the operator names it.
+
+Committed Part A as a single commit (`docs(brand-transplant): land brand guidelines and tokens`): `charter/brand-guidelines.md` plus `charter/brand/tokens.css`. The brand guidelines specify Padhanam's colour tokens, typography (Plus Jakarta Sans), environment tag colours for Phase 2 agent-lifecycle surfaces, and implementation pointer to the tokens file. The tokens file holds CSS variables consumed by the deck (Block 3) and any future Padhanam UI surface.
+
+Part B (`docs/notes/prior-art-karma/` reference directory holding 11 pattern notes plus 4 karma reference docs per the Block 2 plan): state (c) at verification — directory absent from the working tree and never committed. Block 2 closes without Part B; the absence surfaces as an open thread for future strategic-block consideration of whether the prior-art-karma corpus is recreated or the Block 2 plan revised to omit it.
+
+Open threads:
+
+- Lineage paragraph naming karma as brand source is absent from `charter/brand-guidelines.md`. Verification flagged it; the operator chose to commit without the lineage paragraph and surface the gap here so the audit-trail hole is visible. Next brand-touching strategic block adds the lineage paragraph to the preamble.
+- D-entry or principles edit for the brand-as-charter-grade placement decision is missing. The placement under `charter/brand/` rather than `assets/` or `design/` is a structural commitment without an audit trail. Next strategic block surfaces it.
+- Block 3 (`charter/deck.html` v1 draft against the brand guidelines) remains queued.
+- Part B prior-art-karma reference directory absent at verification. Open for future strategic-block consideration.
