@@ -38,6 +38,7 @@ from typing import Protocol
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from contexts.run_history.adapters.outbound.postgres.repository import (
@@ -180,9 +181,14 @@ class PostgresRunHistoryReader:
         if cursor is not None:
             # Row-value tuple comparison: (started_at, id) < (cursor_started_at, cursor_id)
             # paginates stably under the (started_at DESC, id DESC) sort.
+            # The id column is pg.UUID; cast the parameter explicitly so the
+            # Postgres operator resolver does not see uuid < varchar.
             clauses.append(
                 sa.tuple_(runs.c.started_at, runs.c.id)
-                < sa.tuple_(cursor.started_at, str(cursor.id))
+                < sa.tuple_(
+                    cursor.started_at,
+                    sa.cast(str(cursor.id), pg.UUID(as_uuid=False)),
+                )
             )
 
         query = (
