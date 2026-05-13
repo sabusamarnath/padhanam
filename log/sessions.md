@@ -1390,3 +1390,34 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## Strategic block: PRFAQ v2 in-flight correction per D93 (2026-05-13)
+
+roles: PM, technical writer
+mode: strategic
+
+Produced: One charter-only commit (`8a46d39`, `docs(charter): prfaq v2 in-flight correction per D93`) with one file edit. `charter/prfaq.md` gains a new `## v2 in-flight correction (Phase 1 / Phase 2 boundary strategic block, 2026-05-13)` section between v2's body and the existing Version log, with `---` delimiters on both sides matching the file's section convention (the existing `---` on the prior pre-Version-log line serves as the v2-body-to-correction separator; a new `---` after the correction separates it from Version log). The correction names four specific elements of v2 now misaligned with D93's direction (press release framing, customer quote, founder quote, FAQ orientation) and defers the full v3 revoice to the Phase 1 close audit at P12 close per D45's living-artefact cadence. v1 body, v2 body, top framing paragraph, and Version log all unchanged byte-for-byte. Lint passes (24/24 contracts; 9/9 enforcement tests).
+
+Decisions: No new D-entries. The correction references D93 from the prior strategic block at `66a650a` (Phase 1 / Phase 2 boundary), with D45 (living-artefact cadence), D51 (the superseded voice-and-audience choice), and D43 (append-only-at-version-level discipline) as supporting decisions.
+
+Reflection (three prompts per the brief):
+
+1. **Pre-write reconciliation outcome.** Live state matched the brief's assumptions: D93 was the most recent D-entry at `66a650a`, `charter/prfaq.md` carried the four-region structure the brief expected (top framing paragraph, v1 body, v2 body, Version log) with `---` delimiters between regions matching the file convention, and the v2 framing paragraph at the top did not require update (the in-flight correction is its own section). One small adjustment surfaced at the edit moment: the brief's draft block included `---` delimiters at top and bottom, but the file already carried a `---` between v2 body and Version log; using the existing `---` as the leading separator (rather than inserting a redundant one) and adding a single new `---` after the correction section preserved the file's one-`---`-between-sections convention. Pre-write reconciliation now at its ninth-plus instance; the small adjustment is the kind of brief-versus-live-state detail the pattern's value is built on.
+
+2. **In-flight-correction-as-bridge precedent.** D52 established the in-flight-correction shape on `charter/phase-1-prd.md` at the carryover-cleanup strategic session (2026-05-06): a versioned-living-document acquires a mid-phase correction section between its body and as-built/version-log sections when a later D-entry supersedes a load-bearing element of the body before the next version-refresh cadence point. This block extends the pattern to `charter/prfaq.md` (v2 in-flight correction). Two instances now of the in-flight-correction-as-bridge-between-living-document-versions pattern. Worth recording as a Patterns-observed candidate at the Phase 1 close audit per the structural-promotion convention (three instances earns prescriptive status); if a third instance fires before audit it earns promotion to the methodology document's prescriptive principles section.
+
+3. **Defer full v3 revoice to Phase 1 close audit.** The trade-off named at the brief: living-artefact cadence (D45: refresh at every phase audit, every audit produces a new version) versus structural-honesty-now (D93 immediately misaligned v2). The in-flight correction is the structural-honesty bridge that preserves D45's cadence. The alternative — full v3 revoice now — would have produced PRFAQ v3 ahead of phase boundary, which the cadence forbids and which would have left v2 without an audit-trail of why it was superseded mid-phase. The deeper principle: living-artefact cadence and structural-honesty are not in tension when the document supports in-flight corrections; the correction surface absorbs the supersession event without invalidating the cadence. Phase 1 close audit at P12 close inherits the correction as input to v3's revoice, alongside the dogfooding scenario acknowledgment per D77 and D78 per the existing carryover.
+
+```
+metrics:
+  classification: strategic
+  session_started: 2026-05-13
+  session_closed: 2026-05-13
+  merged: 2026-05-13
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: updated
+  corrects:
+  corrected_by:
+```
