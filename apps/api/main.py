@@ -50,6 +50,7 @@ from shared_kernel import TenantId as SharedTenantId
 from padhanam.config import (
     ControlPlaneSettings,
     InferenceSettings,
+    Neo4jSettings,
 )
 from padhanam.events import DomainEvent, SynchronousEventBus
 from padhanam.observability import init_tracing, install_credential_scrub
@@ -136,12 +137,37 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
     )
 
+    inference_port = LiteLLMAdapter(settings=inference_settings)
+
+    # S30b: production-shaped agent runtime composition for the SSE
+    # endpoint at apps/api/routers/agent.py. The S29b commit shipped
+    # the endpoint plus the AgentRuntimeComposition dataclass on
+    # app.state but left the default factory with agent_runtime=None;
+    # S30b wires the production composition so the new
+    # `padhanam agent run` CLI (and any future SSE consumer) reaches a
+    # real runtime through the standard API entry point.
+    from apps.api._agent_runtime_wiring import (
+        build_agent_runtime_composition,
+    )
+
+    agent_runtime = build_agent_runtime_composition(
+        inference_port=inference_port,
+        audit_port=audit_adapter,
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        control_plane_settings=cp_settings,
+        neo4j_settings=Neo4jSettings(),
+    )
+
     return AppCompositions(
-        inference_port=LiteLLMAdapter(settings=inference_settings),
+        inference_port=inference_port,
         event_bus=SynchronousEventBus(),
         audit_port=audit_adapter,
         tenant_registry=registry,
         session_factory_cache=session_factory_cache,
+        agent_runtime=agent_runtime,
     )
 
 
