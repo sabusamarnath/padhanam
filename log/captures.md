@@ -198,3 +198,22 @@ Recurrence count: four reinforcements across five sessions in a row (S26a-1 as f
 
   - triaged: note on 2026-05-12
   - resolution: forwarded to Phase 1 close audit prep as a methodology-document Patterns-observed promotion candidate. The audit's strategic-mode conversation drafts the formal entry per the build-versus-strategic discipline (build sessions do not write to `charter/methodology.md` directly per D47).
+
+## 2026-05-13 [S30b] — Test-fixture leak wipes methodology rows while filter-protected role rows survive
+
+Source: S30b pre-session smoke run against the rebuilt padhanam-api container. The smoke run surfaced an empty `methodology_templates` table and a missing `LVTGuide` role on the control plane, against an Alembic state that reports `0010_role_tool_allowlist_pin` (latest). The seven McKinsey role rows (`migration:0008_create_mckinsey_7_step` provenance) survived; the McKinsey methodology row and the LVT methodology row plus LVTGuide role did not.
+
+Symptom: cross-test ordering against the live control-plane DB wipes methodology-owned rows while leaving role-owned rows intact. S26b's session-log entry named the fix as "Four pre-existing methodology integration fixtures updated to scope truncation to non-migration actors (`created_by_user_id NOT LIKE 'migration:%'`) so migration-owned rows survive cross-test ordering." The fix landed at four named fixtures; the asymmetric outcome (roles survive, methodologies do not) suggests at least one methodology-touching test path remains unfiltered.
+
+Root-cause hypothesis: a methodology-truncation path (test fixture, integration setup, or `clean_up_*` helper) outside the four S26b-covered fixtures issues a `DELETE FROM methodology_templates` or `DELETE FROM methodology_revisions` without the `created_by_user_id NOT LIKE 'migration:%'` guard. The role-truncation paths use the guard (verified by the seven McKinsey role rows surviving with their migration provenance).
+
+Recovery at S30b: ad-hoc CLI authoring via `padhanam methodology create` (LVT and McKinsey 7-Step) and `padhanam role create` (LVTGuide) against the live control plane, with content reconstructed from `briefs/p7/s25.md` (LVT system prompt) and `briefs/p8/mckinsey-7-step.md` (McKinsey per-role overrides). The recreated rows carry the operator's `cli-operator` actor (no `migration:` prefix), so the filter-protected fixtures would NOT wipe them. The unprotected path remains exposed.
+
+Scope of the underlying bug: the offending fixture or helper has not been identified at S30b. Identification work: grep for methodology-table truncation across `tests/`, `conftest.py` files, and any `cleanup_*` helpers; cross-reference against the four fixtures S26b covered to identify the unprotected one(s). The fix mirrors the S26b fix shape (add the `created_by_user_id NOT LIKE 'migration:%'` predicate).
+
+Impact at S30b: recoverable. The recreated methodologies and role pass the smoke test (`agent create-from-methodology` against LVT succeeds, archive cleans up); S30b's two demonstrations run against the recreated state. The captured demo outputs at commit 4 carry the substantive S30b evidence and are stable once written.
+
+Impact beyond S30b: state fragility until the fixture is identified and fixed. If the offending path runs at container start, the next restart re-wipes; if it runs at test execution, recovery is stable through the demo run but fragile against subsequent test runs.
+
+  - triaged: defer on 2026-05-13
+  - resolution: fixture identification deferred to a P9 candidate or to a strategic block in the Phase 1 close audit window. The S30b recovery is throwaway state (recreated methodology row IDs are not stable across recreations); the structural fix is the identification + filter-extension work that lands separately.
