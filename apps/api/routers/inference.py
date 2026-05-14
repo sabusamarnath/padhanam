@@ -93,17 +93,19 @@ async def get_tenant_context(
     D103 (S37) extends this resolver with a discriminator check at
     entry: platform-operator-typed principals raise
     ``PrincipalTypeMismatchError``, which the registered handler at
-    ``apps/api/_errors.py`` translates to HTTP 403 plus an
-    ``AUTHZ_DENIAL`` security event.
+    ``apps/api/_auth_errors.py`` (D104, S38) translates to HTTP 403
+    plus an ``AUTHZ_DENIAL`` security event.
 
     Tests override this dependency via ``app.dependency_overrides`` to
     inject a fixed TenantContext when the registry is not wired.
     """
-    # Lazy import to avoid the apps.api._errors → apps.api.routers
-    # circular surface (the audit query parser imports from
-    # contexts.audit and _errors imports the audit parser's
-    # exception class).
-    from apps.api._errors import PrincipalTypeMismatchError
+    # Lazy import preserves the prior circular-import guard shape:
+    # ``apps.api.routers`` modules are imported by ``apps.api.main``
+    # at composition time, and the auth-error module pulls in the
+    # shared ``ErrorResponse`` from ``apps.api._errors``. Containing
+    # the dependency edge inside the function call avoids load-time
+    # cycles.
+    from apps.api._auth_errors import PrincipalTypeMismatchError
 
     if principal.principal_type is not PrincipalType.TENANT:
         raise PrincipalTypeMismatchError(

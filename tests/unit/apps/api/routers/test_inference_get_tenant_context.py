@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from apps.api._errors import PrincipalTypeMismatchError
+from apps.api._auth_errors import PrincipalTypeMismatchError
 from apps.api.routers.inference import get_tenant_context
 from padhanam.security import Principal, PrincipalType
 from shared_kernel import TenantId
@@ -32,8 +32,8 @@ def _request_with_app_state(**state) -> SimpleNamespace:
 
 def test_get_tenant_context_rejects_platform_operator_with_typed_error() -> None:
     """D103: platform-operator tokens raise PrincipalTypeMismatchError;
-    the registered handler at _errors.py translates to 403 + AUTHZ_DENIAL
-    security event."""
+    the registered handler at _auth_errors.py (D104, S38) translates
+    to 403 + AUTHZ_DENIAL security event."""
     p = Principal(
         subject="ops-1",
         tenant_id=TenantId(""),

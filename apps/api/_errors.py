@@ -48,7 +48,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from apps.api.routers._audit_query import InvalidAuditFilterError
 from apps.api.routers._run_history_query import InvalidFilterRangeError
@@ -85,39 +85,6 @@ class RunNotFoundError(Exception):
     def __init__(self, run_id: str) -> None:
         super().__init__(f"run {run_id} not found")
         self.run_id = run_id
-
-
-class PrincipalTypeMismatchError(Exception):
-    """Raised when the route's required principal type does not match the
-    authenticated principal's type (D103, S37 commit 4).
-
-    Three call sites at S37:
-
-    - ``apps.api.middleware.get_platform_operator_principal`` raises
-      when a tenant-typed token hits a ``/platform/audit/*`` route.
-    - ``apps.api.routers.inference.get_tenant_context`` raises when a
-      platform-operator-typed token hits a tenant-scoped route.
-    - Future route dependencies that gate on principal type follow the
-      same pattern.
-
-    Carries the required and actual principal-type values so the
-    error handler can surface a typed 403 with informative metadata
-    AND fire an ``AUTHZ_DENIAL`` security event identifying the
-    attempted-route plus the offending token's principal_type.
-    """
-
-    def __init__(
-        self,
-        *,
-        required: str,
-        actual: str,
-    ) -> None:
-        super().__init__(
-            f"authenticated principal lacks the required type {required!r} "
-            f"for this route; got {actual!r}"
-        )
-        self.required = required
-        self.actual = actual
 
 
 class AuditEventNotFoundError(Exception):
@@ -236,54 +203,6 @@ async def _handle_bound_tenant_mismatch(
     return JSONResponse(status_code=500, content=body.model_dump())
 
 
-async def _handle_principal_type_mismatch(
-    request: Request, exc: PrincipalTypeMismatchError
-) -> JSONResponse:
-    """Translate ``PrincipalTypeMismatchError`` to 403 + AUTHZ_DENIAL event (D103).
-
-    Fires an ``AUTHZ_DENIAL`` security event carrying the attempted
-    route, the offending token's actual principal_type, the
-    correlation_id (if present on request.state.principal), and the
-    request timestamp. The handler is the single place the 403 path
-    is emitted, so the security event guard is centralised.
-    """
-    logger: SecurityEventLogger | None = getattr(
-        request.app.state, "security_events", None
-    )
-    if logger is not None:
-        principal = getattr(request.state, "principal", None)
-        principal_ref = principal.subject if principal is not None else None
-        # Tenant_id captured for forensic traceability when the
-        # offending token is tenant-typed; for platform-operator
-        # tokens (which carry the empty sentinel), the metadata
-        # surfaces "no tenant" via the actual=platform_operator
-        # marker.
-        tenant_id_for_event: TenantId | None = None
-        if principal is not None and principal.tenant_id:
-            tenant_id_for_event = TenantId(str(principal.tenant_id))
-        logger.emit(
-            SecurityEvent(
-                category=SecurityEventCategory.AUTHZ_DENIAL,
-                principal_ref=principal_ref,
-                tenant_id=tenant_id_for_event,
-                action=f"{request.method} {request.url.path}",
-                resource_ref=None,
-                outcome="principal_type_mismatch",
-                metadata={
-                    "required_principal_type": exc.required,
-                    "actual_principal_type": exc.actual,
-                },
-            )
-        )
-
-    body = ErrorResponse(
-        error_code="principal_type_mismatch",
-        message=str(exc),
-        correlation_id=_correlation_id(request),
-    )
-    return JSONResponse(status_code=403, content=body.model_dump())
-
-
 async def _handle_audit_event_not_found(
     request: Request, exc: AuditEventNotFoundError
 ) -> JSONResponse:
@@ -367,31 +286,30 @@ def register_run_history_error_handlers(app: FastAPI) -> None:
 
 
 def register_audit_error_handlers(app: FastAPI) -> None:
-    """Register the audit error handlers on the FastAPI app (D103, S37).
+    """Register the audit error handlers on the FastAPI app (D103, S37; refined D104, S38).
 
     Parallel to ``register_run_history_error_handlers`` per S37
     pre-write reconciliation finding 4 user-question resolution: each
     audit-context exception class registers its own handler in this
     function; the composition root at ``apps/api/main.py`` calls both
     ``register_run_history_error_handlers`` and
-    ``register_audit_error_handlers`` at app construction time. The
-    additive pattern mirrors the existing convention; future
-    refactors may consolidate into a generic
-    ``register_error_handlers`` at a cleanup moment.
+    ``register_audit_error_handlers`` at app construction time.
 
-    Handlers registered:
+    The ``PrincipalTypeMismatchError`` handler moved out at S38 (D104)
+    to a sibling ``register_auth_error_handlers`` at
+    ``apps/api/_auth_errors.py``; the auth-cross-cutting surface is
+    now owned by the auth module so ingestion (S38) and any future
+    routers consuming the shared ``get_tenant_context`` chokepoint
+    inherit the 403 + AUTHZ_DENIAL path without coupling to audit.
 
-    - ``PrincipalTypeMismatchError`` -> 403 ``principal_type_mismatch``
-      with ``AUTHZ_DENIAL`` security event.
+    Handlers registered here (audit-specific only):
+
     - ``AuditEventNotFoundError`` -> 404 ``audit_event_not_found``.
     - ``InvalidAuditFilterError`` -> 400 ``invalid_audit_filter``.
     - ``AuditMalformedCursorError`` -> 400 ``malformed_audit_cursor``.
     - ``AuditQueryRoutingError`` -> 400 ``invalid_audit_routing``
       (defence-in-depth path; should never fire in production).
     """
-    app.add_exception_handler(
-        PrincipalTypeMismatchError, _handle_principal_type_mismatch  # type: ignore[arg-type]
-    )
     app.add_exception_handler(
         AuditEventNotFoundError, _handle_audit_event_not_found  # type: ignore[arg-type]
     )
@@ -410,7 +328,6 @@ __all__ = [
     "AuditEventNotFoundError",
     "BoundTenantIdMismatchError",
     "ErrorResponse",
-    "PrincipalTypeMismatchError",
     "RunNotFoundError",
     "register_audit_error_handlers",
     "register_run_history_error_handlers",

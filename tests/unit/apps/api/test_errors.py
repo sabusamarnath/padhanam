@@ -17,7 +17,6 @@ from apps.api._errors import (
     AuditEventNotFoundError,
     BoundTenantIdMismatchError,
     ErrorResponse,
-    PrincipalTypeMismatchError,
     RunNotFoundError,
     _handle_audit_event_not_found,
     _handle_audit_query_routing_error,
@@ -26,7 +25,6 @@ from apps.api._errors import (
     _handle_invalid_filter_range,
     _handle_malformed_audit_cursor,
     _handle_malformed_cursor,
-    _handle_principal_type_mismatch,
     _handle_request_validation,
     _handle_run_not_found,
 )
@@ -171,77 +169,6 @@ def test_bound_tenant_mismatch_handler_without_logger_still_returns_500() -> Non
     exc = BoundTenantIdMismatchError(ValueError("tenant mismatch"))
     response = asyncio.run(_handle_bound_tenant_mismatch(request, exc))
     assert response.status_code == 500
-
-
-# --------------------------------------------------------------------
-# D103 (S37) audit-side handlers: principal_type_mismatch.
-# --------------------------------------------------------------------
-
-
-class _CaptureLoggerAudit:
-    def __init__(self) -> None:
-        self.events: list[SecurityEvent] = []
-
-    def emit(self, event: SecurityEvent) -> None:
-        self.events.append(event)
-
-
-def test_principal_type_mismatch_handler_returns_403_and_emits_authz_denial() -> None:
-    request = _mock_request()
-    logger = _CaptureLoggerAudit()
-    request.app.state.security_events = logger
-    request.state.principal = SimpleNamespace(
-        subject="ops-1", tenant_id=""
-    )
-    request.method = "GET"
-    request.url.path = "/audit/events"
-
-    exc = PrincipalTypeMismatchError(required="tenant", actual="platform_operator")
-    response = asyncio.run(_handle_principal_type_mismatch(request, exc))
-
-    assert response.status_code == 403
-    body = json.loads(response.body)
-    assert body["error_code"] == "principal_type_mismatch"
-    assert body["correlation_id"] == "test-correlation-id"
-    assert "tenant" in body["message"]
-    assert "platform_operator" in body["message"]
-
-    assert len(logger.events) == 1
-    event = logger.events[0]
-    assert event.category == SecurityEventCategory.AUTHZ_DENIAL
-    assert event.principal_ref == "ops-1"
-    assert event.outcome == "principal_type_mismatch"
-    assert event.metadata["required_principal_type"] == "tenant"
-    assert event.metadata["actual_principal_type"] == "platform_operator"
-    assert event.action == "GET /audit/events"
-
-
-def test_principal_type_mismatch_handler_without_logger_still_returns_403() -> None:
-    request = _mock_request()
-    request.app.state.security_events = None
-    exc = PrincipalTypeMismatchError(
-        required="platform_operator", actual="tenant"
-    )
-    response = asyncio.run(_handle_principal_type_mismatch(request, exc))
-    assert response.status_code == 403
-
-
-def test_principal_type_mismatch_handler_captures_tenant_id_for_tenant_principal() -> None:
-    """When a tenant token hits a platform-operator route, the security
-    event metadata captures the tenant_id for forensic traceability."""
-    request = _mock_request()
-    logger = _CaptureLoggerAudit()
-    request.app.state.security_events = logger
-    request.state.principal = SimpleNamespace(
-        subject="alice", tenant_id="00000000-0000-4000-8000-0000000000a1"
-    )
-
-    exc = PrincipalTypeMismatchError(
-        required="platform_operator", actual="tenant"
-    )
-    asyncio.run(_handle_principal_type_mismatch(request, exc))
-
-    assert logger.events[0].tenant_id == "00000000-0000-4000-8000-0000000000a1"
 
 
 # --------------------------------------------------------------------

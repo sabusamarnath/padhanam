@@ -12,7 +12,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from apps.api._errors import PrincipalTypeMismatchError
+from apps.api._auth_errors import PrincipalTypeMismatchError
 from apps.api.middleware import get_platform_operator_principal
 from padhanam.security import PlatformOperatorPrincipal, Principal, PrincipalType
 from shared_kernel import TenantId
@@ -38,8 +38,8 @@ def test_get_platform_operator_principal_accepts_platform_operator_principal() -
 
 def test_get_platform_operator_principal_rejects_tenant_principal_with_typed_error() -> None:
     """D103: tenant tokens raise the typed PrincipalTypeMismatchError;
-    the registered handler at _errors.py translates to 403 + AUTHZ_DENIAL
-    security event."""
+    the registered handler at _auth_errors.py (D104, S38) translates
+    to 403 + AUTHZ_DENIAL security event."""
     p = Principal(
         subject="alice",
         tenant_id=TenantId("tenant-a"),

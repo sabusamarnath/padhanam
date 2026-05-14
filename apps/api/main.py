@@ -28,6 +28,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from apps.api._auth_errors import register_auth_error_handlers
 from apps.api._errors import (
     register_audit_error_handlers,
     register_run_history_error_handlers,
@@ -284,12 +285,21 @@ def create_app(
     # refresh to the new shape.
     register_run_history_error_handlers(app)
 
-    # S37 (D103): audit error handlers — parallel registration per
-    # the additive composition discipline (S37 pre-write
-    # reconciliation finding 4). Covers PrincipalTypeMismatchError
-    # (403 with AUTHZ_DENIAL security event),
-    # AuditEventNotFoundError (404), InvalidAuditFilterError (400),
-    # AuditMalformedCursorError (400), AuditQueryRoutingError (400).
+    # S38 (D104): authentication-cross-cutting error handlers.
+    # PrincipalTypeMismatchError (403 with AUTHZ_DENIAL security
+    # event) relocated from register_audit_error_handlers at S38 so
+    # each new router consuming get_tenant_context or
+    # get_platform_operator_principal inherits the 403 path without
+    # coupling to audit. Registered ahead of audit registration so
+    # the auth-cross-cutting surface is wired first.
+    register_auth_error_handlers(app)
+
+    # S37 (D103) refined at S38 (D104): audit error handlers cover
+    # audit-specific exception classes only after the S38 relocation.
+    # Covers AuditEventNotFoundError (404), InvalidAuditFilterError
+    # (400), AuditMalformedCursorError (400), AuditQueryRoutingError
+    # (400). PrincipalTypeMismatchError moved to
+    # register_auth_error_handlers per D104.
     register_audit_error_handlers(app)
 
     # OTel FastAPI instrumentation populates a server span around every

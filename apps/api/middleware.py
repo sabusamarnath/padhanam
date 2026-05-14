@@ -144,8 +144,8 @@ def get_platform_operator_principal(
     Routes that declare ``Depends(get_platform_operator_principal)``
     are gated to platform-operator-typed principals. Tenant-typed
     tokens raise ``PrincipalTypeMismatchError``, which the registered
-    handler at ``apps/api/_errors.py`` translates to HTTP 403 plus an
-    ``AUTHZ_DENIAL`` security event.
+    handler at ``apps/api/_auth_errors.py`` (D104, S38) translates to
+    HTTP 403 plus an ``AUTHZ_DENIAL`` security event.
 
     The middleware authenticates the credential and stores the
     ``Principal`` on ``request.state.principal`` regardless of
@@ -153,12 +153,12 @@ def get_platform_operator_principal(
     ``PlatformOperatorPrincipal`` thin marker that downstream
     handlers consume without re-checking the discriminator.
     """
-    # Imported lazily to avoid a top-level cycle: ``apps.api._errors``
-    # imports from ``apps.api.routers._audit_query`` for the audit
-    # filter type, and ``apps.api.routers`` imports from middleware
-    # at module load. Lazy-import keeps the typed exception available
-    # without circular-import friction.
-    from apps.api._errors import PrincipalTypeMismatchError
+    # Imported lazily to preserve the original circular-import guard
+    # shape: ``apps.api.routers`` modules import from middleware at
+    # load time, and the auth-error module pulls in the shared
+    # ``ErrorResponse`` from ``apps.api._errors``. Lazy import keeps
+    # the dependency edge contained inside the function call.
+    from apps.api._auth_errors import PrincipalTypeMismatchError
 
     principal: Principal = request.state.principal
     if principal.principal_type is not PrincipalType.PLATFORM_OPERATOR:

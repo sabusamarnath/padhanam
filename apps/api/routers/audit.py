@@ -9,7 +9,8 @@ Four routes across two trees per D103:
   ``apps/api/routers/inference.py`` is extended at S37 commit 2
   with a discriminator check that rejects platform-operator
   tokens with the typed ``PrincipalTypeMismatchError`` →
-  registered 403 ``principal_type_mismatch`` handler.
+  registered 403 ``principal_type_mismatch`` handler (relocated
+  to ``apps/api/_auth_errors.py`` at S38 per D104).
 
 - ``GET /platform/audit/events/{event_id}`` and ``GET /platform/audit/events`` —
   control-plane chain served under the new
