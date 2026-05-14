@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import uuid
 
 import pytest
 
@@ -341,17 +342,157 @@ def test_control_plane_db_has_no_pgvector_extension(
 
 # ---------------------------------------------------------------------------
 # S22 / D65 — retrieval-surface tenant-isolation contracts.
+#
 # These tests exercise the application-level retrieval ports against
 # both tenants by invoking ``padhanam ingest search`` and
 # ``padhanam ingest traverse`` inside the padhanam-api container.
-# Cross-tenant retrieval against an unindexed tenant must return
-# zero results; both methods enforce the tenant predicate per D24.
+# Cross-tenant retrieval must respect D24's tenant predicate filter.
+#
+# Fixture-setup pattern at S35b: psql lives in the postgres-tenant
+# container image (it's the image's native CLI), not in the padhanam-
+# api image; the prior padhanam-api shell-out failed because psql is
+# absent there, so the truncate ran nowhere and the tests passed only
+# when tenant DBs happened to be empty (S30b's demo runs populated
+# chunks; S35a's trace_id-propagation demo did the same — the latent
+# pass-because-empty mode surfaced at S35a close as load-bearing).
+#
+# The methodology-fixture pattern at test_methodology_isolation.py
+# uses SQLAlchemy from host loopback against the control-plane Postgres
+# (5433 binding, an explicit D5 exception). That pattern does not
+# transfer here: per D5 the per-tenant Postgres containers carry no
+# host-port bindings by design, so SQLAlchemy-from-host cannot reach
+# them. The equivalent in-container psql pattern from
+# test_concurrent_workers.py::_exec_psql_tenant_a and
+# test_create_from_methodology_flow.py::_exec_psql_tenant — both
+# exec'ing psql inside postgres-tenant-<label> — is the structurally
+# honest substitute. Same architectural property as the methodology
+# fixture's in-container SQL execution, just not in Python. The
+# reconciliation finding is preserved in briefs/p9/s35b.md Appendix D.
+#
+# Red-team posture per D24: each tenant is seeded with a distinct
+# marker chunk so the test passes-because-isolated rather than
+# pass-because-empty. The search test asserts each tenant returns its
+# own marker AND never the other tenant's marker — the (no other
+# marker) outcome proves the predicate filter is real, not a side-
+# effect of globally-empty tables.
 # ---------------------------------------------------------------------------
+
+
+_TENANT_UUID_BY_LABEL: dict[str, str] = {
+    "a": "00000000-0000-4000-8000-00000000a001",
+    "b": "00000000-0000-4000-8000-00000000b002",
+}
+_MARKER_BY_LABEL: dict[str, str] = {
+    "a": "ISO_CONTRACT_MARKER_TENANT_A",
+    "b": "ISO_CONTRACT_MARKER_TENANT_B",
+}
+# Unit vector at 768 dimensions (every dimension = 1/sqrt(768)). Any
+# query embedding produced by the embedder yields a nonzero cosine
+# similarity against this constant, so HNSW returns the seeded chunk
+# when its own tenant searches. Cross-tenant search returns nothing
+# because the predicate filter excludes the row before HNSW runs.
+_UNIT_VAL = round(1 / (768 ** 0.5), 8)
+_PLACEHOLDER_EMBEDDING = "[" + ",".join([str(_UNIT_VAL)] * 768) + "]"
+
+
+def _exec_psql_in_tenant(label: str, sql: str, timeout: int = 30) -> str:
+    """Execute SQL inside the postgres-tenant-<label> container via
+    docker compose exec. psql is the postgres image's native CLI; this
+    is the path the codebase already uses at test_concurrent_workers.py
+    and test_create_from_methodology_flow.py."""
+    cmd = (
+        'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "'
+        + sql.replace('"', '\\"')
+        + '"'
+    )
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            f"postgres-tenant-{label}",
+            "sh",
+            "-c",
+            cmd,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _truncate_tenant(label: str) -> None:
+    """Truncate per-tenant ingestion tables.
+
+    Includes run_chunk_citations to satisfy the S32 FK boundary per
+    D95 (run_chunk_citations.chunk_id REFERENCES chunks(id) ON DELETE
+    SET NULL; TRUNCATE bypasses FK-action triggers). Same explicit-
+    list shape applied at the commit-2 TRUNCATE+CASCADE fix.
+    """
+    _exec_psql_in_tenant(
+        label, "TRUNCATE TABLE chunks, sources, run_chunk_citations;"
+    )
+
+
+def _seed_marker_chunk(label: str) -> None:
+    """Insert one source + one chunk row into postgres-tenant-<label>,
+    bypassing the LLM-driven ingestion pipeline. The seeded chunk is
+    sufficient signal for the cross-tenant contract: search must
+    respect the tenant predicate filter regardless of how rows landed.
+
+    sources.state='indexed' is required so the pgvector_search query's
+    ``s.state = :indexed_state`` clause passes the chunk through.
+    """
+    tenant_uuid = _TENANT_UUID_BY_LABEL[label]
+    marker = _MARKER_BY_LABEL[label]
+    src_id = str(uuid.uuid4())
+    chunk_id = str(uuid.uuid4())
+    sql = (
+        "INSERT INTO sources "
+        "(id, tenant_id, jurisdiction, file_name, file_type, "
+        "file_size_bytes, raw_content, state, created_by_user_id) "
+        f"VALUES ('{src_id}', '{tenant_uuid}', 'eu-west', "
+        f"'iso-marker-{label}.md', 'markdown', 64, "
+        "''::bytea, 'indexed', "
+        "'tests/contract/tenant_isolation'); "
+        "INSERT INTO chunks "
+        "(id, source_id, tenant_id, jurisdiction, chunk_index, "
+        "content, embedding) "
+        f"VALUES ('{chunk_id}', '{src_id}', '{tenant_uuid}', "
+        "'eu-west', 0, "
+        f"'{marker} fixture-seeded chunk for D24 verification.', "
+        f"'{_PLACEHOLDER_EMBEDDING}'::vector);"
+    )
+    _exec_psql_in_tenant(label, sql, timeout=30)
+
+
+@pytest.fixture(scope="module")
+def red_team_state(compose_running: None) -> "None":
+    """Reset per-tenant ingestion state and seed each tenant with one
+    marker chunk so cross-tenant isolation tests pass-because-isolated
+    rather than pass-because-empty per D24.
+
+    Module-scoped to amortise the setup cost across both retrieval-
+    surface tests. Teardown restores empty state so subsequent
+    contract tests in the harness start from a known floor.
+    """
+    for label in ("a", "b"):
+        _truncate_tenant(label)
+    for label in ("a", "b"):
+        _seed_marker_chunk(label)
+    yield
+    for label in ("a", "b"):
+        _truncate_tenant(label)
 
 
 def _exec_in_api(
     *args: str, timeout: int = 60
 ) -> subprocess.CompletedProcess[str]:
+    """Invoke the padhanam CLI inside the padhanam-api container so the
+    per-tenant Postgres hostnames resolve over the Compose network."""
     return subprocess.run(
         ["docker", "compose", "exec", "-T", "padhanam-api", *args],
         capture_output=True,
@@ -362,52 +503,62 @@ def _exec_in_api(
 
 
 @pytest.mark.parametrize("tenant_label", ["a", "b"])
-def test_search_against_empty_tenant_returns_no_results(
-    compose_running: None, tenant_label: str
+def test_search_returns_only_own_tenant_chunks(
+    red_team_state: None, tenant_label: str
 ) -> None:
-    """Defensively: a tenant with no indexed sources returns no
-    results from ``padhanam ingest search``. The truncate fixture
-    is module-scoped, so this also fails cleanly if cross-tenant
-    leakage from prior tests has landed.
+    """Cross-tenant non-leak via the search path. Each tenant is
+    seeded with a distinct marker chunk at fixture-setup time; the
+    test asserts the searching tenant returns its own marker AND
+    never the other tenant's marker.
+
+    The (other marker not present) assertion is the load-bearing
+    isolation claim: a tenant predicate failure would surface as the
+    other tenant's marker leaking into this tenant's result set. The
+    test passes because D24's predicate filter holds, not because
+    tables happen to be empty.
     """
-    # Truncate both tenants to ensure a known-empty starting state.
-    for label in ("a", "b"):
-        _exec_in_api(
-            "sh", "-c",
-            f'PGPASSWORD="$POSTGRES_TENANT_{label.upper()}_PASSWORD" '
-            f"psql -h postgres-tenant-{label} "
-            f'-U "$POSTGRES_TENANT_{label.upper()}_USER" '
-            f'-d "$POSTGRES_TENANT_{label.upper()}_DB" '
-            f'-c "TRUNCATE TABLE chunks, sources;"',
-        )
+    own_marker = _MARKER_BY_LABEL[tenant_label]
+    other_label = "b" if tenant_label == "a" else "a"
+    other_marker = _MARKER_BY_LABEL[other_label]
     result = _exec_in_api(
         "python", "-m", "apps.cli", "ingest", "search",
-        "anything", "--tenant-id", tenant_label, "--limit", "5",
+        "isolation marker", "--tenant-id", tenant_label, "--limit", "5",
     )
     assert result.returncode == 0, (
         f"ingest search failed for tenant {tenant_label}: "
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
     )
-    assert "(no results)" in result.stdout, (
-        f"tenant {tenant_label} search unexpectedly returned: "
-        f"{result.stdout!r}"
+    assert own_marker in result.stdout, (
+        f"tenant {tenant_label} search did not return its own seeded "
+        f"marker ({own_marker!r}); fixture-seed may have failed or "
+        f"D24 predicate over-filtered. stdout={result.stdout!r}"
+    )
+    assert other_marker not in result.stdout, (
+        f"tenant {tenant_label} search leaked the OTHER tenant's "
+        f"marker ({other_marker!r}); D24 tenant predicate violated. "
+        f"stdout={result.stdout!r}"
     )
 
 
 @pytest.mark.parametrize("tenant_label", ["a", "b"])
-def test_traverse_against_empty_tenant_returns_no_results(
-    compose_running: None, tenant_label: str
+def test_traverse_against_tenant_with_no_seeded_entity_returns_no_results(
+    red_team_state: None, tenant_label: str
 ) -> None:
-    """Symmetric to the search isolation test: an empty tenant's
-    traverse returns nothing. Combined with the read isolation
-    contract test in ``test_neo4j_isolation.py`` that exercises
-    cross-tenant graph access, the application-level retrieval
-    surface inherits the property-based scoping discipline at the
-    user-visible boundary.
+    """The fixture seeds Postgres chunks only, not Neo4j graph nodes;
+    querying the traverse path for an entity that exists in neither
+    tenant's subgraph returns (no results). Paired with the search
+    cross-tenant non-leak test above, the application-level retrieval
+    surface is exercised across both retrieval paths.
+
+    Per D63 (property-based Neo4j scoping), the cross-tenant graph-
+    read isolation contract lives at test_neo4j_isolation.py; this
+    test asserts only that the application-layer traverse honours
+    the predicate when no matching entity exists.
     """
     result = _exec_in_api(
         "python", "-m", "apps.cli", "ingest", "traverse",
-        "AnyEntity", "--tenant-id", tenant_label, "--depth", "1",
+        "AnyEntityThatDoesNotExist",
+        "--tenant-id", tenant_label, "--depth", "1",
     )
     assert result.returncode == 0, (
         f"ingest traverse failed for tenant {tenant_label}: "
