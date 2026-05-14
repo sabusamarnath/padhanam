@@ -26,8 +26,6 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from fastapi import HTTPException
-
 from padhanam.observability import (
     SecurityEvent,
     SecurityEventCategory,
@@ -145,13 +143,9 @@ def get_platform_operator_principal(
 
     Routes that declare ``Depends(get_platform_operator_principal)``
     are gated to platform-operator-typed principals. Tenant-typed
-    tokens are rejected with HTTP 403; the security event for the
-    rejection fires at the error handler when the typed
-    ``PrincipalTypeMismatchError`` lands at commit 5 (S37). At this
-    commit the dependency raises ``HTTPException(403)`` directly so
-    the auth-model surface is testable in isolation; commit 5
-    refactors to the typed exception and the parallel error-handler
-    registration.
+    tokens raise ``PrincipalTypeMismatchError``, which the registered
+    handler at ``apps/api/_errors.py`` translates to HTTP 403 plus an
+    ``AUTHZ_DENIAL`` security event.
 
     The middleware authenticates the credential and stores the
     ``Principal`` on ``request.state.principal`` regardless of
@@ -159,15 +153,18 @@ def get_platform_operator_principal(
     ``PlatformOperatorPrincipal`` thin marker that downstream
     handlers consume without re-checking the discriminator.
     """
+    # Imported lazily to avoid a top-level cycle: ``apps.api._errors``
+    # imports from ``apps.api.routers._audit_query`` for the audit
+    # filter type, and ``apps.api.routers`` imports from middleware
+    # at module load. Lazy-import keeps the typed exception available
+    # without circular-import friction.
+    from apps.api._errors import PrincipalTypeMismatchError
+
     principal: Principal = request.state.principal
     if principal.principal_type is not PrincipalType.PLATFORM_OPERATOR:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "authenticated principal lacks the required type "
-                "'platform_operator' for this route; got "
-                f"{principal.principal_type.value!r}"
-            ),
+        raise PrincipalTypeMismatchError(
+            required=PrincipalType.PLATFORM_OPERATOR.value,
+            actual=principal.principal_type.value,
         )
     return PlatformOperatorPrincipal(
         subject=principal.subject,

@@ -12,8 +12,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
+from apps.api._errors import PrincipalTypeMismatchError
 from apps.api.middleware import get_platform_operator_principal
 from padhanam.security import PlatformOperatorPrincipal, Principal, PrincipalType
 from shared_kernel import TenantId
@@ -37,7 +36,10 @@ def test_get_platform_operator_principal_accepts_platform_operator_principal() -
     assert result.credential_ref == "abc12345..."
 
 
-def test_get_platform_operator_principal_rejects_tenant_principal_with_403() -> None:
+def test_get_platform_operator_principal_rejects_tenant_principal_with_typed_error() -> None:
+    """D103: tenant tokens raise the typed PrincipalTypeMismatchError;
+    the registered handler at _errors.py translates to 403 + AUTHZ_DENIAL
+    security event."""
     p = Principal(
         subject="alice",
         tenant_id=TenantId("tenant-a"),
@@ -45,8 +47,7 @@ def test_get_platform_operator_principal_rejects_tenant_principal_with_403() -> 
         credential_ref="def56789...",
         principal_type=PrincipalType.TENANT,
     )
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(PrincipalTypeMismatchError) as exc_info:
         get_platform_operator_principal(_request_with_principal(p))  # type: ignore[arg-type]
-    assert exc_info.value.status_code == 403
-    assert "platform_operator" in str(exc_info.value.detail)
-    assert "tenant" in str(exc_info.value.detail)
+    assert exc_info.value.required == "platform_operator"
+    assert exc_info.value.actual == "tenant"

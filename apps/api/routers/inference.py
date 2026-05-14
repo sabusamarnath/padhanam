@@ -91,24 +91,24 @@ async def get_tenant_context(
     that is not in the registry returns 404.
 
     D103 (S37) extends this resolver with a discriminator check at
-    entry: platform-operator-typed principals are rejected with 403
-    because they have no tenant scope and have no business invoking
-    tenant routes. The 403 path is raised as ``HTTPException(403)``
-    at this commit; commit 5 refactors to the typed
-    ``PrincipalTypeMismatchError`` plus parallel error-handler
-    registration with security event logging.
+    entry: platform-operator-typed principals raise
+    ``PrincipalTypeMismatchError``, which the registered handler at
+    ``apps/api/_errors.py`` translates to HTTP 403 plus an
+    ``AUTHZ_DENIAL`` security event.
 
     Tests override this dependency via ``app.dependency_overrides`` to
     inject a fixed TenantContext when the registry is not wired.
     """
+    # Lazy import to avoid the apps.api._errors → apps.api.routers
+    # circular surface (the audit query parser imports from
+    # contexts.audit and _errors imports the audit parser's
+    # exception class).
+    from apps.api._errors import PrincipalTypeMismatchError
+
     if principal.principal_type is not PrincipalType.TENANT:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "authenticated principal lacks the required type 'tenant' "
-                "for this route; got "
-                f"{principal.principal_type.value!r}"
-            ),
+        raise PrincipalTypeMismatchError(
+            required=PrincipalType.TENANT.value,
+            actual=principal.principal_type.value,
         )
 
     registry = getattr(request.app.state, "tenant_registry", None)

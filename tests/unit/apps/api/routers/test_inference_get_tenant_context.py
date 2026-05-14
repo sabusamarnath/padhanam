@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from apps.api._errors import PrincipalTypeMismatchError
 from apps.api.routers.inference import get_tenant_context
 from padhanam.security import Principal, PrincipalType
 from shared_kernel import TenantId
@@ -29,7 +30,10 @@ def _request_with_app_state(**state) -> SimpleNamespace:
     )
 
 
-def test_get_tenant_context_rejects_platform_operator_with_403() -> None:
+def test_get_tenant_context_rejects_platform_operator_with_typed_error() -> None:
+    """D103: platform-operator tokens raise PrincipalTypeMismatchError;
+    the registered handler at _errors.py translates to 403 + AUTHZ_DENIAL
+    security event."""
     p = Principal(
         subject="ops-1",
         tenant_id=TenantId(""),
@@ -41,11 +45,10 @@ def test_get_tenant_context_rejects_platform_operator_with_403() -> None:
     # request app state need not carry a tenant_registry for this
     # branch.
     request = _request_with_app_state(tenant_registry=None)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(PrincipalTypeMismatchError) as exc_info:
         asyncio.run(get_tenant_context(request, principal=p))  # type: ignore[arg-type]
-    assert exc_info.value.status_code == 403
-    assert "tenant" in str(exc_info.value.detail)
-    assert "platform_operator" in str(exc_info.value.detail)
+    assert exc_info.value.required == "tenant"
+    assert exc_info.value.actual == "platform_operator"
 
 
 def test_get_tenant_context_503_when_registry_missing_for_tenant_principal() -> None:

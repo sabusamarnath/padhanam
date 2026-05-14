@@ -28,7 +28,10 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-from apps.api._errors import register_run_history_error_handlers
+from apps.api._errors import (
+    register_audit_error_handlers,
+    register_run_history_error_handlers,
+)
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import health as health_router
@@ -258,6 +261,14 @@ def create_app(
     # FastAPI's default HTTPException 422 / 404 / 500 shapes until they
     # refresh to the new shape.
     register_run_history_error_handlers(app)
+
+    # S37 (D103): audit error handlers — parallel registration per
+    # the additive composition discipline (S37 pre-write
+    # reconciliation finding 4). Covers PrincipalTypeMismatchError
+    # (403 with AUTHZ_DENIAL security event),
+    # AuditEventNotFoundError (404), InvalidAuditFilterError (400),
+    # AuditMalformedCursorError (400), AuditQueryRoutingError (400).
+    register_audit_error_handlers(app)
 
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
