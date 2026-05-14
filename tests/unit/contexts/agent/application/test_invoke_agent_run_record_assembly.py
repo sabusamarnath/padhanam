@@ -286,7 +286,7 @@ def test_invocation_completed_writes_run_record_with_final_result() -> None:
     assert record.total_cost_usd == Decimal("0.0005")
     assert record.audit_start_hash == _START_HASH
     assert record.audit_end_hash == _END_HASH
-    assert record.trace_id is None  # OTel integration deferred
+    assert record.trace_id is None  # no active OTel span scope in unit test
 
 
 # --- 2. InvariantBlocked produces a runs row with synthesised reason ---

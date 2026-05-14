@@ -63,6 +63,8 @@ from decimal import Decimal
 from typing import Any, AsyncIterator, Mapping
 from uuid import UUID, uuid4
 
+from opentelemetry import trace as _otel_trace
+
 from contexts.agent.application.composition import (
     compose_effective_constraint_bundle,
 )
@@ -994,13 +996,39 @@ def _assemble_agent_run_record(
         termination_reason=termination_reason,
         iteration_count=iteration_count,
         total_cost_usd=total_cost_usd,
-        trace_id=None,
+        trace_id=_current_otel_trace_id_hex(),
         audit_start_hash=audit_start_hash,
         audit_end_hash=audit_end_hash,
         created_at=now,
         chunk_citations=chunk_citations,
         entity_citations=entity_citations,
     )
+
+
+def _current_otel_trace_id_hex() -> str | None:
+    """Return the active OTel span's trace_id as 32-char lowercase hex.
+
+    D27 commits the trace store as operational observability with the
+    run record's ``trace_id`` column as the join key for cross-store
+    deep-dives (Postgres runs row ↔ Langfuse trace lookup). The agent
+    runtime's ``AgentLoopExecutor`` opens an ``agent.invocation`` span
+    (S29b commit 4 nested-span scaffold); the span is current via OTel
+    contextvars when ``invoke_agent`` calls this helper from inside
+    the ``async for event in stream:`` loop after the terminal yield.
+
+    OTel's ``SpanContext.trace_id`` is an integer; Langfuse and the
+    runs schema expect the 32-character lowercase hex string form per
+    D95. ``INVALID_TRACE_ID`` (zero) maps to ``None`` so the column
+    stays NULL when no recording tracer is active (unit tests without
+    an SDK-configured provider).
+    """
+    span = _otel_trace.get_current_span()
+    span_context = span.get_span_context()
+    if not span_context.is_valid:
+        return None
+    if span_context.trace_id == _otel_trace.INVALID_TRACE_ID:
+        return None
+    return format(span_context.trace_id, "032x")
 
 
 async def _resolve_role_view(
