@@ -49,6 +49,7 @@ class TenantRegistryPort(Protocol):
         jurisdiction: Jurisdiction,
         display_name: str,
         connection_config: TenantConnectionConfig,
+        created_by_user_id: str,
     ) -> Tenant: ...
 
     def get_tenant(self, tenant_id: TenantId) -> Tenant: ...

@@ -44,8 +44,11 @@ TENANT_B_UUID = "00000000-0000-4000-8000-00000000b002"
 
 
 def _operator_principal() -> Principal:
+    # Subject starts with `migration:` per D101 so seeded rows match
+    # the canonical wipe-guard pattern `created_by_user_id NOT LIKE
+    # 'migration:%'` symmetrically with methodology/role/tool tables.
     return Principal(
-        subject="system:control_plane",
+        subject="migration:ops/seed_tenants",
         tenant_id=SharedTenantId("operator"),
         roles=frozenset({OPERATOR_ROLE}),
         credential_ref="dev-token-op...",

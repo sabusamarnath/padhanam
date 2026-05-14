@@ -136,20 +136,31 @@ def registry_with_tenants(
     )
     try:
         async def setup() -> None:
+            # D101: preserve migration-seeded rows on entry too;
+            # the canonical wipe-guard pattern matches sentinel
+            # actors used by Alembic backfill and ops/seed_tenants.
             async with reg._sessionmaker() as session:
-                await session.execute(sa.delete(tenant_registry))
+                await session.execute(
+                    sa.delete(tenant_registry).where(
+                        tenant_registry.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
                 await session.commit()
             await reg.register_tenant(
                 tenant_id=TenantId(TENANT_A_UUID),
                 jurisdiction=Jurisdiction("eu-west"),
                 display_name="Tenant A",
                 connection_config=_plaintext(),
+                created_by_user_id="test:isolation",
             )
             await reg.register_tenant(
                 tenant_id=TenantId(TENANT_B_UUID),
                 jurisdiction=Jurisdiction("us-east"),
                 display_name="Tenant B",
                 connection_config=_plaintext(password="tenant-b-secret"),
+                created_by_user_id="test:isolation",
             )
             # Drain registration security events so test-scope
             # assertions only see events from the test action.
@@ -163,7 +174,13 @@ def registry_with_tenants(
     finally:
         async def teardown() -> None:
             async with reg._sessionmaker() as session:
-                await session.execute(sa.delete(tenant_registry))
+                await session.execute(
+                    sa.delete(tenant_registry).where(
+                        tenant_registry.c.created_by_user_id.notlike(
+                            "migration:%"
+                        )
+                    )
+                )
                 await session.commit()
             await reg.dispose()
         event_loop.run_until_complete(teardown())

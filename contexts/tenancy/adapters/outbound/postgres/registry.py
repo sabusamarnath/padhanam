@@ -89,6 +89,11 @@ tenant_registry = sa.Table(
     sa.Column("cost_attribution_id", sa.Text, nullable=False),
     sa.Column("cost_ceiling_usd_monthly", sa.Numeric, nullable=True),
     sa.Column("cost_ceiling_action", sa.Text, nullable=True),
+    # Actor provenance per D101 (Alembic revision 0011). Persists
+    # `principal.subject` from the application-layer register_tenant
+    # use case so the wipe-guard pattern `NOT LIKE 'migration:%'`
+    # applies symmetrically with the methodology/role/tool tables.
+    sa.Column("created_by_user_id", sa.Text, nullable=False),
 )
 
 
@@ -171,6 +176,7 @@ class PostgresTenantRegistry:
         jurisdiction: Jurisdiction,
         display_name: str,
         connection_config: TenantConnectionConfig,
+        created_by_user_id: str,
     ) -> Tenant:
         # Encrypt before any I/O. The plaintext bytes go out of scope at
         # function return; they are never assigned to ``self``.
@@ -205,6 +211,7 @@ class PostgresTenantRegistry:
                     # cost-ceiling columns stay NULL at insert time —
                     # forward-affordance, not consumed at S14.
                     cost_attribution_id=str(tenant_id),
+                    created_by_user_id=created_by_user_id,
                 )
             )
             await session.commit()
@@ -223,7 +230,7 @@ class PostgresTenantRegistry:
             cost_attribution_id=str(tenant_id),
         )
         await self._emit_audit(
-            actor="system:control_plane",
+            actor=created_by_user_id,
             action_verb="tenant.register",
             resource_id=str(tenant_id),
             before={},
@@ -237,7 +244,7 @@ class PostgresTenantRegistry:
         self._security_events.emit(
             SecurityEvent(
                 category=SecurityEventCategory.PRIVILEGED_ACTION,
-                principal_ref="system:control_plane",
+                principal_ref=created_by_user_id,
                 tenant_id=None,
                 action="tenant.register",
                 resource_ref=f"tenant:{tenant_id}",

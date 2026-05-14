@@ -74,6 +74,7 @@ class _AsyncRegistryPort(Protocol):
         jurisdiction: Jurisdiction,
         display_name: str,
         connection_config: TenantConnectionConfig,
+        created_by_user_id: str,
     ) -> Tenant: ...
 
     async def get_tenant(self, tenant_id: TenantId) -> Tenant | None: ...
@@ -131,11 +132,16 @@ async def register_tenant(
             tenant_id=tenant_id,
             security_events=security_events,
         )
+    # D101: actor provenance flows from principal.subject. The seed
+    # script at ops/seed_tenants.py uses a principal whose subject
+    # starts with `migration:` so seeded rows match the canonical
+    # wipe-guard sentinel.
     return await registry.register_tenant(
         tenant_id=tenant_id,
         jurisdiction=jurisdiction,
         display_name=display_name,
         connection_config=connection_config,
+        created_by_user_id=principal.subject,
     )
 
 
