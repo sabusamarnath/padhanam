@@ -32,8 +32,10 @@ from apps.api.middleware import AuthenticationMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
+from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
 from apps.api.routers.agent import AgentRuntimeComposition
+from contexts.run_history.ports.reader import RunHistoryReader
 from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
 from contexts.audit.domain.ports import AuditPort
 from contexts.inference.adapters.outbound.litellm import LiteLLMAdapter
@@ -54,7 +56,10 @@ from padhanam.config import (
 )
 from padhanam.events import DomainEvent, SynchronousEventBus
 from padhanam.observability import init_tracing, install_credential_scrub
-from padhanam.observability.security_events import file_security_event_logger
+from padhanam.observability.security_events import (
+    SecurityEventLogger,
+    file_security_event_logger,
+)
 from padhanam.security import Principal
 
 # httpx instrumentation propagates the W3C traceparent header through
@@ -89,6 +94,17 @@ class AppCompositions:
     # keep their narrow factory invocations; commit 9's integration
     # test populates this for the live-stack end-to-end run.
     agent_runtime: AgentRuntimeComposition | None = None
+    # S34 (D98): optional run-history reader for the GET /runs* routes.
+    # Defaults to None so test fixtures without the run-history stack
+    # can keep their narrow factory invocations; production wiring in
+    # _build_default_compositions populates this.
+    run_history_reader: RunHistoryReader | None = None
+    # S34 (D98): the shared security-event logger surfaced for the
+    # run-history routes (which fire TENANT_SCOPE_VIOLATION events on
+    # 404s from GET /runs/{run_id}). Existing routes consume the same
+    # logger via the auth middleware constructor; this field surfaces
+    # it on app.state for route-handler-level access.
+    security_events: SecurityEventLogger | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -148,6 +164,7 @@ def _build_default_compositions() -> AppCompositions:
     # real runtime through the standard API entry point.
     from apps.api._agent_runtime_wiring import (
         build_agent_runtime_composition,
+        build_run_history_reader,
     )
 
     agent_runtime = build_agent_runtime_composition(
@@ -161,6 +178,17 @@ def _build_default_compositions() -> AppCompositions:
         neo4j_settings=Neo4jSettings(),
     )
 
+    # S34: run-history reader for the GET /runs* routes. Mirrors the
+    # writer wiring in build_agent_runtime_composition (same session
+    # factory cache, same operator principal, same security-event
+    # logger).
+    run_history_reader = build_run_history_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -168,6 +196,8 @@ def _build_default_compositions() -> AppCompositions:
         tenant_registry=registry,
         session_factory_cache=session_factory_cache,
         agent_runtime=agent_runtime,
+        run_history_reader=run_history_reader,
+        security_events=sec,
     )
 
 
@@ -239,6 +269,7 @@ def create_app(
     app.include_router(inference_router.router)
     app.include_router(tenant_audit_router.router)
     app.include_router(agent_router.router)
+    app.include_router(run_history_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
@@ -247,6 +278,8 @@ def create_app(
     app.state.tenant_registry = compositions.tenant_registry
     app.state.session_factory_cache = compositions.session_factory_cache
     app.state.agent_runtime = compositions.agent_runtime
+    app.state.run_history_reader = compositions.run_history_reader
+    app.state.security_events = compositions.security_events
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit
