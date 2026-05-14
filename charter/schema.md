@@ -26,6 +26,7 @@ D33. Schema lands at S10 via Alembic revision
 | `cost_attribution_id`      | `text`          | not null; per-tenant cost-attribution identifier (D41); S14 revision `0003_add_cost_columns` populates it for existing rows from `tenant_id::text` |
 | `cost_ceiling_usd_monthly` | `numeric`       | nullable; forward-affordance per D41; not read by any code path at S14 (enforcement deferred to Phase 2) |
 | `cost_ceiling_action`      | `text`          | nullable; CHECK ∈ {`block`, `throttle`, `notify`, `audit_only`} or NULL; forward-affordance per D41; not read by any code path at S14 |
+| `created_by_user_id`       | `text`          | not null; actor provenance per D101; lands at S35a via Alembic revision `0011_add_tenant_registry_actor_provenance`; existing rows backfill with sentinel `'migration:0001'`; seed script uses `'migration:ops/seed_tenants'` so wipe-guard pattern `NOT LIKE 'migration:%'` works symmetrically with methodology/role/tool tables |
 
 No plaintext credential column exists; the registry adapter at S10
 encrypts on write via `padhanam/security/crypto.py` and never decrypts

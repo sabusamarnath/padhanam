@@ -374,16 +374,6 @@ Activates at Phase 2 framing if any of the following surface: heterogeneous cons
 
 **The specific D-entry lands at Phase 2 framing when the actual consumer surface is concrete.** Premature commitment ahead of that context is paper architecture.
 
-## Integration-test slowness from real-LLM inference in `tests/integration/`
-
-Activates at any session feeling fast-iteration pressure enough to invest in tier separation. The pressure is most likely to fire at P10 framing if P10's evaluation work requires fast hygiene loops, or at Phase 1 close substrate-completion if the substrate-completion territory bundles hygiene.
-
-**The cost is real LLM inference in test bodies, not fixture overhead.** Investigation at S34 close (`docs/notes/integration-test-slowness-investigation.md`) measured the top-ten slow integration tests at roughly 695 seconds combined. The cost is dominated by real LLM inference via LiteLLM against `qwen2.5:7b` plus embedding models against Ollama — three top-three files (`evaluation/test_cli_e2e.py`, `ingestion/test_retrieval_e2e.py`, `evaluation/test_cost_per_successful_task_e2e.py`) account for ~620 of those seconds. Module-scope fixtures are correctly applied; `engine.dispose()` patterns honour module scope by living inside single-invocation setup scripts; the only function-scoped truncation antipattern (`_clean` in `test_retrieval_e2e.py`) costs ~3% of the file's combined budget. The dominant lever is not in fixture architecture.
-
-**The recommended fix shape is two-tier test strategy.** Mark LLM-dependent integration tests with `@pytest.mark.live_llm` (or equivalent), exclude from default `uv run pytest` runs via `pyproject.toml`'s pytest collection config, expose through a separate Makefile target that runs at per-package close or weekly cadence. Preserves test fidelity (the assertions still exercise real model behaviour when they run); trades freshness of LLM-dependent verification against turnaround time on default hygiene runs. The work is small (~50 lines: pytest markers plus pyproject.toml collection config plus Makefile target) but warrants its own session for the D-entry that names the test-tier convention.
-
-**The specific D-entry lands at the activating session.** Premature commitment to a specific marker name or collection rule ahead of the actual fast-iteration pressure is paper architecture. Reference: `docs/notes/integration-test-slowness-investigation.md` (committed at S35) for the full investigation including durations data, fixture trace for the top three files, and the alternatives considered.
-
 ## HTTP API for ingestion management (Phase 2 substrate completion)
 
 Activates when a UI consumer (Phase 2 frontend or external tool) needs HTTP-driven ingestion management. Triggers at the first concrete user story demanding it.
