@@ -82,35 +82,51 @@ and finding 9 (single `timestamp_range` versus the brief's
 `started_at_range`/`ended_at_range` shape — the audit
 schema has one timestamp column).
 
-**S37 in flight.** D103 commits the platform-operator
-principal type as a discriminator-field claim on the D23
-signed-token backend (structurally complementary to the
-existing `Principal.roles` + `OPERATOR_ROLE` per pre-write
-reconciliation finding 1 user-question resolution), plus the
-HTTP transport for the audit reader with two route trees
-(`/audit` under the existing principal-derived tenant context
-pattern from S29b/S34; `/platform/audit` under the new
-`get_platform_operator_principal` dependency), plus the
-seven-filter query-string vocabulary settled at S36 surfaced
-at the list routes (`timestamp_range_start`,
-`timestamp_range_end`, `actor`, `action_verb`,
-`resource_type`, `resource_id` paired with `resource_type`,
-`correlation_id`, `jurisdiction`) plus `cursor` and
-`page_size`, plus the 403 `principal_type_mismatch` error
-path extending S34's D98 error response handler at
-`apps/api/_errors.py` via a parallel
-`register_audit_error_handlers` function. Pre-write
-reconciliation fired its fifteenth instance with one
-structural finding (existing role-list reality contradicts
-D103 alternative (b) framing; resolved to revise the
-framing rather than the choice) plus three mechanical
-findings (DTO module naming `_audit_dto.py` matches
-run-history precedent; platform-operator dev-mint helper
-omits `OPERATOR_ROLE` by default; new audit error handlers
-land as parallel `register_audit_error_handlers` function)
-plus four mechanical absorptions. S37 brief preserved at
-`briefs/p10/s37.md` with Appendix D capturing reconciliation
-outcomes.
+**S37 closed** at 2026-05-14 with the audit HTTP transport
+and the platform-operator principal type now in place
+end-to-end. Eight commits closed S37: D103 + charter
+touch-points (commit 1) with alternative (b) revised at
+pre-write reconciliation finding 1 user-question resolution
+to acknowledge the existing `Principal.roles` + `OPERATOR_ROLE`
+as production code rather than hypothetical Phase 2 future,
+framing `principal_type` as structurally complementary
+(discriminator anchors `tenant_id` conditional validity at
+decode time, which role-list cannot do cleanly because
+`verify_credential` requires `tenant_id` unconditionally
+today); D23 backend extension at `padhanam/security/auth.py`
+plus dependency surface at `apps/api/middleware.py` and
+`apps/api/routers/inference.py` (commit 2); Pydantic DTOs +
+query parser at `apps/api/routers/_audit_dto.py` and
+`_audit_query.py` mirroring run-history precedent per finding
+2 (commit 3); audit error response extension at
+`apps/api/_errors.py` with five new error-code paths and the
+parallel `register_audit_error_handlers` per finding 4 plus
+the refactor of commit-2 dependencies to raise typed
+`PrincipalTypeMismatchError` (commit 4); HTTP routes at
+`apps/api/routers/audit.py` with two FastAPI routers under
+`/audit/*` and `/platform/audit/*` plus composition wiring at
+`apps/api/main.py` including `PostgresAuditAdapter`'s new
+public `control_plane_sessionmaker` property (commit 5); six
+tenant-isolation contract scenarios at
+`tests/contract/tenant_isolation/test_audit_http_isolation.py`
+(commit 6) extending the harness from 27 to 33 scenarios;
+live-stack smoke at `docs/smoke/p10_s37_audit_http.md` plus
+script at `scripts/smoke_p10_s37.py` walking all ten
+verification paths end-to-end against tenant_a's 23-row chain
+and a seeded control-plane probe event, with four security
+events captured in `logs/security.jsonl` (commit 7); this
+entry (commit 8). 1251 passed + 17 skipped + 31 deselected
+(live_llm) at S37 close — net +51 from S36's 1200. 25/25
+import-linter contracts kept; AST enforcement passes.
+
+**S38 next**: HTTP API for ingestion management at
+`apps/api/routers/ingestion.py` plus the P10 close
+end-to-end demonstration absorbing both the audit HTTP
+transport and the ingestion management surface. P6
+carryover scope (list sources, get source by id, get source
+ingestion status) lands here per D102. S38 anchors directly
+from the P10 epic note at `charter/packages/p10-epic.md`
+unless structural drift surfaces.
 
 ## P9 closed (preserved below)
 
