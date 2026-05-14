@@ -2,7 +2,51 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P9 closed; P10 framing next
+## P10 open
+
+**P10 framed** at strategic-mode conversation on 2026-05-14.
+D102 commits the audit log read substrate as extension of the
+existing `contexts/audit/` bounded context: consumer-defined
+`AuditEventReader` port on the read side, two-destination model
+(per-tenant `tenant_audit` and control-plane `tenant_audit`)
+through a destination parameter on port methods, chain
+integrity verified on read at page granularity reusing
+`compute_event_hash` and `GENESIS_HASH` primitives from
+`contexts/audit/domain/events.py` with new page-granularity
+verifier logic on top (the existing `verify_chain` walker is
+from-genesis-only and is NOT reused), HTTP transport exposing
+both destinations on separately authorized routes (`/audit`
+under principal-derived tenant context, `/platform/audit`
+under a new platform-operator claim extending D23), HTTP API
+for ingestion management absorbed at P10 from the P6
+carryover. P10 epic at
+[charter/packages/p10-epic.md](packages/p10-epic.md). Three-
+to-four-session forecast (S36 read port + adapter + chain
+integrity; S37 HTTP transport + platform-operator claim; S38
+ingestion management HTTP API + P10 close demo; S39 carryover
+hygiene if needed).
+
+**Corrective note on misrouted P10 framing inputs.** The S35
+close paragraph below carries the line "P10 is the evaluation
+territory per the roadmap" and names two P10 framing inputs
+(retrieval-not-exercised model-behaviour gap; trace-id
+propagation gap). The P10 strategic-mode framing conversation
+on 2026-05-14 surfaced that this characterisation contradicts
+the canonical roadmap and D92, which scope P10 as the audit
+log viewer (backend-only). The two named framing inputs are
+correctly routed to the queued retrieval-evaluation design
+session pre-P11, not to P10. The corrective is captured
+append-only per the existing discipline; the original S35
+text stands as written below and this note attaches at P10
+open.
+
+**S36 next**: ship the audit context's read side (port, domain
+types, Postgres adapter against both destinations, wiring,
+contract-harness extensions, live-stack smoke). D-entries
+forecast for S36 cover read-port shape, filter vocabulary, and
+chain-integrity status shape.
+
+## P9 closed (preserved below)
 
 **S35b closed** at 2026-05-14 with harness integrity restored across all six pre-existing carryover failures. Five commits closed S35b: commit 1 transitioned `charter/current-package.md` and preserved the brief; commit 2 fixed TRUNCATE-without-CASCADE on chunks-to-`run_chunk_citations` (two fixture sites — `test_concurrent_workers.py`, `test_create_from_methodology_flow.py` — extended their TRUNCATE table-list to include `run_chunk_citations` per D95's FK chain; production ORM-deletion semantics with `ON DELETE SET NULL` are unaffected because TRUNCATE bypasses FK-action triggers); commit 3 migrated `test_ingestion_isolation.py`'s S22/D65 retrieval-surface block from the failing padhanam-api psql shell-out to the in-tenant-container psql pattern already used at `test_concurrent_workers.py` and `test_create_from_methodology_flow.py`, with each tenant seeded a distinct marker chunk (placeholder unit-vector embedding, sources.state='indexed') so the test asserts own-marker-present AND other-marker-absent — pass-because-isolated; commit 4 folded in the streaming-isolation test-scaffolding fix (added `_NullRunHistoryWriter` to `_build_app` to satisfy S31's `run_history_writer` field on `AgentRuntimeComposition`); commit 5 (this commit) appends the session log entry and transitions `current-package.md` back to "P9 closed; P10 framing next." Pre-write reconciliation fired its fourteenth instance at session-open: one structural-drift finding (surface 2: methodology fixture pattern doesn't transfer to per-tenant DBs because per-D5 they have no host-port bindings; operator-resolved via user-question to in-tenant-container psql) plus four mechanical absorptions, plus a mid-commit-3 structural finding (deliberate-violation cycle exposed that D32's per-DB topology is the *primary* isolation mechanism, with the SQL predicate as defense-in-depth — meaningful methodology signal for the Phase 1 close audit). 1106 passed + 17 skipped + 31 deselected at S35b close (+6 from S35a's 1100). Zero failures, no regressions. 25/25 import-linter contracts kept; AST enforcement passes. No new D-entries at S35b; D24 already commits the principle the fixes restore. The S35a + S35b carryover-hygiene tail folds into the P9 archive at P10 strategic-mode framing per operator direction.
 
@@ -33,6 +77,20 @@ P9 delivered the run-history backend substrate as the Phase 2 UX consumer surfac
 
 ## Carryovers active across the P8→P9 boundary
 
+- **Audit context port-location asymmetry.** Write-side
+  `AuditPort` sits at `contexts/audit/domain/ports.py` (pre-
+  P9 convention). Read-side `AuditEventReader` sits at
+  `contexts/audit/ports/reader.py` (P9-era convention
+  established at run_history). Activation trigger: the next
+  port added to the audit context (likely at P10 S37 HTTP
+  work or P11 recommendation-engine consumers). At that
+  point, decide whether to symmetrize by moving `AuditPort`
+  to `contexts/audit/ports/writer.py` versus accepting the
+  intra-context asymmetry as the audit-context convention.
+  Recorded at S36 pre-write reconciliation; deferred on
+  scope-discipline grounds because Option B (move now) has
+  unbounded touch surface and adds incidental scope at
+  S36 build time.
 - **Retrieval-aware role allowlists.** P8's two demos showed the substrate end-to-end but without retrieval grounding because all migration-seeded roles ship with empty `tool_allowlist`. Per-invocation allowlist override OR role-allowlist tightening (adding the retrieval tool reference) at Phase 2 makes source-grounded artifacts the default. Activates at the first authoring evidence demanding it.
 - **Per-invocation retrieval-constraint threading at ToolInvoker.** The Phase 1 `ToolInvokerAdapter` constructor accepts retrieval constants at composition time; per-role retrieval constraints from the effective bundle do not thread through to the tool invoker on each invocation. Phase 2 substrate refinement queued at the `apps/api/_agent_runtime_wiring.py` module docstring.
 - **Cross-app adapter location cleanup.** S30b's production wiring imports adapter classes from `apps/cli/_cross_context.py` because both `apps/cli/` and `apps/api/` need them. Phase 2 cleanup relocates to a shared `apps/`-level module; Phase 1 cross-app import is the pragmatic call documented in the wiring module's docstring.
