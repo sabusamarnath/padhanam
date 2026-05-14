@@ -1,5 +1,131 @@
 # P10 Epic — Audit log viewer (backend-only)
 
+## Retrospective addendum (S38 close, 2026-05-14)
+
+P10 closed at S38 close on 2026-05-14 with three sessions shipped:
+S36 (audit context read substrate — `AuditEventReader` consumer-
+defined port, Postgres adapter against both destinations, chain
+integrity verifier reusing the existing hash primitives,
+intra-context port-location asymmetry recorded as carryover), S37
+(HTTP transport for the audit reader at two route trees + D23
+backend extension with the platform-operator principal type +
+parallel `register_audit_error_handlers` registration shape per
+finding-4 resolution), and S38 (auth error handler relocation to a
+new cross-cutting `_auth_errors.py` module + HTTP API for ingestion
+management consuming the existing application layer via Path A + P10
+close end-to-end demo). Three D-entries landed across the package:
+D102 (P10 framing — read port shape, two-destination model, chain
+integrity verification on read at page granularity, ingestion-
+management API absorbed from the P6 carryover), D103 (platform-
+operator principal type as discriminator-field claim + HTTP
+transport with two route trees + 403 path extension), D104 (auth
+error handler cross-cutting registration + ingestion HTTP transport
+with three read routes via Path A — extend `SourceRepositoryPort`
+with `list_sources` plus add a `list_sources` application use case
+rather than stand up a separate consumer-defined reader port).
+
+**Delta from framing.** The framing forecast three-to-four sessions;
+as-built shipped three. S39 carryover hygiene did not need a
+session because no carryover surfaced at S38 close. The
+`PrincipalTypeMismatchError` handler-location entry the S38 brief
+expected in `charter/deferred-decisions.md` did not exist as a
+separate entry; the architectural seed was at D103 alternative (i)
+("preserves the option to refactor to a generic
+`register_error_handlers` at a future cleanup moment"). The
+relocation at S38 commit 2 still proceeded per the architectural
+intent and the trigger fired exactly as the alternative (i)
+language anticipated. The audit-context port-location asymmetry
+carryover from S36 (write-side `AuditPort` at
+`contexts/audit/domain/ports.py`; read-side `AuditEventReader` at
+`contexts/audit/ports/reader.py`) stays open and inherits to the
+next port added to the audit context per the existing
+`charter/current-package.md` "Carryovers active across the P8→P9
+boundary" entry.
+
+**Substrate as Phase 2 UX consumer surface.** P10 closes with the
+full audit and ingestion management read substrate in place: the
+consumer-defined audit reader port (S36) with chain integrity
+verification at page granularity reusing the existing
+`compute_event_hash` and `GENESIS_HASH` primitives; the HTTP
+transports for both destinations under separate principal-derived
+gating (S37); the principal-type discriminator separating
+tenant-typed and platform-operator-typed access at the token
+chokepoint (S37); the cross-cutting auth error handler at
+`_auth_errors.py` so future routers consuming the shared
+`get_tenant_context` chokepoint inherit the 403 path without
+coupling to audit (S38); the ingestion management API with three
+read routes consuming the existing application layer via Path A
+(S38). Every consumer surface Phase 2 UX needs for audit-evidence
+and ingestion-management observability is in place and verifiable
+end-to-end through a single reproducible script at
+`scripts/smoke_p10_s38.py`.
+
+**Phase 1 substrate-completeness observations recorded at S38
+close.** Three observations surface from the P10 close demo at
+`docs/smoke/p10_s38_close_demo.md` for the Phase 1 close audit at
+P12. First, the audit-context port-location asymmetry from S36
+inherits unchanged through P10 close — the next port added to the
+audit context (likely at P11 recommendation-engine consumers if it
+needs audit reads, or a Phase 2 surface) will activate the
+symmetrize-or-accept decision. Second, the chain integrity
+verifier returns `partial` rather than `verified` on a single-row
+page — this is the correct page-granularity-verifier shape per
+D102's `partial` semantics, but the smoke surfaced it as a
+structurally honest "I cannot verify two-row chain links on a
+one-row page" rather than a false-positive `verified`; the
+observation is recorded so the Phase 2 UX audit-viewer designer
+understands the three-state surface from day one. Third, the
+trace-id propagation gap from P9 close did not surface during the
+P10 read paths because the HTTP layer does not yet read or
+display `trace_id`; the gap remains open for the Phase 1 close
+audit per the P9 retrospective.
+
+**Methodology candidate reinforcements at P10.** Pre-write
+reconciliation reinforced at session-open for all three P10
+sessions — S36 (one structural-honesty finding on audit port
+location resolving to operator-selected option A), S37 (one
+structural-honesty finding on the platform-operator-versus-roles
+relationship resolving via D103 alternative (b)), S38 (one
+structural-honesty finding on the missing `list_sources` capability
+resolving to operator-selected Path A). Each pre-write
+reconciliation produced one D-entry alternative revision that
+shaped the final commitment. The pattern reached an inferred 16
+instances at S37 close and 17 at S38 close — the methodology
+candidate count continues to grow at a stable rate (one per build
+session) and the substrate-extension-time variant (catching brief-
+versus-built-state mismatches rather than architectural-drift
+mismatches) shows up across P10 as the pre-write reconciliation
+mode shifts when the codebase is in extension rather than
+shape-establishing mode.
+
+Consumer-port-plus-wiring-adapter reinforced at S36 (the tenth
+class on `apps/cli/_cross_context.py`, `AuditEventReaderAdapter`)
+and at S38 in a sub-shape variant — the `TenantRoutingSourceRepository`
+at `apps/api/_agent_runtime_wiring.py` is a routing-wrapper rather
+than a port-defined-elsewhere-wired-here adapter, but it follows
+the same shape: the production composition layer owns the
+per-tenant routing impedance, the consumer (the HTTP route) sees
+a single clean port surface. Both forwarded as methodology
+candidates for the Phase 1 close audit at P12 close per the
+build-versus-strategic discipline (D47).
+
+**Architectural-extension-rather-than-greenfield as a P10
+characteristic.** P10 differed from earlier packages in that every
+S36/S37/S38 session extended an existing bounded context rather
+than shaping a new one. The reconciliation-as-discovery shape
+shifted accordingly: S36 reconciled where to place a new port
+within the existing audit context (intra-context placement
+question rather than cross-context architecture question); S37
+reconciled how to extend the existing D23 token model rather than
+replace it; S38 reconciled whether to extend the existing
+`SourceRepositoryPort` (Path A) or stand up a parallel reader port
+(Path B). All three reconciliations produced cleaner outcomes
+because the existing context shape constrained the option set.
+Worth noting at the Phase 1 close audit: P10's reconciliation
+mode tracks the codebase's maturity arc — early packages
+established context boundaries, P10 extends them, and Phase 2
+will exercise them.
+
 ## Goal
 
 P10 ships the audit log read substrate that closes Phase 1's

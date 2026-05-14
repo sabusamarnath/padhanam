@@ -2,7 +2,46 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P10 open
+## P10 closed; retrieval-evaluation design session next
+
+P10 closed at S38 close on 2026-05-14 with the full audit and
+ingestion management read substrate in place per D102 (framing),
+D103 (audit HTTP transport + platform-operator principal type), and
+D104 (auth handler relocation + ingestion HTTP transport via Path
+A). Three sessions shipped (S36, S37, S38) against the
+three-to-four-session framing forecast. Retrospective addendum
+lands at [charter/packages/p10-epic.md](packages/p10-epic.md) with
+five sections mirroring P9's shape: delta from framing, substrate
+as Phase 2 UX consumer surface, Phase 1 substrate-completeness
+observations, methodology candidate reinforcements, and the new
+architectural-extension-rather-than-greenfield observation
+specific to P10's mode.
+
+**Next strategic-mode conversation.** The retrieval-evaluation
+design session sits ahead of P11 framing per the standing
+strategic carryover at [charter/current-package.md](current-package.md)
+"Carryovers active across the P8→P9 boundary" (the entry titled
+"Retrieval-evaluation design session"). The audience is the
+existing P5 eval harness plus the P11 optimisation layer; the
+design space to settle includes gold-set construction, offline
+versus online relevance signals, recall@k versus precision@k
+tradeoffs, and test corpus shape. The session is must-have for the
+bet's optimisation claim because the optimisation layer at P11 has
+to distinguish retrieval failures from reasoning failures.
+
+The session is queued for Claude.ai strategic-mode rather than
+build-mode in Claude Code because the deliverables are charter
+artefacts (a D-entry committing the retrieval-evaluation framing,
+plus potentially the P11 framing decision tree depending on what
+the design session settles). The next Claude Code conversation
+after the strategic block is P11 build kick-off (or P11 framing
+follow-on if the strategic block produces a build-session brief).
+
+P9 archive landed at S35 close to `docs/archive/packages/p9.md`;
+P10 archive lands at the same destination from a follow-on
+operator-driven step.
+
+## P10 — final history (preserved below for traceability)
 
 **P10 framed** at strategic-mode conversation on 2026-05-14.
 D102 commits the audit log read substrate as extension of the
