@@ -109,7 +109,18 @@ def _exec_psql_tenant(label: str, query: str) -> str:
 
 
 def _truncate_ingestion_tables(label: str) -> None:
-    _exec_psql_tenant(label, "TRUNCATE TABLE chunks, sources;")
+    # Include run_chunk_citations in the truncate set: S32 introduced
+    # run_chunk_citations.chunk_id REFERENCES chunks(id) ON DELETE SET
+    # NULL per D95. TRUNCATE bypasses FK-action triggers; truncating
+    # chunks alone fails on the FK reference. Explicit-list shape over
+    # CASCADE keyword documents intent at the call site and keeps the
+    # production ORM-deletion path's SET NULL semantics intact per
+    # D95's audit-evidence survival commitment. Mirror of the S35b fix
+    # at test_concurrent_workers.py; this site was outside S35b's
+    # explicit scope at the time per S38a reconciliation.
+    _exec_psql_tenant(
+        label, "TRUNCATE TABLE chunks, sources, run_chunk_citations;"
+    )
 
 
 def _write_file_in_container(path: str, content: str) -> None:

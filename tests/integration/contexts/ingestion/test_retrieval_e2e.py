@@ -107,7 +107,15 @@ def _exec_psql_tenant(label: str, query: str) -> str:
 
 
 def _truncate_tenant(label: str) -> None:
-    _exec_psql_tenant(label, "TRUNCATE TABLE chunks, sources;")
+    # Include run_chunk_citations in the truncate set: S32 introduced
+    # run_chunk_citations.chunk_id REFERENCES chunks(id) ON DELETE SET
+    # NULL per D95. TRUNCATE bypasses FK-action triggers; truncating
+    # chunks alone fails on the FK reference. Explicit-list shape
+    # mirrors S35b at test_concurrent_workers.py; this site was outside
+    # S35b's explicit scope at the time per S38a reconciliation.
+    _exec_psql_tenant(
+        label, "TRUNCATE TABLE chunks, sources, run_chunk_citations;"
+    )
 
 
 def _truncate_neo4j_extraction_data() -> None:
