@@ -38,6 +38,14 @@ Methods at S20:
   - ``count_embedded_chunks``: structural assertion helper for the
     integration test; counts chunks with non-null ``embedding`` for
     a source, tenant-scoped.
+  - ``list_sources``: paginated list of sources for a tenant on the
+    ``(created_at DESC, id DESC)`` sort order with cursor pagination
+    (D104, S38). Read-side surface for the HTTP ingestion management
+    API; the existing read methods (``get_source``,
+    ``get_chunks_for_source``, ``count_embedded_chunks``) already
+    co-locate on this port per the ingestion context's existing
+    read/write-mixed convention. Path A from S38 reconciliation
+    chose extension over standing up a separate reader port.
 """
 
 from __future__ import annotations
@@ -48,6 +56,7 @@ from uuid import UUID
 from contexts.ingestion.domain.chunk import Chunk
 from contexts.ingestion.domain.embedding import Embedding
 from contexts.ingestion.domain.source import Source
+from contexts.ingestion.domain.source_list import SourceListCursor, SourceListPage
 from contexts.ingestion.domain.state import SourceState
 
 
@@ -151,5 +160,29 @@ class SourceRepositoryPort(Protocol):
         """Return the count of chunks with a non-null embedding for
         the source. Tenant-scoped. Helper for integration-test
         assertions about the worker's embedding-write effect.
+        """
+        ...
+
+    async def list_sources(
+        self,
+        *,
+        tenant_id: str,
+        cursor: SourceListCursor | None,
+        page_size: int,
+    ) -> SourceListPage:
+        """Return a paginated page of sources for the tenant (D104, S38).
+
+        Sort order is ``created_at DESC, id DESC`` so the most recent
+        uploads surface first. Pagination uses tuple comparison on
+        ``(created_at, id)`` against the cursor; the first page passes
+        ``cursor=None`` and the adapter applies no comparison clause.
+
+        The returned page carries the loaded ``Source`` aggregates and
+        an optional ``next_cursor``. When the adapter loads fewer rows
+        than ``page_size`` the ``next_cursor`` is ``None`` (end of
+        page). The adapter is responsible for tenant-scoping every
+        emitted row via the existing per-tenant routing pattern;
+        no cross-tenant rows ever surface even if a cursor is
+        fabricated.
         """
         ...

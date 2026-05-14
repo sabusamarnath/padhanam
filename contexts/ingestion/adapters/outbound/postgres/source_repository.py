@@ -21,6 +21,7 @@ from typing import Sequence
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from contexts.ingestion.adapters.outbound.postgres._tables import (
@@ -30,6 +31,7 @@ from contexts.ingestion.adapters.outbound.postgres._tables import (
 from contexts.ingestion.domain.chunk import Chunk
 from contexts.ingestion.domain.embedding import Embedding
 from contexts.ingestion.domain.source import Source
+from contexts.ingestion.domain.source_list import SourceListCursor, SourceListPage
 from contexts.ingestion.domain.state import SourceState
 
 
@@ -372,6 +374,75 @@ class PostgresSourceRepository:
             )
             count = result.scalar_one()
         return int(count)
+
+    async def list_sources(
+        self,
+        *,
+        tenant_id: str,
+        cursor: SourceListCursor | None,
+        page_size: int,
+    ) -> SourceListPage:
+        """Tenant-scoped paginated list of sources (D104, S38).
+
+        Sort order is ``created_at DESC, id DESC``. Pagination uses
+        tuple comparison on ``(created_at, id)`` against the cursor;
+        the first page passes ``cursor=None`` and the WHERE clause
+        applies tenant scoping only. The cast on ``sources.id`` to
+        ``pg.UUID`` mirrors the S33 finding for the run-history reader
+        — without it Postgres resolves ``id < varchar`` and fails
+        with operator-mismatch when comparing the stored UUID column
+        against the string-shaped cursor value.
+
+        Loads ``page_size + 1`` rows so the adapter knows whether
+        another page follows; if the extra row is present, the
+        returned page's ``next_cursor`` carries the last in-page
+        row's ``(created_at, id)`` for the next request.
+        """
+        conditions = [sources_table.c.tenant_id == tenant_id]
+        if cursor is not None:
+            # Tuple comparison: (created_at, id) < (cursor.created_at, cursor.id)
+            # The DESC sort order means "next page" needs rows
+            # strictly smaller than the cursor's last in-page row.
+            conditions.append(
+                sa.tuple_(
+                    sources_table.c.created_at,
+                    sa.cast(sources_table.c.id, pg.UUID),
+                )
+                < sa.tuple_(
+                    sa.literal(cursor.created_at),
+                    sa.cast(sa.literal(str(cursor.id)), pg.UUID),
+                )
+            )
+
+        stmt = (
+            sa.select(sources_table)
+            .where(sa.and_(*conditions))
+            .order_by(
+                sources_table.c.created_at.desc(),
+                sources_table.c.id.desc(),
+            )
+            .limit(page_size + 1)
+        )
+        async with self._session_factory() as session:
+            result = await session.execute(stmt)
+            rows = result.mappings().all()
+
+        sources = [_row_to_source(row) for row in rows[:page_size]]
+        next_cursor: SourceListCursor | None = None
+        if len(rows) > page_size and sources:
+            # The +1 row exists, so another page follows. The cursor
+            # carries the last in-page row's ``(created_at, id)`` so the
+            # next request's tuple-comparison clause picks up after it.
+            last = sources[-1]
+            next_cursor = SourceListCursor(
+                created_at=last.created_at,
+                id=last.id,
+                page_size=page_size,
+            )
+        return SourceListPage(
+            sources=tuple(sources),
+            next_cursor=next_cursor,
+        )
 
 
 def _format_vector_literal(vector) -> str:
