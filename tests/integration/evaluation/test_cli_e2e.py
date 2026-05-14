@@ -40,6 +40,8 @@ from uuid import UUID
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 
 # ---------------------------------------------------------------------
 # Compose probes (mirroring the S17b shape)

@@ -37,6 +37,8 @@ import textwrap
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 
 _TENANT_A_LABEL = "a"
 _TENANT_A_ID = "00000000-0000-4000-8000-00000000a001"

@@ -24,6 +24,8 @@ import urllib.request
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 from padhanam.config import ObservabilitySettings
 from padhanam.security.auth import issue_dev_token
 

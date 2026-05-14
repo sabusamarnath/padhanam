@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -20,7 +20,8 @@ help:
 	@echo "  scan        Trivy + pip-audit; gates session-closing commits (D25)"
 	@echo "  sbom        Generate SBOM (stub until real Python deps land in S7)"
 	@echo "  lint        Run import-linter against the architectural contracts"
-	@echo "  test        Run the unit and contract test suites"
+	@echo "  test        Run the unit and contract test suites (default tier; excludes live_llm per D99)"
+	@echo "  test-live-llm  Run integration tests that exercise real LLM via LiteLLM/Ollama (D99)"
 	@echo "  migrate     Apply Alembic migrations: control-plane phase, then per-tenant phase against each registered tenant (D36)"
 	@echo "  seed-tenants  Register the test set tenants in the registry; idempotent"
 	@echo "  scheduled-check  Run scheduled supply-chain check; writes report to docs/security/scheduled-check-reports/"
@@ -105,6 +106,13 @@ lint:
 
 test:
 	uv run pytest
+
+# Live-LLM tier per D99. Default `make test` excludes these via the
+# `addopts = -m 'not live_llm'` config in pyproject.toml; this target
+# runs them explicitly. Requires the Compose stack up and Ollama
+# reachable; tests that find the stack unreachable skip themselves.
+test-live-llm:
+	uv run pytest -m live_llm
 
 # Apply Alembic migrations against the live control-plane Postgres
 # instance (D33), then iterate over registered tenants and apply the

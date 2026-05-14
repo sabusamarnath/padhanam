@@ -44,6 +44,8 @@ import textwrap
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 
 _TENANT_A_LABEL = "a"
 _TENANT_B_LABEL = "b"

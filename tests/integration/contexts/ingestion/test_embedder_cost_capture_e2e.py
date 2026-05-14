@@ -33,6 +33,8 @@ from uuid import uuid4
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 from contexts.ingestion.adapters.outbound.embedding import (
     LiteLLMChunkEmbedder,
 )

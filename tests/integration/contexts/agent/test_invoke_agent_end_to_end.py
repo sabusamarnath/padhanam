@@ -46,6 +46,8 @@ import subprocess
 
 import pytest
 
+pytestmark = pytest.mark.live_llm  # D99: real LLM via LiteLLM/Ollama
+
 
 def _docker_available() -> bool:
     if shutil.which("docker") is None:

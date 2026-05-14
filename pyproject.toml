@@ -87,5 +87,8 @@ padhanam-cli = {workspace = true}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not live_llm'"
 pythonpath = ["."]
+markers = [
+    "live_llm: integration test exercises real LLM inference via LiteLLM/Ollama (D99); excluded from default collection; run via `make test-live-llm`",
+]
