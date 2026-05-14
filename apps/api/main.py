@@ -34,11 +34,13 @@ from apps.api._errors import (
 )
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
+from apps.api.routers import audit as audit_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
 from apps.api.routers.agent import AgentRuntimeComposition
+from contexts.audit.ports.reader import AuditEventReader
 from contexts.run_history.ports.reader import RunHistoryReader
 from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
 from contexts.audit.domain.ports import AuditPort
@@ -109,6 +111,12 @@ class AppCompositions:
     # logger via the auth middleware constructor; this field surfaces
     # it on app.state for route-handler-level access.
     security_events: SecurityEventLogger | None = None
+    # S37 (D103): optional audit event reader for the GET /audit/* and
+    # GET /platform/audit/* routes. Defaults to None so test fixtures
+    # without the audit stack can keep their narrow factory
+    # invocations; production wiring in _build_default_compositions
+    # populates this from build_audit_event_reader.
+    audit_event_reader: AuditEventReader | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -168,6 +176,7 @@ def _build_default_compositions() -> AppCompositions:
     # real runtime through the standard API entry point.
     from apps.api._agent_runtime_wiring import (
         build_agent_runtime_composition,
+        build_audit_event_reader,
         build_run_history_reader,
     )
 
@@ -193,6 +202,18 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
     )
 
+    # S37: audit event reader for the GET /audit/* and GET
+    # /platform/audit/* routes. Shares the control-plane
+    # sessionmaker with the write-side audit adapter so reads and
+    # writes pool against the same engine.
+    audit_event_reader = build_audit_event_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        control_plane_sessionmaker=audit_adapter.control_plane_sessionmaker,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -202,6 +223,7 @@ def _build_default_compositions() -> AppCompositions:
         agent_runtime=agent_runtime,
         run_history_reader=run_history_reader,
         security_events=sec,
+        audit_event_reader=audit_event_reader,
     )
 
 
@@ -290,6 +312,11 @@ def create_app(
     app.include_router(tenant_audit_router.router)
     app.include_router(agent_router.router)
     app.include_router(run_history_router.router)
+    # S37 (D103): two audit route trees — /audit/* under
+    # principal-derived tenant context; /platform/audit/* under the
+    # new platform-operator principal type.
+    app.include_router(audit_router.tenant_router)
+    app.include_router(audit_router.platform_router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
@@ -300,6 +327,7 @@ def create_app(
     app.state.agent_runtime = compositions.agent_runtime
     app.state.run_history_reader = compositions.run_history_reader
     app.state.security_events = compositions.security_events
+    app.state.audit_event_reader = compositions.audit_event_reader
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit

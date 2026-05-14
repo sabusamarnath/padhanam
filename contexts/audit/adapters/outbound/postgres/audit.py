@@ -143,6 +143,20 @@ class PostgresAuditAdapter:
     async def dispose(self) -> None:
         await self._control_plane_engine.dispose()
 
+    @property
+    def control_plane_sessionmaker(self) -> async_sessionmaker[AsyncSession]:
+        """Expose the control-plane sessionmaker for sibling composition (S37, D103).
+
+        The audit reader at ``contexts/audit/adapters/outbound/postgres/
+        reader.py`` queries the same control-plane ``tenant_audit``
+        table the write-side adapter writes to. Exposing the
+        sessionmaker as a public accessor lets the API composition root
+        share the writer's sessionmaker (and connection pool) with the
+        ``AuditEventReaderAdapter`` rather than constructing a parallel
+        pool against the same database.
+        """
+        return self._control_plane_sessionmaker
+
     # ------------------------------------------------------------------
     # AuditPort implementation
     # ------------------------------------------------------------------
