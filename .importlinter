@@ -48,6 +48,7 @@ type = layers
 layers =
     contexts.audit.adapters
     contexts.audit.application
+    contexts.audit.ports
     contexts.audit.domain
 
 [importlinter:contract:layers-tenancy]
