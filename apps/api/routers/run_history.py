@@ -33,6 +33,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from apps.api._errors import BoundTenantIdMismatchError, RunNotFoundError
 from apps.api.middleware import get_principal
 from apps.api.routers._run_history_dto import (
     RunListResponse,
@@ -107,9 +108,20 @@ async def get_run(
     is privacy-preserving — confirming existence on another tenant
     would leak information.
     """
-    record = await reader.get_run(
-        tenant_context=tenant_context, run_id=run_id
-    )
+    try:
+        record = await reader.get_run(
+            tenant_context=tenant_context, run_id=run_id
+        )
+    except ValueError as exc:
+        # Reader's bound-tenant-id defence-in-depth fired; should never
+        # happen above the data layer because the route-layer principal
+        # check should have caught the mismatch. Re-raise as the typed
+        # exception so the handler at apps/api/_errors.py emits the
+        # security event synchronously and returns 500.
+        if "tenant" in str(exc):
+            raise BoundTenantIdMismatchError(exc) from exc
+        raise
+
     if record is None:
         security_events.emit(
             SecurityEvent(
@@ -125,10 +137,7 @@ async def get_run(
                 },
             )
         )
-        raise HTTPException(
-            status_code=404,
-            detail=f"run {run_id} not found",
-        )
+        raise RunNotFoundError(str(run_id))
     return RunResponse.model_validate(record)
 
 
@@ -151,11 +160,17 @@ async def list_runs(
     indistinguishable from genuine no-results.
     """
     filters, cursor = parsed
-    page = await reader.list_runs_with_filters(
-        tenant_context=tenant_context,
-        filters=filters,
-        cursor=cursor,
-    )
+    try:
+        page = await reader.list_runs_with_filters(
+            tenant_context=tenant_context,
+            filters=filters,
+            cursor=cursor,
+        )
+    except ValueError as exc:
+        if "tenant" in str(exc):
+            raise BoundTenantIdMismatchError(exc) from exc
+        raise
+
     return RunListResponse(
         runs=[RunResponse.model_validate(run) for run in page.runs],
         next_cursor=encode_cursor(page.next_cursor) if page.next_cursor else None,

@@ -28,7 +28,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-from apps.api.middleware import AuthenticationMiddleware
+from apps.api._errors import register_run_history_error_handlers
+from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
@@ -246,9 +247,17 @@ def create_app(
     # Auth middleware FIRST so it wraps the router from the ASGI side
     # — including 404 and 422 handlers. Order of add_middleware calls
     # is reverse-applied at request time (last added is outermost), so
-    # this single auth middleware is the only one and sits at the
-    # outside.
+    # CorrelationIdMiddleware added last sits outermost, generating a
+    # correlation_id before AuthenticationMiddleware reads it for the
+    # AUTH_FAILURE security event.
     app.add_middleware(AuthenticationMiddleware)
+    app.add_middleware(CorrelationIdMiddleware)
+
+    # S34 (D98): error handlers translate run-history exceptions into
+    # the new ErrorResponse body shape. Existing routes keep using
+    # FastAPI's default HTTPException 422 / 404 / 500 shapes until they
+    # refresh to the new shape.
+    register_run_history_error_handlers(app)
 
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is

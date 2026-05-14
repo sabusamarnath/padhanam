@@ -151,6 +151,9 @@ def _build_app(
     app.dependency_overrides[get_tenant_context] = lambda: _tenant_context_fixture()
     app.dependency_overrides[get_run_history_reader] = lambda: reader
     app.dependency_overrides[get_security_event_logger] = lambda: security_events
+    # Exception handlers read security_events from app.state (not via
+    # FastAPI dependencies), so substitute the app.state seam too.
+    app.state.security_events = security_events
     return app
 
 
@@ -224,6 +227,13 @@ def test_get_run_returns_404_and_fires_security_event_on_missing(
     )
 
     assert response.status_code == 404
+    body = response.json()
+    assert body["error_code"] == "run_not_found"
+    assert _RUN_UUID in body["message"]
+    assert body["correlation_id"]  # populated from CorrelationIdMiddleware
+    assert body["details"] is None
+    # The response header carries the same correlation_id as the body.
+    assert response.headers.get("x-correlation-id") == body["correlation_id"]
     assert len(sec.events) == 1
     event = sec.events[0]
     assert event.category == SecurityEventCategory.TENANT_SCOPE_VIOLATION
@@ -254,7 +264,10 @@ def test_get_run_returns_422_on_bad_uuid_path_param(
     )
 
     assert response.status_code == 422
-    # FastAPI validation surfaces a structured detail body
+    body = response.json()
+    assert body["error_code"] == "validation_error"
+    assert body["correlation_id"]
+    assert "errors" in body["details"]
     assert reader.get_run_calls == []
     assert sec.events == []
 
@@ -409,3 +422,190 @@ def test_list_runs_returns_401_when_unauthenticated(
     response = client.get("/runs")
     assert response.status_code == 401
     assert reader.list_calls == []
+
+
+# --------------------------------------------------------------------
+# Error handlers: malformed cursor, invalid filter range, page_size
+# out of bounds, bound-tenant-id defence-in-depth, method not allowed.
+# --------------------------------------------------------------------
+
+
+def test_list_runs_returns_400_on_malformed_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        "/runs",
+        params={"cursor": "not-a-valid-cursor"},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error_code"] == "malformed_cursor"
+    assert body["correlation_id"]
+    assert reader.list_calls == []
+
+
+def test_list_runs_returns_400_on_only_one_date_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        "/runs",
+        params={"started_at_after": _NOW.isoformat()},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error_code"] == "invalid_filter_range"
+    assert "both be provided" in body["message"]
+
+
+def test_list_runs_returns_400_on_inverted_date_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    after = _NOW.replace(hour=18).isoformat()
+    before = _NOW.replace(hour=12).isoformat()
+    response = client.get(
+        "/runs",
+        params={"started_at_after": after, "started_at_before": before},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error_code"] == "invalid_filter_range"
+    assert "strictly earlier" in body["message"]
+
+
+def test_list_runs_returns_422_on_page_size_out_of_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        "/runs",
+        params={"page_size": 999},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error_code"] == "validation_error"
+    assert body["correlation_id"]
+
+
+def test_list_runs_returns_422_on_negative_page_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        "/runs",
+        params={"page_size": 0},
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_get_run_returns_500_on_bound_tenant_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reader's defence-in-depth ValueError translates to 500 plus
+    a synchronous TENANT_SCOPE_VIOLATION security event with critical
+    severity metadata per D98."""
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+
+    class _RaisingReader(_FakeReader):
+        async def get_run(self, *, tenant_context, run_id):  # type: ignore[override]
+            raise ValueError(
+                "TenantContext.tenant_id does not match adapter's bound tenant"
+            )
+
+    reader = _RaisingReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        f"/runs/{_RUN_UUID}",
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["error_code"] == "internal_error"
+    assert body["correlation_id"]
+    assert len(sec.events) == 1
+    event = sec.events[0]
+    assert event.category == SecurityEventCategory.TENANT_SCOPE_VIOLATION
+    assert event.outcome == "defence_in_depth_fired"
+    assert event.metadata["severity"] == "critical"
+
+
+def test_correlation_id_header_returned_on_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CorrelationIdMiddleware sets X-Correlation-Id on every response."""
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    record = _make_run_record()
+    reader = _FakeReader(get_run_returns=record)
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.get(
+        f"/runs/{_RUN_UUID}",
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 200
+    correlation_id = response.headers.get("x-correlation-id")
+    assert correlation_id is not None
+    # uuid4-shaped
+    UUID(correlation_id)
+
+
+def test_method_not_allowed_returns_405(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST /runs/{run_id} is not registered; FastAPI default 405 shape applies."""
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-run-history")
+    reader = _FakeReader()
+    sec = _FakeSecurityEventLogger()
+    app = _build_app(reader=reader, security_events=sec)
+    client = TestClient(app)
+
+    response = client.post(
+        f"/runs/{_RUN_UUID}",
+        headers={"Authorization": f"Bearer {_token()}"},
+    )
+
+    assert response.status_code == 405

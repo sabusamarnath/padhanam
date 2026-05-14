@@ -19,6 +19,7 @@ distinct from application logs.
 
 from __future__ import annotations
 
+import uuid
 from typing import Awaitable, Callable
 
 from fastapi import Request, Response
@@ -32,6 +33,9 @@ from padhanam.observability import (
     file_security_event_logger,
 )
 from padhanam.security import AuthError, Principal, verify_credential
+
+
+CORRELATION_ID_HEADER = "X-Correlation-Id"
 
 
 # Routes that bypass authentication. The set is deliberately tiny and
@@ -124,3 +128,29 @@ def get_principal(request: Request) -> Principal:
     """
     principal: Principal = request.state.principal
     return principal
+
+
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    """Generate a per-request correlation ID for forensic correlation (S34, D98).
+
+    Generates ``uuid4()`` on every inbound request, attaches it to
+    ``request.state.correlation_id``, and returns the value in the
+    ``X-Correlation-Id`` response header. Exception handlers and route
+    handlers pull from request state to populate the
+    ``ErrorResponse.correlation_id`` field per D98.
+
+    The middleware runs unconditionally on every request including
+    health probes and unmatched paths, so error responses always
+    carry a correlation_id for forensic correlation.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        correlation_id = str(uuid.uuid4())
+        request.state.correlation_id = correlation_id
+        response = await call_next(request)
+        response.headers[CORRELATION_ID_HEADER] = correlation_id
+        return response
