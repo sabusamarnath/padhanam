@@ -37,6 +37,27 @@ the design session settles). The next Claude Code conversation
 after the strategic block is P11 build kick-off (or P11 framing
 follow-on if the strategic block produces a build-session brief).
 
+**S38a fired** as post-P10 hygiene on 2026-05-14 between P10 close
+and the retrieval-evaluation design session. Closed 10 pre-existing
+integration test failures in `tests/integration/contexts/ingestion/`
+— 8 ERRORs at `test_ingest_e2e.py` plus 2 named FAILUREs at
+`test_extract_e2e.py:268` and `test_retrieval_e2e.py:334` — all
+caused by the same `run_chunk_citations.chunk_id` FK class that S35b
+fixed at two other sites. The brief's framing of "1 ERROR + 2
+downstream FAILUREs" was incorrect; pre-write reconciliation's
+sweep step (introduced at the S38a brief as a new reconciliation
+pass) surfaced that all three sites carry independent broken fixture
+helpers (`_truncate_ingestion_tables`, `_truncate_tenant_a`,
+`_truncate_tenant`) and would each fail independently of the others.
+Single commit applied the explicit-list TRUNCATE shape from S35b's
+a555902 precedent to all three sites; 16/16 previously-affected
+tests pass against the live stack post-fix. Methodology observation
+captured at the session log entry: the reconciliation sweep step
+earned its first concrete payoff inside its first deliberate
+instance — without it, S38a would have shipped an under-scoped fix
+and required a second cleanup commit when the test ordering surfaced
+the remaining sites.
+
 P9 archive landed at S35 close to `docs/archive/packages/p9.md`;
 P10 archive lands at the same destination from a follow-on
 operator-driven step.
