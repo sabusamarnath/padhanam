@@ -100,7 +100,6 @@ from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
     RolePostgresRepository,
 )
-from padhanam.config import ControlPlaneSettings
 from padhanam.observability.security_events import (
     SecurityEventLogger,
     file_security_event_logger,
@@ -108,6 +107,7 @@ from padhanam.observability.security_events import (
 from shared_kernel import TenantContext, TenantId
 
 from apps.cli._agent_run import DEFAULT_API_URL, run_invocation
+from apps.cli._composition import get_compositions
 from apps.cli._cross_context import (
     MethodologyLookupAdapter,
     RoleLookupAdapter,
@@ -514,7 +514,9 @@ async def _run_create_from_methodology(
     # exit. S26a-1 per D86: methodology resolution goes through both
     # repos (methodology revision carries role_refs; adapter resolves
     # to the role's content bundle for the consumer-side MethodologyView).
-    control_plane_settings = ControlPlaneSettings()
+    # D100: control_plane_settings flows from the composition root, not
+    # from per-command construction.
+    control_plane_settings = get_compositions().control_plane_settings
     methodology_repo = MethodologyPostgresRepository.from_settings(
         settings=control_plane_settings, security_events=sec
     )
@@ -579,8 +581,8 @@ async def _run_create_from_role(
 
     # Role repository: control-plane Postgres; the role-clone flow
     # does not need the methodology repository because no methodology
-    # is referenced.
-    control_plane_settings = ControlPlaneSettings()
+    # is referenced. D100: control_plane_settings from composition root.
+    control_plane_settings = get_compositions().control_plane_settings
     role_repo = RolePostgresRepository.from_settings(
         settings=control_plane_settings, security_events=sec
     )

@@ -54,12 +54,41 @@ from apps.cli._methodology import methodology_app
 from apps.cli._role import role_app
 from apps.cli._tool import tool_app
 
+from apps.cli._composition import (
+    build_default_compositions,
+    get_compositions,
+    set_compositions,
+)
+
+
 app = typer.Typer(
     name="padhanam",
     help="Padhanam CLI runner (S18 eval; S19 ingest; S23 methodology; S24 agent; S26a-2 role).",
     no_args_is_help=True,
     add_completion=False,
 )
+
+
+@app.callback()
+def _initialise_compositions() -> None:
+    """Construct the CLI composition root per D100.
+
+    Runs once at typer-app entry before any command body. Constructs
+    ``ControlPlaneSettings`` plus the security event logger ONCE and
+    stores them at module scope (``apps/cli/_composition``) so the
+    per-context ``_build_repository`` helpers consume from a single
+    shared instance rather than reconstructing per-command.
+
+    Test fixtures that need to override (loopback Postgres against the
+    host, collecting security event logger) call
+    ``set_compositions(test_compositions)`` BEFORE invoking the
+    CliRunner. The callback respects an existing initialisation and
+    only builds defaults when none is active.
+    """
+    try:
+        get_compositions()
+    except RuntimeError:
+        set_compositions(build_default_compositions())
 
 eval_app = typer.Typer(
     name="eval",

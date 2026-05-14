@@ -68,12 +68,9 @@ from contexts.methodology.application import (
     update_role_template,
 )
 from contexts.methodology.domain.role import RoleRevision, RoleTemplate
-from padhanam.config import ControlPlaneSettings
-from padhanam.observability.security_events import (
-    SecurityEventLogger,
-    file_security_event_logger,
-)
+from padhanam.observability.security_events import SecurityEventLogger
 
+from apps.cli._composition import get_compositions
 from apps.cli._runtime import build_operator_principal
 
 
@@ -221,12 +218,15 @@ def _to_decimal(value: Any) -> Decimal:
 
 
 def _build_repository() -> tuple[RolePostgresRepository, SecurityEventLogger]:
-    settings = ControlPlaneSettings()
-    sec = file_security_event_logger()
+    # D100: settings + security_events come from the composition root,
+    # not from per-command construction. Tests override via
+    # `apps.cli._composition.set_compositions(...)` in a fixture.
+    compositions = get_compositions()
     repo = RolePostgresRepository.from_settings(
-        settings=settings, security_events=sec
+        settings=compositions.control_plane_settings,
+        security_events=compositions.security_events,
     )
-    return repo, sec
+    return repo, compositions.security_events
 
 
 # ---------------------------------------------------------------------

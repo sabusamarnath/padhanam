@@ -36,6 +36,7 @@ import sqlalchemy as sa
 import yaml
 from typer.testing import CliRunner
 
+from apps.cli._composition import CliCompositions, set_compositions
 from apps.cli.main import app
 from contexts.tools.adapters.outbound.postgres import ToolPostgresRepository
 from contexts.tools.adapters.outbound.postgres.tool_repository import (
@@ -72,6 +73,10 @@ def cleanup(
         port=int(os.environ.get("CONTROL_PLANE_PORT_OVERRIDE", "5433")),
     )
     sec = file_security_event_logger()
+    # D100: install loopback-shaped settings at the CLI composition root
+    # so CliRunner-invoked commands consume them instead of constructing
+    # fresh ones from the docker-internal hostname env var.
+    set_compositions(CliCompositions(control_plane_settings=settings, security_events=sec))
     repo = ToolPostgresRepository.from_settings(
         settings=settings, security_events=sec,
     )
@@ -100,6 +105,9 @@ def cleanup(
     finally:
         event_loop.run_until_complete(truncate())
         event_loop.run_until_complete(repo.dispose())
+        # D100: reset compositions so subsequent tests reconstruct
+        # defaults via the typer callback.
+        set_compositions(None)
 
 
 def _config(
