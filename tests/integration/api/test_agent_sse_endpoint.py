@@ -36,6 +36,10 @@ from apps.api.routers.agent import (
 )
 from apps.api.routers.inference import get_tenant_context
 from contexts.agent.application.ports import RoleView
+from contexts.agent.application.ports.run_history_writer import (
+    AgentRunRecord,
+    RunHistoryWriter,
+)
 from contexts.agent.domain.agent import AgentRevision, AgentTemplate
 from contexts.agent.domain.events import (
     AgentEvent,
@@ -161,6 +165,14 @@ class _FakeSecurityEventLogger:
         self.events.append(event)
 
 
+class _FakeRunHistoryWriter:
+    def __init__(self) -> None:
+        self.records: list[AgentRunRecord] = []
+
+    async def record_run(self, record, *, principal) -> None:
+        self.records.append(record)
+
+
 def _build_app(
     *,
     runtime: AgentRuntimeComposition | None,
@@ -185,6 +197,7 @@ def _runtime_with_script(events: list[AgentEvent]) -> AgentRuntimeComposition:
         methodology_overrides_lookup=_FakeOverridesLookup(),  # type: ignore[arg-type]
         tool_definitions_lookup=_empty_tool_definitions_lookup,  # type: ignore[arg-type]
         executor=_ScriptedExecutor(events),  # type: ignore[arg-type]
+        run_history_writer=_FakeRunHistoryWriter(),  # type: ignore[arg-type]
         security_events=_FakeSecurityEventLogger(),  # type: ignore[arg-type]
     )
 
