@@ -383,3 +383,39 @@ Activates when a UI consumer (Phase 2 frontend or external tool) needs HTTP-driv
 **The substrate is fully in place.** The ingestion use cases at `contexts/ingestion/application/` exist, are exercised by the CLI, and are tenant-scoped via `TenantContext`. The HTTP exposure is mechanical: principal-derived tenant context per the S29b precedent at `apps/api/routers/agent.py`, error response shape per the S34 D98 precedent at `apps/api/_errors.py`, route definitions wrapping the existing use cases. Estimated work when activated: one session.
 
 **The specific D-entry lands at the activating session.** Premature commitment to specific route shapes, payload structures, or error vocabulary ahead of a real Phase 2 UX consumer story is paper architecture. References: D60 (the original P6 deferral with HTTP-API-after-UI-consumer framing); D98 (the run-history HTTP shape the ingestion API would mirror at the request and error layers).
+
+## Per-invocation retrieval constraint threading at the ToolInvoker (refined scope per D105)
+
+Per-role retrieval constraints (top_k, min_score, strategy overrides) flowing through to the ToolInvoker on each invocation. D105 closes the allowlist piece (adding the retrieval tool to role allowlists at P11 open) and narrows this entry to the per-invocation constraint threading work only.
+
+**Activation trigger.** First Phase 2 use case demanding per-invocation override of role-level retrieval defaults.
+
+## Platform-curated cross-tenant retrieval gold sets
+
+Tenants author their own gold sets at P11 per D105. Platform-curated cross-tenant gold sets defer to the same activation condition D53 set for platform-curated scoring sheets.
+
+**Activation trigger.** A real onboarding flow per D13, or a cross-tenant curated gold-set library with at least one real consumer beyond demoware.
+
+## Phase 2 UX for richer gold-set authoring
+
+The Phase 1 substrate is the CLI flow (query, retrieve, mark, save) per D105. Phase 2 UX adds richer authoring: browsing past agent runs, converting their citations from `run_chunk_citations` and `run_entity_citations` into candidate gold-set entries, suggested chunks based on the retrieval surface.
+
+**Activation trigger.** Phase 2 methodology-as-product UX work reaches the gold-set authoring surface per D93's wave sequencing.
+
+## Graded relevance and nDCG metric
+
+Binary relevance (chunks marked correct or not, ordered list as the entry shape) at P11 per D105. Graded relevance (per-chunk 0/1/2 grades) and the nDCG ranking-aware metric land if consumer evidence demands.
+
+**Activation trigger.** Recommendation engine surfaces evidence that binary relevance is losing signal worth capturing, or a methodology-specific gold set demands graded relevance.
+
+## Cost-per-retrieval-query as a load-bearing metric
+
+Captured on the evaluation result record at P11 per D105 but not load-bearing because Phase 1 retrieval is local (Ollama embedding, local pgvector, local Neo4j) and costs are essentially zero.
+
+**Activation trigger.** Production deployment with non-zero embedding or vector-search cost.
+
+## Online retrieval evaluation (extracting signal from production agent runs)
+
+Offline gold-set evaluation only at P11 per D105. Online signals defer because they require a labelling layer (human judgement on production retrieval quality) which is the same shape as D55's calibration loop.
+
+**Activation trigger.** P11 close audit surfaces evidence that offline-only evaluation misses production retrieval problems the recommendation engine should be catching.
