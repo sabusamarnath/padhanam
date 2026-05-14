@@ -46,6 +46,9 @@ from contexts.agent.domain.events import (
     InvocationCompleted,
     InvocationStarted,
 )
+from contexts.agent.application.ports.run_history_writer import (
+    AgentRunRecord,
+)
 from contexts.agent.ports.executor import (
     AgentInvocationContext,
     TerminationReason,
@@ -57,7 +60,7 @@ from contexts.inference.domain.completion import (
 )
 from padhanam.events import SynchronousEventBus
 from padhanam.observability.security_events import SecurityEvent
-from padhanam.security.auth import issue_dev_token
+from padhanam.security.auth import Principal, issue_dev_token
 from padhanam.security.hash_chain import GENESIS_REVISION_HASH
 from shared_kernel import TenantContext
 
@@ -179,6 +182,23 @@ class _FakeSecurityEventLogger:
         self.events.append(event)
 
 
+class _NullRunHistoryWriter:
+    """No-op RunHistoryWriter for the streaming-isolation contract.
+
+    This contract verifies tenant-context routing at the SSE endpoint,
+    not run-history persistence; the writer must satisfy the
+    AgentRuntimeComposition shape (D95 / S31 added run_history_writer
+    as a required field) but does not need to record anything. Same
+    test-scaffolding pattern as the S35 fix on
+    test_agent_sse_endpoint.py::_runtime_with_script.
+    """
+
+    async def record_run(
+        self, record: AgentRunRecord, *, principal: Principal
+    ) -> None:
+        return None
+
+
 def _build_app(executor: _CapturingExecutor, repo: _FakeAgentRepository):
     runtime = AgentRuntimeComposition(
         agent_repository=repo,  # type: ignore[arg-type]
@@ -186,6 +206,7 @@ def _build_app(executor: _CapturingExecutor, repo: _FakeAgentRepository):
         methodology_overrides_lookup=_FakeOverridesLookup(),  # type: ignore[arg-type]
         tool_definitions_lookup=_empty_tool_definitions_lookup,  # type: ignore[arg-type]
         executor=executor,  # type: ignore[arg-type]
+        run_history_writer=_NullRunHistoryWriter(),  # type: ignore[arg-type]
         security_events=_FakeSecurityEventLogger(),  # type: ignore[arg-type]
     )
     app = create_app(
