@@ -31,6 +31,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from apps.api._auth_errors import register_auth_error_handlers
 from apps.api._errors import (
     register_audit_error_handlers,
+    register_ingestion_error_handlers,
     register_run_history_error_handlers,
 )
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
@@ -38,6 +39,7 @@ from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
+from apps.api.routers import ingestion as ingestion_router
 from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
 from apps.api.routers.agent import AgentRuntimeComposition
@@ -118,6 +120,12 @@ class AppCompositions:
     # invocations; production wiring in _build_default_compositions
     # populates this from build_audit_event_reader.
     audit_event_reader: AuditEventReader | None = None
+    # S38 (D104): optional source repository for the GET /ingestion/*
+    # routes. Defaults to None so test fixtures without the ingestion
+    # stack can keep their narrow factory invocations; production
+    # wiring in _build_default_compositions populates this from
+    # build_source_repository.
+    source_repository: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -179,6 +187,7 @@ def _build_default_compositions() -> AppCompositions:
         build_agent_runtime_composition,
         build_audit_event_reader,
         build_run_history_reader,
+        build_source_repository,
     )
 
     agent_runtime = build_agent_runtime_composition(
@@ -215,6 +224,18 @@ def _build_default_compositions() -> AppCompositions:
         control_plane_sessionmaker=audit_adapter.control_plane_sessionmaker,
     )
 
+    # S38 (D104): per-tenant routing source repository for the
+    # GET /ingestion/* routes. Resolves the per-tenant session
+    # factory at call time via the shared TenantSessionFactoryCache
+    # — same shape as TenantRoutingRetrievalClient and the
+    # writer/reader factories above.
+    source_repository = build_source_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -225,6 +246,7 @@ def _build_default_compositions() -> AppCompositions:
         run_history_reader=run_history_reader,
         security_events=sec,
         audit_event_reader=audit_event_reader,
+        source_repository=source_repository,
     )
 
 
@@ -302,6 +324,13 @@ def create_app(
     # register_auth_error_handlers per D104.
     register_audit_error_handlers(app)
 
+    # S38 (D104): ingestion management error handlers. Covers
+    # IngestionSourceNotFoundError (404) and the ingestion-side
+    # MalformedCursorError (400). Mirror of the audit and
+    # run-history registration shape per the additive composition
+    # discipline.
+    register_ingestion_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -327,6 +356,10 @@ def create_app(
     # new platform-operator principal type.
     app.include_router(audit_router.tenant_router)
     app.include_router(audit_router.platform_router)
+    # S38 (D104): ingestion management routes under principal-derived
+    # tenant context. Three read endpoints: list sources, get source,
+    # get source status.
+    app.include_router(ingestion_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
@@ -338,6 +371,7 @@ def create_app(
     app.state.run_history_reader = compositions.run_history_reader
     app.state.security_events = compositions.security_events
     app.state.audit_event_reader = compositions.audit_event_reader
+    app.state.source_repository = compositions.source_repository
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit

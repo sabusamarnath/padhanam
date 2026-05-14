@@ -56,6 +56,9 @@ from contexts.audit.domain.query_filters import (
     MalformedCursorError as AuditMalformedCursorError,
 )
 from contexts.audit.ports.reader import AuditQueryRoutingError
+from contexts.ingestion.domain.source_list import (
+    MalformedCursorError as IngestionMalformedCursorError,
+)
 from contexts.run_history.domain.query_filters import MalformedCursorError
 from padhanam.observability.security_events import (
     SecurityEvent,
@@ -101,6 +104,21 @@ class AuditEventNotFoundError(Exception):
     def __init__(self, event_id: str) -> None:
         super().__init__(f"audit event {event_id} not found")
         self.event_id = event_id
+
+
+class IngestionSourceNotFoundError(Exception):
+    """Raised when the ingestion HTTP routes do not find the requested source (D104, S38).
+
+    Translates to 404 ``ingestion_source_not_found``. Mirror of
+    ``AuditEventNotFoundError``: no security event fires because the
+    per-tenant repository scopes the query by tenant_id, making
+    cross-tenant attempts structurally indistinguishable from
+    genuine not-found at the single-source-lookup altitude.
+    """
+
+    def __init__(self, source_id: str) -> None:
+        super().__init__(f"ingestion source {source_id} not found")
+        self.source_id = source_id
 
 
 class BoundTenantIdMismatchError(Exception):
@@ -236,6 +254,28 @@ async def _handle_malformed_audit_cursor(
     return JSONResponse(status_code=400, content=body.model_dump())
 
 
+async def _handle_ingestion_source_not_found(
+    request: Request, exc: IngestionSourceNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="ingestion_source_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_malformed_ingestion_cursor(
+    request: Request, exc: IngestionMalformedCursorError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="malformed_ingestion_cursor",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
 async def _handle_audit_query_routing_error(
     request: Request, exc: AuditQueryRoutingError
 ) -> JSONResponse:
@@ -324,11 +364,34 @@ def register_audit_error_handlers(app: FastAPI) -> None:
     )
 
 
+def register_ingestion_error_handlers(app: FastAPI) -> None:
+    """Register the ingestion management error handlers on the FastAPI app (D104, S38).
+
+    Mirrors the audit and run-history registration shape per the
+    additive composition discipline. The composition root at
+    ``apps/api/main.py`` invokes this alongside the other
+    per-router registration functions.
+
+    Handlers registered:
+
+    - ``IngestionSourceNotFoundError`` -> 404 ``ingestion_source_not_found``.
+    - ``IngestionMalformedCursorError`` -> 400 ``malformed_ingestion_cursor``.
+    """
+    app.add_exception_handler(
+        IngestionSourceNotFoundError, _handle_ingestion_source_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        IngestionMalformedCursorError, _handle_malformed_ingestion_cursor  # type: ignore[arg-type]
+    )
+
+
 __all__ = [
     "AuditEventNotFoundError",
     "BoundTenantIdMismatchError",
     "ErrorResponse",
+    "IngestionSourceNotFoundError",
     "RunNotFoundError",
     "register_audit_error_handlers",
+    "register_ingestion_error_handlers",
     "register_run_history_error_handlers",
 ]

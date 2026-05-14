@@ -57,12 +57,17 @@ from contexts.ingestion.adapters.outbound.neo4j import (
     Neo4jGraphRepository,
     make_async_driver,
 )
+from contexts.ingestion.adapters.outbound.postgres.source_repository import (
+    PostgresSourceRepository,
+)
 from contexts.ingestion.adapters.outbound.retrieval import (
     Neo4jTraverse,
     PgVectorSearch,
 )
 from contexts.ingestion.domain.chunk_result import ChunkResult
 from contexts.ingestion.domain.entity_result import EntityResult
+from contexts.ingestion.domain.source import Source
+from contexts.ingestion.domain.source_list import SourceListCursor, SourceListPage
 from contexts.inference.ports import InferencePort
 from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
@@ -336,6 +341,102 @@ def build_run_history_reader(
     )
 
 
+class TenantRoutingSourceRepository:
+    """Implements the read subset of ``SourceRepositoryPort`` by per-tenant routing.
+
+    The HTTP ingestion management routes (D104, S38) need access to
+    sources scoped per-tenant. The existing
+    ``PostgresSourceRepository`` constructor takes a single
+    tenant-bound ``async_sessionmaker``; the worker layer that
+    consumes it sees one tenant per invocation, but the API server
+    sees many tenants across requests.
+
+    This wrapper resolves the per-tenant session factory via the
+    existing ``TenantSessionFactoryCache`` for each call, constructs
+    a fresh ``PostgresSourceRepository`` against that factory, and
+    delegates. The single composed instance lives on
+    ``app.state.source_repository`` and the route handlers
+    dependency-inject it.
+
+    Implements only ``get_source`` and ``list_sources`` — the two
+    read methods the HTTP routes need. The write-side methods stay
+    on the worker-layer instances of ``PostgresSourceRepository``;
+    the HTTP layer at S38 is read-only.
+    """
+
+    def __init__(
+        self,
+        *,
+        cache: TenantSessionFactoryCache,
+        registry: PostgresTenantRegistry,
+        operator_principal: Principal,
+        security_events: SecurityEventLogger,
+    ) -> None:
+        self._cache = cache
+        self._registry = registry
+        self._operator_principal = operator_principal
+        self._security_events = security_events
+
+    async def _repository_for_tenant(
+        self, tenant_id: str
+    ) -> PostgresSourceRepository:
+        session_factory = await self._cache.get(
+            tenant_id=TenantId(tenant_id),
+            principal=self._operator_principal,
+            registry=self._registry,
+            security_events=self._security_events,
+        )
+        return PostgresSourceRepository(session_factory=session_factory)
+
+    async def get_source(
+        self, source_id, tenant_id: str
+    ) -> Source | None:
+        repo = await self._repository_for_tenant(tenant_id)
+        return await repo.get_source(source_id, tenant_id)
+
+    async def list_sources(
+        self,
+        *,
+        tenant_id: str,
+        cursor: SourceListCursor | None,
+        page_size: int,
+    ) -> SourceListPage:
+        repo = await self._repository_for_tenant(tenant_id)
+        return await repo.list_sources(
+            tenant_id=tenant_id,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+
+def build_source_repository(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> TenantRoutingSourceRepository:
+    """Wire the ingestion read surface for the production composition (D104, S38).
+
+    Returns a ``TenantRoutingSourceRepository`` the HTTP routes
+    dependency-inject. The wrapper is constructed once at composition
+    time and resolves per-tenant session factories at request time via
+    the existing ``TenantSessionFactoryCache``.
+
+    Per D104 / Path A the ingestion HTTP routes consume the existing
+    ``SourceRepositoryPort`` (extended with ``list_sources`` at S38
+    commit 3) rather than a separate consumer-defined reader port.
+    The wrapper provides the per-tenant routing that the API server
+    needs.
+    """
+    return TenantRoutingSourceRepository(
+        cache=session_factory_cache,
+        registry=tenant_registry,
+        operator_principal=operator_principal,
+        security_events=security_events,
+    )
+
+
 def build_audit_event_reader(
     *,
     tenant_registry: PostgresTenantRegistry,
@@ -381,7 +482,9 @@ def build_audit_event_reader(
 
 __all__ = [
     "TenantRoutingRetrievalClient",
+    "TenantRoutingSourceRepository",
     "build_agent_runtime_composition",
     "build_audit_event_reader",
     "build_run_history_reader",
+    "build_source_repository",
 ]
