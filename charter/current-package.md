@@ -82,16 +82,35 @@ and finding 9 (single `timestamp_range` versus the brief's
 `started_at_range`/`ended_at_range` shape — the audit
 schema has one timestamp column).
 
-**S37 next**: HTTP routes for the audit reader at
-`apps/api/routers/audit.py`. Two route trees, `/audit`
-(per-tenant under the principal-derived tenant context
-pattern from S29b/S34) and `/platform/audit` (control-plane
-under a new platform-operator claim extending D23). D-entry
-forecast covers HTTP DTO shape, query-string vocabulary,
-platform-operator claim semantics. Strategic-mode S37
-framing conversation may run in Claude.ai if structural
-drift surfaces at S36 close; otherwise S37 anchors directly
-from the P10 epic note.
+**S37 in flight.** D103 commits the platform-operator
+principal type as a discriminator-field claim on the D23
+signed-token backend (structurally complementary to the
+existing `Principal.roles` + `OPERATOR_ROLE` per pre-write
+reconciliation finding 1 user-question resolution), plus the
+HTTP transport for the audit reader with two route trees
+(`/audit` under the existing principal-derived tenant context
+pattern from S29b/S34; `/platform/audit` under the new
+`get_platform_operator_principal` dependency), plus the
+seven-filter query-string vocabulary settled at S36 surfaced
+at the list routes (`timestamp_range_start`,
+`timestamp_range_end`, `actor`, `action_verb`,
+`resource_type`, `resource_id` paired with `resource_type`,
+`correlation_id`, `jurisdiction`) plus `cursor` and
+`page_size`, plus the 403 `principal_type_mismatch` error
+path extending S34's D98 error response handler at
+`apps/api/_errors.py` via a parallel
+`register_audit_error_handlers` function. Pre-write
+reconciliation fired its fifteenth instance with one
+structural finding (existing role-list reality contradicts
+D103 alternative (b) framing; resolved to revise the
+framing rather than the choice) plus three mechanical
+findings (DTO module naming `_audit_dto.py` matches
+run-history precedent; platform-operator dev-mint helper
+omits `OPERATOR_ROLE` by default; new audit error handlers
+land as parallel `register_audit_error_handlers` function)
+plus four mechanical absorptions. S37 brief preserved at
+`briefs/p10/s37.md` with Appendix D capturing reconciliation
+outcomes.
 
 ## P9 closed (preserved below)
 
