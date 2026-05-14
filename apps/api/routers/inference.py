@@ -41,7 +41,7 @@ from contexts.inference.domain.errors import (
 from contexts.inference.ports import InferencePort
 from contexts.tenancy.domain.tenant_id import TenantId
 from shared_kernel import TenantContext
-from padhanam.security import Principal
+from padhanam.security import Principal, PrincipalType
 
 router = APIRouter(prefix="/inference", tags=["inference"])
 
@@ -90,9 +90,27 @@ async def get_tenant_context(
     not UUID-shaped (e.g., the operator sentinel) returns 400. A UUID
     that is not in the registry returns 404.
 
+    D103 (S37) extends this resolver with a discriminator check at
+    entry: platform-operator-typed principals are rejected with 403
+    because they have no tenant scope and have no business invoking
+    tenant routes. The 403 path is raised as ``HTTPException(403)``
+    at this commit; commit 5 refactors to the typed
+    ``PrincipalTypeMismatchError`` plus parallel error-handler
+    registration with security event logging.
+
     Tests override this dependency via ``app.dependency_overrides`` to
     inject a fixed TenantContext when the registry is not wired.
     """
+    if principal.principal_type is not PrincipalType.TENANT:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "authenticated principal lacks the required type 'tenant' "
+                "for this route; got "
+                f"{principal.principal_type.value!r}"
+            ),
+        )
+
     registry = getattr(request.app.state, "tenant_registry", None)
     if registry is None:
         raise HTTPException(

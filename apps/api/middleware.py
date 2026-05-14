@@ -26,13 +26,21 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from fastapi import HTTPException
+
 from padhanam.observability import (
     SecurityEvent,
     SecurityEventCategory,
     SecurityEventLogger,
     file_security_event_logger,
 )
-from padhanam.security import AuthError, Principal, verify_credential
+from padhanam.security import (
+    AuthError,
+    PlatformOperatorPrincipal,
+    Principal,
+    PrincipalType,
+    verify_credential,
+)
 
 
 CORRELATION_ID_HEADER = "X-Correlation-Id"
@@ -128,6 +136,43 @@ def get_principal(request: Request) -> Principal:
     """
     principal: Principal = request.state.principal
     return principal
+
+
+def get_platform_operator_principal(
+    request: Request,
+) -> PlatformOperatorPrincipal:
+    """FastAPI dependency: resolve the principal to a platform-operator marker (D103).
+
+    Routes that declare ``Depends(get_platform_operator_principal)``
+    are gated to platform-operator-typed principals. Tenant-typed
+    tokens are rejected with HTTP 403; the security event for the
+    rejection fires at the error handler when the typed
+    ``PrincipalTypeMismatchError`` lands at commit 5 (S37). At this
+    commit the dependency raises ``HTTPException(403)`` directly so
+    the auth-model surface is testable in isolation; commit 5
+    refactors to the typed exception and the parallel error-handler
+    registration.
+
+    The middleware authenticates the credential and stores the
+    ``Principal`` on ``request.state.principal`` regardless of
+    principal type; this dependency narrows the surface to a
+    ``PlatformOperatorPrincipal`` thin marker that downstream
+    handlers consume without re-checking the discriminator.
+    """
+    principal: Principal = request.state.principal
+    if principal.principal_type is not PrincipalType.PLATFORM_OPERATOR:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "authenticated principal lacks the required type "
+                "'platform_operator' for this route; got "
+                f"{principal.principal_type.value!r}"
+            ),
+        )
+    return PlatformOperatorPrincipal(
+        subject=principal.subject,
+        credential_ref=principal.credential_ref,
+    )
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
