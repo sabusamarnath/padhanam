@@ -82,6 +82,7 @@ from shared_kernel import TenantContext, TenantId
 
 from apps.api.routers.agent import AgentRuntimeComposition
 from apps.cli._cross_context import (
+    AuditEventReaderAdapter,
     MethodologyOverridesLookupAdapter,
     RoleLookupAdapter,
     RunHistoryReaderAdapter,
@@ -335,8 +336,52 @@ def build_run_history_reader(
     )
 
 
+def build_audit_event_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+    control_plane_sessionmaker,
+) -> AuditEventReaderAdapter:
+    """Wire the audit read surface for the production composition (S36, D102).
+
+    Mirrors ``build_run_history_reader``'s shape but adds the
+    control-plane sessionmaker as a separate construction-time
+    dependency because the audit reader handles two destinations
+    (per-tenant and control-plane) per D102.
+
+    The per-tenant ``session_factory_for_tenant`` callable closes
+    over the same ``TenantSessionFactoryCache`` the writer and
+    run-history-reader factories use. The control-plane
+    sessionmaker is the same one the write-side audit adapter
+    uses (caller supplies it from ``AppCompositions`` so both
+    halves of the audit context route to the same instance).
+
+    No consumer at S36 calls the returned adapter; the wiring is
+    the substrate the HTTP layer at S37 will dependency-inject
+    against. Per D102 the audit reader is a producer-side port
+    (consumer is the HTTP API at S37, not a bounded context); the
+    wiring layer is the composition surface that constructs it.
+    """
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return AuditEventReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+        control_plane_sessionmaker=control_plane_sessionmaker,
+    )
+
+
 __all__ = [
     "TenantRoutingRetrievalClient",
     "build_agent_runtime_composition",
+    "build_audit_event_reader",
     "build_run_history_reader",
 ]

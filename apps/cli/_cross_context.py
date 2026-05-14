@@ -90,6 +90,17 @@ from contexts.methodology.ports import (
     MethodologyRepositoryPort,
     RoleRepositoryPort,
 )
+from contexts.audit.adapters.outbound.postgres.reader import (
+    PostgresAuditEventReader,
+)
+from contexts.audit.domain.audit_event_record import AuditEventRecord
+from contexts.audit.domain.chain_integrity import ChainIntegrityVerification
+from contexts.audit.domain.destination import AuditDestination
+from contexts.audit.domain.query_filters import (
+    AuditEventListCursor,
+    AuditEventListFilters,
+    AuditEventListPage,
+)
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
     PostgresRunHistoryReader,
@@ -872,6 +883,115 @@ class RunHistoryReaderAdapter:
         return PostgresRunHistoryReader(
             per_tenant_sessionmaker_resolver=_resolver,
             bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class AuditEventReaderAdapter:
+    """Adapter wiring for the audit read surface (S36 commit 5, D102).
+
+    Symmetric to ``RunHistoryReaderAdapter`` from S33 — composition-
+    root altitude wiring class holding a callable that resolves the
+    per-tenant ``async_sessionmaker`` at call time plus the control-
+    plane ``async_sessionmaker`` as instance state. Each method
+    invocation constructs a per-call ``PostgresAuditEventReader``
+    closed over both factories so the adapter implements
+    ``AuditEventReader`` (structural Protocol satisfaction).
+
+    The audit reader differs from the run-history reader in that
+    it handles two destinations (per-tenant and control-plane) per
+    D102's destination-parameter routing. The control-plane
+    sessionmaker is constructed once at adapter construction time
+    and survives across requests; the per-tenant sessionmaker is
+    resolved per request via the ``session_factory_for_tenant``
+    callable.
+
+    No consumer at S36 calls this adapter directly; the wiring is
+    the substrate the future HTTP routes at S37 dependency-inject
+    against. Symmetry with ``RunHistoryReaderAdapter`` keeps the
+    reading-and-writing patterns visually parallel per D102.
+
+    This is the tenth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+        control_plane_sessionmaker: async_sessionmaker[AsyncSession],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+        self._control_plane_sessionmaker = control_plane_sessionmaker
+
+    async def get_audit_event(
+        self,
+        *,
+        destination: AuditDestination,
+        event_id: UUID,
+        tenant_context: TenantContext | None,
+    ) -> AuditEventRecord | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_audit_event(
+            destination=destination,
+            event_id=event_id,
+            tenant_context=tenant_context,
+        )
+
+    async def list_audit_events_with_filters(
+        self,
+        *,
+        destination: AuditDestination,
+        filters: AuditEventListFilters,
+        cursor: AuditEventListCursor | None,
+        page_size: int,
+        tenant_context: TenantContext | None,
+    ) -> AuditEventListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_audit_events_with_filters(
+            destination=destination,
+            filters=filters,
+            cursor=cursor,
+            page_size=page_size,
+            tenant_context=tenant_context,
+        )
+
+    async def verify_chain_segment(
+        self,
+        *,
+        destination: AuditDestination,
+        events,
+    ) -> ChainIntegrityVerification:
+        reader = await self._build_reader(tenant_context=None)
+        return await reader.verify_chain_segment(
+            destination=destination,
+            events=events,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext | None
+    ) -> PostgresAuditEventReader:
+        # The per-tenant resolver closes over the request's
+        # tenant_context. For control-plane destinations the
+        # resolver is never invoked because the destination routes
+        # to the control-plane sessionmaker directly.
+        captured_context = tenant_context
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            if captured_context is None:
+                raise RuntimeError(
+                    "per-tenant resolver invoked without a tenant_context; "
+                    "this should not happen if AuditQueryRoutingError is "
+                    "raised at port-method entry first"
+                )
+            return await self._session_factory_for_tenant(captured_context)
+
+        return PostgresAuditEventReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            control_plane_sessionmaker=self._control_plane_sessionmaker,
         )
 
 
