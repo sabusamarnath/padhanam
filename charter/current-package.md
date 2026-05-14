@@ -40,11 +40,58 @@ append-only per the existing discipline; the original S35
 text stands as written below and this note attaches at P10
 open.
 
-**S36 next**: ship the audit context's read side (port, domain
-types, Postgres adapter against both destinations, wiring,
-contract-harness extensions, live-stack smoke). D-entries
-forecast for S36 cover read-port shape, filter vocabulary, and
-chain-integrity status shape.
+**S36 closed** at 2026-05-14 with the audit context's read
+side now in place end-to-end. Eight commits closed S36:
+charter touch-points landing D102 (audit log read substrate
+framing); four domain value-object modules at
+`contexts/audit/domain/` (`audit_event_record.py`,
+`query_filters.py`, `chain_integrity.py`, `destination.py`);
+`AuditEventReader` Protocol port at the new
+`contexts/audit/ports/reader.py` (operator-selected option A
+at the pre-write reconciliation finding 1 user-question:
+keep write-side `AuditPort` at `domain/ports.py`, place new
+reader at `ports/reader.py`; intra-context asymmetry
+recorded as carryover); cursor codec at
+`contexts/audit/application/cursor.py` mirroring run_history;
+`.importlinter` layers-audit contract extended with
+`contexts.audit.ports`; `PostgresAuditEventReader` adapter at
+`contexts/audit/adapters/outbound/postgres/reader.py`
+implementing the port against both destinations through
+destination-parameter routing per D102 alternative (b);
+chain integrity verifier reuses `compute_event_hash` and
+`GENESIS_HASH` primitives (the existing `verify_chain`
+walker is from-genesis-only and is NOT reused per D102
+alternative (h)); wiring at both composition roots
+(`AuditEventReaderAdapter` as the tenth consumer-port-plus-
+wiring-adapter class on `apps/cli/_cross_context.py`;
+`build_audit_event_reader` factory at
+`apps/api/_agent_runtime_wiring.py`); seven tenant-isolation
+contract scenarios at
+`tests/contract/tenant_isolation/test_audit_reader_isolation.py`;
+live-stack smoke at `docs/smoke/p10_s36_audit_reader.md`
+walks five scenarios + two routing-guard pairs end-to-end
+against tenant_a's chain (20 audit rows) and a seeded
+control-plane probe event. Net new tests at S36 close: 92
+audit unit tests (was 50 pre-S36; +42 new), 7 contract
+harness scenarios, 6 wiring tests = 55 net new test cases.
+25/25 import-linter contracts kept; AST enforcement passes.
+Two new findings landed in `briefs/p10/s36.md` Appendix D
+at write time: finding 8 (Pydantic v2 versus frozen
+dataclass — frozen dataclass picked for sibling-symmetry)
+and finding 9 (single `timestamp_range` versus the brief's
+`started_at_range`/`ended_at_range` shape — the audit
+schema has one timestamp column).
+
+**S37 next**: HTTP routes for the audit reader at
+`apps/api/routers/audit.py`. Two route trees, `/audit`
+(per-tenant under the principal-derived tenant context
+pattern from S29b/S34) and `/platform/audit` (control-plane
+under a new platform-operator claim extending D23). D-entry
+forecast covers HTTP DTO shape, query-string vocabulary,
+platform-operator claim semantics. Strategic-mode S37
+framing conversation may run in Claude.ai if structural
+drift surfaces at S36 close; otherwise S37 anchors directly
+from the P10 epic note.
 
 ## P9 closed (preserved below)
 
