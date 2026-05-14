@@ -188,7 +188,16 @@ def test_two_concurrent_workers_no_double_processing_full_pipeline(
     no-doubling invariant; the invariant under test is the
     structural correctness, not the per-worker distribution.
     """
-    _exec_psql_tenant_a("TRUNCATE TABLE chunks, sources;")
+    # Include run_chunk_citations in the truncate set: S32 introduced
+    # run_chunk_citations.chunk_id REFERENCES chunks(id) ON DELETE SET
+    # NULL per D95. TRUNCATE bypasses FK-action triggers; truncating
+    # chunks alone fails on the FK reference. Explicit-list shape over
+    # CASCADE keyword documents intent at the call site. Production
+    # chunk-deletion through the ORM is unaffected; SET NULL semantics
+    # apply there per D95's audit-evidence survival commitment.
+    _exec_psql_tenant_a(
+        "TRUNCATE TABLE chunks, sources, run_chunk_citations;"
+    )
     _write_file(
         "/tmp/e2e_concurrency.md",
         textwrap.dedent(
