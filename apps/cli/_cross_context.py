@@ -102,6 +102,12 @@ from contexts.audit.domain.query_filters import (
     AuditEventListFilters,
     AuditEventListPage,
 )
+from contexts.retrieval_evaluation.adapters.outbound.postgres.evaluation_run_reader import (
+    PostgresEvaluationRunReader,
+)
+from contexts.retrieval_evaluation.adapters.outbound.postgres.evaluation_run_repository import (
+    PostgresEvaluationRunRepository,
+)
 from contexts.retrieval_evaluation.adapters.outbound.postgres.reader import (
     PostgresGoldSetReader,
 )
@@ -109,12 +115,20 @@ from contexts.retrieval_evaluation.adapters.outbound.postgres.repository import 
     PostgresGoldSetRepository,
 )
 from contexts.retrieval_evaluation.domain import (
+    EvaluationAggregate,
+    EvaluationResult,
+    EvaluationRun,
     GoldSet,
     GoldSetEntry,
     GoldSetRevision,
 )
 from contexts.retrieval_evaluation.domain.query_filters import (
+    EvaluationRunListCursor,
     GoldSetListCursor,
+)
+from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
+    EvaluationRunListPage,
+    EvaluationRunSnapshot,
 )
 from contexts.retrieval_evaluation.ports.reader import (
     GoldSetListPage,
@@ -1201,6 +1215,167 @@ class GoldSetReaderAdapter:
             return sessionmaker
 
         return PostgresGoldSetReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class EvaluationRunRepositoryAdapter:
+    """Adapter wiring for the retrieval-evaluation runner write surface
+    (S40 commit 6, D110).
+
+    Composition-root altitude wiring class: holds a callable that
+    resolves the per-tenant ``async_sessionmaker`` at call time and
+    constructs a per-call ``PostgresEvaluationRunRepository`` bound to
+    the request's tenant. Implements ``EvaluationRunRepository``
+    (Protocol satisfaction is structural).
+
+    Thirteenth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py (after the twelve listed at
+    ``GoldSetRepositoryAdapter`` plus ``GoldSetReaderAdapter`` from S39).
+    The pattern continues to do load-bearing work at runner substrate
+    sessions; S39 methodology line 3 forwarded the promotion candidate
+    to the Phase 1 close audit.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def persist_run(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run: EvaluationRun,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_run(tenant_context=tenant_context, run=run)
+
+    async def persist_result(
+        self,
+        *,
+        tenant_context: TenantContext,
+        result: EvaluationResult,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_result(tenant_context=tenant_context, result=result)
+
+    async def persist_aggregate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        aggregate: EvaluationAggregate,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_aggregate(
+            tenant_context=tenant_context, aggregate=aggregate
+        )
+
+    async def mark_completed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.mark_completed(
+            tenant_context=tenant_context,
+            run_id=run_id,
+            completed_at=completed_at,
+        )
+
+    async def mark_failed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.mark_failed(
+            tenant_context=tenant_context,
+            run_id=run_id,
+            completed_at=completed_at,
+        )
+
+    async def _build_repository(
+        self, tenant_context: TenantContext
+    ) -> PostgresEvaluationRunRepository:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresEvaluationRunRepository(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class EvaluationRunReaderAdapter:
+    """Adapter wiring for the retrieval-evaluation runner read surface
+    (S40 commit 6, D110).
+
+    Mirrors ``EvaluationRunRepositoryAdapter`` at composition-root
+    altitude. Fourteenth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py; HTTP transport at S42 dependency-injects
+    this adapter through ``EvaluationRunReader``.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_runs(
+        self,
+        *,
+        tenant_context: TenantContext,
+        cursor: EvaluationRunListCursor | None,
+        page_size: int,
+    ) -> EvaluationRunListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_runs(
+            tenant_context=tenant_context,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+    async def get_run_with_results_and_aggregates(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+    ) -> EvaluationRunSnapshot | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_run_with_results_and_aggregates(
+            tenant_context=tenant_context,
+            run_id=run_id,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresEvaluationRunReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresEvaluationRunReader(
             per_tenant_sessionmaker_resolver=_resolver,
             bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
         )

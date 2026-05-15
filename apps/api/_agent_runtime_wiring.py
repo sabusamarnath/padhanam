@@ -88,6 +88,8 @@ from shared_kernel import TenantContext, TenantId
 from apps.api.routers.agent import AgentRuntimeComposition
 from apps.cli._cross_context import (
     AuditEventReaderAdapter,
+    EvaluationRunReaderAdapter,
+    EvaluationRunRepositoryAdapter,
     GoldSetReaderAdapter,
     GoldSetRepositoryAdapter,
     MethodologyOverridesLookupAdapter,
@@ -540,11 +542,72 @@ def build_gold_set_reader(
     )
 
 
+def build_evaluation_run_repository(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> EvaluationRunRepositoryAdapter:
+    """Wire the retrieval-evaluation runner write surface (S40, D110).
+
+    Mirrors ``build_gold_set_repository``'s shape: the adapter holds a
+    callable that resolves the per-tenant session factory at call time
+    via the existing ``TenantSessionFactoryCache``. The CLI at
+    apps/cli/_retrieval_evaluation.py consumes the adapter directly
+    for the ``evaluation-run start`` subcommand at S40; the HTTP
+    transport at S42 will dependency-inject against
+    ``EvaluationRunRepository``.
+    """
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return EvaluationRunRepositoryAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
+def build_evaluation_run_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> EvaluationRunReaderAdapter:
+    """Wire the retrieval-evaluation runner read surface (S40, D110).
+
+    Symmetric to ``build_evaluation_run_repository``. The HTTP layer at
+    S42 dependency-injects against ``EvaluationRunReader``; the CLI at
+    S40 consumes the adapter directly for ``evaluation-run get`` and
+    ``evaluation-run list``.
+    """
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return EvaluationRunReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
 __all__ = [
     "TenantRoutingRetrievalClient",
     "TenantRoutingSourceRepository",
     "build_agent_runtime_composition",
     "build_audit_event_reader",
+    "build_evaluation_run_reader",
+    "build_evaluation_run_repository",
     "build_gold_set_reader",
     "build_gold_set_repository",
     "build_run_history_reader",
