@@ -693,7 +693,111 @@ def build_recommendation_reader(
     )
 
 
+def build_retrieval_client(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+    neo4j_settings: Neo4jSettings,
+) -> "TenantRoutingRetrievalClient":
+    """Wire a standalone TenantRoutingRetrievalClient for the S42 surface (D112).
+
+    The agent-runtime composition still constructs its own client
+    internally for the SSE endpoint; this builder produces a separate
+    instance for the discovery route at GET /retrieval-candidates and
+    for the retrieval-runner port wired below. Both instances share the
+    same session factory cache and tenant registry, so per-tenant
+    routing produces identical Postgres / Neo4j connections regardless
+    of which surface invokes search.
+    """
+    embedder = LiteLLMChunkEmbedder()
+    return TenantRoutingRetrievalClient(
+        cache=session_factory_cache,
+        embedder=embedder,
+        registry=tenant_registry,
+        operator_principal=operator_principal,
+        security_events=security_events,
+        neo4j_settings=neo4j_settings,
+    )
+
+
+class HttpRetrievalRunnerPort:
+    """Wraps an ``AgentRetrievalClient`` as a ``RetrievalRunnerPort`` (D112, S42).
+
+    Mirrors the CLI's _CliRetrievalRunnerPort shape at
+    ``apps/cli/_retrieval_evaluation.py``. Captures wall-clock latency
+    per call, supplies evaluation-appropriate defaults for ``min_score``
+    (zero so the runner sees every result for metric computation) and
+    ``filter_tree`` (empty), and projects ranked chunk IDs from
+    ``RetrievalResult.citation_candidates`` (the chunk-level provenance
+    source of truth per D96; only ChunkCitationCandidate entries carry
+    chunk_id, so the extraction is type-narrowed).
+    """
+
+    def __init__(self, *, adapter) -> None:
+        # adapter type: AgentRetrievalClientAdapter (imported lazily
+        # below to avoid load-time cross-app cycles).
+        self._adapter = adapter
+
+    async def __call__(
+        self,
+        *,
+        query,
+        tenant_context,
+        strategy_dispatch,
+        top_k: int,
+    ):
+        import time
+        from decimal import Decimal
+        from uuid import UUID
+        from contexts.agent.domain.citation_candidates import (
+            ChunkCitationCandidate,
+        )
+        from contexts.retrieval_evaluation.ports.retrieval_runner import (
+            RankedChunks,
+        )
+
+        start = time.monotonic()
+        result = await self._adapter(
+            query=query,
+            tenant_context=tenant_context,
+            retrieval_strategy=strategy_dispatch,
+            filter_tree={},
+            top_k=top_k,
+            min_score=Decimal(0),
+        )
+        latency_ms = int((time.monotonic() - start) * 1000)
+        chunk_ids: tuple[UUID, ...] = tuple(
+            c.chunk_id
+            for c in result.citation_candidates
+            if isinstance(c, ChunkCitationCandidate)
+        )
+        return RankedChunks(chunk_ids=chunk_ids, latency_ms=latency_ms)
+
+
+def build_retrieval_runner_port(
+    *,
+    retrieval_client: "TenantRoutingRetrievalClient",
+) -> HttpRetrievalRunnerPort:
+    """Wire the retrieval-runner port for the synchronous evaluation-run kickoff (D112).
+
+    The runner port is the consumer-defined surface that the
+    ``run_retrieval_evaluation`` orchestrator invokes per
+    (gold-set-entry × executing strategy) pairing. The CLI wires this
+    inline in apps/cli/_retrieval_evaluation.py; the API server's
+    single composed instance lives on app.state.retrieval_runner_port.
+    """
+    from apps.cli._cross_context import AgentRetrievalClientAdapter
+
+    agent_adapter = AgentRetrievalClientAdapter(
+        retrieval_client=retrieval_client
+    )
+    return HttpRetrievalRunnerPort(adapter=agent_adapter)
+
+
 __all__ = [
+    "HttpRetrievalRunnerPort",
     "TenantRoutingRetrievalClient",
     "TenantRoutingSourceRepository",
     "build_agent_runtime_composition",
@@ -706,6 +810,8 @@ __all__ = [
     "build_optimization_run_repository",
     "build_recommendation_reader",
     "build_recommendation_repository",
+    "build_retrieval_client",
+    "build_retrieval_runner_port",
     "build_run_history_reader",
     "build_source_repository",
 ]

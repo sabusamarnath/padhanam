@@ -32,6 +32,8 @@ from apps.api._auth_errors import register_auth_error_handlers
 from apps.api._errors import (
     register_audit_error_handlers,
     register_ingestion_error_handlers,
+    register_optimization_error_handlers,
+    register_retrieval_evaluation_error_handlers,
     register_run_history_error_handlers,
 )
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
@@ -40,10 +42,35 @@ from apps.api.routers import audit as audit_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import ingestion as ingestion_router
+from apps.api.routers import optimization as optimization_router
+from apps.api.routers import retrieval_evaluation as retrieval_evaluation_router
 from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
 from apps.api.routers.agent import AgentRuntimeComposition
 from contexts.audit.ports.reader import AuditEventReader
+from contexts.optimization.ports.optimization_run_reader import (
+    OptimizationRunReader,
+)
+from contexts.optimization.ports.optimization_run_repository import (
+    OptimizationRunRepository,
+)
+from contexts.optimization.ports.recommendation_reader import (
+    RecommendationReader,
+)
+from contexts.optimization.ports.recommendation_repository import (
+    RecommendationRepository,
+)
+from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
+    EvaluationRunReader,
+)
+from contexts.retrieval_evaluation.ports.evaluation_run_repository import (
+    EvaluationRunRepository,
+)
+from contexts.retrieval_evaluation.ports.reader import GoldSetReader
+from contexts.retrieval_evaluation.ports.repository import GoldSetRepository
+from contexts.retrieval_evaluation.ports.retrieval_runner import (
+    RetrievalRunnerPort,
+)
 from contexts.run_history.ports.reader import RunHistoryReader
 from contexts.audit.adapters.outbound.postgres.audit import PostgresAuditAdapter
 from contexts.audit.domain.ports import AuditPort
@@ -126,6 +153,29 @@ class AppCompositions:
     # wiring in _build_default_compositions populates this from
     # build_source_repository.
     source_repository: object | None = None
+    # S42 (D112): retrieval-evaluation surface — gold-set authoring,
+    # evaluation-run kickoff, and the discovery candidates route.
+    # Default to None so test fixtures without the retrieval-evaluation
+    # stack can keep their narrow factory invocations; production wiring
+    # populates each via the builders in _agent_runtime_wiring.py.
+    gold_set_repository: GoldSetRepository | None = None
+    gold_set_reader: GoldSetReader | None = None
+    evaluation_run_repository: EvaluationRunRepository | None = None
+    evaluation_run_reader: EvaluationRunReader | None = None
+    # Top-level retrieval client and runner port for the discovery
+    # endpoint and the synchronous evaluation-run kickoff. Separate
+    # instances from the agent-runtime composition's internal client;
+    # both share the same TenantSessionFactoryCache and tenant registry
+    # so per-tenant routing produces identical connections regardless
+    # of which surface invokes search.
+    retrieval_client: object | None = None
+    retrieval_runner_port: RetrievalRunnerPort | None = None
+    # S42 (D112): optimization surface — engine kickoff plus recommendation
+    # read and lifecycle write routes.
+    optimization_run_repository: OptimizationRunRepository | None = None
+    optimization_run_reader: OptimizationRunReader | None = None
+    recommendation_repository: RecommendationRepository | None = None
+    recommendation_reader: RecommendationReader | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -236,6 +286,86 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
     )
 
+    # S42 (D112): retrieval-evaluation + optimization HTTP transport
+    # surface. The gold-set + evaluation-run + recommendation read and
+    # write surfaces all share the per-tenant session factory cache
+    # plus the operator principal plus the security-events logger.
+    # The retrieval_client is a fresh TenantRoutingRetrievalClient
+    # instance (separate from the one inside the agent runtime
+    # composition); both back onto the same cache and registry so
+    # per-tenant routing produces identical connections.
+    from apps.api._agent_runtime_wiring import (
+        build_evaluation_run_reader,
+        build_evaluation_run_repository,
+        build_gold_set_reader,
+        build_gold_set_repository,
+        build_optimization_run_reader,
+        build_optimization_run_repository,
+        build_recommendation_reader,
+        build_recommendation_repository,
+        build_retrieval_client,
+        build_retrieval_runner_port,
+    )
+
+    gold_set_repository = build_gold_set_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    gold_set_reader = build_gold_set_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    evaluation_run_repository = build_evaluation_run_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    evaluation_run_reader = build_evaluation_run_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    retrieval_client = build_retrieval_client(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        neo4j_settings=Neo4jSettings(),
+    )
+    retrieval_runner_port = build_retrieval_runner_port(
+        retrieval_client=retrieval_client,
+    )
+    optimization_run_repository = build_optimization_run_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    optimization_run_reader = build_optimization_run_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    recommendation_repository = build_recommendation_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    recommendation_reader = build_recommendation_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -247,6 +377,16 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         audit_event_reader=audit_event_reader,
         source_repository=source_repository,
+        gold_set_repository=gold_set_repository,
+        gold_set_reader=gold_set_reader,
+        evaluation_run_repository=evaluation_run_repository,
+        evaluation_run_reader=evaluation_run_reader,
+        retrieval_client=retrieval_client,
+        retrieval_runner_port=retrieval_runner_port,
+        optimization_run_repository=optimization_run_repository,
+        optimization_run_reader=optimization_run_reader,
+        recommendation_repository=recommendation_repository,
+        recommendation_reader=recommendation_reader,
     )
 
 
@@ -331,6 +471,14 @@ def create_app(
     # discipline.
     register_ingestion_error_handlers(app)
 
+    # S42 (D112): retrieval-evaluation and optimization error handlers.
+    # Cover the gold-set + evaluation-run + recommendation lifecycle
+    # exception classes plus the InvalidOptimizationFilterError surfaced
+    # by the recommendations list query parser. Same additive shape as
+    # the existing registrations.
+    register_retrieval_evaluation_error_handlers(app)
+    register_optimization_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -361,6 +509,17 @@ def create_app(
     # get source status.
     app.include_router(ingestion_router.router)
 
+    # S42 (D112): retrieval-evaluation transport surface — three routers
+    # (gold-sets, retrieval-candidates discovery, evaluation-runs).
+    app.include_router(retrieval_evaluation_router.gold_set_router)
+    app.include_router(retrieval_evaluation_router.discovery_router)
+    app.include_router(retrieval_evaluation_router.evaluation_run_router)
+
+    # S42 (D112): optimization transport surface — two routers
+    # (optimization-runs, recommendations).
+    app.include_router(optimization_router.optimization_run_router)
+    app.include_router(optimization_router.recommendation_router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -372,6 +531,19 @@ def create_app(
     app.state.security_events = compositions.security_events
     app.state.audit_event_reader = compositions.audit_event_reader
     app.state.source_repository = compositions.source_repository
+    # S42 (D112): retrieval-evaluation and optimization composition seams.
+    app.state.gold_set_repository = compositions.gold_set_repository
+    app.state.gold_set_reader = compositions.gold_set_reader
+    app.state.evaluation_run_repository = compositions.evaluation_run_repository
+    app.state.evaluation_run_reader = compositions.evaluation_run_reader
+    app.state.retrieval_client = compositions.retrieval_client
+    app.state.retrieval_runner_port = compositions.retrieval_runner_port
+    app.state.optimization_run_repository = (
+        compositions.optimization_run_repository
+    )
+    app.state.optimization_run_reader = compositions.optimization_run_reader
+    app.state.recommendation_repository = compositions.recommendation_repository
+    app.state.recommendation_reader = compositions.recommendation_reader
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit
