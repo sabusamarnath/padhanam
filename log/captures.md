@@ -239,3 +239,52 @@ Observation: substrate sessions may benefit from a planned scope-check at the do
 
   - triaged: pending — flagged for P12 audit methodology candidates list
   - resolution: candidate observation; promotion to charter/methodology.md if the pattern recurs at one or two more substrate sessions, or if P12 audit deems substrate sessions a distinct shape worth methodology treatment.
+
+## 2026-05-15 [S41] — Principle-versus-framing drift as distinct methodology candidate
+
+Source: S41 commit 4 (rules placement). The brief framed
+`contexts/optimization/domain/rules/` as the placement for the four
+default rule implementations. Writing the code surfaced the layering
+violation: the rules import producer-context reader ports and consume
+the application-layer `EvidenceContext`, so they cannot live at the
+domain layer without breaching hexagonal intent. Placement corrected
+to `contexts/optimization/application/rules/` at commit time.
+
+This finding is structurally distinct from the three previous P11 mid-
+session drift surfacings:
+
+- S39 sibling-in-pattern (D109 framing referenced contexts/evaluation/
+  scoring-sheet as the structural precedent; the scoring-sheet aggregate
+  was read-only at S16 with no hash-chain, breaking the framing).
+- S40 D66 framing-versus-as-built (D66 catalogued three retrieval
+  strategies; the adapter implemented two, with parallel_rrf unimplemented).
+- S40b graph_only infrastructure substrate (S40 framing assumed the
+  graph retrieval leg would be exercised at runner time; graph-extract
+  reliability surfaced as a substrate gap).
+
+All three previous findings were as-built-versus-as-framed drift: the
+brief framed against a specific codebase reality and the reality was
+different from the framing. Pre-write reconciliation, by reading the
+codebase before writing, catches this class.
+
+This finding is principle-versus-framing drift. The brief framed
+against no specific as-built reality; the framing simply contradicted
+the hexagonal layering principle the codebase commits to at D16. No
+pre-write reconciliation against codebase reality could catch it
+because there was no codebase reference to reconcile against; only
+writing the code and watching the import pattern surface the principle
+violation catches the drift.
+
+Mitigation surface is different from the previous three. Pre-write
+reconciliation is the right discipline for as-built drift; for
+principle drift, the mitigation surface is closer to "check the framing
+against the principles file before writing the prompt." A brief-review
+checkpoint at strategic-mode close that walks the framing against
+`charter/principles.md` would catch this class of drift before the
+build session opens.
+
+  - triaged: pending — flagged for P12 audit methodology candidates list
+  - resolution: candidate observation; promotion to charter/methodology.md
+    if the pattern recurs at one or two more sessions, or if P12 audit
+    deems the distinct mitigation surface (brief-vs-principles check vs
+    brief-vs-codebase check) worth methodology treatment.
