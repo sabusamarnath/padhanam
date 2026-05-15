@@ -2,65 +2,15 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
-## P10 closed; retrieval-evaluation design session next
+## P11 framed; S39 next
 
-P10 closed at S38 close on 2026-05-14 with the full audit and
-ingestion management read substrate in place per D102 (framing),
-D103 (audit HTTP transport + platform-operator principal type), and
-D104 (auth handler relocation + ingestion HTTP transport via Path
-A). Three sessions shipped (S36, S37, S38) against the
-three-to-four-session framing forecast. Retrospective addendum
-lands at [charter/packages/p10-epic.md](packages/p10-epic.md) with
-five sections mirroring P9's shape: delta from framing, substrate
-as Phase 2 UX consumer surface, Phase 1 substrate-completeness
-observations, methodology candidate reinforcements, and the new
-architectural-extension-rather-than-greenfield observation
-specific to P10's mode.
+P11 framed at the strategic-mode conversation between S38b close and S39 open on 2026-05-15. D108 commits the optimization-engine substrate as new bounded context at `contexts/optimization/` consuming four producer contexts (evaluation, retrieval_evaluation per D105, run_history, observability) through consumer-defined ports plus wiring adapters, with the `RunHistoryReader` from `contexts/run_history/ports/reader.py` reused per the S33 vintage and three new reader ports defined at S41. The recommendation aggregate carries five fields (category, subject, text, evidence_citations, status); numeric confidence scores stay out on D9 grounds. Four recommendation categories ship at P11 close: retrieval_strategy, model_choice, prompt_revision, cost_optimization. The allowlist closure folds into S39's front half (role-allowlist seed migrations gain the retrieval tool reference); per-invocation retrieval-constraint threading stays Phase 2. HTTP transports at S42 cover three router trees including the P5-deferred evaluation-HTTP carryover absorption. Active testing scheduler integration is P12 territory.
 
-**Next strategic-mode conversation.** The retrieval-evaluation
-design session sits ahead of P11 framing per the standing
-strategic carryover at [charter/current-package.md](current-package.md)
-"Carryovers active across the P8→P9 boundary" (the entry titled
-"Retrieval-evaluation design session"). The audience is the
-existing P5 eval harness plus the P11 optimisation layer; the
-design space to settle includes gold-set construction, offline
-versus online relevance signals, recall@k versus precision@k
-tradeoffs, and test corpus shape. The session is must-have for the
-bet's optimisation claim because the optimisation layer at P11 has
-to distinguish retrieval failures from reasoning failures.
+Four sessions firm (S39 allowlist plus `contexts/retrieval_evaluation/` substrate; S40 retrieval evaluation runner and metric computation; S41 `contexts/optimization/` substrate; S42 HTTP transports plus P11 close demo), S43 reserved for optional carryover hygiene. Epic note at [charter/packages/p11-epic.md](packages/p11-epic.md).
 
-The session is queued for Claude.ai strategic-mode rather than
-build-mode in Claude Code because the deliverables are charter
-artefacts (a D-entry committing the retrieval-evaluation framing,
-plus potentially the P11 framing decision tree depending on what
-the design session settles). The next Claude Code conversation
-after the strategic block is P11 build kick-off (or P11 framing
-follow-on if the strategic block produces a build-session brief).
+**Next Claude Code session.** S39 build session lands the allowlist closure as commit 1 (Alembic migration plus smoke verification adding the retrieval tool reference to seeded role allowlists per the existing migrations) followed by the `contexts/retrieval_evaluation/` substrate as subsequent commits. The S39 prompt drafts at the next Claude.ai conversation handoff.
 
-**S38a fired** as post-P10 hygiene on 2026-05-14 between P10 close
-and the retrieval-evaluation design session. Closed 10 pre-existing
-integration test failures in `tests/integration/contexts/ingestion/`
-— 8 ERRORs at `test_ingest_e2e.py` plus 2 named FAILUREs at
-`test_extract_e2e.py:268` and `test_retrieval_e2e.py:334` — all
-caused by the same `run_chunk_citations.chunk_id` FK class that S35b
-fixed at two other sites. The brief's framing of "1 ERROR + 2
-downstream FAILUREs" was incorrect; pre-write reconciliation's
-sweep step (introduced at the S38a brief as a new reconciliation
-pass) surfaced that all three sites carry independent broken fixture
-helpers (`_truncate_ingestion_tables`, `_truncate_tenant_a`,
-`_truncate_tenant`) and would each fail independently of the others.
-Single commit applied the explicit-list TRUNCATE shape from S35b's
-a555902 precedent to all three sites; 16/16 previously-affected
-tests pass against the live stack post-fix. Methodology observation
-captured at the session log entry: the reconciliation sweep step
-earned its first concrete payoff inside its first deliberate
-instance — without it, S38a would have shipped an under-scoped fix
-and required a second cleanup commit when the test ordering surfaced
-the remaining sites.
-
-P9 archive landed at S35 close to `docs/archive/packages/p9.md`;
-P10 archive lands at the same destination from a follow-on
-operator-driven step.
+D107 landed at S38b on 2026-05-15 committing the session-log per-package archival convention with the P0-through-P10 bootstrap; `log/sessions.md` cut from 1879 lines to 56 lines (header plus S38b entry). Forward from S42 close, package archives commit at package-close per D107.
 
 ## P10 — final history (preserved below for traceability)
 
@@ -233,7 +183,6 @@ P9 delivered the run-history backend substrate as the Phase 2 UX consumer surfac
   scope-discipline grounds because Option B (move now) has
   unbounded touch surface and adds incidental scope at
   S36 build time.
-- **Retrieval-aware role allowlists.** P8's two demos showed the substrate end-to-end but without retrieval grounding because all migration-seeded roles ship with empty `tool_allowlist`. Per-invocation allowlist override OR role-allowlist tightening (adding the retrieval tool reference) at Phase 2 makes source-grounded artifacts the default. Activates at the first authoring evidence demanding it.
 - **Per-invocation retrieval-constraint threading at ToolInvoker.** The Phase 1 `ToolInvokerAdapter` constructor accepts retrieval constants at composition time; per-role retrieval constraints from the effective bundle do not thread through to the tool invoker on each invocation. Phase 2 substrate refinement queued at the `apps/api/_agent_runtime_wiring.py` module docstring.
 - **Cross-app adapter location cleanup.** S30b's production wiring imports adapter classes from `apps/cli/_cross_context.py` because both `apps/cli/` and `apps/api/` need them. Phase 2 cleanup relocates to a shared `apps/`-level module; Phase 1 cross-app import is the pragmatic call documented in the wiring module's docstring.
 - **`psql` missing in padhanam-api image.** Two tests at `tests/contract/tenant_isolation/test_ingestion_isolation.py` shell out to `psql` to truncate chunks + sources; the image does not include `psql`. Tests pass only when tenant DBs happen to be empty; S30b's demo runs surfaced the latent issue. Pre-existing failure; P9 candidate.
@@ -247,17 +196,6 @@ P9 delivered the run-history backend substrate as the Phase 2 UX consumer surfac
   does not block any P7 build session because the substrate (D-entries
   D69-D73, the principle, the scaffold structure) is in place. Authoring
   effort estimated at one strategic block session.
-- **Retrieval-evaluation design session.** Queued strategic-mode
-  conversation ahead of P11 (recommendation engine). The audience
-  is the existing eval harness from P5 and the optimisation layer
-  at P11; the design space (gold-set construction, offline versus
-  online relevance signals, recall@k versus precision@k tradeoffs,
-  test corpus shape) warrants its own focused session at the
-  audience-relevant moment. Must-have for the bet's optimisation
-  claim because the optimisation layer has to distinguish retrieval
-  failures from reasoning failures; deferred at the data-retrieval
-  design session on Kano-versus-RICE asymmetry grounds (must-have
-  on Kano, high effort on RICE relative to its on-runtime impact).
 - **Product methodology selection-space.** P7 commits to LVT as
   the first methodology per D68; the LVT methodology template
   lands at S25. Other methodologies in
