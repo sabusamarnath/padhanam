@@ -219,3 +219,12 @@ In-session fix: both fixtures patched at S30b to carry the `created_by_user_id N
 
   - triaged: fix on 2026-05-13
   - resolution: both fixtures patched in-session at S30b with the S26b filter pattern. Subsequent test runs preserve migration-seeded rows. The S26b fix's "four fixtures" framing carried an implicit completeness claim that did not hold across the broader test surface — the structural lesson is that filter-pattern application at a single audit moment needs a grep-driven completeness check rather than a per-file enumeration.
+
+## 2026-05-15 [S39b] — Migration name-length convention
+
+Alembic revision strings must stay ≤32 characters to fit the `alembic_version.version_num VARCHAR(32)` column. S39's initial revisions exceeded the ceiling (`0012_role_allowlist_retrieval_closure` at 37 chars, `0013_retrieval_evaluation_substrate` at 35 chars) and `make migrate` failed with `StringDataRightTruncation` on the `alembic_version` UPDATE at version-bump time; the transactional DDL rolled back the failed upgrade cleanly, no partial state. Shortened in place at smoke time to `0012_role_allowlist_retrieval` (29 chars) and `0013_retrieval_eval_substrate` (29 chars).
+
+Convention forward: revision-string components should fit `NNNN_<short_slug>` where `<short_slug>` stays under ~25 chars to leave headroom for the four-character zero-padded number plus underscore. File names (e.g. `YYYY_MM_DD_NNNN_<slug>.py`) can be longer; only the `revision: str = "..."` declaration inside the file must stay short.
+
+  - triaged: convention captured on 2026-05-15
+  - resolution: convention recorded in this file as a project-tooling constraint. No D-entry required — this is a vendor-tooling constraint (alembic's VARCHAR(32) column ceiling), not an architectural decision. Future migrations should keep this in mind; if a third instance of name-length truncation surfaces, consider promoting to a project-tooling note in `charter/principles.md` Token discipline section.
