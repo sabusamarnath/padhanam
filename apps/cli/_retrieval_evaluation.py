@@ -29,7 +29,6 @@ from typing import Annotated, Any, Mapping, Optional, Sequence
 from uuid import UUID
 
 import typer
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from contexts.agent.application.ports.retrieval_client import (
     RetrievalResult,
@@ -505,12 +504,16 @@ def _build_runner_dependencies(
     agent_adapter = AgentRetrievalClientAdapter(retrieval_client=retrieval_client)
     runner_port = _CliRetrievalRunnerPort(adapter=agent_adapter)
 
-    control_plane_settings = ControlPlaneSettings()
-    control_plane_engine = create_async_engine(
-        control_plane_settings.url_async, pool_pre_ping=True
-    )
-    audit_adapter = PostgresAuditAdapter(
-        control_plane_engine=control_plane_engine,
+    # PostgresAuditAdapter.from_settings constructs the control-plane
+    # engine via the audit module's _control_plane_url helper, avoiding
+    # a non-existent attribute on ControlPlaneSettings (runtime fix at
+    # S40 smoke per the operator's flagged-CLI-audit-connection-risk
+    # disposition: fix inline, capture as methodology finding). The
+    # control-plane connection is required at adapter init but unused
+    # for the runner's emissions (all events carry non-empty tenant_id
+    # and route to the per-tenant audit table).
+    audit_adapter = PostgresAuditAdapter.from_settings(
+        control_plane_settings=ControlPlaneSettings(),
         per_tenant_sessionmaker_resolver=_resolver,
     )
     return run_repo, run_reader, gold_set_reader, runner_port, audit_adapter
