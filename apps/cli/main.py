@@ -51,7 +51,10 @@ from apps.cli._ingest import (
 )
 from apps.cli._agent import agent_app
 from apps.cli._methodology import methodology_app
-from apps.cli._retrieval_evaluation import retrieval_evaluation_app
+from apps.cli._retrieval_evaluation import (
+    evaluation_run_app,
+    retrieval_evaluation_app,
+)
 from apps.cli._role import role_app
 from apps.cli._tool import tool_app
 
@@ -120,6 +123,9 @@ app.add_typer(tool_app, name="tool")
 
 # S39 retrieval-evaluation gold-set authoring commands (D109).
 app.add_typer(retrieval_evaluation_app, name="gold-set")
+
+# S40 retrieval-evaluation runner orchestration (D110).
+app.add_typer(evaluation_run_app, name="evaluation-run")
 
 
 _OUTPUT_FORMAT_TEXT = "text"
