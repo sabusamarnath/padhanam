@@ -141,7 +141,13 @@ migrate: derive-env
 # during a session, see `make sync-code`.
 build-api:
 	@echo "Rebuilding padhanam-api image..."
-	$(COMPOSE) build padhanam-api
+	@# docker compose build fails when the image: directive carries a
+	@# digest (the digest is not a valid build tag); we drive the
+	@# build directly via `docker build`, then rewrite the compose
+	@# pin to the new content-addressed digest. The S37 smoke used
+	@# the same docker build pattern; the S42 smoke surfaced the
+	@# compose-build incompatibility in the original target.
+	docker build -t padhanam-api:dev -f apps/api/Dockerfile .
 	@new_digest=$$(docker image inspect padhanam-api:dev --format '{{.Id}}') && \
 		echo "New image digest: $$new_digest" && \
 		echo "Updating compose.yaml digest pin..." && \

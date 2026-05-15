@@ -337,3 +337,81 @@ session close uses build-api.
     compose.yaml comment at line 374-375 anticipates this; the
     production manifest replaces the build-context form with an
     upstream-image digest pin where the friction disappears).
+
+## 2026-05-15 [S42] — `make build-api` target broken by digest-in-image-tag
+
+Source: S42 smoke. The post-S41 `make build-api` target at
+`Makefile` invoked `docker compose build padhanam-api` to rebuild the
+image; the compose `image:` directive carries a digest pin
+(`padhanam-api:dev@sha256:...`) which is not a valid build tag, so the
+target failed with "build tag cannot contain a digest" the first time
+it was exercised at S42 smoke.
+
+In-session fix at the Makefile: replaced `$(COMPOSE) build padhanam-api`
+with `docker build -t padhanam-api:dev -f apps/api/Dockerfile .` —
+matches the S37 smoke's direct-docker-build pattern and produces an
+image tagged without the digest, which the subsequent
+`docker image inspect` step then converts into the new digest pin.
+
+Methodology candidate observation: the resolution of the
+container-image-lag pattern at S41 close (commit 0e8041f) shipped two
+Makefile targets without exercising either against the production-shape
+flow. The bug was structurally invisible to unit tests (Makefile is
+not test-covered) and to the resolution commit's smoke (which used the
+pre-existing `docker build` pattern). The first production-shaped use
+at S42 surfaced the bug. Promotion candidate: smoke-time verification
+of dev-workflow tooling at the same session that ships it. Recurrence
+test continues at the next dev-workflow tooling addition.
+
+  - triaged: fix on 2026-05-15
+  - resolution: Makefile target patched in-session; the fix lands as
+    part of the S42 commit chain. Captured here as a methodology
+    candidate (smoke-time verification of dev-workflow tooling).
+
+## 2026-05-15 [S42] — Audit chain rows from S40/S41 carry empty correlation_id
+
+Source: S42 smoke Stage 8. The S37 audit reader's
+`AuditEventRecord.__post_init__` validator requires `correlation_id`
+to be a non-empty string. The retrieval_evaluation and optimization
+audit-event drafts at `contexts/retrieval_evaluation/application/audit_events.py`
+and `contexts/optimization/application/audit_events.py` default
+`correlation_id=""` (no calling context populates it yet), so audit
+rows emitted by the S40 evaluation runner and the S41 optimization
+engine fail the validator at read time.
+
+Symptom at smoke: `GET /audit/events` without filters returns 500
+because the reader iterates rows and the validator chokes on the
+first empty-correlation_id row. Filtering by `resource_type=agent`
+narrows to rows with valid correlation_ids and the route succeeds.
+
+The S37 single-event read path is unaffected when the requested event
+has a valid correlation_id; affected when targeting a row from S40 or
+S41. The chain-integrity computation at page granularity is computed
+from the rows that DO deserialize, so the reported `partial` status
+on the agent-filtered page reflects the filter-vs-chain divergence
+not the chain itself.
+
+Two plausible mitigations for the pre-P12 hygiene session:
+
+(a) Loosen the validator to allow empty correlation_id (treat as "no
+    inbound request context for this event"). Honest about the
+    cross-context audit semantics: not every audit event traces back
+    to an HTTP request with a correlation_id (engine internals,
+    background work). Cheap fix, no migration.
+
+(b) Tighten the audit-event drafts to always supply a non-empty
+    correlation_id (e.g. derive from the parent run_id or use a
+    sentinel like "engine-internal:<run_id>"). Requires a backfill
+    migration to repair the existing rows.
+
+Recommend (a) at pre-P12 hygiene with a one-line validator change;
+the backfill in (b) is heavier and the empty-string state is a
+legitimate "no inbound HTTP context" signal that should not require
+data shaping.
+
+  - triaged: deferred-to-hygiene on 2026-05-15
+  - resolution: captured for the pre-P12 hygiene session; S42 smoke
+    workaround uses `resource_type=agent` filter to bypass affected
+    rows. S37 single-event lookup against agent-context rows verified
+    working; the route surface itself holds, only the cross-context
+    data shape is inconsistent.
