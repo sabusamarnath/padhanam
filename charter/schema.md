@@ -798,3 +798,81 @@ load-bearing audit evidence rather than a pre-rendered display
 field. The audit-evidence-fidelity claim from D94 holds for entity
 provenance the same way it holds for chunk content. Citation rows
 land within the same single transaction as the runs row per D96.
+
+## Retrieval evaluation tables (per-tenant)
+
+Substrate for `contexts/retrieval_evaluation/` per D109. The gold-set
+aggregate root carries the tenant-authored named container; revisions
+are append-only with status (draft or finalized) and hash-chain audit
+on finalized revisions per D26 chain-self-containment; entries carry
+an ordered chunk-id list encoding ranked relevance per D105.
+
+### `gold_sets`
+
+| Column                | Type            | Constraints                                                                                |
+|-----------------------|-----------------|--------------------------------------------------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`                                                   |
+| `tenant_id`           | `uuid`          | not null; jurisdiction-bearing per D12; denormalised per D22                               |
+| `jurisdiction`        | `text`          | not null; CHECK `jurisdiction <> ''`                                                       |
+| `name`                | `text`          | not null                                                                                   |
+| `created_by_user_id`  | `text`          | not null                                                                                   |
+| `created_at`          | `timestamptz`   | not null; default `now()`                                                                  |
+| `current_revision_id` | `uuid`          | nullable; FK → `gold_set_revisions.id` DEFERRABLE INITIALLY DEFERRED per the circular FK   |
+
+`UNIQUE(tenant_id, name)` — `gold_sets_tenant_name_unique`. The
+`current_revision_id` FK is deferrable so the create-gold-set use
+case can insert the aggregate row plus the initial draft revision
+row in a single transaction with the FK check fired at commit time
+rather than at row-insert time.
+
+### `gold_set_revisions`
+
+| Column                | Type            | Constraints                                                                                |
+|-----------------------|-----------------|--------------------------------------------------------------------------------------------|
+| `id`                  | `uuid`          | primary key; default `gen_random_uuid()`                                                   |
+| `gold_set_id`         | `uuid`          | not null; FK → `gold_sets.id` ON DELETE RESTRICT                                           |
+| `revision_number`     | `integer`       | not null; monotonic per `gold_set_id` starting at 1                                        |
+| `status`              | `text`          | not null; CHECK ∈ {`draft`, `finalized`}                                                   |
+| `created_by_user_id`  | `text`          | not null                                                                                   |
+| `created_at`          | `timestamptz`   | not null; default `now()`                                                                  |
+| `finalized_at`        | `timestamptz`   | nullable; populated when status transitions to `finalized`                                 |
+| `this_event_hash`     | `text`          | nullable; populated at finalization via `compute_revision_hash` per D109 commitment 4      |
+| `previous_event_hash` | `text`          | nullable; `GENESIS_HASH` for revision_number=1 or the prior finalized revision's hash      |
+
+`UNIQUE(gold_set_id, revision_number)` —
+`gold_set_revisions_gold_set_revision_unique`. Finalized revisions
+are immutable per D31 (no UPDATE path on rows where `status =
+'finalized'`); the application layer enforces this; corrections land
+as new draft revisions opened by `finalize_revision` or by the next
+authoring action.
+
+### `gold_set_entries`
+
+| Column                  | Type            | Constraints                                                                                |
+|-------------------------|-----------------|--------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`          | primary key; default `gen_random_uuid()`                                                   |
+| `gold_set_revision_id`  | `uuid`          | not null; FK → `gold_set_revisions.id` ON DELETE RESTRICT                                  |
+| `entry_index`           | `integer`       | not null; monotonic position within revision starting at 0                                 |
+| `query`                 | `text`          | not null                                                                                   |
+| `expected_chunk_ids`    | `uuid[]`        | not null; ordered array; order encodes ranked relevance per D105                           |
+
+`UNIQUE(gold_set_revision_id, entry_index)` —
+`gold_set_entries_revision_entry_unique`. The `expected_chunk_ids`
+array references the per-tenant `chunks` table from
+`contexts/ingestion/` per D109 commitment 3; no foreign key
+constraint to `chunks.id` is enforced at the database level because
+chunk lifecycle is independent of gold-set authoring (chunks may
+delete or re-ingest while gold-set entries persist as historical
+record). Recall@k, precision@k, and MRR computation at S40 handles
+missing-chunk cases at metric-computation time.
+
+Chain integrity verification reuses the audit context's primitive
+shape per D109 commitment 4: the gold-set-revision payload (the
+revision's canonical JSON shape with entries sorted by `entry_index`
+and `expected_chunk_ids` rendered as lowercase canonical UUID
+strings) feeds `compute_chained_payload_hash` from
+`contexts/audit/domain/events.py` along with `previous_event_hash`;
+the result is the row's `this_event_hash`. On-read verification
+mirrors the S36 page-granularity verifier pattern: read the
+revision and its entries, reconstruct the canonical payload,
+recompute the hash, compare against the stored value.
