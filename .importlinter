@@ -114,6 +114,15 @@ layers =
     contexts.run_history.ports
     contexts.run_history.domain
 
+[importlinter:contract:layers-retrieval-evaluation]
+name = Retrieval evaluation layers (hexagonal)
+type = layers
+layers =
+    contexts.retrieval_evaluation.adapters
+    contexts.retrieval_evaluation.application
+    contexts.retrieval_evaluation.ports
+    contexts.retrieval_evaluation.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -141,6 +150,7 @@ modules =
     contexts.agent.domain
     contexts.tools.domain
     contexts.run_history.domain
+    contexts.retrieval_evaluation.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -161,6 +171,7 @@ modules =
     contexts.agent.application
     contexts.tools.application
     contexts.run_history.application
+    contexts.retrieval_evaluation.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -180,6 +191,7 @@ modules =
     contexts.agent.adapters
     contexts.tools.adapters
     contexts.run_history.adapters
+    contexts.retrieval_evaluation.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -214,6 +226,7 @@ source_modules =
     contexts.agent.domain
     contexts.tools.domain
     contexts.run_history.domain
+    contexts.retrieval_evaluation.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -290,6 +303,7 @@ source_modules =
     contexts.agent
     contexts.tools
     contexts.run_history
+    contexts.retrieval_evaluation
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -318,6 +332,7 @@ source_modules =
     contexts.agent
     contexts.tools
     contexts.run_history
+    contexts.retrieval_evaluation
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -384,6 +399,7 @@ source_modules =
     contexts.agent
     contexts.tools
     contexts.run_history
+    contexts.retrieval_evaluation
 forbidden_modules =
     neo4j
 allow_indirect_imports = false

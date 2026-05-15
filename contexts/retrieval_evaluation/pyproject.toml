@@ -1,0 +1,18 @@
+[project]
+name = "padhanam-retrieval-evaluation"
+version = "0.0.0"
+description = "Retrieval evaluation bounded context (D105, D108, D109). Tenant-authored gold sets with hash-chain audit on revisions; substrate for the retrieval evaluation runner at S40 and the optimization-engine recommendation generation at S41. Sibling-in-placement to contexts/evaluation/ per D105; structural precedent for revision-with-hash-chain is contexts/methodology/ per the S39 pre-write reconciliation."
+requires-python = ">=3.14"
+# SQLAlchemy + asyncpg arrive at S39 commit 5 alongside the
+# Postgres adapter per D30's per-context dep-scoping invariant.
+# Mirrors the run_history context's adapter scope (S31 commit 5):
+# sqlalchemy[asyncio] for the AsyncEngine + Core query surface,
+# asyncpg as the driver. Domain code is pure per D16; the deps
+# live here because the adapter declares them.
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+]
+
+[tool.uv]
+package = false

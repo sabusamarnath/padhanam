@@ -36,6 +36,7 @@ COPY contexts/methodology/pyproject.toml ./contexts/methodology/
 COPY contexts/agent/pyproject.toml ./contexts/agent/
 COPY contexts/tools/pyproject.toml ./contexts/tools/
 COPY contexts/run_history/pyproject.toml ./contexts/run_history/
+COPY contexts/retrieval_evaluation/pyproject.toml ./contexts/retrieval_evaluation/
 
 RUN uv sync --frozen --no-dev --no-install-project
 
