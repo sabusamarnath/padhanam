@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padhanam — Case Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --color-brand-navy: #2E3264;
+  --color-brand-teal: #2BA692;
+  --color-brand-teal-accessible: #1A8070;
+  --color-brand-teal-light: #E8F7F5;
+  --color-brand-charcoal: #383F47;
+  --color-brand-mid-grey: #636A72;
+  --color-brand-light-grey: #DCDCDC;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: #FBFAF6;
+  color: var(--color-brand-charcoal);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+article.deck {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 96px 24px 192px;
+}
+
+header.deck-header {
+  margin-bottom: 96px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid var(--color-brand-light-grey);
+}
+
+header.deck-header h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 4.5rem;
+  line-height: 1.05;
+  color: var(--color-brand-navy);
+  margin: 0 0 24px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+header.deck-header p.tagline {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 1.5rem;
+  line-height: 1.4;
+  color: var(--color-brand-mid-grey);
+  margin: 0 0 32px;
+  max-width: 560px;
+}
+
+header.deck-header p.meta {
+  font-size: 0.8125rem;
+  color: var(--color-brand-mid-grey);
+  margin: 0;
+  letter-spacing: 0.03em;
+}
+
+section.act {
+  margin-bottom: 96px;
+}
+
+section.act h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2.5rem;
+  line-height: 1.2;
+  color: var(--color-brand-navy);
+  margin: 0 0 48px;
+  font-weight: 400;
+}
+
+section.act h2 .act-number {
+  display: block;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--color-brand-mid-grey);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-weight: 400;
+}
+
+section.act p {
+  margin: 0 0 24px;
+}
+
+section.act p:last-child {
+  margin-bottom: 0;
+}
+
+code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 0.875em;
+  background-color: var(--color-brand-teal-light);
+  color: var(--color-brand-teal-accessible);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+a {
+  color: var(--color-brand-teal-accessible);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--color-brand-navy);
+}
+
+footer.deck-footer {
+  margin-top: 96px;
+  padding-top: 48px;
+  border-top: 1px solid var(--color-brand-light-grey);
+  font-size: 0.875rem;
+  color: var(--color-brand-mid-grey);
+}
+
+footer.deck-footer p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  article.deck { padding: 48px 20px 96px; }
+  header.deck-header { margin-bottom: 64px; padding-bottom: 32px; }
+  header.deck-header h1 { font-size: 2.75rem; }
+  header.deck-header p.tagline { font-size: 1.25rem; }
+  section.act { margin-bottom: 64px; }
+  section.act h2 { font-size: 1.875rem; margin-bottom: 32px; }
+  body { font-size: 17px; }
+}
+</style>
+</head>
+<body>
+<article class="deck">
+
+<header class="deck-header">
+  <h1>Padhanam</h1>
+  <p class="tagline">A public case study in directing enterprise-grade AI-assisted development as a senior product leader.</p>
+  <p class="meta">v1 · Living artefact per D45 · Refreshes at Phase 1 close audit and Phase 2 framing</p>
+</header>
+
+<section class="act" id="act-1">
+  <h2><span class="act-number">Act 1</span>The shift</h2>
+
+  <p>Code is two things at once. It is instructions to machines, written in syntax that compilers and runtimes execute. And it is a conceptual model of the problem domain, encoded in the names, the boundaries, the invariants, and the protocols that shape what the system is. These two purposes look like one thing because traditionally the same person produced both. An engineer modelled the domain and wrote the SQLAlchemy adapter. The skills bundled because they had to.</p>
+
+  <p>That bundling is breaking. Claude Code and Cursor produce the instructions. They write the SQL, the migrations, the unit tests, the import-linter contracts. The dilution of the skill needed for instruction-writing is the visible market story of 2026, and it is not finished. As AI tools take more of the syntactic load, the skill that scales is the one they do not replace: programmatic thinking applied to the conceptual model. Thinking in bounded contexts, invariants, ports, and trade-offs without needing to write the SQLAlchemy adapter.</p>
+
+  <p>Product drives this side. Always has. Product leaders decide what the domain is, where the boundaries sit, what the system stands behind, what trade-offs the architecture commits to. The reason this work was historically read as "requirements" rather than as "architecture" is that product leaders could not ship without engineering. The dependency was structural. The credit followed the ship.</p>
+
+  <p>That structural dependency is what AI tools change. A senior product leader with programmatic thinking can now direct end-to-end implementation, decide the architecture, log the trade-offs, audit the result, and ship the artefact. The work is not new. The route from work to shipped artefact is new. And the value of the work, no longer mediated through someone else's hands, is now legible to the market in a way it was not before.</p>
+
+  <p>This is the shift. Not "AI writes code" but "AI does the instruction-writing, and the modelling skill that was always the harder part is now the bottleneck and the differentiator." The question is whether the shift holds at scale.</p>
+</section>
+
+<section class="act" id="act-2">
+  <h2><span class="act-number">Act 2</span>The test condition</h2>
+
+  <p>Most AI-assisted-development demonstrations run at toy scale. The shape is recognisable: some flavour of CRUD app, a CLI tool, a chat interface over a vector store with retrieval scaffolded in. At that scale the conceptual model is trivial and the instruction-writing is the bottleneck, which happens to be exactly the work AI tools do well. That is why the demonstration is compelling. The skill Act 1 names is not the test condition at toy scale, so the demonstration can't answer Act 1's question.</p>
+
+  <p>Enterprise-grade is where the modelling load actually sits. SOC 2 Type II and ISO 27001 are the obvious framing for the procurement audience, but the architectural shape underneath is the substantive part: database-per-tenant isolation, hash-chained audit, jurisdiction-aware design, OTel as a portability boundary, supply-chain pinning. None of these is a feature. Take database-per-tenant. Every code path threads a tenant context. Every migration runs N times. Isolation is verified as a structural invariant rather than a runtime check, which means the test substrate itself has to carry an architectural commitment. That's one constraint. There are six. They don't compose neatly. Hash-chained audit forces a decision about which writes belong in the chain before the audit table exists. Jurisdiction is decided at schema time, not after. OTel commits the system to vendor-neutral instrumentation conventions across every observability surface, which sounds abstract until the day you swap a tracing backend and discover what abstract means.</p>
+
+  <p>These constraints were chosen deliberately. Not because procurement readers are demanding them at this stage (the case study is not for sale), but because the modelling skill Act 1 names is only the bottleneck where the modelling is the harder problem. Build below this floor and the case study turns into a demonstration of AI tools, which is a thing the market already has plenty of.</p>
+</section>
+
+<section class="act" id="act-3">
+  <h2><span class="act-number">Act 3</span>The architect-implementer pattern</h2>
+
+  <p>This is the architect-implementer pattern, and it is the literal answer to Act 1.</p>
+
+  <p>Take P6, the package on source ingestion (everything between a user uploading a document and the AI being able to use it). The product decisions I made were architectural. The most consequential was that the whole pipeline should live in one module, not be split by file type or by processing stage. Splitting along file type means proliferating modules forever as new formats land; splitting along stage means the orchestration logic lives nowhere coherent. One module, one set of decisions. From there: documents flow through asynchronously so users upload and walk away, multiple background workers can run in parallel without contending for the same document (SKIP LOCKED at the database is the technical mechanism), and the data model lands as two tables, one for original documents and one for the chunks they get broken into, with each row carrying its own processing state. Those decisions sit in D60 with the alternatives I rejected and the reasoning. Claude Code then wrote all the implementation: seven database tables, the background worker, the markdown parser, the embedding pipeline, the vector index that lets the AI find related content fast. None of which I would have written by hand at that speed. The harder point is that none of it would exist without the product decisions first, because the architecture is what makes the writing coherent.</p>
+
+  <p>D41 followed the same shape on the cost question. I committed cost-per-call as a first-class observability dimension, meaning every AI call gets its cost tracked at the moment it happens, and decided the per-model pricing lives in config rather than being computed from usage logs. Claude Code wired the tracking into every part of the platform that calls an AI.</p>
+
+  <p>The pattern works because the discipline is heavy. It starts with the brief: a markdown file at <code>briefs/pN/sN.md</code> where I write what gets built this session, what's out of scope, and where my strongest recommendation needs to give way if implementation evidence pushes back. Claude Code reads it, cross-checks the brief against current vendor documentation and the live codebase (a step I call pre-write reconciliation), folds any catches in as corrections, and starts the build with the brief preserved as written. After that, the discipline is mostly structural: the decision log accrues every architectural choice with the alternatives I rejected (ninety-plus entries to date), PRDs and PRFAQs capture intent at draft and reality at audit, phase audits check whether I've been exercising all five role functions or skewing toward the engineer surface and away from analyst or PM, and the methodology document captures patterns once they've surfaced often enough to count. All of it lives publicly in the git history. The case study isn't a claim about what the architect-implementer pattern produces. It's an artefact.</p>
+</section>
+
+<section class="act" id="act-4">
+  <h2><span class="act-number">Act 4</span>What travels</h2>
+
+  <p>The platform is one artefact; what generalises is the methodology.</p>
+
+  <p>What I mean by methodology is a set of disciplines that surfaced repeatedly across the build and got promoted to a methodology document once they'd repeated enough to count as patterns rather than one-offs. The document is now the operating manual for how the work runs.</p>
+
+  <p>Start with the brief discipline. Briefs are not new (every product team writes them) but the discipline around them is. Briefs are preserved as written rather than edited in place, so the audit trail of what I framed at the start of a session is intact even when implementation evidence pushes the build somewhere different. Pre-write reconciliation cross-checks the brief against current vendor documentation and the live codebase before any code is written, surfacing drift between what I framed and what reality looks like. The catches get folded in as corrections, not edits, so the original brief remains readable as a record of what I thought I was committing to. The transferable insight is the no-edit discipline plus the pre-write reconciliation step, both of which would land in PM workflow without much restructuring.</p>
+
+  <p>Decisions get the same treatment. Every architectural choice lands in a numbered log entry with the choice, the reasoning, the alternatives considered and rejected, and a Kano category for what kind of priority the choice carried. Entries don't get edited. Later decisions that supersede earlier ones explicitly reference what they're superseding rather than rewriting history. Ninety-plus entries logged so far. The transferable insight is the alternatives-considered-and-rejected requirement, which forces the framer to actually have considered them rather than just chosen the first plausible option. Most decision logs collapse this work into a single "decision: X" line. The alternatives field is where the discipline pays off.</p>
+
+  <p>Then there's the role-function audit. The proposition the case study tests is that a senior product leader can direct enterprise-grade implementation, which means the work needs evidence that the product leader's analyst, PM, architect, engineer, and technical-writer functions are all being used. Phase audits check the distribution: too many engineer-skewed sessions mean the analyst function is atrophying. Per-session tagging records which functions fired, and over time the distribution surfaces whether I've stayed balanced or drifted. The transferable insight: "I am a senior product leader" is a claim about a function distribution, not a job title, and the function distribution is auditable against artefacts.</p>
+
+  <p>These three patterns are the most directly transferable. The full methodology surface is larger and lives in the methodology document for any reader who wants the depth: engineer-side abstraction patterns reinforced six times across the build, a discipline for how briefs make recommendations rather than mandates so implementation evidence can refine them, a cadence for capturing intent versus reality in living documents, and a recurrence-based threshold for when an observation becomes a methodology entry. The platform is Apache 2.0 licensed, so the methodology document, the decision log, and the commit history are all readable without permission or paywall.</p>
+
+  <p>The honest framing is that none of this is settled. The methodology document is currently descriptive, capturing patterns as they form; the Phase 1 close audit moves it toward prescriptive shape, and the methodology has to survive its own pivot at Phase 2 framing to count as a methodology rather than a one-off recipe that worked because of this specific operator, this specific platform, this specific moment. Whatever survives is what travels.</p>
+</section>
+
+<section class="act" id="act-5">
+  <h2><span class="act-number">Act 5</span>Where this goes</h2>
+
+  <p>Phase 1 is closing. The substrate is real and inspectable. Twenty-four architectural rules are enforced automatically in the codebase, so any change that breaks one fails the build. Seven hundred and thirty-two tests pass. The decision log carries ninety-plus architectural decisions, each with the alternatives I rejected and a Kano category. Around thirty work sessions have produced eight packages of work, with the eighth currently closing. The full charter is public: <code>bet.md</code>, the principles, the methodology document, the decision log, the living roadmap and PRFAQ, every package archive. Nothing is sanitised after the fact, because the append-only discipline doesn't allow for it.</p>
+
+  <p>Phase 2 is open. Direction lands at the Phase 1 close audit, decided against what Phase 1 surfaced about the proposition, the methodology, and my interests. The load-bearing test isn't whether Phase 1 produced an artefact (it did), it's whether the methodology survives its own pivot at Phase 2 framing. A methodology that only works inside one product domain isn't a methodology, it's a recipe that happened to fit one problem. Phase 2 either extends the methodology by testing it against new territory, or it pivots against the methodology and surfaces what wasn't really transferable. Either outcome is recorded honestly, and the methodology document refines as a result.</p>
+
+  <p>The forward position is descriptive. The platform is Apache 2.0 licensed, so the methodology is the proprietary insight and the discipline is what's bought when someone engages with this work. The commercial shape I anticipate is L&amp;D, advisory, content, and senior-role positioning at AI-native companies and the consultancies that serve them. Not a product company. The case study isn't being run as a sales motion.</p>
+
+  <p>How to engage. Start with the methodology document at <code>charter/methodology.md</code> for the discipline itself. The decision log at <code>charter/decisions.md</code> is the densest architectural read. The PRFAQ at <code>charter/prfaq.md</code> frames the work in procurement-shape if you want that lens. The commit history runs end-to-end. Engagement happens through whichever surface matches the reader's own work. I don't have a contact form or a calendar link to push, because the case study's value at this stage is being read, not negotiated. That changes if Phase 2 surfaces a direction that benefits from earlier engagement.</p>
+</section>
+
+<footer class="deck-footer">
+  <p>Padhanam is Apache 2.0 licensed. This deck is a living artefact per D45, refreshed at every phase audit.</p>
+</footer>
+
+</article>
+</body>
+</html>
