@@ -51,6 +51,7 @@ from apps.cli._ingest import (
 )
 from apps.cli._agent import agent_app
 from apps.cli._methodology import methodology_app
+from apps.cli._optimization import optimization_app, optimization_run_app
 from apps.cli._retrieval_evaluation import (
     evaluation_run_app,
     retrieval_evaluation_app,
@@ -126,6 +127,10 @@ app.add_typer(retrieval_evaluation_app, name="gold-set")
 
 # S40 retrieval-evaluation runner orchestration (D110).
 app.add_typer(evaluation_run_app, name="evaluation-run")
+
+# S41 optimization engine + lifecycle (D111).
+app.add_typer(optimization_app, name="optimization")
+app.add_typer(optimization_run_app, name="optimization-run")
 
 
 _OUTPUT_FORMAT_TEXT = "text"
