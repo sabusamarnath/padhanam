@@ -228,3 +228,14 @@ Convention forward: revision-string components should fit `NNNN_<short_slug>` wh
 
   - triaged: convention captured on 2026-05-15
   - resolution: convention recorded in this file as a project-tooling constraint. No D-entry required — this is a vendor-tooling constraint (alembic's VARCHAR(32) column ceiling), not an architectural decision. Future migrations should keep this in mind; if a third instance of name-length truncation surfaces, consider promoting to a project-tooling note in `charter/principles.md` Token discipline section.
+
+## 2026-05-15 [S41] — Scope-check-at-substrate-application-boundary as candidate methodology default
+
+Source: S41 mid-session reconciliation. The original S41 brief framed 12 commits. The pre-write reconciliation Finding 3 zero-recommendation-surface push-back (the (δ) disposition committing OptimizationRun as a coupled aggregate) expanded scope by ~15-20% — adds an aggregate root + repository + reader + Postgres adapters + migration table + list/get use cases + CLI subcommands. The expansion was structurally honest (substrate symmetry with EvaluationRun); the framing did not anticipate it.
+
+Mid-execution at the substrate-application boundary (between commit 3 closing the domain layer and commit 4 opening the application/rules work), operator pause caught the scope-versus-framing divergence. Reasoning: domain layer is shape-stable and tested; smoke at end of session is load-bearing structural-honesty surface and carries more risk after long single-stretch execution than after focused work units; recognising scope expansion is structurally honest rather than powering through a now-larger-than-framed session.
+
+Observation: substrate sessions may benefit from a planned scope-check at the domain-application boundary rather than discovering scope creep at execution time. The boundary is naturally where the new context's shape stabilises (domain landed) and the next work unit's character changes (application use cases, engine logic, persistence). A planned scope-check at that boundary would let the operator decide split-vs-continue with full information about both what shipped and what remains.
+
+  - triaged: pending — flagged for P12 audit methodology candidates list
+  - resolution: candidate observation; promotion to charter/methodology.md if the pattern recurs at one or two more substrate sessions, or if P12 audit deems substrate sessions a distinct shape worth methodology treatment.
