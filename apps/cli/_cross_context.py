@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 from uuid import UUID, uuid4
@@ -100,6 +101,25 @@ from contexts.audit.domain.query_filters import (
     AuditEventListCursor,
     AuditEventListFilters,
     AuditEventListPage,
+)
+from contexts.retrieval_evaluation.adapters.outbound.postgres.reader import (
+    PostgresGoldSetReader,
+)
+from contexts.retrieval_evaluation.adapters.outbound.postgres.repository import (
+    PostgresGoldSetRepository,
+)
+from contexts.retrieval_evaluation.domain import (
+    GoldSet,
+    GoldSetEntry,
+    GoldSetRevision,
+)
+from contexts.retrieval_evaluation.domain.query_filters import (
+    GoldSetListCursor,
+)
+from contexts.retrieval_evaluation.ports.reader import (
+    GoldSetListPage,
+    GoldSetWithCurrentRevision,
+    RevisionWithEntries,
 )
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
@@ -992,6 +1012,197 @@ class AuditEventReaderAdapter:
         return PostgresAuditEventReader(
             per_tenant_sessionmaker_resolver=_resolver,
             control_plane_sessionmaker=self._control_plane_sessionmaker,
+        )
+
+
+class GoldSetRepositoryAdapter:
+    """Adapter wiring for the gold-set write surface (S39 commit 7, D109).
+
+    Composition-root altitude wiring class: holds a callable that
+    resolves the per-tenant ``async_sessionmaker`` at call time and
+    constructs a per-call ``PostgresGoldSetRepository`` bound to the
+    request's tenant. Implements ``GoldSetRepository`` (Protocol
+    satisfaction is structural).
+
+    Eleventh consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py (after MethodologyLookup, RoleLookup,
+    SourceLookup, AgentRetrievalClient, MethodologyOverridesLookup,
+    ToolDefinitionsLookup, ToolInvoker, RunHistoryWriter,
+    RunHistoryReader, AuditEventReader). The pattern reaches the
+    eleventh instance at S39 alongside ``GoldSetReaderAdapter`` (the
+    twelfth); promotion candidate at the Phase 1 close audit.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def persist_new_gold_set(
+        self,
+        *,
+        tenant_context: TenantContext,
+        gold_set: GoldSet,
+        initial_revision: GoldSetRevision,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_new_gold_set(
+            tenant_context=tenant_context,
+            gold_set=gold_set,
+            initial_revision=initial_revision,
+        )
+
+    async def open_new_draft_revision(
+        self,
+        *,
+        tenant_context: TenantContext,
+        revision: GoldSetRevision,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.open_new_draft_revision(
+            tenant_context=tenant_context,
+            revision=revision,
+        )
+
+    async def append_entry(
+        self,
+        *,
+        tenant_context: TenantContext,
+        entry: GoldSetEntry,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.append_entry(
+            tenant_context=tenant_context,
+            entry=entry,
+        )
+
+    async def finalize_revision(
+        self,
+        *,
+        tenant_context: TenantContext,
+        revision_id: UUID,
+        gold_set_id: UUID,
+        this_event_hash: str,
+        previous_event_hash: str,
+        finalized_at: datetime,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.finalize_revision(
+            tenant_context=tenant_context,
+            revision_id=revision_id,
+            gold_set_id=gold_set_id,
+            this_event_hash=this_event_hash,
+            previous_event_hash=previous_event_hash,
+            finalized_at=finalized_at,
+        )
+
+    async def _build_repository(
+        self, tenant_context: TenantContext
+    ) -> PostgresGoldSetRepository:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresGoldSetRepository(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class GoldSetReaderAdapter:
+    """Adapter wiring for the gold-set read surface (S39 commit 7, D109).
+
+    Mirrors ``GoldSetRepositoryAdapter`` at composition-root altitude:
+    holds a callable that resolves the per-tenant
+    ``async_sessionmaker`` at call time; each method invocation
+    constructs a per-call ``PostgresGoldSetReader`` bound to the
+    request's tenant.
+
+    Twelfth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py. The HTTP layer at S42 will
+    dependency-inject this adapter through ``GoldSetReader`` without
+    needing to know about session-factory resolution.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_gold_sets(
+        self,
+        *,
+        tenant_context: TenantContext,
+        cursor: GoldSetListCursor | None,
+        page_size: int,
+    ) -> GoldSetListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_gold_sets(
+            tenant_context=tenant_context,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+    async def get_gold_set_with_current_revision(
+        self,
+        *,
+        tenant_context: TenantContext,
+        gold_set_id: UUID,
+    ) -> GoldSetWithCurrentRevision | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_gold_set_with_current_revision(
+            tenant_context=tenant_context,
+            gold_set_id=gold_set_id,
+        )
+
+    async def get_revision_with_entries(
+        self,
+        *,
+        tenant_context: TenantContext,
+        revision_id: UUID,
+    ) -> RevisionWithEntries | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_revision_with_entries(
+            tenant_context=tenant_context,
+            revision_id=revision_id,
+        )
+
+    async def find_current_draft_revision(
+        self,
+        *,
+        tenant_context: TenantContext,
+        gold_set_id: UUID,
+    ) -> GoldSetRevision | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.find_current_draft_revision(
+            tenant_context=tenant_context,
+            gold_set_id=gold_set_id,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresGoldSetReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresGoldSetReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
         )
 
 
