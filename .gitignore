@@ -45,3 +45,6 @@ logs/
 
 # Charter export scratch directories (charter-export tooling writes dated snapshots).
 charter-2026*/
+
+# Charter-snapshot tooling artefacts (recreated by charter-export script after each run).
+docs/archive/snapshots/
