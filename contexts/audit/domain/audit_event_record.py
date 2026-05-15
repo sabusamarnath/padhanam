@@ -50,12 +50,23 @@ class AuditEventRecord:
     constraints and the hash-chain shape from D22:
 
     1. ``actor``, ``jurisdiction``, ``action_verb``,
-       ``resource_type``, ``resource_id``, ``correlation_id``
-       all non-empty (mirrors NOT NULL on text columns where
-       empty strings would defeat the column's purpose).
-    2. ``previous_event_hash`` and ``this_event_hash`` are
+       ``resource_type``, ``resource_id`` all non-empty (mirrors
+       NOT NULL on text columns where empty strings would defeat
+       the column's purpose).
+    2. ``correlation_id`` may be the empty string. Not every
+       audit event traces back to an inbound HTTP request with a
+       correlation_id — engine internals (the retrieval_evaluation
+       runner at S40 / D110, the optimization engine at S41 / D111)
+       and background work emit audit events without inbound HTTP
+       request context. The empty-string state is a legitimate
+       "no inbound HTTP context" signal, not an invalid state.
+       Pre-P12 hygiene loosened this from the original S37 / D102
+       non-empty-required commitment when audit chains accumulated
+       rows from S40 and S41 that the original validator rejected
+       at read time.
+    3. ``previous_event_hash`` and ``this_event_hash`` are
        64 lowercase hex characters.
-    3. ``tenant_id`` shape: control-plane rows carry the empty
+    4. ``tenant_id`` shape: control-plane rows carry the empty
        string per D35 sentinel; per-tenant rows carry the
        routed tenant's id. No constraint at the domain layer
        because the destination context disambiguates.
@@ -85,7 +96,6 @@ class AuditEventRecord:
             "action_verb",
             "resource_type",
             "resource_id",
-            "correlation_id",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, str) or not value:
@@ -93,6 +103,15 @@ class AuditEventRecord:
                     f"AuditEventRecord.{field_name} must be a non-empty "
                     f"string; got {value!r}"
                 )
+        # correlation_id is type-checked as str but may be empty per the
+        # docstring's "no inbound HTTP context" semantics. Engine-internal
+        # audit events from retrieval_evaluation (S40/D110) and
+        # optimization (S41/D111) carry empty correlation_id legitimately.
+        if not isinstance(self.correlation_id, str):
+            raise ValueError(
+                f"AuditEventRecord.correlation_id must be a string; "
+                f"got {self.correlation_id!r}"
+            )
         for hash_field in ("previous_event_hash", "this_event_hash"):
             value = getattr(self, hash_field)
             if not _is_64_lowercase_hex(value):

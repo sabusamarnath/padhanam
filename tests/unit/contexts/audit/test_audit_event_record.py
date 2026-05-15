@@ -49,13 +49,39 @@ def test_control_plane_empty_tenant_id_accepted() -> None:
         "action_verb",
         "resource_type",
         "resource_id",
-        "correlation_id",
     ],
 )
 def test_empty_string_on_required_text_field_raises(field: str) -> None:
     kwargs = _valid_kwargs()
     kwargs[field] = ""
     with pytest.raises(ValueError, match=f"AuditEventRecord.{field}"):
+        AuditEventRecord(**kwargs)
+
+
+def test_empty_correlation_id_accepted_for_engine_internal_events() -> None:
+    """Engine-internal events (retrieval_evaluation runner per S40/D110,
+    optimization engine per S41/D111) emit audit rows with empty
+    correlation_id because they have no inbound HTTP request context.
+    Pre-P12 hygiene loosened the validator after S40/S41 rows surfaced
+    the cross-context audit semantics drift at the S37 reader's list
+    route. The empty-string state is now a legitimate "no inbound HTTP
+    context" signal.
+    """
+    kwargs = _valid_kwargs()
+    kwargs["correlation_id"] = ""
+    record = AuditEventRecord(**kwargs)
+    assert record.correlation_id == ""
+
+
+def test_non_string_correlation_id_still_raises() -> None:
+    """The loosening preserves the type contract — correlation_id must
+    still be a string. Numeric or None values raise.
+    """
+    kwargs = _valid_kwargs()
+    kwargs["correlation_id"] = None  # type: ignore[arg-type]
+    with pytest.raises(
+        ValueError, match="AuditEventRecord.correlation_id must be a string"
+    ):
         AuditEventRecord(**kwargs)
 
 
