@@ -1,12 +1,13 @@
-"""run_retrieval_evaluation use case (D110 commitments 5, 6, 7).
+"""run_retrieval_evaluation use case (D110 commitments 5, 6, 7; D111 cmt 6).
 
 The orchestrator the runner CLI subcommand invokes. Reads the
 gold-set revision the operator named, exercises every entry against
 every executing D66-registered strategy via the consumer-defined
-``RetrievalRunnerPort``, computes per-query metrics on the fly,
-persists per-query records, computes per-strategy aggregates at
-run-completion time, persists aggregates, and transitions the run
-to ``completed`` (or to ``failed`` on any uncaught exception).
+``RetrievalRunnerPort``, computes per-query metrics on the fly via
+the injected ``MetricCalculator``, persists per-query records,
+computes per-strategy aggregates at run-completion time via the same
+calculator, persists aggregates, and transitions the run to
+``completed`` (or to ``failed`` on any uncaught exception).
 
 Every write to the three runner tables emits an audit event via
 ``AuditPort`` per D110 commitment 7. The audit context's existing
@@ -18,14 +19,18 @@ Per D110 commitment 6 the strategy set is sourced from
 ``application/strategy_keys.EXECUTING_STRATEGIES`` (currently
 ``vector_only`` and ``graph_only``; ``parallel_rrf`` deferred per
 ``charter/deferred-decisions.md``).
+
+Per D111 commitment 6 the metric primitives sit behind the
+``MetricCalculator`` Protocol with ``BinaryRelevanceMetrics`` as
+the default implementation. Composition roots inject the calculator
+so Phase 2 graded-relevance implementations (nDCG, MAP per D105
+deferred alternatives) land as siblings without runner change.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Mapping
 from uuid import UUID, uuid4
 
 from contexts.audit.domain.ports import AuditPort
@@ -51,13 +56,8 @@ from contexts.retrieval_evaluation.domain import (
     EvaluationRun,
     EvaluationRunStatus,
     GoldSetEntry,
-)
-from contexts.retrieval_evaluation.domain.metrics import (
-    compute_per_k_metrics,
-    latency_percentiles,
-    mean_mrr,
-    mean_per_k,
-    mean_reciprocal_rank,
+    MetricCalculator,
+    PerQueryMetrics,
 )
 from contexts.retrieval_evaluation.ports.evaluation_run_repository import (
     EvaluationRunRepository,
@@ -97,6 +97,7 @@ async def run_retrieval_evaluation(
     repository: EvaluationRunRepository,
     retrieval_runner: RetrievalRunnerPort,
     audit_port: AuditPort,
+    metric_calculator: MetricCalculator,
     now: datetime | None = None,
     run_id: UUID | None = None,
 ) -> RunRetrievalEvaluationResult:
@@ -136,13 +137,7 @@ async def run_retrieval_evaluation(
 
     try:
         per_query_results: list[EvaluationResult] = []
-        per_strategy_recall: dict[str, list[Mapping[int, float]]] = {
-            s: [] for s in EXECUTING_STRATEGIES
-        }
-        per_strategy_precision: dict[str, list[Mapping[int, float]]] = {
-            s: [] for s in EXECUTING_STRATEGIES
-        }
-        per_strategy_mrr: dict[str, list[Decimal]] = {
+        per_strategy_metrics: dict[str, list[PerQueryMetrics]] = {
             s: [] for s in EXECUTING_STRATEGIES
         }
         per_strategy_latency: dict[str, list[int]] = {
@@ -151,12 +146,13 @@ async def run_retrieval_evaluation(
 
         for entry in snapshot.entries:
             for strategy in EXECUTING_STRATEGIES:
-                result = await _exercise_entry_against_strategy(
+                result, per_query_metrics = await _exercise_entry_against_strategy(
                     entry=entry,
                     strategy=strategy,
                     tenant_context=tenant_context,
                     run_id=run.id,
                     retrieval_runner=retrieval_runner,
+                    metric_calculator=metric_calculator,
                 )
                 await repository.persist_result(
                     tenant_context=tenant_context, result=result
@@ -169,28 +165,25 @@ async def run_retrieval_evaluation(
                     )
                 )
                 per_query_results.append(result)
-                per_strategy_recall[strategy].append(result.recall_at_k)
-                per_strategy_precision[strategy].append(result.precision_at_k)
-                per_strategy_mrr[strategy].append(result.mrr)
+                per_strategy_metrics[strategy].append(per_query_metrics)
                 per_strategy_latency[strategy].append(result.latency_ms)
 
         aggregates: list[EvaluationAggregate] = []
         for strategy in EXECUTING_STRATEGIES:
-            p50, p95, mean_latency = latency_percentiles(
-                per_strategy_latency[strategy]
+            aggregated = metric_calculator.aggregate_per_strategy(
+                per_query_results=per_strategy_metrics[strategy],
+                latencies_ms=per_strategy_latency[strategy],
             )
             aggregate = EvaluationAggregate(
                 id=uuid4(),
                 evaluation_run_id=run.id,
                 retrieval_strategy=strategy,
-                recall_at_k_mean=mean_per_k(per_strategy_recall[strategy]),
-                precision_at_k_mean=mean_per_k(
-                    per_strategy_precision[strategy]
-                ),
-                mrr_mean=mean_mrr(per_strategy_mrr[strategy]),
-                latency_ms_p50=p50,
-                latency_ms_p95=p95,
-                latency_ms_mean=mean_latency,
+                recall_at_k_mean=aggregated.recall_at_k_mean,
+                precision_at_k_mean=aggregated.precision_at_k_mean,
+                mrr_mean=aggregated.mrr_mean,
+                latency_ms_p50=aggregated.latency_ms_p50,
+                latency_ms_p95=aggregated.latency_ms_p95,
+                latency_ms_mean=aggregated.latency_ms_mean,
             )
             await repository.persist_aggregate(
                 tenant_context=tenant_context, aggregate=aggregate
@@ -270,7 +263,8 @@ async def _exercise_entry_against_strategy(
     tenant_context: TenantContext,
     run_id: UUID,
     retrieval_runner: RetrievalRunnerPort,
-) -> EvaluationResult:
+    metric_calculator: MetricCalculator,
+) -> tuple[EvaluationResult, PerQueryMetrics]:
     dispatch = to_adapter_dispatch(strategy)
     ranked = await retrieval_runner(
         query=entry.query,
@@ -278,25 +272,22 @@ async def _exercise_entry_against_strategy(
         strategy_dispatch=dispatch,
         top_k=RUNNER_TOP_K,
     )
-    recall, precision = compute_per_k_metrics(
+    per_query = metric_calculator.compute_per_query(
         returned=ranked.chunk_ids,
         expected=entry.expected_chunk_ids,
     )
-    mrr = mean_reciprocal_rank(
-        returned=ranked.chunk_ids,
-        expected=entry.expected_chunk_ids,
-    )
-    return EvaluationResult(
+    result = EvaluationResult(
         id=uuid4(),
         evaluation_run_id=run_id,
         gold_set_entry_id=entry.id,
         retrieval_strategy=strategy,
         returned_chunk_ids=ranked.chunk_ids,
-        recall_at_k=recall,
-        precision_at_k=precision,
-        mrr=mrr,
+        recall_at_k=per_query.recall_at_k,
+        precision_at_k=per_query.precision_at_k,
+        mrr=per_query.mrr,
         latency_ms=ranked.latency_ms,
     )
+    return result, per_query
 
 
 __all__ = [

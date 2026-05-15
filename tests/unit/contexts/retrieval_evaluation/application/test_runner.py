@@ -39,7 +39,10 @@ from contexts.retrieval_evaluation.application.cursor import (
     decode_run_cursor,
     encode_run_cursor,
 )
-from contexts.retrieval_evaluation.domain import EvaluationRunStatus
+from contexts.retrieval_evaluation.domain import (
+    BinaryRelevanceMetrics,
+    EvaluationRunStatus,
+)
 from contexts.retrieval_evaluation.domain.query_filters import (
     EvaluationRunListCursor,
     MalformedCursorError,
@@ -231,6 +234,7 @@ def test_run_retrieval_evaluation_persists_run_results_and_aggregates() -> None:
             repository=repo,
             retrieval_runner=runner,
             audit_port=audit,
+            metric_calculator=BinaryRelevanceMetrics(),
         )
     )
 
@@ -263,6 +267,7 @@ def test_run_retrieval_evaluation_emits_audit_event_for_every_write() -> None:
                 responses=_runner_responses(queries)
             ),
             audit_port=audit,
+            metric_calculator=BinaryRelevanceMetrics(),
         )
     )
 
@@ -305,6 +310,7 @@ def test_run_retrieval_evaluation_marks_failed_on_runner_exception() -> None:
                 repository=repo,
                 retrieval_runner=runner,
                 audit_port=audit,
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
 
@@ -333,6 +339,7 @@ def test_run_retrieval_evaluation_gold_set_not_found_raises() -> None:
                 repository=repo,
                 retrieval_runner=FakeRetrievalRunner(),
                 audit_port=RecordingAuditPort(),
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
 
@@ -364,6 +371,7 @@ def test_run_retrieval_evaluation_no_finalized_revision_raises() -> None:
                 ),
                 retrieval_runner=FakeRetrievalRunner(),
                 audit_port=RecordingAuditPort(),
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
 
@@ -387,6 +395,7 @@ def test_run_retrieval_evaluation_cross_tenant_gold_set_raises() -> None:
                 ),
                 retrieval_runner=FakeRetrievalRunner(),
                 audit_port=RecordingAuditPort(),
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
 
@@ -407,6 +416,7 @@ def test_run_retrieval_evaluation_dispatches_every_executing_strategy() -> None:
             repository=FakeEvaluationRunRepository(InMemoryEvaluationRunStore()),
             retrieval_runner=runner,
             audit_port=RecordingAuditPort(),
+            metric_calculator=BinaryRelevanceMetrics(),
         )
     )
 
@@ -444,6 +454,7 @@ def test_get_evaluation_run_returns_snapshot_with_results_and_aggregates() -> No
                 responses=_runner_responses(queries)
             ),
             audit_port=RecordingAuditPort(),
+            metric_calculator=BinaryRelevanceMetrics(),
         )
     )
 
@@ -481,6 +492,7 @@ def test_get_evaluation_run_cross_tenant_returns_none() -> None:
                 responses=_runner_responses(queries)
             ),
             audit_port=RecordingAuditPort(),
+            metric_calculator=BinaryRelevanceMetrics(),
         )
     )
 
@@ -522,6 +534,7 @@ def test_list_evaluation_runs_paginates_and_isolates_by_tenant() -> None:
                     responses=_runner_responses(queries_a)
                 ),
                 audit_port=RecordingAuditPort(),
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
     for _ in range(2):
@@ -536,6 +549,7 @@ def test_list_evaluation_runs_paginates_and_isolates_by_tenant() -> None:
                     responses=_runner_responses(queries_b)
                 ),
                 audit_port=RecordingAuditPort(),
+                metric_calculator=BinaryRelevanceMetrics(),
             )
         )
 

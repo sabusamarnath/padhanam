@@ -67,6 +67,7 @@ from contexts.retrieval_evaluation.application import (
     list_gold_sets,
     run_retrieval_evaluation,
 )
+from contexts.retrieval_evaluation.domain import BinaryRelevanceMetrics
 from contexts.retrieval_evaluation.ports.retrieval_runner import RankedChunks
 from padhanam.config import ControlPlaneSettings
 from shared_kernel import TenantContext, TenantId
@@ -555,6 +556,7 @@ def cmd_evaluation_run_start(
                 repository=run_repo,
                 retrieval_runner=runner_port,
                 audit_port=audit_adapter,
+                metric_calculator=BinaryRelevanceMetrics(),
             )
             typer.echo(f"evaluation_run_id={result.run.id}")
             typer.echo(f"status={result.run.status.value}")

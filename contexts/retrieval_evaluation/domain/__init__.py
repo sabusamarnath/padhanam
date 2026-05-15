@@ -24,14 +24,23 @@ Runner substrate (D110, S40):
   ``evaluation_result.py`` — per-query-per-strategy result row.
 - ``EvaluationAggregate`` at ``evaluation_aggregate.py`` — per-strategy
   summary row computed at run completion.
-- ``metrics.py`` — recall@k, precision@k, MRR primitives plus
-  aggregation helpers (mean, percentile).
+
+Pluggable metric abstraction (D111 commitment 6):
+
+- ``MetricCalculator`` Protocol plus ``PerQueryMetrics`` and
+  ``AggregatedMetrics`` value objects at ``metric_calculator.py``.
+- ``BinaryRelevanceMetrics`` at ``binary_relevance_metrics.py`` as
+  the default implementation, absorbing the previous ``metrics.py``
+  module's recall@k / precision@k / MRR / aggregation primitives.
 
 All value objects enforce invariants in ``__post_init__`` so the
 repository adapter cannot persist a row, and the reader adapter
 cannot materialise a domain object, that fails the domain rules.
 """
 
+from contexts.retrieval_evaluation.domain.binary_relevance_metrics import (
+    BinaryRelevanceMetrics,
+)
 from contexts.retrieval_evaluation.domain.evaluation_aggregate import (
     EvaluationAggregate,
 )
@@ -54,9 +63,18 @@ from contexts.retrieval_evaluation.domain.hash_chain import (
     compute_revision_hash,
     revision_canonical_payload,
 )
+from contexts.retrieval_evaluation.domain.metric_calculator import (
+    AggregatedMetrics,
+    MetricCalculator,
+    PerQueryMetrics,
+)
 
 __all__ = [
+    "AggregatedMetrics",
+    "BinaryRelevanceMetrics",
     "GENESIS_REVISION_HASH",
+    "MetricCalculator",
+    "PerQueryMetrics",
     "SUPPORTED_K_VALUES",
     "EvaluationAggregate",
     "EvaluationResult",
