@@ -876,3 +876,80 @@ the result is the row's `this_event_hash`. On-read verification
 mirrors the S36 page-granularity verifier pattern: read the
 revision and its entries, reconstruct the canonical payload,
 recompute the hash, compare against the stored value.
+
+## `contexts/retrieval_evaluation/` runner substrate (per-tenant database, P11 S40, D110)
+
+Three additional tables on each tenant's dedicated Postgres data
+plane per D32, capturing the retrieval-evaluation runner's
+per-query records, per-strategy aggregates, and run-level
+lifecycle. Tamper-evidence on these platform-computed records is
+absorbed by the audit context at the event level per D110
+commitment 7 (every write to the three tables emits an audit
+event); no parallel hash chain on the runner records themselves.
+
+### `evaluation_runs`
+
+| Column                  | Type             | Constraints                                                                                |
+|-------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `tenant_id`             | `uuid`           | not null; jurisdiction-bearing per D12                                                     |
+| `jurisdiction`          | `text`           | not null                                                                                   |
+| `gold_set_id`           | `uuid`           | not null; FK → `gold_sets.id` ON DELETE RESTRICT                                           |
+| `gold_set_revision_id`  | `uuid`           | not null; FK → `gold_set_revisions.id` ON DELETE RESTRICT; the revision exercised          |
+| `invoked_by_user_id`    | `text`           | not null                                                                                   |
+| `invoked_at`            | `timestamptz`    | not null; default `now()`                                                                  |
+| `completed_at`          | `timestamptz`    | nullable until status transitions to `completed` or `failed`                               |
+| `status`                | `text`           | not null; CHECK constraint pins {`running`, `completed`, `failed`}                         |
+
+The aggregate is mutable for status transitions per D110
+commitment 2 (`running` → `completed` or `failed`); the child rows
+in `evaluation_results` and `evaluation_aggregates` are append-only
+and immutable.
+
+### `evaluation_results`
+
+| Column                  | Type             | Constraints                                                                                |
+|-------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `evaluation_run_id`     | `uuid`           | not null; FK → `evaluation_runs.id` ON DELETE RESTRICT                                     |
+| `gold_set_entry_id`     | `uuid`           | not null; FK → `gold_set_entries.id` ON DELETE RESTRICT                                    |
+| `retrieval_strategy`    | `text`           | not null; canonical identifier per D110 commitment 6 (`vector_only`, `graph_only`)         |
+| `returned_chunk_ids`    | `uuid[]`         | not null; ordered array; ranked by retrieval at runner time                                |
+| `recall_at_k`           | `jsonb`          | not null; `{"1": float, "3": float, "5": float, "10": float}`                              |
+| `precision_at_k`        | `jsonb`          | not null; same shape                                                                       |
+| `mrr`                   | `numeric(6,4)`   | not null; 0.0000 to 1.0000                                                                 |
+| `latency_ms`            | `integer`        | not null; wall-clock retrieval-client-invocation-start to result-return                    |
+
+`UNIQUE(evaluation_run_id, gold_set_entry_id, retrieval_strategy)`
+— `evaluation_results_run_entry_strategy_unique`. The
+`returned_chunk_ids` array captures retrieval-time provenance; no
+FK to `chunks.id` per the same lifecycle-independence reasoning
+that applies to `gold_set_entries.expected_chunk_ids` at D109
+commitment 3.
+
+### `evaluation_aggregates`
+
+| Column                  | Type             | Constraints                                                                                |
+|-------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `evaluation_run_id`     | `uuid`           | not null; FK → `evaluation_runs.id` ON DELETE RESTRICT                                     |
+| `retrieval_strategy`    | `text`           | not null; canonical identifier per D110 commitment 6                                       |
+| `recall_at_k_mean`      | `jsonb`          | not null; mean across the run's per-query records for this strategy                        |
+| `precision_at_k_mean`   | `jsonb`          | not null; same shape                                                                       |
+| `mrr_mean`              | `numeric(6,4)`   | not null                                                                                   |
+| `latency_ms_p50`        | `integer`        | not null                                                                                   |
+| `latency_ms_p95`        | `integer`        | not null                                                                                   |
+| `latency_ms_mean`       | `integer`        | not null                                                                                   |
+
+`UNIQUE(evaluation_run_id, retrieval_strategy)` —
+`evaluation_aggregates_run_strategy_unique`. Per-strategy aggregates
+compute at run-completion time from the per-query
+`evaluation_results` rows; the aggregation formula lives at
+`contexts/retrieval_evaluation/domain/metrics.py` per D110
+commitment 4 so on-read computation is unnecessary and the
+aggregation surface is stable across reads. The runner produces
+one aggregate row per executing strategy per the D110 commitment 6
+strategy-set (two at S40: `vector_only`, `graph_only`; the
+deferred `parallel_rrf` per `charter/deferred-decisions.md`
+activates a third row when fusion implementation lands).
+
