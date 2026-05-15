@@ -288,3 +288,52 @@ build session opens.
     if the pattern recurs at one or two more sessions, or if P12 audit
     deems the distinct mitigation surface (brief-vs-principles check vs
     brief-vs-codebase check) worth methodology treatment.
+
+## 2026-05-15 [S41-post] — Container-image-lag pattern resolved via Makefile targets
+
+Source: S41 session log methodology line 4 (container-image-lag at
+smoke time at third P11 instance). The S41 session log promotion
+question — "should the dev workflow include a documented fast-path
+code sync into running container for smoke, or should the operator-
+driven smoke loop assume container rebuild as baseline?" — resolves
+to BOTH paths supported via Makefile targets.
+
+Root cause: `apps/api/Dockerfile` uses `COPY` to bake source into
+the image at build time; compose.yaml pins `padhanam-api:dev@sha256:
+DIGEST` as an immutable reference. Local rebuilds get new digests,
+so the pin becomes stale. Source changes don't reach the running
+container without either (a) rebuild + digest-pin update or (b)
+ad-hoc `docker compose cp`. Three P11 instances (S39, S40, S41)
+each used (b) inline.
+
+Resolution: two Makefile targets at `Makefile`:
+
+- `make build-api`: rebuilds the image, captures the new sha256
+  via `docker image inspect`, and sed-substitutes the compose.yaml
+  digest pin in place. Production-shaped path; same code path
+  production would exercise. Slower (a few minutes per rebuild)
+  but verifies the actual image artefact.
+
+- `make sync-code`: `docker compose cp` of source trees (contexts,
+  apps, padhanam, shared_kernel, alembic) into the running
+  padhanam-api container. Dev fast-path: CLI invocations via
+  `docker compose exec ... python -m apps.cli.main` start fresh
+  Python processes that import from disk, so synced source is
+  picked up immediately. Server inside the container would
+  require restart; smokes typically invoke CLI not server.
+
+Both targets shipped at standalone commit (separable from any
+session's substrate work). Future smokes choose the target at
+smoke time based on what's being verified: tight iteration on a
+session's code uses sync-code; production-shaped verification at
+session close uses build-api.
+
+  - triaged: resolved 2026-05-15
+  - resolution: Makefile targets land; methodology candidate
+    closed without P12 promotion (resolved at session-close, not
+    deferred). The underlying observation — that compose-image
+    pinning creates dev-friction proportional to rebuild
+    frequency — remains a Phase 2 deployment-shape concern (the
+    compose.yaml comment at line 374-375 anticipates this; the
+    production manifest replaces the build-context form with an
+    upstream-image digest pin where the friction disappears).

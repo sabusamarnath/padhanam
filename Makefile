@@ -129,6 +129,46 @@ test-live-llm:
 migrate: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.migrate
 
+# Rebuild the padhanam-api image and refresh the digest pin in
+# compose.yaml so `docker compose up --force-recreate padhanam-api`
+# picks up the new image (S41 methodology line 4 resolution; the
+# Dockerfile uses COPY to bake source at build time, and the
+# compose.yaml image-digest pin treats the image as immutable, so
+# local rebuilds need the digest pin updated each time).
+#
+# Production-shaped path; use this when verifying against the same
+# code path production would exercise. For tighter smoke iteration
+# during a session, see `make sync-code`.
+build-api:
+	@echo "Rebuilding padhanam-api image..."
+	$(COMPOSE) build padhanam-api
+	@new_digest=$$(docker image inspect padhanam-api:dev --format '{{.Id}}') && \
+		echo "New image digest: $$new_digest" && \
+		echo "Updating compose.yaml digest pin..." && \
+		sed -i.bak -E "s|padhanam-api:dev@sha256:[a-f0-9]+|padhanam-api:dev@$$new_digest|" compose.yaml && \
+		rm -f compose.yaml.bak && \
+		echo "Done. Run 'docker compose up -d --force-recreate padhanam-api' to bring it up."
+
+# Sync local source trees into the running padhanam-api container
+# without rebuild (S41 methodology line 4 resolution). Dev-only
+# fast-path: CLI commands invoked via `docker compose exec
+# padhanam-api python -m apps.cli.main ...` create fresh Python
+# processes that import from disk, so synced source is picked up
+# immediately. The FastAPI server inside the container would still
+# require a restart; smoke commands typically invoke CLI not server.
+#
+# Use this for tight smoke iteration when iterating on a session's
+# code; use `make build-api` when verifying against the production-
+# shaped image path.
+sync-code:
+	@echo "Syncing local source into padhanam-api container (dev fast-path)..."
+	@$(COMPOSE) cp contexts padhanam-api:/app/
+	@$(COMPOSE) cp apps padhanam-api:/app/
+	@$(COMPOSE) cp padhanam padhanam-api:/app/
+	@$(COMPOSE) cp shared_kernel padhanam-api:/app/
+	@$(COMPOSE) cp alembic padhanam-api:/app/
+	@echo "Synced. CLI commands pick up changes immediately."
+
 # Register the test set tenants (postgres-tenant-a, postgres-tenant-b)
 # in the registry. Idempotent: skips already-registered ids.
 # Runs inside padhanam-api so the Compose service hostnames resolve.
