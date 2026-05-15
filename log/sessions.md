@@ -13,6 +13,58 @@ Format:
 
 ---
 
+## S39b — Corpus re-ingest and real-corpus discovery-mode authoring
+roles: engineer, technical writer
+mode: build (verification-and-hygiene bridge between S39 substrate close and S40 runner work)
+
+- Produced: Six commits closed S39b.
+  - Commit 1 (`docs(charter)`, 9876bdd) lands the S39b in-flight paragraph at `charter/current-package.md`, captures the migration name-length convention at `log/captures.md` as a project-tooling constraint, and preserves the brief at `briefs/p11/s39b.md`.
+  - Commit 2 ingestion-drift commit skipped per Finding 1 — the ingestion CLI runs clean post-S39.
+  - Commit 3 (`feat(p11/s39b)`, 1926057) lands forward-only control-plane Alembic migration `0013_lvtguide_reseed` re-seeding LVTGuide with the retrieval tool reference pinned at insertion time and the LVT system prompt lifted verbatim from `briefs/p7/s25.md`. Idempotent; preserves `migration:0013_lvtguide_reseed` actor for provenance symmetry with the seven McKinsey 7-Step roles. One documented mechanical drift: S25 brief named the retrieval strategy "hybrid" citing D66; D66's actual registry name is `parallel_rrf`. Migration uses D66's canonical name.
+  - Commit 4 (rename, executed as direct SQL UPDATE; no code commit). Renamed the S39 synthetic gold-set on tenant_a from "P11 retrieval baseline" to "P11 retrieval baseline (synthetic, S39)". Captured as execution evidence in the smoke document; rename is hash-chain-invariant because the canonical revision payload excludes the gold-set name (structurally honest proof recorded in the smoke document's Stage 3).
+  - Commit 5 (`fix(p11/s39b)`, 5c7a7f2) corrects ChunkResult attribute access in the gold-set append-entry CLI (`.text` → `.content`, `.score` → `.similarity_score`). Surfaced at S39b stage 4 when discovery-mode authoring ran for the first time; S39's import-shape verification missed this because the typer registration imports cleanly without invoking the candidate-rendering loop. The fix is the methodology demonstration that justifies the bridge-session shape: import-shape verification does not substitute for runtime verification at the discovery-mode CLI altitude.
+  - Commit 6 (`docs(p11/s39b)`, f241247) lands the smoke document at `docs/smoke/p11_s39b_corpus_reingest_and_real_authoring.md` with five-stage executed-evidence walkthrough (image rebuild + compose digest pin advancement, LVTGuide re-seed plus chain integrity verification, corpus re-ingest with substitution evidence and one extraction-failure retry path, S39 gold-set rename via SQL UPDATE, real-corpus discovery-mode authoring with the runtime-fix mid-smoke and hash-chain verification byte-identical). Includes four S40 / P12 carryovers explicitly named.
+  - Commit 7 (this commit, session log entry).
+
+- Decisions: No new D-entries. Migration name-length convention captured at `log/captures.md` per the brief disposition (vendor-tooling constraint, not architectural decision).
+
+- Tests: 1047 unit tests pass at session close (matches S39 baseline; no test surface changed at S39b). 26 import-linter contracts kept. Tenant-isolation contract harness scenario count unchanged.
+
+- Enforcement layer: No `import-linter` contract changes. No AST enforcement changes. The S39b runtime-fix at commit 5c7a7f2 modifies two attribute references in `apps/cli/_retrieval_evaluation.py`; the existing import-linter contracts continue to police the same cross-context boundaries. The CLI's import-shape verification at S39 passed and still passes; the runtime divergence was below the import-shape surface.
+
+- Operator-decided dispositions at pre-write reconciliation:
+  - **Finding 1 (corpus source and path):** Option (c) — substitute corpus drafted at execution time; S25's original synthetic sources never landed in repo and are not recoverable. Operator added shaping note: substitute corpus shape should plausibly answer S39's three queries so the real-corpus gold-set reuses those queries and produces a structural-comparison artefact with the S39 synthetic gold-set at P12. Substitution evidence captured at smoke Stage 2.
+  - **Finding 2 (LVTGuide re-seed):** Option (b) — new control-plane migration `0013_lvtguide_reseed`. LVT system prompt lifted verbatim from briefs/p7/s25.md per operator's fidelity ask. One drift surfaced at lift: brief said `retrieval_strategy: hybrid` citing D66; D66's registry names this `parallel_rrf`; mechanical correction at the migration with rationale documented in the migration's docstring. No D-entry required (mechanical rename per D66, not a substantive choice).
+  - **Finding 3 (S39 gold-set rename):** Option (a) — direct SQL UPDATE. Structural-honesty observation captured at smoke Stage 3: the rename is hash-chain-invariant because the canonical revision payload at `contexts/retrieval_evaluation/domain/hash_chain.py:70-94` spans only `{revision_number, entries[]}` and explicitly excludes the gold-set name. The S39 gold-set's stored hash `ad94611492299f23b76d7c3eb4602206e88a20223e9ea5983bb0568c43f465a4` still recomputes byte-identically post-rename. This is the structural proof that the rename does not break D109 commitment 4.
+  - **Findings 4-6 (autonomous):** Embedding model `nomic-embed-text:v1.5` present on Ollama; dimensions match (768 ↔ 768); per-tenant chunks schema unchanged; discovery-mode CLI runtime verified end-to-end at smoke Stage 4 (with the runtime fix at commit 5).
+
+- methodology (line 1): **Import-shape verification is not runtime verification at the discovery-mode CLI altitude.** S39's smoke document explicitly named that the typer-wiring imports were verified but the `--query` retrieval path was not exercised end-to-end. S39b's stage 4 authoring ran the path for the first time and immediately surfaced an AttributeError on ChunkResult that the import-shape check could not have caught (the typer command's module loads without invoking the candidate-rendering loop, where the bad attribute access lives). The methodology-shape observation worth recording: substrate-session CLI ACs cannot claim closure on import-shape alone; runtime verification against real producers is the closure gate. This is the verification-debt-from-smoke-carryovers pattern the brief named, fired in its first instance at S39b. Recommend P12 audit names this distinctly as "verification-and-hygiene bridge sessions catch CLI runtime divergences that substrate sessions cannot catch with import-shape verification". The bridge-session shape has now produced its first methodology-promoting observation; whether to formally promote depends on whether a second bridge session at P12 or P13 surfaces a similar pattern.
+
+- methodology (line 2): **LVT-query feedback loop in the real-corpus gold-set.** The substitute corpus document `lvt_methodology_overview.md` paraphrases the LVTGuide system prompt being seeded by migration 0013 at the same session. S40's retrieval-evaluation runner against this gold-set will report misleadingly high metric scores on the LVT query because the retrieval corpus and the agent's system prompt share LVT framing content. The artefact is sufficient for the S39b CLI-flow-verification purpose but cannot be a methodologically-clean evaluation baseline. **Carryover to S40 explicitly named:** the methodologically-clean evaluation gold-sets S40 needs require queries whose answers exist in the per-tenant corpus but NOT in the agent's system prompt. The S39b real-corpus gold-set should be marked as "CLI-flow-verification artefact" in any S40 documentation that consumes it.
+
+- methodology (line 3): **CC-autonomously authoring is explicit in the smoke document.** The discovery-mode CLI is interactive at human-operator-time; at this session, CC operates the CLI autonomously and selects "correct" chunk indices from the retrieval candidates without a human in the loop. The smoke document's "CC-autonomously authoring provenance" section names this explicitly so any reader at P12 audit understands that the ground-truth annotations on the real-corpus gold-set reflect CC's rank-based selection, not a human operator's content-fit judgment. Carried as a P12 audit observation.
+
+- methodology (line 4): **Rank-by-similarity ≠ best semantic answer.** Entry 3 illustrates the distinction. Query "what does the bet say about procurement-grade architecture" surfaced ten retrieval candidates with similarity scores. CC selected indices 1, 2, 3 by rank; candidate 4 ("the compliance and architectural constraints") was substantively as relevant or more so than candidate 3 ("the LVT four-levels framing"). A human operator authoring this gold-set with content-fit judgment would likely select 1, 4, 2 instead. The methodology distinction between rank-based and content-fit-based annotation discipline is a P12 audit observation. Recommend the methodologically-clean gold-set at S40 re-authors with content-fit judgment rather than rank-based heuristic.
+
+- methodology (line 5): **Verification-and-hygiene bridge sessions as a session shape.** S39b is Phase 1's first verification-and-hygiene bridge session — distinct from substrate sessions (commit code), feature sessions (commit feature surfaces), and audit sessions (review and consolidate). Trigger condition: substrate session closes with smoke-evidence carryovers that aren't blocking but are real (LVTGuide absent, corpus empty, CLI not runtime-verified). Resolution: a session that resolves the carryovers and tightens the smoke evidence before the next feature session opens. S39b's shape worked: minimal code commits (migration 0013, runtime fix), one substitute-corpus draft, executed-state evidence, runtime divergence caught and fixed mid-smoke. Worth flagging at P12 as a methodology-promoting candidate shape; one instance is observation, recurrence at P12 or P13 would promote.
+
+```
+metrics:
+  classification: verification-and-hygiene bridge
+  brief_started: 2026-05-15
+  session_started: 2026-05-15
+  session_closed: 2026-05-15
+  merged: 2026-05-15
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: log/captures.md (migration name-length convention); charter/current-package.md (S39b paragraph); briefs/p11/s39b.md
+  corrects: S39 commit 8 CLI runtime drift (ChunkResult attribute access)
+  corrected_by:
+```
+
+---
+
 ## S39 — P11 allowlist closure plus contexts/retrieval_evaluation/ substrate
 roles: analyst, PM, architect, engineer, technical writer
 mode: build (P11 opening session, new bounded context substrate)
