@@ -251,10 +251,175 @@ created_at matching stage-2 creation time. No `next_cursor` (single page).
   surface for the adapter at S39; the unit-against-fake-session pattern is a
   hygiene opportunity for a future session if signal emerges.
 
-## After execution
+## Executed-state evidence (2026-05-15 12:45 UTC)
 
-Append actual outputs (gold_set_id, revision_id, hash values, recomputed-vs-
-stored confirmation) inline under each stage so this document captures the
-executed-state evidence per the smoke-document convention at
-docs/smoke/p9_s32_smoke.md and docs/smoke/p10_s38_close_demo.md. The session
-log entry references this document for AC 4 / AC 14 verification.
+Image: `padhanam-api:dev@sha256:fcb4b71942999ab159523771281a3ebd10e7612cac960575b313ec31d3792d1a`.
+Rebuilt at smoke time to bake in the S39 commits (the pre-S39 image at
+`6479c9d0` predated all S39 work). Compose digest pin updated in
+`compose.yaml`.
+
+### Migration name length correction at smoke time
+
+Initial `make migrate` failed with
+`StringDataRightTruncation: value too long for type character varying(32)`
+on the `alembic_version` UPDATE. Both new migrations carried revision
+strings longer than the 32-char column ceiling:
+
+- `0012_role_allowlist_retrieval_closure` (37 chars)
+- `0013_retrieval_evaluation_substrate` (35 chars)
+
+Shortened to `0012_role_allowlist_retrieval` (29 chars) and
+`0013_retrieval_eval_substrate` (29 chars) in-place at the migration
+files. The transactional DDL rolled back the failed upgrade cleanly,
+so no partial state. Image rebuilt; re-run succeeded.
+
+### Stage 1 — Allowlist closure (executed)
+
+`make migrate` post-fix:
+```
+INFO  [alembic.runtime.migration] Running upgrade 0011_tenant_actor_provenance -> 0012_role_allowlist_retrieval
+INFO  [alembic.runtime.migration] Running upgrade 0012_revise_citation_snapshots -> 0013_retrieval_eval_substrate
+INFO  [ops.migrate] phase 2: tenant 00000000-0000-4000-8000-00000000a001 migrated
+INFO  [ops.migrate] phase 2: tenant 00000000-0000-4000-8000-00000000b002 migrated
+```
+
+Allowlist verification post-migration — **seven McKinsey roles carry the
+retrieval reference; LVTGuide is absent from the DB**:
+
+```
+Analyst       | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+Communicator  | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+Disaggregator | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+Planner       | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+Prioritiser   | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+ProblemFramer | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+Synthesiser  | [{"tool_id": "00000000-0000-0000-0000-000000000001", "revision_id": "00000000-0000-0000-0000-000000000002"}]
+```
+
+LVTGuide absence is the S30b carryover state: the role was wiped by the
+test-fixture leak named in `log/captures.md` (2026-05-13 entry) and was
+re-seeded via CLI authoring at S30b close on a different DB instance or
+was wiped again later. Migration 0012's `WHERE t.name = ANY(:names)`
+filter handles the absence gracefully (the SELECT just returns no row
+for LVTGuide; idempotent). When LVTGuide is re-seeded into this DB,
+re-running migration 0012 idempotently picks it up. Operator note for
+the P12 audit: LVTGuide re-seed flow should run migration 0012 or the
+CLI authoring should set `tool_allowlist` to the retrieval pin at
+authoring time.
+
+Chain integrity verification on the seven updated roles:
+
+```
+Planner              stored=22eec192a66c recomputed=22eec192a66c OK
+Synthesiser          stored=04f54e975cd4 recomputed=04f54e975cd4 OK
+ProblemFramer        stored=a98915cb8bc0 recomputed=a98915cb8bc0 OK
+Prioritiser          stored=a7fd0da3b0f6 recomputed=a7fd0da3b0f6 OK
+Analyst              stored=e2235a8213cf recomputed=e2235a8213cf OK
+Disaggregator        stored=8ff135007d2d recomputed=8ff135007d2d OK
+Communicator         stored=046529d3afe7 recomputed=046529d3afe7 OK
+broken=0/7
+```
+
+D26 chain-self-containment honoured on every updated row.
+
+### Stage 2 — Authoring against tenant_a (executed; discovery-mode synthesised)
+
+**Tenant_a has zero chunks at smoke time** (`SELECT COUNT(*) FROM chunks` →
+0). The S25 sources were ingested at the time of S25's smoke but data did
+not survive subsequent DB volume rebuilds or test-fixture cycles; this is
+the same kind of decay that hit LVTGuide on the control plane. The discovery-
+mode CLI path (`gold-set append-entry --query ... --top-k ...`) requires
+retrieval candidates and was therefore not exercised end-to-end.
+
+Substrate path (create / append / finalize / hash-chain) exercised via a
+direct use-case call with synthetic chunk_ids in lieu of retrieval-surfaced
+candidates. This satisfies AC 6, 7, 10 (substrate side), 14 (hash-chain
+integrity) and leaves the discovery-mode CLI path verified at the
+unit-test level only (the `gold-set append-entry` typer command imports
+and constructs cleanly; the retrieval call wasn't fired).
+
+Create:
+```
+$ docker compose exec -T padhanam-api python -m apps.cli gold-set create \
+    --tenant-id a --name "P11 retrieval baseline"
+gold_set_id=dd4ec3ee-b65d-4426-b6f1-df8a715a1062
+initial_revision_id=eebd5df0-9681-4d21-9bbf-3f9534e49a75
+status=draft revision_number=1
+```
+
+Three direct-use-case appends with synthetic chunk_ids (`11...1`, `22...2`,
+`33...3`, `44...4`):
+```
+appended entry_index=0 opened_new_draft=False
+appended entry_index=1 opened_new_draft=False
+appended entry_index=2 opened_new_draft=False
+```
+
+### Stage 3 — Finalize (executed)
+
+```
+finalized: revision_number=1 this_event_hash=ad94611492299f23b76d7c3eb4602206e88a20223e9ea5983bb0568c43f465a4
+           previous_event_hash=0000000000000000000000000000000000000000000000000000000000000000
+```
+
+`previous_event_hash` of all zeros confirms `GENESIS_REVISION_HASH` chains
+the genesis revision per D109 commitment 4.
+
+### Stage 4 — Hash-chain integrity verification (executed)
+
+Independent recomputation via `compute_revision_hash` from
+`contexts/retrieval_evaluation/domain/hash_chain.py` (which delegates to
+`padhanam.security.hash_chain.compute_revision_hash` — the D75-promoted
+primitive):
+
+```
+stored:     ad94611492299f23b76d7c3eb4602206e88a20223e9ea5983bb0568c43f465a4
+recomputed: ad94611492299f23b76d7c3eb4602206e88a20223e9ea5983bb0568c43f465a4
+match=True
+```
+
+D109 commitment 4 verified at revision granularity: stored
+`this_event_hash` matches the recomputed value byte-identically.
+
+### Stage 5 — List and get (executed)
+
+```
+$ docker compose exec -T padhanam-api python -m apps.cli gold-set list --tenant-id a
+dd4ec3ee-b65d-4426-b6f1-df8a715a1062  name='P11 retrieval baseline'  created_at=2026-05-15T11:45:24.462274+00:00  current_revision_id=eebd5df0-9681-4d21-9bbf-3f9534e49a75
+
+$ docker compose exec -T padhanam-api python -m apps.cli gold-set get \
+    --tenant-id a --gold-set-id dd4ec3ee-b65d-4426-b6f1-df8a715a1062
+id=dd4ec3ee-b65d-4426-b6f1-df8a715a1062
+name='P11 retrieval baseline'
+jurisdiction=eu-west
+created_at=2026-05-15T11:45:24.462274+00:00
+current_revision_id=eebd5df0-9681-4d21-9bbf-3f9534e49a75
+current revision: number=1 status=finalized finalized_at=2026-05-15T11:48:07.352389+00:00
+this_event_hash=ad94611492299f23b76d7c3eb4602206e88a20223e9ea5983bb0568c43f465a4
+previous_event_hash=0000000000000000000000000000000000000000000000000000000000000000
+entries (3):
+  [0] query='what is the cost ceiling for the PM agent'
+      expected_chunk_ids=[11111111-1111-1111-1111-111111111111]
+  [1] query='which sources cover the LVT methodology framing'
+      expected_chunk_ids=[22222222-2222-2222-2222-222222222222, 33333333-3333-3333-3333-333333333333]
+  [2] query='what does the bet say about procurement-grade architecture'
+      expected_chunk_ids=[44444444-4444-4444-4444-444444444444]
+```
+
+### Smoke-evidence carryovers for the P12 audit
+
+1. **LVTGuide re-seed** plus retrieval-allowlist application against this
+   DB instance. Migration 0012 picks it up idempotently when the row exists.
+2. **Tenant_a corpus re-ingestion**, so the discovery-mode CLI path
+   (`gold-set append-entry --query`) can be exercised end-to-end against
+   real retrieval candidates rather than synthesised chunk_ids. The CLI
+   command itself works (imports + typer wiring verified at unit-test
+   level); only the `PgVectorSearch` leg is unrun.
+3. **Image digest pin** at `compose.yaml` updated to
+   `fcb4b71942999ab159523771281a3ebd10e7612cac960575b313ec31d3792d1a`
+   at smoke time. Commit alongside this evidence.
+4. **Migration name length convention**: revision strings must stay ≤32
+   chars to fit the `alembic_version.version_num` column. The existing
+   migrations all comply; future migrations should keep this in mind.
+   Worth a one-line note in `charter/principles.md` Token discipline
+   section or as a project-convention capture in `log/captures.md`.

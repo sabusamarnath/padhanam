@@ -39,7 +39,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as pg
 
 
-revision: str = "0013_retrieval_evaluation_substrate"
+revision: str = "0013_retrieval_eval_substrate"
 down_revision: Union[str, None] = "0012_revise_citation_snapshots"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

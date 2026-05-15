@@ -53,7 +53,7 @@ import sqlalchemy as sa
 from padhanam.security.hash_chain import compute_revision_hash
 
 
-revision: str = "0012_role_allowlist_retrieval_closure"
+revision: str = "0012_role_allowlist_retrieval"
 down_revision: Union[str, None] = "0011_tenant_actor_provenance"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

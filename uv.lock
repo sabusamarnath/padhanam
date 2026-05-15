@@ -14,6 +14,7 @@ members = [
     "padhanam-ingestion",
     "padhanam-methodology",
     "padhanam-observability",
+    "padhanam-retrieval-evaluation",
     "padhanam-run-history",
     "padhanam-tenancy",
     "padhanam-tools",
@@ -1192,6 +1193,7 @@ dependencies = [
     { name = "padhanam-ingestion" },
     { name = "padhanam-methodology" },
     { name = "padhanam-observability" },
+    { name = "padhanam-retrieval-evaluation" },
     { name = "padhanam-run-history" },
     { name = "padhanam-tenancy" },
     { name = "padhanam-tools" },
@@ -1224,6 +1226,7 @@ requires-dist = [
     { name = "padhanam-ingestion", virtual = "contexts/ingestion" },
     { name = "padhanam-methodology", virtual = "contexts/methodology" },
     { name = "padhanam-observability", virtual = "contexts/observability" },
+    { name = "padhanam-retrieval-evaluation", virtual = "contexts/retrieval_evaluation" },
     { name = "padhanam-run-history", virtual = "contexts/run_history" },
     { name = "padhanam-tenancy", virtual = "contexts/tenancy" },
     { name = "padhanam-tools", virtual = "contexts/tools" },
@@ -1406,6 +1409,21 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "langfuse", specifier = ">=2.50,<3" }]
+
+[[package]]
+name = "padhanam-retrieval-evaluation"
+version = "0.0.0"
+source = { virtual = "contexts/retrieval_evaluation" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
 
 [[package]]
 name = "padhanam-run-history"
