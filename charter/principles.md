@@ -5,6 +5,7 @@ Read every session. Kept tight on purpose.
 ## Architectural
 
 - Hexagonal throughout. External systems behind interfaces. Domain code never imports vendor SDKs.
+- Vendor flexibility. External dependencies — LLM provider, embedding model, database backend, vector store, graph store, audit target, observability target — sit behind ports; vendor swap is configuration or adapter replacement, never domain change. Procurement-grade commitment: vendor lock-in is not architectural. Operationalised at the producer-context level through MetricCalculator and RecommendationRule pluggable domain abstractions (Phase 1, D111); ported domain-layer pluggability is the same principle applied to pluggable evaluation techniques and recommendation rules.
 - Local-first. Full stack runs on the laptop. Production swap is configuration, not refactor.
 - Database-per-tenant. No code path assumes a single shared database.
 - LLM-provider-agnostic via LiteLLM. Default development model is Ollama.

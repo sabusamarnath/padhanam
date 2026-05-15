@@ -953,3 +953,83 @@ strategy-set (two at S40: `vector_only`, `graph_only`; the
 deferred `parallel_rrf` per `charter/deferred-decisions.md`
 activates a third row when fusion implementation lands).
 
+## Optimization tables (per-tenant)
+
+Substrate for `contexts/optimization/` per D111. Two aggregate roots
+(`OptimizationRun` and `Recommendation`) plus the
+`recommendation_status_transitions` audit table. Tamper-evidence on
+both aggregates is absorbed by the audit context at the event level
+per D110 commitment 7's regime extended at D111 commitment 8;
+every write to `optimization_runs` (insert + status transitions),
+every write to `recommendations` (generation), and every row in
+`recommendation_status_transitions` emits an audit event.
+
+### `optimization_runs`
+
+| Column                  | Type             | Constraints                                                                                |
+|-------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                    | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `tenant_id`             | `uuid`           | not null; jurisdiction-bearing per D12                                                     |
+| `jurisdiction`          | `text`           | not null; CHECK `jurisdiction <> ''`                                                       |
+| `invoked_by_user_id`    | `text`           | not null                                                                                   |
+| `invoked_at`            | `timestamptz`    | not null; default `now()`                                                                  |
+| `completed_at`          | `timestamptz`    | nullable until status transitions to `completed` or `failed`                               |
+| `status`                | `text`           | not null; CHECK constraint pins {`running`, `completed`, `failed`}                         |
+| `skipped_categories`    | `jsonb`          | not null; default `'{}'::jsonb`; `{category: {reason_code, reason_text}}` per D111 cmt 2   |
+
+The aggregate is mutable for status transitions per D111
+commitment 2 (`running` → `completed` or `failed`); the engine
+captures rule skip-reasons on `skipped_categories` at status-
+transition time so the run's persisted snapshot carries the full
+invocation context including which categories were skipped and
+why. Phase 1 populates `skipped_categories` for `model_choice` and
+`prompt_revision` since their substrate (scoring-sheet evaluation
+runs from `contexts/evaluation/`) is Phase 2 territory.
+
+### `recommendations`
+
+| Column                          | Type             | Constraints                                                                                |
+|---------------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                            | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `tenant_id`                     | `uuid`           | not null; jurisdiction-bearing per D12                                                     |
+| `jurisdiction`                  | `text`           | not null; CHECK `jurisdiction <> ''`                                                       |
+| `category`                      | `text`           | not null; CHECK ∈ {`retrieval_strategy`, `model_choice`, `prompt_revision`, `cost_optimization`} |
+| `subject`                       | `text`           | not null                                                                                   |
+| `text`                          | `text`           | not null                                                                                   |
+| `evidence_citations`            | `jsonb`          | not null; discriminated union by category per D111 commitment 7                            |
+| `status`                        | `text`           | not null; CHECK ∈ {`generated`, `acknowledged`, `applied`, `rejected`}                     |
+| `generated_at`                  | `timestamptz`    | not null; default `now()`                                                                  |
+| `generated_by_run_id`           | `uuid`           | not null; FK → `optimization_runs.id` ON DELETE RESTRICT                                   |
+| `last_transition_at`            | `timestamptz`    | not null; default `now()`                                                                  |
+| `last_transition_by_user_id`    | `text`           | nullable; populated when status transitions away from `generated`                          |
+
+The aggregate is mutable for status transitions; `text` and
+`evidence_citations` are append-only per D111 alternative (g) (no
+UPDATE path on those columns; corrections happen as new
+recommendations in a new optimization run). The
+`last_transition_at` / `last_transition_by_user_id` fields mirror
+the most-recent transition row in `recommendation_status_transitions`
+for read-time convenience; the transitions table is canonical for
+any audit drill-down.
+
+Index `recommendations_tenant_status_category_idx` on `(tenant_id,
+status, category)` supports list filtering at the read surface.
+
+### `recommendation_status_transitions`
+
+| Column                          | Type             | Constraints                                                                                |
+|---------------------------------|------------------|--------------------------------------------------------------------------------------------|
+| `id`                            | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
+| `recommendation_id`             | `uuid`           | not null; FK → `recommendations.id` ON DELETE RESTRICT                                     |
+| `from_status`                   | `text`           | not null                                                                                   |
+| `to_status`                     | `text`           | not null                                                                                   |
+| `transitioned_by_user_id`       | `text`           | not null                                                                                   |
+| `transitioned_at`               | `timestamptz`    | not null; default `now()`                                                                  |
+
+Append-only; no UPDATE or DELETE on rows. Provides the full
+status-history audit trail at the recommendation level without
+mutating the parent aggregate's lifecycle fields. Index
+`recommendation_status_transitions_recommendation_idx` on
+`(recommendation_id, transitioned_at)` supports per-recommendation
+chronological reads.
+
