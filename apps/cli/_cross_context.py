@@ -135,6 +135,36 @@ from contexts.retrieval_evaluation.ports.reader import (
     GoldSetWithCurrentRevision,
     RevisionWithEntries,
 )
+from contexts.optimization.adapters.outbound.postgres.optimization_run_reader import (
+    PostgresOptimizationRunReader,
+)
+from contexts.optimization.adapters.outbound.postgres.optimization_run_repository import (
+    PostgresOptimizationRunRepository,
+)
+from contexts.optimization.adapters.outbound.postgres.recommendation_reader import (
+    PostgresRecommendationReader,
+)
+from contexts.optimization.adapters.outbound.postgres.recommendation_repository import (
+    PostgresRecommendationRepository,
+)
+from contexts.optimization.domain import (
+    CategorySkipReason,
+    OptimizationRun,
+    Recommendation,
+    RecommendationStatusTransition,
+)
+from contexts.optimization.domain.query_filters import (
+    OptimizationRunListCursor,
+    RecommendationListCursor,
+    RecommendationListFilters,
+)
+from contexts.optimization.ports.optimization_run_reader import (
+    OptimizationRunListPage,
+    OptimizationRunSnapshot,
+)
+from contexts.optimization.ports.recommendation_reader import (
+    RecommendationListPage,
+)
 from contexts.run_history.adapters.outbound.postgres import (
     PostgresRunHistoryAdapter,
     PostgresRunHistoryReader,
@@ -1376,6 +1406,261 @@ class EvaluationRunReaderAdapter:
             return sessionmaker
 
         return PostgresEvaluationRunReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class OptimizationRunRepositoryAdapter:
+    """Adapter wiring for the optimization-engine write surface
+    (S41 commit 8, D111 commitment 2).
+
+    Composition-root altitude wiring class: holds a callable that
+    resolves the per-tenant ``async_sessionmaker`` at call time and
+    constructs a per-call ``PostgresOptimizationRunRepository`` bound
+    to the request's tenant. Implements ``OptimizationRunRepository``
+    (Protocol satisfaction is structural).
+
+    Fifteenth consumer-port-plus-wiring-adapter class on
+    apps/cli/_cross_context.py. The pattern continues to do load-
+    bearing work at substrate sessions.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def persist_run(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run: OptimizationRun,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_run(tenant_context=tenant_context, run=run)
+
+    async def mark_completed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+        skipped_categories: Mapping[str, CategorySkipReason],
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.mark_completed(
+            tenant_context=tenant_context,
+            run_id=run_id,
+            completed_at=completed_at,
+            skipped_categories=skipped_categories,
+        )
+
+    async def mark_failed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.mark_failed(
+            tenant_context=tenant_context,
+            run_id=run_id,
+            completed_at=completed_at,
+        )
+
+    async def _build_repository(
+        self, tenant_context: TenantContext
+    ) -> PostgresOptimizationRunRepository:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresOptimizationRunRepository(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class OptimizationRunReaderAdapter:
+    """Adapter wiring for the optimization-engine read surface
+    (S41 commit 8, D111 commitment 2).
+
+    Sixteenth consumer-port-plus-wiring-adapter class.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def get_optimization_run(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+    ) -> OptimizationRunSnapshot | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_optimization_run(
+            tenant_context=tenant_context,
+            run_id=run_id,
+        )
+
+    async def list_optimization_runs(
+        self,
+        *,
+        tenant_context: TenantContext,
+        cursor: OptimizationRunListCursor | None,
+        page_size: int,
+    ) -> OptimizationRunListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_optimization_runs(
+            tenant_context=tenant_context,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresOptimizationRunReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresOptimizationRunReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class RecommendationRepositoryAdapter:
+    """Adapter wiring for the recommendation write surface
+    (S41 commit 8, D111 commitments 3, 4).
+
+    Seventeenth consumer-port-plus-wiring-adapter class.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def persist_recommendation(
+        self,
+        *,
+        tenant_context: TenantContext,
+        recommendation: Recommendation,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_recommendation(
+            tenant_context=tenant_context,
+            recommendation=recommendation,
+        )
+
+    async def persist_status_transition(
+        self,
+        *,
+        tenant_context: TenantContext,
+        updated_recommendation: Recommendation,
+        transition: RecommendationStatusTransition,
+    ) -> None:
+        repo = await self._build_repository(tenant_context)
+        await repo.persist_status_transition(
+            tenant_context=tenant_context,
+            updated_recommendation=updated_recommendation,
+            transition=transition,
+        )
+
+    async def _build_repository(
+        self, tenant_context: TenantContext
+    ) -> PostgresRecommendationRepository:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresRecommendationRepository(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+
+class RecommendationReaderAdapter:
+    """Adapter wiring for the recommendation read surface
+    (S41 commit 8, D111 commitments 3, 4).
+
+    Eighteenth consumer-port-plus-wiring-adapter class.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[async_sessionmaker[AsyncSession]]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def get_recommendation(
+        self,
+        *,
+        tenant_context: TenantContext,
+        recommendation_id: UUID,
+    ) -> Recommendation | None:
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_recommendation(
+            tenant_context=tenant_context,
+            recommendation_id=recommendation_id,
+        )
+
+    async def list_recommendations(
+        self,
+        *,
+        tenant_context: TenantContext,
+        filters: RecommendationListFilters,
+        cursor: RecommendationListCursor | None,
+        page_size: int,
+    ) -> RecommendationListPage:
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_recommendations(
+            tenant_context=tenant_context,
+            filters=filters,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresRecommendationReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(
+            _tid: TenantId,
+        ) -> async_sessionmaker[AsyncSession]:
+            return sessionmaker
+
+        return PostgresRecommendationReader(
             per_tenant_sessionmaker_resolver=_resolver,
             bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
         )

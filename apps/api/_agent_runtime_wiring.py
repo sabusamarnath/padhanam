@@ -93,6 +93,10 @@ from apps.cli._cross_context import (
     GoldSetReaderAdapter,
     GoldSetRepositoryAdapter,
     MethodologyOverridesLookupAdapter,
+    OptimizationRunReaderAdapter,
+    OptimizationRunRepositoryAdapter,
+    RecommendationReaderAdapter,
+    RecommendationRepositoryAdapter,
     RoleLookupAdapter,
     RunHistoryReaderAdapter,
     RunHistoryWriterAdapter,
@@ -601,6 +605,94 @@ def build_evaluation_run_reader(
     )
 
 
+def build_optimization_run_repository(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> OptimizationRunRepositoryAdapter:
+    """Wire the optimization-engine write surface (S41, D111 cmt 2)."""
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return OptimizationRunRepositoryAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
+def build_optimization_run_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> OptimizationRunReaderAdapter:
+    """Wire the optimization-run read surface (S41, D111 cmt 2)."""
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return OptimizationRunReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
+def build_recommendation_repository(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> RecommendationRepositoryAdapter:
+    """Wire the recommendation write surface (S41, D111 cmt 3, 4)."""
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return RecommendationRepositoryAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
+def build_recommendation_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> RecommendationReaderAdapter:
+    """Wire the recommendation read surface (S41, D111 cmt 3, 4)."""
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return RecommendationReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
 __all__ = [
     "TenantRoutingRetrievalClient",
     "TenantRoutingSourceRepository",
@@ -610,6 +702,10 @@ __all__ = [
     "build_evaluation_run_repository",
     "build_gold_set_reader",
     "build_gold_set_repository",
+    "build_optimization_run_reader",
+    "build_optimization_run_repository",
+    "build_recommendation_reader",
+    "build_recommendation_repository",
     "build_run_history_reader",
     "build_source_repository",
 ]

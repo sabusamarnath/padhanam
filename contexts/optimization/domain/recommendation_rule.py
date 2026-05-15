@@ -24,7 +24,7 @@ Domain code is framework-free per D16 — stdlib only.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable, Protocol
+from typing import Iterable, Protocol
 
 from contexts.optimization.domain.category import RecommendationCategory
 from contexts.optimization.domain.optimization_run import CategorySkipReason
@@ -32,10 +32,16 @@ from contexts.optimization.domain.recommendation_candidate import (
     RecommendationCandidate,
 )
 
-if TYPE_CHECKING:
-    from contexts.optimization.application.evidence_context import (
-        EvidenceContext,
-    )
+
+# ``evidence_context`` argument type is the application-layer
+# ``EvidenceContext`` dataclass at
+# ``contexts/optimization/application/evidence_context.py``. The
+# Protocol intentionally does not import that class because domain
+# code must not depend on application code per the hexagonal layer
+# contract (D16); the annotation below is a string literal under
+# PEP 563 lazy evaluation. The class lives at application not domain
+# because it wraps producer-context reader ports — concrete cross-
+# context types — that domain cannot reference.
 
 
 class SubstrateGapError(Exception):
@@ -70,7 +76,7 @@ class RecommendationRule(Protocol):
     async def evaluate(
         self,
         *,
-        evidence_context: "EvidenceContext",
+        evidence_context: "object",
     ) -> Iterable[RecommendationCandidate]:
         """Evaluate the rule against producer-context evidence.
 

@@ -123,6 +123,15 @@ layers =
     contexts.retrieval_evaluation.ports
     contexts.retrieval_evaluation.domain
 
+[importlinter:contract:layers-optimization]
+name = Optimization layers (hexagonal)
+type = layers
+layers =
+    contexts.optimization.adapters
+    contexts.optimization.application
+    contexts.optimization.ports
+    contexts.optimization.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -151,6 +160,7 @@ modules =
     contexts.tools.domain
     contexts.run_history.domain
     contexts.retrieval_evaluation.domain
+    contexts.optimization.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -172,6 +182,7 @@ modules =
     contexts.tools.application
     contexts.run_history.application
     contexts.retrieval_evaluation.application
+    contexts.optimization.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -192,6 +203,7 @@ modules =
     contexts.tools.adapters
     contexts.run_history.adapters
     contexts.retrieval_evaluation.adapters
+    contexts.optimization.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -227,6 +239,7 @@ source_modules =
     contexts.tools.domain
     contexts.run_history.domain
     contexts.retrieval_evaluation.domain
+    contexts.optimization.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -304,6 +317,7 @@ source_modules =
     contexts.tools
     contexts.run_history
     contexts.retrieval_evaluation
+    contexts.optimization
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -400,6 +414,7 @@ source_modules =
     contexts.tools
     contexts.run_history
     contexts.retrieval_evaluation
+    contexts.optimization
 forbidden_modules =
     neo4j
 allow_indirect_imports = false
