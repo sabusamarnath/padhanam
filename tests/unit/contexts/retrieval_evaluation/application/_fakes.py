@@ -1,32 +1,54 @@
-"""In-memory fakes of the GoldSetRepository and GoldSetReader ports.
+"""In-memory fakes of the retrieval-evaluation ports.
 
-The fakes keep gold sets, revisions, and entries in dicts keyed by
-id so use-case tests exercise the full authoring lifecycle without
-a Postgres dependency. Tenant scoping is enforced at every method
-to mirror the Postgres adapter's tenant_isolation contract.
+Gold-set side (D109): ``FakeGoldSetRepository``, ``FakeGoldSetReader``
+backed by ``InMemoryGoldSetStore``.
+
+Runner side (D110, S40): ``FakeEvaluationRunRepository``,
+``FakeEvaluationRunReader`` backed by ``InMemoryEvaluationRunStore``;
+``FakeRetrievalRunner`` programmable to return canned chunk IDs and
+latency per (query, strategy_dispatch); ``RecordingAuditPort`` records
+emitted events for assertion.
+
+All fakes enforce tenant scoping at every method to mirror the
+Postgres adapters' tenant_isolation contract.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime
+from typing import Any, Callable, Mapping
 from uuid import UUID
+
+from contexts.audit.domain.events import AuditEvent
 
 from shared_kernel.tenant_context import TenantContext
 
 from contexts.retrieval_evaluation.domain import (
+    EvaluationAggregate,
+    EvaluationResult,
+    EvaluationRun,
+    EvaluationRunStatus,
     GoldSet,
     GoldSetEntry,
     GoldSetRevision,
     GoldSetRevisionStatus,
 )
 from contexts.retrieval_evaluation.domain.query_filters import (
+    EvaluationRunListCursor,
     GoldSetListCursor,
+)
+from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
+    EvaluationRunListPage,
+    EvaluationRunSnapshot,
 )
 from contexts.retrieval_evaluation.ports.reader import (
     GoldSetListPage,
     GoldSetWithCurrentRevision,
     RevisionWithEntries,
+)
+from contexts.retrieval_evaluation.ports.retrieval_runner import (
+    RankedChunks,
 )
 
 
@@ -225,3 +247,219 @@ class FakeGoldSetReader:
             return None
         drafts.sort(key=lambda r: r.revision_number, reverse=True)
         return drafts[0]
+
+
+# ----------------------------------------------------------------------
+# Runner-side fakes (D110, S40)
+# ----------------------------------------------------------------------
+
+
+class InMemoryEvaluationRunStore:
+    """Backing storage shared by FakeEvaluationRunRepository/Reader."""
+
+    def __init__(self) -> None:
+        self.runs: dict[UUID, EvaluationRun] = {}
+        self.results: dict[UUID, EvaluationResult] = {}
+        self.aggregates: dict[UUID, EvaluationAggregate] = {}
+
+    def _tenant_match(
+        self, tenant_context: TenantContext, run: EvaluationRun
+    ) -> bool:
+        return str(run.tenant_id) == tenant_context.tenant_id
+
+
+class FakeEvaluationRunRepository:
+    def __init__(self, store: InMemoryEvaluationRunStore) -> None:
+        self._store = store
+
+    async def persist_run(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run: EvaluationRun,
+    ) -> None:
+        if str(run.tenant_id) != tenant_context.tenant_id:
+            raise PermissionError("cross-tenant write")
+        self._store.runs[run.id] = run
+
+    async def persist_result(
+        self,
+        *,
+        tenant_context: TenantContext,
+        result: EvaluationResult,
+    ) -> None:
+        parent = self._store.runs.get(result.evaluation_run_id)
+        if parent is None or not self._store._tenant_match(
+            tenant_context, parent
+        ):
+            raise PermissionError("cross-tenant or orphan result")
+        self._store.results[result.id] = result
+
+    async def persist_aggregate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        aggregate: EvaluationAggregate,
+    ) -> None:
+        parent = self._store.runs.get(aggregate.evaluation_run_id)
+        if parent is None or not self._store._tenant_match(
+            tenant_context, parent
+        ):
+            raise PermissionError("cross-tenant or orphan aggregate")
+        self._store.aggregates[aggregate.id] = aggregate
+
+    async def mark_completed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+    ) -> None:
+        run = self._store.runs[run_id]
+        if not self._store._tenant_match(tenant_context, run):
+            raise PermissionError("cross-tenant transition")
+        self._store.runs[run_id] = replace(
+            run,
+            status=EvaluationRunStatus.COMPLETED,
+            completed_at=completed_at,
+        )
+
+    async def mark_failed(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+        completed_at: datetime,
+    ) -> None:
+        run = self._store.runs[run_id]
+        if not self._store._tenant_match(tenant_context, run):
+            raise PermissionError("cross-tenant transition")
+        self._store.runs[run_id] = replace(
+            run,
+            status=EvaluationRunStatus.FAILED,
+            completed_at=completed_at,
+        )
+
+
+class FakeEvaluationRunReader:
+    def __init__(self, store: InMemoryEvaluationRunStore) -> None:
+        self._store = store
+
+    async def list_runs(
+        self,
+        *,
+        tenant_context: TenantContext,
+        cursor: EvaluationRunListCursor | None,
+        page_size: int,
+    ) -> EvaluationRunListPage:
+        rows = [
+            r
+            for r in self._store.runs.values()
+            if self._store._tenant_match(tenant_context, r)
+        ]
+        rows.sort(key=lambda r: (r.invoked_at, r.id), reverse=True)
+        if cursor is not None:
+            rows = [
+                r
+                for r in rows
+                if (r.invoked_at, r.id) < (cursor.invoked_at, cursor.id)
+            ]
+        page_rows = tuple(rows[:page_size])
+        next_cursor: EvaluationRunListCursor | None = None
+        if len(rows) > page_size:
+            last = page_rows[-1]
+            next_cursor = EvaluationRunListCursor(
+                invoked_at=last.invoked_at,
+                id=last.id,
+                page_size=page_size,
+            )
+        return EvaluationRunListPage(runs=page_rows, next_cursor=next_cursor)
+
+    async def get_run_with_results_and_aggregates(
+        self,
+        *,
+        tenant_context: TenantContext,
+        run_id: UUID,
+    ) -> EvaluationRunSnapshot | None:
+        run = self._store.runs.get(run_id)
+        if run is None or not self._store._tenant_match(tenant_context, run):
+            return None
+        results = tuple(
+            sorted(
+                (
+                    r
+                    for r in self._store.results.values()
+                    if r.evaluation_run_id == run_id
+                ),
+                key=lambda r: (str(r.gold_set_entry_id), r.retrieval_strategy),
+            )
+        )
+        aggregates = tuple(
+            sorted(
+                (
+                    a
+                    for a in self._store.aggregates.values()
+                    if a.evaluation_run_id == run_id
+                ),
+                key=lambda a: a.retrieval_strategy,
+            )
+        )
+        return EvaluationRunSnapshot(
+            run=run, results=results, aggregates=aggregates
+        )
+
+
+class FakeRetrievalRunner:
+    """Programmable RetrievalRunnerPort fake.
+
+    ``responses`` maps (query, frozenset of strategy_dispatch items) →
+    ``RankedChunks``; lookup misses return an empty RankedChunks unless
+    ``raise_on_miss`` is set, in which case the configured exception
+    fires (useful for failure-path tests).
+    """
+
+    def __init__(
+        self,
+        *,
+        responses: dict[tuple[str, frozenset], RankedChunks] | None = None,
+        raise_on_miss: BaseException | None = None,
+        always_raises: BaseException | None = None,
+    ) -> None:
+        self._responses = responses or {}
+        self._raise_on_miss = raise_on_miss
+        self._always_raises = always_raises
+        self.invocations: list[
+            tuple[str, Mapping[str, Any], int]
+        ] = []
+
+    async def __call__(
+        self,
+        *,
+        query: str,
+        tenant_context: TenantContext,
+        strategy_dispatch: Mapping[str, Any],
+        top_k: int,
+    ) -> RankedChunks:
+        self.invocations.append((query, dict(strategy_dispatch), top_k))
+        if self._always_raises is not None:
+            raise self._always_raises
+        key = (query, frozenset(strategy_dispatch.items()))
+        if key in self._responses:
+            return self._responses[key]
+        if self._raise_on_miss is not None:
+            raise self._raise_on_miss
+        return RankedChunks(chunk_ids=(), latency_ms=0)
+
+
+class RecordingAuditPort:
+    """In-memory AuditPort that records emitted events."""
+
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def emit(self, event: AuditEvent) -> AuditEvent:
+        self.events.append(event)
+        return event
+
+    async def verify_chain(self, tenant_id):  # pragma: no cover — unused at runner tests
+        raise NotImplementedError
