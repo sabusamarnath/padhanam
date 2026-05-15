@@ -42,3 +42,6 @@ logs/
 /*.zip
 /*.tar.gz
 /*.tgz
+
+# Charter export scratch directories (charter-export tooling writes dated snapshots).
+charter-2026*/
