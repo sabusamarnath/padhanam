@@ -163,10 +163,10 @@ def cmd_append_entry(
 
             typer.echo(f"retrieved {len(candidates)} candidates:")
             for i, c in enumerate(candidates, start=1):
-                excerpt = c.text[:120].replace("\n", " ")
+                excerpt = c.content[:120].replace("\n", " ")
                 typer.echo(
                     f"  [{i}] chunk_id={c.chunk_id} "
-                    f"score={c.score:.3f} excerpt={excerpt!r}"
+                    f"score={c.similarity_score:.3f} excerpt={excerpt!r}"
                 )
 
             if correct_indices is None:
