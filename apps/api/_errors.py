@@ -51,6 +51,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from apps.api.routers._audit_query import InvalidAuditFilterError
+from apps.api.routers._optimization_query import (
+    InvalidOptimizationFilterError,
+)
 from apps.api.routers._run_history_query import InvalidFilterRangeError
 from contexts.audit.domain.query_filters import (
     MalformedCursorError as AuditMalformedCursorError,
@@ -58,6 +61,26 @@ from contexts.audit.domain.query_filters import (
 from contexts.audit.ports.reader import AuditQueryRoutingError
 from contexts.ingestion.domain.source_list import (
     MalformedCursorError as IngestionMalformedCursorError,
+)
+from contexts.optimization.application._transition_helpers import (
+    RecommendationNotFoundError,
+    TransitionNotPermittedError,
+)
+from contexts.optimization.domain.query_filters import (
+    MalformedCursorError as OptimizationMalformedCursorError,
+)
+from contexts.retrieval_evaluation.application.append_entry_to_revision import (
+    GoldSetNotFoundError,
+)
+from contexts.retrieval_evaluation.application.finalize_revision import (
+    EmptyDraftError,
+    NoDraftToFinalizeError,
+)
+from contexts.retrieval_evaluation.application.run_retrieval_evaluation import (
+    GoldSetMissingFinalizedRevisionError,
+)
+from contexts.retrieval_evaluation.domain.query_filters import (
+    MalformedCursorError as RetrievalEvaluationMalformedCursorError,
 )
 from contexts.run_history.domain.query_filters import MalformedCursorError
 from padhanam.observability.security_events import (
@@ -119,6 +142,34 @@ class IngestionSourceNotFoundError(Exception):
     def __init__(self, source_id: str) -> None:
         super().__init__(f"ingestion source {source_id} not found")
         self.source_id = source_id
+
+
+class EvaluationRunNotFoundError(Exception):
+    """Raised when the retrieval-evaluation reader returns ``None`` for a single-run lookup (D112, S42).
+
+    The HTTP handler translates to 404 ``evaluation_run_not_found``.
+    No security event fires per the audit-event-not-found precedent
+    (S37): the per-tenant adapter scopes the query by tenant context,
+    so cross-tenant invisibility is structurally indistinguishable
+    from genuine not-found at the single-resource-lookup altitude.
+    """
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(f"evaluation run {run_id} not found")
+        self.run_id = run_id
+
+
+class OptimizationRunNotFoundError(Exception):
+    """Raised when the optimization reader returns ``None`` for a single-run lookup (D112, S42).
+
+    The HTTP handler translates to 404 ``optimization_run_not_found``.
+    Same privacy-preserving structural argument as the audit and
+    evaluation-run not-found cases.
+    """
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(f"optimization run {run_id} not found")
+        self.run_id = run_id
 
 
 class BoundTenantIdMismatchError(Exception):
@@ -276,6 +327,132 @@ async def _handle_malformed_ingestion_cursor(
     return JSONResponse(status_code=400, content=body.model_dump())
 
 
+async def _handle_gold_set_not_found(
+    request: Request, exc: GoldSetNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="gold_set_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_no_draft_to_finalize(
+    request: Request, exc: NoDraftToFinalizeError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="no_draft_to_finalize",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
+
+async def _handle_empty_draft(
+    request: Request, exc: EmptyDraftError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="empty_draft",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_gold_set_missing_finalized_revision(
+    request: Request, exc: GoldSetMissingFinalizedRevisionError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="gold_set_missing_finalized_revision",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_evaluation_run_not_found(
+    request: Request, exc: EvaluationRunNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="evaluation_run_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_malformed_retrieval_evaluation_cursor(
+    request: Request, exc: RetrievalEvaluationMalformedCursorError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="malformed_retrieval_evaluation_cursor",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_recommendation_not_found(
+    request: Request, exc: RecommendationNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="recommendation_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_transition_not_permitted(
+    request: Request, exc: TransitionNotPermittedError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="recommendation_transition_not_permitted",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+        details={
+            "recommendation_id": str(exc.recommendation_id),
+            "from_status": exc.from_status.value,
+            "to_status": exc.to_status.value,
+        },
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
+
+async def _handle_optimization_run_not_found(
+    request: Request, exc: OptimizationRunNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="optimization_run_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_malformed_optimization_cursor(
+    request: Request, exc: OptimizationMalformedCursorError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="malformed_optimization_cursor",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_invalid_optimization_filter(
+    request: Request, exc: InvalidOptimizationFilterError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="invalid_optimization_filter",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
 async def _handle_audit_query_routing_error(
     request: Request, exc: AuditQueryRoutingError
 ) -> JSONResponse:
@@ -385,13 +562,86 @@ def register_ingestion_error_handlers(app: FastAPI) -> None:
     )
 
 
+def register_retrieval_evaluation_error_handlers(app: FastAPI) -> None:
+    """Register the retrieval-evaluation HTTP error handlers (D112, S42).
+
+    Handlers registered:
+
+    - ``GoldSetNotFoundError`` -> 404 ``gold_set_not_found``.
+    - ``NoDraftToFinalizeError`` -> 409 ``no_draft_to_finalize``.
+    - ``EmptyDraftError`` -> 400 ``empty_draft``.
+    - ``GoldSetMissingFinalizedRevisionError`` -> 400
+      ``gold_set_missing_finalized_revision``.
+    - ``EvaluationRunNotFoundError`` -> 404 ``evaluation_run_not_found``.
+    - ``RetrievalEvaluationMalformedCursorError`` -> 400
+      ``malformed_retrieval_evaluation_cursor``.
+    """
+    app.add_exception_handler(
+        GoldSetNotFoundError, _handle_gold_set_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        NoDraftToFinalizeError, _handle_no_draft_to_finalize  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        EmptyDraftError, _handle_empty_draft  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        GoldSetMissingFinalizedRevisionError,  # type: ignore[arg-type]
+        _handle_gold_set_missing_finalized_revision,
+    )
+    app.add_exception_handler(
+        EvaluationRunNotFoundError, _handle_evaluation_run_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        RetrievalEvaluationMalformedCursorError,  # type: ignore[arg-type]
+        _handle_malformed_retrieval_evaluation_cursor,
+    )
+
+
+def register_optimization_error_handlers(app: FastAPI) -> None:
+    """Register the optimization HTTP error handlers (D112, S42).
+
+    Handlers registered:
+
+    - ``RecommendationNotFoundError`` -> 404 ``recommendation_not_found``.
+    - ``TransitionNotPermittedError`` -> 409
+      ``recommendation_transition_not_permitted``.
+    - ``OptimizationRunNotFoundError`` -> 404
+      ``optimization_run_not_found``.
+    - ``OptimizationMalformedCursorError`` -> 400
+      ``malformed_optimization_cursor``.
+    - ``InvalidOptimizationFilterError`` -> 400
+      ``invalid_optimization_filter``.
+    """
+    app.add_exception_handler(
+        RecommendationNotFoundError, _handle_recommendation_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        TransitionNotPermittedError, _handle_transition_not_permitted  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        OptimizationRunNotFoundError, _handle_optimization_run_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        OptimizationMalformedCursorError,  # type: ignore[arg-type]
+        _handle_malformed_optimization_cursor,
+    )
+    app.add_exception_handler(
+        InvalidOptimizationFilterError, _handle_invalid_optimization_filter  # type: ignore[arg-type]
+    )
+
+
 __all__ = [
     "AuditEventNotFoundError",
     "BoundTenantIdMismatchError",
     "ErrorResponse",
+    "EvaluationRunNotFoundError",
     "IngestionSourceNotFoundError",
+    "OptimizationRunNotFoundError",
     "RunNotFoundError",
     "register_audit_error_handlers",
     "register_ingestion_error_handlers",
+    "register_optimization_error_handlers",
+    "register_retrieval_evaluation_error_handlers",
     "register_run_history_error_handlers",
 ]
