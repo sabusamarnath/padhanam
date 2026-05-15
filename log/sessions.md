@@ -13,6 +13,60 @@ Format:
 
 ---
 
+## S40b — Clean gold-set authoring with content-fit selection
+roles: engineer, technical writer
+mode: build (verification-and-hygiene bridge between S40 runner close and S41 optimization framing)
+
+- Produced: Five commits closed S40b.
+  - Commit 1 (`docs(charter)`, ad9d729) lands the S40b in-flight paragraph at `charter/current-package.md` and the `.gitignore` rule for `docs/archive/snapshots/` closing the AC 17 cleanliness gap S40 flagged.
+  - Commit 2 (`feat(p11/s40b)`, db9cd2d) lands the Pacelane recovery-first wearable case-study corpus at `tests/fixtures/corpus/p11_s40b/pacelane_recovery_first_case.md`. ~1,750 words across 6 H2 sections plus title; produces 7 chunks at ingest. Vocabulary diverges from the LVTGuide system prompt on case-study-specific terms (Pacelane, recovery-first, HRV, Spearman correlation, retention, subscription) while keeping unavoidable LVT-conceptual overlap (bet, initiative, epic, story, success criteria). The corpus is version-controlled so chunk references are reproducible across DB rebuilds, closing the S39b corpus-not-in-repo gap prospectively for S40b; S39b's corpus stays uncommitted as a separate P12 audit input.
+  - Commit 3 (`docs(p11/s40b)`, 221ef1c) lands the live-stack smoke at `docs/smoke/p11_s40b_clean_gold_set.md` with five-stage executed-evidence walkthrough. Stage 1 (corpus refresh): Neo4j cleanup per the operator's refined criterion (12 entities trimmed, 8 deleted), Postgres delete + new source ingest, graph-extract bypass via forced state='indexed' captured as methodology finding plus orphan-entity cleanup after a late-completing worker. Stage 2 (S39b rename): direct SQL UPDATE renaming the rank-selected gold-set; hash byte-identical post-rename per the canonical-payload-excludes-name proof. Stage 3 (clean gold-set authoring): create `3b001430-...`, three per-query content-fit selection blocks each capturing the chunks selected, the chunks rejected, and the criterion that drove each line including the transparent borderline-section judgment for Query 2; finalize with revision hash `8fec2553d9...`. Stage 4 (verification re-run): runner produces `c168c2ba-...` with substantive recall@k drops vs S39b. Stage 5 (S41-evidence verdict): contamination broke at the recall@k surface.
+  - Commit 4 (this commit) lands the session log entry plus the S40b close marker at `charter/current-package.md`.
+
+- Decisions: No new D-entries. Two `charter/deferred-decisions.md` entries from S40 (`parallel_rrf` retrieval-strategy implementation; gold-set aggregate-level audit emission) remain active without S40b touch. The methodology principle S40b demonstrates — selection function at authoring must differ from the function being evaluated — is forwarded to P12 audit as a candidate, not committed as a D-entry inside S40b per the brief's explicit out-of-scope item.
+
+- Tests: 1105 unit tests pass at session close (matches S40 baseline; no test surface touched at S40b). 26 import-linter contracts kept. Tenant_isolation contract harness scenario count unchanged at 126 (no new ports or adapter shapes; the harness extension at commit 8f179fd covers what S40b exercises).
+
+- Enforcement layer: No `import-linter` contract changes. No AST enforcement changes. The runtime fix from S40 (`PostgresAuditAdapter.from_settings` at commit 21acd36) is the only code surface the verification re-run depends on; S40b exercises the runner CLI end-to-end without further code modifications.
+
+- Operator-decided dispositions at pre-write reconciliation:
+  - **Finding 1 (corpus refresh scope):** Option (a) — replace `lvt_methodology_overview.md` with the Pacelane case study. Operator strengthening accepted: Query 2 reframing is load-bearing alongside corpus replacement because the word *framing* in the original Query 2 is system-prompt vocabulary. Reframed to "how did Pacelane apply LVT to its recovery-first wearable launch" using case-study-specific terms. Queries 1 and 3 unchanged.
+  - **Finding 2 (authoring agent provenance):** Option (a) — CC autonomously authors with content-fit selection. The structural-honesty cut is selection-function-must-differ-from-evaluated-function, not selection-is-human; CC reading chunk content and judging answer-fit meets the cut.
+  - **Finding 3 (S39b gold-set rename):** Option (a) — direct SQL UPDATE on `gold_sets.name`. Renamed to "P11 retrieval baseline (rank-selected, S39b)". Stored revision hash `9ee5aed07c7c...` byte-identical post-rename per the canonical-payload-excludes-name proof from S39b's smoke Stage 3.
+  - **Finding 4 (corpus durability):** Option (a) — version-controlled at `tests/fixtures/corpus/p11_s40b/`. Closes the S39b corpus-not-in-repo gap prospectively.
+  - **Finding 5 (Ollama state; autonomous):** Compose stack healthy at S40 smoke; `nomic-embed-text:v1.5` present. No drift since S39b.
+  - **Finding 6 (replace-vs-additive; refined to refined-cleanup-criterion):** Ingest CLI is additive-only; cleanup of LVT chunks + entities required direct DB operations. Operator's refined Neo4j criterion landed: trim `source_chunk_ids` to remove deleted chunk references first, conditional-delete only when array is empty. Preserved "bet", "Padhanam", "PM agent", "agent" entities (co-derived from surviving sources); deleted 8 LVT-source-only entities.
+  - **Finding 7 (gold-set audit-emission gap; autonomous informational):** Confirmed; no S40b touch.
+
+- methodology (line 1): **Pre-write reconciliation surfacing brief-vs-required-structure gaps reaches third instance in P11.** S39 Finding 2 caught D105's scoring-sheet-precedent failure (sibling-in-placement-not-in-pattern). S40 Finding 2 caught D66's framing-vs-as-built drift (catalogue says three strategies, adapter executes two). S40b pre-write reconciliation caught the Query 2 reframing being load-bearing alongside corpus replacement — the operator's brief named the corpus refresh but did not name the query vocabulary as system-prompt-overlapping. Three instances inside one package. The methodology candidate from S40 line 1 strengthens at S40b: pre-write reconciliation routinely surfaces drift between strategic-mode framing and as-built or as-required structure; the discipline's value is now demonstrable at three instances in P11 alone. Strong P12 audit promotion candidate.
+
+- methodology (line 2): **Metric-threshold expectations should derive from structural understanding of what each metric measures, not from gut intuition.** The brief stated MRR above 0.9 would trigger corpus revision. At Stage 4 the recall@k drops were substantive (28% relative at k=1, 20% at k=3) but MRR stayed at 1.0. Operator-owned at smoke time as a wrong implicit assumption: content-fit selection typically agrees with vector retrieval at rank-1 when vector retrieval is competent at top-1 ranking, so MRR=1.0 is a structural property of this metric on a competent-retrieval setup, not a contamination signal. The structural cut sharper than the brief framed: at S39b rank-1 is in expected BY CONSTRUCTION (rank-based selection); at S40b rank-1 is in expected BY JUDGMENT (content-fit happened to agree with vector's top-1 because vector's top-1 is genuinely relevant). The selection-must-differ-from-evaluated-function principle holds in both cases; MRR just isn't the surface where the difference surfaces. Recall@k is the contamination-sensitive surface in this evaluation setup. P12 audit candidate: metric-threshold expectations derive from structural understanding of what each metric measures, not from gut intuition about what "clean" looks like. The principle generalises to any evaluation context with multiple metric surfaces.
+
+- methodology (line 3): **Graph-extract pipeline reliability is the gating constraint for any S40-style smoke that needs both retrieval legs.** The local Ollama qwen2.5:7b extract pipeline is slow (1-3 min per chunk) and unreliable on this dev rig — multiple worker invocations left the Pacelane source in `extracting` state without progress, and a late-completing worker wrote orphan entities for a deleted source that required separate cleanup. Per the S40 CLI runner's honest-empty graph_only leg, S40b's contamination-break test doesn't depend on Neo4j entity creation; bypassed by forcing `state='indexed'`. P12 audit input: invest in extract reliability (timeout handling, automatic retry semantics, observable worker progress) at a future hygiene session, or accept that graph_only metrics are honest-zero on this rig and document the expectation. Both paths reasonable; S40b operates under the second.
+
+- methodology (line 4): **Bridge-session-shape pattern's second instance close.** S39 → S39b was verification-and-hygiene (LVTGuide absent, corpus empty, CLI not runtime-verified). S40 → S40b was methodologically-clean-artefact authoring (S39b gold-set was rank-selected; S40b corrected with content-fit). Both bridge sessions resolved specific structural-honesty gaps the substrate session surfaced but could not fix without scope creep. The pattern (S39b methodology line 5) now has two confirmed instances against different sub-substrate concerns. The candidate at S40 close was "one more instance at P11 close or P12 would promote"; S40b is the second instance. Promotion threshold met for P12 audit consideration: bridge sessions as a distinct session shape between substrate and audit with two named sub-substrate variants. Substantive paragraph for the audit: whether substrate sessions should plan bridges in by default rather than discovering them at substrate close is the question P12 should resolve; the brief flagged this explicitly.
+
+- methodology (line 5): **S41 framing brief should privilege recall@k differentials over MRR explicitly in evidence-citation specs.** Operator commitment from the verdict-disposition disposition: when S41 framing happens, the evidence-citation specification for the `retrieval_strategy` recommendation category names recall@k and precision@k as the load-bearing metric surfaces, not MRR. A recommendation like "switch from vector_only to graph_only because vector_only's recall@3 of 0.80 underperforms graph_only's recall@3 of 0.92 on this gold-set" cites the right surface; the same recommendation citing MRR=1.0 differentials would not (MRR is structurally non-discriminating in this evaluation setup). Worth flagging in S41's brief explicitly so the evidence-shape commitment is correct from the start. This is a near-term carryover from S40b for S41 framing, not a P12 audit candidate.
+
+- S40b-close verdict on S41-evidence credibility: **The S40b run `c168c2ba-328f-4163-b374-1f69d914b623` can be cited as procurement-grade evidence for retrieval-strategy recommendations.** The contamination at S39b (selection-function-equals-evaluation-function via rank-based authoring) broke at the recall@k surface where it should surface: recall@1 dropped from 0.555 to 0.400 (28% relative), recall@3 from 1.000 to 0.800 (20%), recall@5 from 1.000 to 0.867 (13%). Vector retrieval is now measured against an independent ground-truth selection function. MRR stayed at 1.0 for structural reasons (operator-owned threshold-setting error captured at methodology line 2); recall@k carries the contamination-break verdict instead. S41 proceeds with the load-bearing-metric commitment captured at methodology line 5.
+
+```
+metrics:
+  classification: verification-and-hygiene bridge (methodologically-clean-artefact authoring)
+  brief_started: 2026-05-15
+  session_started: 2026-05-15
+  session_closed: 2026-05-15
+  merged: 2026-05-15
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: charter/current-package.md (S40b close marker); .gitignore (docs/archive/snapshots/); briefs/p11/s40b.md
+  corrects: S40 close verdict (S39b gold-set unusable as S41 evidence)
+  corrected_by:
+```
+
+---
+
 ## S40 — Retrieval-evaluation runner with per-query plus aggregated result substrate
 roles: analyst, PM, architect, engineer, technical writer
 mode: build (P11 runner substrate; second new-context-substrate session in P11)
