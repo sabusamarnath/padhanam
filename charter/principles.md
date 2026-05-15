@@ -97,7 +97,7 @@ The invariant set is versioned in this file per the existing append-only princip
 
 - Claude Code reads only what the session needs.
 - Files over 200 lines are read in ranges, not whole.
-- Working files (`current-package.md`, session log entries) stay tight. Old content moves to archive at audit time, never deletes.
+- Working files (`current-package.md`, `log/sessions.md`) stay tight. `current-package.md` content archives to `docs/archive/packages/p<n>.md` at package close. `log/sessions.md` entries archive to `docs/archive/sessions/p<n>.md` at package close per D107. Never deletes.
 - Log entries are one line where possible. Prose only when reasoning is non-obvious.
 - Strategic mode and build mode are different work modes, not different UIs. Mode declaration at conversation start is the standing discipline (per D47). Distinct deliverables (strategic produces charter edits, session prompts, or roadmap version updates; build produces code commits and session-log entries) and distinct commit conventions (`docs(charter): ...` or `docs(pN/<boundary-name>): ...` for strategic; `feat(pN/sN): ...` or `docs(pN/sN): ...` for build) carry the separation regardless of which UI is active. Charter files bridge the two modes.
 - Architectural commitments deferred to future sessions live in `charter/deferred-decisions.md`. They are inherited by sessions when their context activates and are reviewed at phase audits.
