@@ -265,7 +265,82 @@ The recommendation aggregate at `contexts/optimization/` carries five fields per
 
 ## The four-context substrate
 
-[Pending in commit 5]
+The P11 substrate ships a four-context scaffold that closes the bet's success criterion 4: the trace capture layer surfaces optimisation recommendations procurement readers can verify end-to-end with full evidence-citation traceability. Four producer contexts emit evidence; one consumer context (`contexts/optimization/`) consumes the evidence via reader ports and produces rule-derived recommendations with citations.
+
+```mermaid
+flowchart LR
+    subgraph producers[Producer contexts]
+        direction TB
+        retrieval_eval[contexts/retrieval_evaluation/<br/>D105, D109, D110<br/>gold sets, evaluation runs,<br/>recall@k, precision@k, MRR]
+        run_history[contexts/run_history/<br/>D94, D95, D96, D97<br/>per-tenant runs, chunk citations,<br/>entity citations]
+        audit[contexts/audit/<br/>D22, D26, D102<br/>append-only hash-chained<br/>audit events]
+        ingestion[contexts/ingestion/<br/>D60-D65<br/>sources, chunks, embeddings,<br/>graph extraction]
+    end
+    subgraph consumer[Consumer context]
+        optimization[contexts/optimization/<br/>D108, D111<br/>OptimizationRun, Recommendation,<br/>RecommendationRule, MetricCalculator,<br/>EvidenceCitation discriminated union]
+    end
+    subgraph rules[Recommendation rules]
+        retrieval_rule[retrieval_strategy_rule<br/>recall@k delta]
+        model_rule[model_choice_rule]
+        prompt_rule[prompt_revision_rule]
+        cost_rule[cost_optimization_rule<br/>cost-per-successful-task]
+    end
+    subgraph transport[HTTP transport per D112]
+        openapi[OpenAPI specification<br/>JWT-resolved tenancy<br/>cursor pagination<br/>discriminated-union DTOs]
+        gold_set_routes[/gold-sets, /retrieval-candidates,<br/>/evaluation-runs/]
+        run_routes[/runs/]
+        audit_routes[/audit, /platform/audit/]
+        opt_routes[/optimization-runs,<br/>/recommendations/]
+    end
+    retrieval_eval -.evidence.-> optimization
+    run_history -.evidence.-> optimization
+    audit -.evidence.-> optimization
+    ingestion -.evidence.-> optimization
+    optimization --> rules
+    rules --> recommendations[Recommendations<br/>with evidence citations]
+    retrieval_eval --> gold_set_routes
+    run_history --> run_routes
+    audit --> audit_routes
+    optimization --> opt_routes
+    gold_set_routes --> openapi
+    run_routes --> openapi
+    audit_routes --> openapi
+    opt_routes --> openapi
+```
+
+### The four producer contexts
+
+**`contexts/retrieval_evaluation/`** (D105, D109, D110): tenant-authored gold sets with revision-with-hash-chain aggregate; evaluation runs with per-query plus aggregated result records; starter metric set recall@k, precision@k, MRR at k of 1/3/5/10; binary relevance (graded relevance deferred per the deferred-decisions entry); offline-only at P11 (online retrieval evaluation deferred). Procurement-grade defensibility: the runner produces recall@k differentials that distinguish retrieval-quality state across strategies; the all-zero CaveatAnnotation on graph_only flags substrate state transparently when graph extraction is incomplete.
+
+**`contexts/run_history/`** (D94, D95, D96, D97): per-tenant Postgres `runs`, `run_chunk_citations`, and `run_entity_citations` tables with rendering-grade snapshot columns alongside technical references; single-transaction write at invocation completion; consumer-defined `RunHistoryReader` port with `RunRecord`-as-aggregate read DTO; cursor pagination matching the reader layer. The four-filter `RunListFilters` vocabulary covers Phase 2 UX consumption shape.
+
+**`contexts/audit/`** (D22, D26, D102): hash-chained append-only `tenant_audit` tables on every per-tenant Postgres data plane plus a control-plane `tenant_audit` table; two-destination read model with chain integrity verified on read at page granularity reusing `compute_event_hash` and `GENESIS_HASH` primitives; separately authorized HTTP routes (`/audit` under principal-derived tenant context, `/platform/audit` under the platform-operator claim per D103). The audit chain is the procurement-grade tamper-evidence surface.
+
+**`contexts/ingestion/`** (D60-D65): asynchronous ingestion pipeline shape; sources flow through parse → chunk → embed → extract-graph states; markdown and plain text at S19 (PDF, DOCX, HTML defer per D61); chunks carry pgvector embeddings via nomic-embed-text per D62; graph extraction via Qwen 2.5 7B with single `:Entity` node shape per D64; tenant-scoped Neo4j sessions enforced through `TenantScopedNeo4jSession` wrapper per D63.
+
+### The optimization consumer
+
+**`contexts/optimization/`** (D108, D111): the consumer of producer evidence and producer of recommendation output. `OptimizationRun` and `Recommendation` aggregates carry the five-field recommendation shape (category, subject, text, evidence_citations, status); pluggable `RecommendationRule` and `MetricCalculator` Protocol abstractions operationalise the vendor-flexibility principle at consumption-pattern granularity; discriminated `EvidenceCitation` union with structured `CaveatAnnotation` keeps procurement-grade-honesty about substrate gaps; audit-chain absorbs both the engine invocation and the recommendation lifecycle (acknowledge/apply/reject transitions) with five chain-anchoring points per citation.
+
+Four default rules ship at P11 close per D111 commitment 5: `retrieval_strategy_rule` (0.15 absolute recall@3 delta threshold); `model_choice_rule`; `prompt_revision_rule`; `cost_optimization_rule` ($0.10 cost-per-successful-task starter threshold). Starter threshold values are Phase 2-tuning candidates per the deferred-decisions entry on "Optimization-engine cost-per-successful-task threshold tuning" — Phase 1's local Ollama regime puts costs at $0.000246 mean, well below the threshold; production LLM regimes shift the threshold by orders of magnitude.
+
+### HTTP transport surface
+
+Per D112, the HTTP transport surface ships routes for the retrieval_evaluation and optimization producer-context substrates with JWT-resolved tenancy, cursor pagination, Pydantic discriminated-union DTOs, and OpenAPI specification as procurement-grade Phase 2 UX-consumer documentation. Combined with the run-history HTTP routes per D98 (S34), the audit HTTP routes per D103 (S37), and the ingestion-management HTTP routes per D104 (S38), the consumer surface for all four producer contexts plus the optimization consumer context is complete.
+
+A Phase 2 frontend developer reads `/openapi.json` (17 P11 operationIds plus the carryover operations from S34, S37, S38) and integrates against the platform without needing to read source. The two-step gold-set discovery decomposition preserves human-in-the-loop content-fit discipline at the HTTP layer per the S40b precedent; the recommendation lifecycle through HTTP lands equivalently to the CLI exercise; tenant isolation holds with no information leakage (verified by 148 tenant_isolation contract scenarios plus 18 HTTP-layer contract scenarios at Phase 1 close).
+
+### End-to-end procurement-grade traceability
+
+The four-context substrate plus optimization consumer plus HTTP transport produces end-to-end procurement-grade defensibility. A procurement reader can:
+
+1. Read a recommendation's prose at `/recommendations/{id}` via OpenAPI.
+2. Trace the prose to its `RecommendationRule` via the `category` discriminator and the citation surface.
+3. Trace each `EvidenceCitation` to its producer-context record (an `EvaluationRun` at `/evaluation-runs/{id}`; a `Run` at `/runs/{id}`; an `AuditEvent` at `/audit?run_id=...`; an ingestion `Source` at the ingestion management routes).
+4. Verify chain integrity on the audit events via the `/audit` route's embedded page-granularity verifier.
+5. Inspect the optimisation engine invocation's audit events to verify the recommendation was produced by the rule it claims.
+
+The verification is end-to-end through the platform's own tooling; no out-of-band assertions are required. This is the bet's success criterion 4 in its substrate form. Phase 2 UX completes the criterion by surfacing the recommendation surface to procurement readers in product form per D93's methodology-as-product positioning.
 
 ## Cross-document map
 
