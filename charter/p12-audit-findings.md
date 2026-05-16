@@ -137,12 +137,162 @@ The codebase faithfully implements D1 through D112 with no unauthorized extensio
 
 ## Section 3: Audit-inputs dispositions
 
-[14 entries from charter/p12-audit-inputs.md get dispositions here]
+Each of the 14 entries at `charter/p12-audit-inputs.md` gets explicit disposition per the four shapes the brief frames (charter amendment / methodology document / deferred-decisions / explicit non-action). Entries that map cleanly are dispositioned tersely; entries that require operator-engagement reasoning are dispositioned with full alternative-considered framing.
+
+### Entry 1: Pre-write reconciliation as architectural discovery (beyond promotion threshold)
+
+**Disposition.** Methodology document entry. The pattern has five-plus P11 instances on top of the prior P7-P10 reinforcement count; recurrence is well beyond the methodology-document promotion threshold. The methodology document's substantive update (commit 8 in the audit's commit chain) lands "Pre-write reconciliation as architectural discovery" as a Patterns-observed entry with the operationalisation mechanism (read every file the brief names before writing code; surface inconsistencies; raise user-question; resolve with explicit dispositions) and the recurrence trail (sixteen-plus instances spanning S6 LiteLLM env-var quirks through S42 Finding 5 DTO placement).
+
+Sub-pattern: **mid-build pre-write reconciliation as a distinct subtype.** The D109 correction at S39 surfaced this — pre-write reconciliation can fire at session-open (the standard pattern) or mid-build when import statements reveal cross-codebase context the session-open read surface missed (the S39 case where importing the `padhanam.security.hash_chain` primitive surfaced the platform-layer-vs-context-layer-helper distinction). Methodology document captures both surfaces under the single Patterns-observed entry's operationalisation paragraph.
+
+### Entry 2: Principle-versus-framing drift as distinct methodology candidate
+
+**Disposition.** Methodology document entry. Distinct from entry 1's pre-write reconciliation because the mitigation surface differs: pre-write reconciliation catches brief-vs-codebase drift via reading; principle-versus-framing drift catches brief-vs-principles drift via writing-and-watching-imports. Three P11 instances (S41 commit 4 rules placement; S41 commit 8 import-linter TYPE_CHECKING edge; S42 Finding 5 DTO placement) plus the S40b graph-extract substrate-gap surface count as a fourth structurally-similar instance.
+
+Methodology document's substantive update lands "Principle-versus-framing drift" as a sibling Patterns-observed entry to entry 1. The mitigation discipline is "check the framing against the principles file before writing the prompt" plus the build-time discovery surface ("writing the code and watching the import pattern surface the principle violation catches the drift"). The third P11 instance at S42 reinforces; methodology document carries the entry forward to Phase 2 audit for further recurrence-rate observation.
+
+### Entry 3: Scope-check-at-substrate-application-boundary as candidate substrate-session default
+
+**Disposition.** Explicit non-action at P12; recurrence test continues. The single-instance observation at S41 is not yet beyond the promotion threshold (Padhanam's convention per the methodology document's "Start simple; refactor at the structural-promotion threshold" — three instances). The candidate stays in `charter/p12-audit-inputs.md` (carried forward without disposition annotation) until a second instance fires at the next substrate session or the candidate ages out.
+
+Operator-engagement criterion declined here per the brief's autonomous-disposition rule for non-substantive-drift findings: single-instance observation does not warrant default-codification. The scope-check moment was operator-driven at S41 and remains operator-driven at the next substrate session; codifying as default risks ceremonialising what was structurally honest as operator judgement.
+
+### Entry 4: Bridge-session pattern (two confirmed instances)
+
+**Disposition.** Methodology document entry as a *named session shape* (not as a Patterns-observed entry — different category). Two instances at P11 (S39b, S40b) plus an implicit third instance via the pre-P12 hygiene session which sits at the boundary between substrate-session-bridge and end-of-package-hygiene. The methodology document's substantive update lands a "Session shapes" sub-section with five shapes named: substrate, bridge, transport, hygiene, audit. Each shape gets a distinguishing-characteristics paragraph plus indicator-for-planning framing.
+
+Audit verdict on the open question "should Phase 2 plan bridge sessions in advance when substrate scope creates verification debt, or remain reactive to substrate-close findings?": the methodology document is currently agnostic on the planning question — the shape is named for recognition value, not for forward-planning prescription. Phase 2 substrate sessions inherit the framing without commitment to mandatory bridging. The recurrence test continues at Phase 2 substrate sessions; if Phase 2 substrate work consistently produces bridge sessions, the planning surface promotes.
+
+### Entry 5: Vendor-flexibility principle operationalisation verdict
+
+**Disposition.** Charter-positive non-action at P12. The principle text at `charter/principles.md` already names MetricCalculator + RecommendationRule as the consumption-pattern-granularity operationalisation pattern. No further principle amendment needed at audit time. The methodology document's substantive update captures the broader pattern (vendor flexibility extends from vendor ports to pluggable domain-layer abstractions) as part of the "Vendor flexibility" architectural-discipline framing without adding a new principle.
+
+### Entry 6: Container-image-lag pattern resolved at S41 close; lesson generalises
+
+**Disposition.** Methodology document entry as a Patterns-observed entry plus explicit non-action on the underlying friction (resolved at session-close). The transferable methodology candidate is "smoke-time verification of dev-workflow tooling at the same session that ships it" — this lands as a separate Patterns-observed sub-pattern. The S42 instance (post-S41 `make build-api` target broken by docker compose build's digest-tag rejection) plus the S42-fix inline holding through the pre-P12 hygiene refresh constitutes recurrence-test-positive at first verification cycle.
+
+Promotion threshold question: should "ship-tooling-with-smoke-exercise" be a structural discipline expectation (third-instance promotion to mechanical enforcement) or a methodology-document Patterns-observed entry (descriptive)? Audit verdict: Patterns-observed at P12, with recurrence test continuing at Phase 2's first dev-workflow tooling addition. Mechanical enforcement would require an AST or CI check that's structurally hard to express; methodology entry is the right altitude.
+
+### Entry 7: MRR threshold structural understanding
+
+**Disposition.** Methodology document entry as a Patterns-observed entry. The pattern is "metric-threshold expectations need structural-understanding grounding rather than gut-intuition framing" with the S40b instance as the named evidence (MRR>0.9 implicit assumption was wrong because the evaluation setup made MRR structurally non-discriminating; the structural surface was recall@k at @3). Forward-relevance: when adding a new metric or threshold, ground the expectation in the structural shape of the comparison surface.
+
+Phase 2 implication: the optimization layer's threshold values (0.15 recall@3 delta; $0.10 cost-per-successful-task) are currently starter-value commits in D111. Phase 2 tuning grounds in production-grade structural understanding (real consumer evidence accumulation; the cost-threshold tuning entry per `charter/deferred-decisions.md`).
+
+### Entry 8: Cost-threshold tuning under production LLM regime (deferred pending consumer evidence)
+
+**Disposition.** Non-action at P12; deferred-decisions entry holds with refreshed activation trigger language. The threshold-vs-actual gap is roughly 400x at the local Ollama development regime; Phase 2 production deployment activates the tuning conversation. No specific scenario surfaces at audit time that requires earlier tuning.
+
+The audit refreshes the deferred-decisions activation trigger language to name the procurement-grade-readiness criterion explicitly: a tenant operating against vendor APIs at non-trivial cost rates with a real cost-per-successful-task aggregation surface across at least one full month of run history. The audit's verdict at P12: parked state holds.
+
+### Entry 9: parallel_rrf retrieval-strategy implementation deferral
+
+**Disposition.** Non-action at P12; deferred-decisions entry holds. Activation trigger ("P12 audit surfaces a Phase 1 procurement-grade need for three-strategy comparison") evaluated explicitly: P12 audit does not surface this need. The bet's criterion-4 procurement-grade demonstration holds end-to-end with the two-strategy comparison surface at S40b's gold-set + S41's evidence-citation pipeline (verified by the all-zero CaveatAnnotation surface as procurement-grade-honest about graph_only's substrate state). Fusion implementation is Phase 2 retrieval-adapter extension work; D66 stands without rewrite; deferred-decisions entry holds without refresh.
+
+### Entry 10: Gold-set aggregate-level audit emission
+
+**Disposition.** Deferred-decisions entry refresh plus a new audit-finding annotation. The deferred-decisions entry framing committed activation "no later than the Phase 1 close audit at P12 close." The audit assesses: back-fill is procurement-grade-necessary for Phase 1's "every state change is audit-event-emitted" load-bearing claim under D26; however, the brief explicitly scopes code changes out of P12. The disposition is:
+
+1. The deferred-decisions entry refreshes with the audit's explicit acknowledgement that procurement-grade-readiness at Phase 2 entry requires this back-fill.
+2. A new entry at `charter/p12-phase-2-inputs.md` names gold-set audit-emission back-fill as a Phase 2-entry hygiene workitem with operational specificity (extend `contexts/retrieval_evaluation/application/` use cases for create_gold_set / append_entry_to_revision / finalize_revision / rename_gold_set to emit audit events; the rename surface needs an explicit `rename_gold_set` use case which today does not exist — S39b's rename was a direct SQL UPDATE, which is part of the audit-emission gap surfacing in the first place).
+
+Phase 1 close substrate-readiness verdict: the bet's audit-evidence claim holds at the audit-event-chain level for tenant-authored content; the gold-set-aggregate-level gap is a known carryover with named Phase 2-entry remediation. The claim is honestly framed rather than overstated.
+
+### Entry 11: S39b retroactive corpus version-control gap
+
+**Disposition.** Methodology document entry as a Patterns-observed entry. The lesson is "future corpus content must land in the repo under `tests/fixtures/` or similar at ingestion time, not only as audit-trail-of-ingestion." Forward-relevance: any new corpus-dependent test or smoke artefact requires corpus content under version control.
+
+The lesson generalises beyond corpus content to "any artefact a session depends on for reproducibility must be repo-resident at the session that ships it" — the S25-era synthetic sources were operator-deemed-substitutable at S39b without bit-identity to the original because the original did not land in the repo. The methodology document folds this into a single Patterns-observed entry: "Reproducibility artefacts land at the session that ships them; audit-trail-of-creation is necessary but not sufficient for reproducibility."
+
+### Entry 12: CLI/API wiring-integration-test asymmetry
+
+**Disposition.** Non-action at P12. Pre-P12 hygiene Finding 2 already settled the disposition as "defensible asymmetry; no backfill needed because CLI side has explicit cross-context adapter tests at `tests/integration/apps/cli/test_cross_context_adapters.py` and the API side exercises wiring through route integration tests at `tests/integration/api/test_*_routes.py` (eight test files post-S42) via FastAPI dependency injection." P12 audit confirms.
+
+The two surfaces test wiring at different altitudes appropriate to each app's entry point. CLI-side tests verify adapter-construction correctness; API-side tests verify the same wiring through the full HTTP stack including dependency injection. Procurement-grade defensibility holds at the altitude each app exposes.
+
+### Entry 13: Graph-extract pipeline reliability
+
+**Disposition.** Non-action at P12; deferred-decisions entry holds. Pre-P12 hygiene Finding 1 landed the structural finding at `charter/deferred-decisions.md` with three structural pieces named (reclaim policy, worker-side asyncio timeout, optimistic-concurrency-control on reclaim) plus operational mitigation at Phase 1 (manual re-trigger via CLI).
+
+P12 audit refreshes the activation trigger language to add explicit Phase 1-close framing: "production-grade graph retrieval reliability is the prerequisite for Phase 2 workflow agents that depend on graph evidence; the reclaim policy is non-negotiable at production-deployment context." The hygiene finding stands.
+
+### Entry 14: Hygiene-session-as-shape observation
+
+**Disposition.** Methodology document entry as part of the "Session shapes" sub-section landing alongside entry 4's bridge-session-pattern disposition. Hygiene sessions earn the methodology-document treatment because the shape is structurally distinct from substrate (architectural-surface ship) and bridge (mid-substrate verification) and transport (HTTP layer over existing substrate). Five session shapes total: substrate, bridge, transport, hygiene, audit.
+
+Forward-relevance for Phase 2: hygiene sessions at phase boundaries plan by default rather than reactively. Phase 2 framing's session-sequence draft includes a planned hygiene-shaped session at the boundary between substrate work and consumer-UX work; the pre-P12 hygiene precedent's seven-item scope plus the methodology-candidate consolidation pattern carries forward as the template.
 
 ## Section 4: New entries audit-surfaced
 
-[entries the audit itself surfaces beyond the original 14 land here]
+Entries the P12 audit surfaces beyond the original 14. Each maps to a disposition shape per the audit-input convention.
+
+### Entry 15 (audit-surfaced): D39 stale framing across charter files
+
+**Observation.** Surfaced at Finding T2. Methodology.md is the active living-hypothesis surface; the "(pending operator authorship per D39)" language remains in five-plus charter sites despite the README rebrand at pre-P12 hygiene.
+
+**Disposition.** Charter amendment via new D-entry confirming methodology.md as active living-hypothesis surface, superseding D39's pending-authorship framing without rewriting D39. Principles.md line 45 amends in place at the same audit-amendments commit. Other doc-content sites (CLAUDE.md, deferred-decisions.md preamble) update at hygiene moments rather than P12.
+
+### Entry 16 (audit-surfaced): Twelve-bounded-context count merits documentation note for future audit conversations
+
+**Observation.** Surfaced at Finding B1. The count exceeds rough P11-era estimates; the architecture surfaces both observability-as-context plus observability-as-platform-cross-cut, plus inference, plus tools, plus tenancy as the registry, plus six P5-through-P11 contexts. Each is charter-authorised; the count itself is the surprise.
+
+**Disposition.** Documentation note in the audit-findings document (this entry); no charter amendment. Future audit conversations inherit the documented count and the observation that the split between bounded-context observability and platform-cross-cut observability is structurally honest per D16.
+
+### Entry 17 (audit-surfaced): `TenantContext` and `ErrorResponse` shapes not formalised in schema.md
+
+**Observation.** Surfaced at Finding B3. Both shapes are well-defined in code and narratively documented across D34/D50/D98; neither appears in `charter/schema.md`.
+
+**Disposition.** Non-action at P12 with a documentation note for Phase 2 entry hygiene. The schema.md formalisation is hygiene work, not audit-disposition work; Phase 2 entry's brief drafts a schema-supplement workitem.
 
 ## Cross-reference index
 
-[mapping from finding to resolution location lands here once sections are populated]
+Mapping from finding to resolution location.
+
+| Finding | Resolution location |
+|---|---|
+| T1: D109 correction preserves audit trail | Non-action; methodology entry 1 absorbs pattern |
+| T2: D39 stale framing | New D-entry at `charter/decisions.md` |
+| T3: D66 vs as-built parallel_rrf | Already at D110 + deferred-decisions |
+| T4: D14 "forbidden" supersession | D76 explicit supersession |
+| T5: D89 control-plane tools | Non-action; deferral explicit at D89 |
+| T6: D88→D90 streaming revision | Non-action; D90 explicit revision |
+| T7: D107 session-log archival | Non-action; bootstrap shipped, per-package archival in flight at P12 close |
+| T8: D111 vendor-flexibility operationalisation | Non-action; principle text in place at S41 |
+| T9: D112 flat-module convention | Non-action; methodology candidate at entry 2 |
+| B1: Twelve bounded contexts | Documentation note; audit-surfaced entry 16 |
+| B2: Tenant audit test-event endpoint | Non-action |
+| B3: TenantContext + ErrorResponse not in schema.md | Phase 2 entry hygiene; audit-surfaced entry 17 |
+| B4: Enforcement count | Non-action; healthy trajectory |
+| B5: Test harness conventions | Non-action |
+| B6: Migration counts | Non-action |
+| B7: No code-level drift | Non-action; bet's commitments ship |
+| Entry 1: Pre-write reconciliation | Methodology document |
+| Entry 2: Principle-versus-framing drift | Methodology document |
+| Entry 3: Scope-check-at-substrate-application-boundary | Non-action; recurrence test continues |
+| Entry 4: Bridge-session pattern | Methodology document (Session shapes sub-section) |
+| Entry 5: Vendor-flexibility operationalisation | Non-action; principle text in place |
+| Entry 6: Container-image-lag + ship-tooling-with-smoke-exercise | Methodology document |
+| Entry 7: MRR threshold structural understanding | Methodology document |
+| Entry 8: Cost-threshold tuning | Deferred-decisions refresh |
+| Entry 9: parallel_rrf deferral | Deferred-decisions hold |
+| Entry 10: Gold-set audit emission | Deferred-decisions refresh + Phase 2 entry hygiene workitem |
+| Entry 11: S39b corpus version-control gap | Methodology document |
+| Entry 12: CLI/API wiring parity | Non-action; defensible asymmetry |
+| Entry 13: Graph-extract reliability | Deferred-decisions refresh |
+| Entry 14: Hygiene-session-as-shape | Methodology document (Session shapes sub-section) |
+| Entry 15 (audit-surfaced): D39 stale framing | New D-entry at `charter/decisions.md` |
+| Entry 16 (audit-surfaced): Twelve-bounded-context count | Documentation note (this file) |
+| Entry 17 (audit-surfaced): Schema.md formalisation gap | Phase 2 entry hygiene workitem |
+
+## Audit verdict summary
+
+The bet's load-bearing claims hold at Phase 1 close:
+
+- A single tenant runs locally with the full stack (verified end-to-end via `make up` plus per-tenant database routing per D32).
+- One agent can be configured, run, audited, and optimised through the platform's own tooling (verified at S30b for run, S37 for audit, S41 for optimise).
+- The evaluation harness produces meaningful quality signals (S40 retrieval evaluation runner against the S40b clean gold-set produces recall@k differentials that distinguish retrieval-quality state).
+- The trace capture layer surfaces optimisation recommendations, not just data (S41 optimization engine produces rule-derived recommendations with full evidence-citation traceability; procurement-grade demonstration holds; Phase 2 UX deliverable closes the bet's criterion 4 fully per D93).
+- The operator can explain every architectural decision and why it was made (the audit reads against 112 D-entries each carrying Choice + Reasoning + Alternatives Considered + Kano; the decisions file is the demonstration artefact).
+- The methodology document captures the architect-implementer pattern with enough specificity that another senior product leader could read it and adopt the discipline (the methodology document's substantive update at this audit's commit 8 lifts the document from v1 articulation to v2 with Phase 1's accumulated discipline-pattern data points integrated; the methodology is the proprietary insight the platform demonstrates).
+
+Phase 1 closes with the substrate intact, the architectural discipline holding under measurement, and the methodology evidence ready for Phase 2 to consume as the substrate it builds against per D93.
