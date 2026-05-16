@@ -160,3 +160,41 @@ The audit's output for the Phase 2 packaging conversation:
 6. This file (`charter/p12-phase-2-inputs.md`) — the bridge between Phase 1's close and Phase 2's opening.
 
 The Phase 2 strategic-mode opening conversation reads these six artefacts plus the bet (`charter/bet.md`), the PRFAQ at the candidate Phase 2-direction articulation (`charter/prfaq.md`), the principles file (`charter/principles.md`), and the roadmap (`charter/roadmap.md`) at v5. Phase 2 framing produces a v6 roadmap entry plus a Phase 2 PRD (or extends the Phase 1 PRD with the Phase 2 living-document section per D43) plus the first Phase 2 package's epic note.
+
+## Updates since P12 close
+
+This section captures charter-discipline work between P12 audit close and Phase 2 packaging open. Append-only; future updates accrete here until Phase 2 framing absorbs them.
+
+### Post-P12 charter-discipline hygiene completion
+
+Seven commits closed the post-P12 charter-discipline hygiene session on 2026-05-16. Three new discipline conventions landed at `charter/methodology.md`: per-phase decisions archival pattern (mirrors D107's per-package session-log pattern at phase granularity); deferred-entry closure-by-D-entry convention (Status header line plus append-only body preservation); principles-D-entry reference convention (parenthetical references where principles restate D-entry commitments). Twenty-two principles in `charter/principles.md` gained parenthetical D-entry references; five required multi-D references (D4+D16 for hexagonal, D1+D32 for database-per-tenant, D4+D15 for LiteLLM+Ollama, D14+D76 for customer-specific behaviour, D16+D17+D28 for bounded contexts). `charter/deferred-decisions.md` reorganised into eight themed sub-sections (Architectural primitives; Phase 2 substrate completion; Production-deployment readiness; Workflow context extensions; Methodology and governance; Compliance and security; Tool registry and authoring; Phase 1 close audit findings) with a table of contents at top; entry content preserved verbatim. D1 through D113 archived to `docs/archive/decisions/phase-1.md` with full Choice/Reasoning/Alternatives/Kano content preserved; active `charter/decisions.md` at 136 lines with one-line summaries plus archive pointers; D106 reservation note landed inline between D105 and D107 summaries. One entry retired: "HTTP API for ingestion management" gained "Status: closed by D104, 2026-05-14" marker. Pre-write reconciliation finding: no dedicated entry exists for the parallel "HTTP API for evaluation management" carryover; D112 absorbed the work at S42; no Status marker landed because no entry exists.
+
+### Refreshed Phase 2 entry handoff artefact list
+
+The Phase 2 strategic-mode opening conversation reads the following expanded set:
+
+1. `charter/p12-audit-findings.md` — the audit's consolidated deliverable (unchanged).
+2. `charter/p12-audit-inputs.md` — the input set the audit acted on (unchanged).
+3. `charter/methodology.md` — now at v3 (or pending v3 at this session's close per `charter/current-package.md`) with the post-P12 three discipline conventions and the pre-Phase-2 Foundation/Work-organisation/Measurement-model refinements landing at this session.
+4. `charter/principles.md` — gained D-entry references throughout (twenty-two principles annotated); header pointer to the three-document relationship lands at this session.
+5. `charter/decisions.md` — now active-phase-with-archive-pointers (136 lines); D1-D113 archived to `docs/archive/decisions/phase-1.md` per the per-phase archival pattern.
+6. `docs/archive/decisions/phase-1.md` — new full archive of D1-D113 with Choice/Reasoning/Alternatives/Kano content preserved verbatim.
+7. `charter/deferred-decisions.md` — reorganised into eight themed sub-sections with table of contents; closure convention preamble added.
+8. `charter/architecture.md` — new synthesis surface with diagrams (landing at this session).
+9. This file (`charter/p12-phase-2-inputs.md`) — updated with this section.
+
+### Phase 2-entry substrate hygiene workitems status refresh
+
+- **Gold-set audit-emission back-fill** — still pending. Extends `contexts/retrieval_evaluation/application/` use cases (create_gold_set, append_entry_to_revision, finalize_revision, plus new rename_gold_set use case) to emit audit events on aggregate-level mutations. Estimated half-session of substrate work. Lands at Phase 2-entry hygiene window before consumer-UX work begins.
+- **Graph-extract reliability fix** — still pending. Three structural pieces (reclaim policy, worker-side asyncio timeout, optimistic-concurrency-control on reclaim) per the deferred-decisions entry. Estimated one substrate session. Activation: first Phase 2 package that depends on graph retrieval producing entities reliably.
+- **Schema.md formalisation** — still pending. `TenantContext`, `ErrorResponse`, canonical cursor codec shapes are well-defined in code but not in the binding-specification surface. Half-session of doc work. Lands at Phase 2-entry hygiene window.
+- **Doc-content rebrand from "(pending operator authorship per D39)"** — partially handled at post-P12 hygiene. `charter/deferred-decisions.md` "Methodology metrics" entry, "Methodology mechanical-enforcement upgrades" preamble, and "Full DORA and CORE4 instrumentation" entry all refreshed to D113's living-hypothesis framing at post-P12 hygiene commit 4 (143a53e). CLAUDE.md "Methodology capture" section still carries the stale framing and is still pending; can land as a small commit at Phase 2-entry hygiene or absorbed into Phase 2 framing if a CLAUDE.md re-read produces other updates anyway.
+
+### Pre-Phase-2-framing pending work explicit
+
+Two workitems land at this session (pre-Phase-2 architecture synthesis and methodology refinement) per the agreed sequencing:
+
+- **`charter/architecture.md` authoring** — new synthesis surface with five Mermaid diagrams (bounded contexts overview; hexagonal within a context; database-per-tenant topology; vendor port-adapter pattern; four-context evaluation-to-recommendation pipeline). Procurement-grade synthesis from inception; Phase 2 readers consult it at onboarding, phase-audit-time, and procurement-grade-touch moments.
+- **`charter/methodology.md` refinements (three sub-section additions)** — Foundation super-section gains "Hypothesis and iteration" sub-section after "What's being investigated"; Work organisation super-section expands to six sub-sections (Strategic tree; Phase lifecycle; Package lifecycle; Session lifecycle; Session shapes; Frameworks); Measurement model section gains hypothesis-framing prose at the top.
+
+After this session closes, Phase 2 packaging strategic-mode opening conversation is the next strategic-mode block. It reads the cleaned and synthesised charter surface plus the artefact list above.
