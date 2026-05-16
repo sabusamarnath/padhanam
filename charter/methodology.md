@@ -228,6 +228,8 @@ Without the capture surface, mid-session stray thoughts derail current sessions 
 
 ## Measurement model
 
+These metrics are themselves part of the hypothesis being tested. Phase audits assess whether each metric category produces useful signal; underperforming metrics earn revision or retirement; missing-signal observations earn new metrics. The measurement model at any version captures what we believe measures the methodology; the model's evolution across versions is itself evidence of what each phase surfaced about what is measurable. The "What the numbers are not" sub-section below makes the framing explicit at the discipline level; this paragraph makes it explicit at the model's hypothesis level.
+
 Per D40, the methodology is measured against a model with four bet-native layers and an industry overlay. Reviewed at every phase audit. Reported even when the trend does not flatter the bet.
 
 **Bet metrics** measure operator fluency, the deliverable Phase 1 commits to. Leading indicators: time-to-decision on D-entries, reflection density quality, framework usage at appropriate moments. Lagging indicators: self-assessed fluency at phase boundaries, ability to direct enterprise-grade implementation without code-level intervention.
@@ -277,7 +279,7 @@ Per session: structured tagging captured at session close, two minutes. Per pack
 
 ### What the numbers are not
 
-The metrics measure the methodology, not the operator. Sessions producing drift are not failures of competence; they are failures of the discipline as it stood at that point, and they typically produce a principle update, a decisions entry, or a methodology refinement that prevents recurrence. The methodology improving over time is the expected result; if the metrics get worse over time, that is itself an important finding the case study should report honestly.
+The metrics measure the methodology, not the operator (and the metric model itself measures what we currently believe is measurable — see the hypothesis-framing paragraph at the top of this section). Sessions producing drift are not failures of competence; they are failures of the discipline as it stood at that point, and they typically produce a principle update, a decisions entry, or a methodology refinement that prevents recurrence. The methodology improving over time is the expected result; if the metrics get worse over time, that is itself an important finding the case study should report honestly.
 
 The metrics also do not measure the platform's quality as a product. The platform is the artefact through which the methodology is demonstrated. Platform quality is a separate concern (covered by the test suite, contract tests, security posture) and is not what the DORA and CORE4 measurement is for.
 
