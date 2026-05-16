@@ -156,11 +156,112 @@ Tools (external services called by the platform on the tenant's behalf) cover mo
 
 ## Vendor and dependency posture
 
-[Pending in commit 4]
+Vendor flexibility is a procurement-grade commitment per D111: external dependencies — LLM provider, embedding model, database backend, vector store, graph store, audit target, observability target — sit behind ports; vendor swap is configuration or adapter replacement, never domain change. Operationalised at the producer-context level through MetricCalculator and RecommendationRule pluggable domain abstractions in `contexts/optimization/` (Phase 1, per D111); ported domain-layer pluggability is the same principle applied to pluggable evaluation techniques and recommendation rules.
+
+```mermaid
+flowchart LR
+    subgraph domain[Domain ports]
+        llm_port[LLMPort]
+        embedder[ChunkEmbedderPort]
+        retrieval[RetrievalClient]
+        audit_port[AuditPort]
+        obs_port[ObservabilityPort]
+        metric_calc[MetricCalculator]
+        rec_rule[RecommendationRule]
+    end
+    subgraph adapters[Adapters]
+        litellm[LiteLLM adapter]
+        ollama_embed[Ollama embedder adapter]
+        pgvector[pgvector adapter]
+        neo4j_adapter[Neo4j adapter]
+        otel_adapter[OTel adapter]
+        langfuse_adapter[Langfuse adapter]
+        postgres_audit[Postgres audit adapter]
+    end
+    subgraph external[External systems]
+        ollama_local[Ollama local]
+        anthropic[Anthropic API]
+        openai[OpenAI API]
+        postgres[Postgres]
+        pgvector_db[(pgvector)]
+        neo4j_db[(Neo4j)]
+        langfuse[Langfuse server]
+    end
+    llm_port -.-> litellm
+    embedder -.-> ollama_embed
+    retrieval -.-> pgvector
+    retrieval -.-> neo4j_adapter
+    audit_port -.-> postgres_audit
+    obs_port -.-> otel_adapter
+    otel_adapter --> langfuse_adapter
+    litellm --> ollama_local
+    litellm --> anthropic
+    litellm --> openai
+    pgvector --> pgvector_db
+    neo4j_adapter --> neo4j_db
+    postgres_audit --> postgres
+    langfuse_adapter --> langfuse
+```
+
+### LLM-provider-agnostic via LiteLLM
+
+LLM access flows through a LiteLLM gateway behind `LLMPort` per D4. The development default is Ollama serving Qwen 2.5 7B per D15 (tool-calling fidelity at the embedding-cost ceiling); production swap is configuration through `padhanam/config/`. No vendor SDKs in domain code; import-linter contracts enforce `no-vendor-sdks-in-domain` at CI. See `charter/principles.md` "LLM-provider-agnostic via LiteLLM" (per D4, D15).
+
+### Hybrid retrieval via pgvector and Neo4j
+
+Retrieval is hybrid: vector via pgvector (HNSW cosine, nomic-embed-text embeddings per D62), graph via Neo4j (shared instance with property-based tenant scoping per D63), both behind the `RetrievalClient` port per D5. Strategy selection at runtime per D66's agent-runtime-executed-composition pattern; the strategy catalogue ships vector_only, graph_only, and parallel_rrf (the last currently deferred per `charter/deferred-decisions.md`). See `charter/principles.md` "Hybrid retrieval" (per D5).
+
+### OTel as observability portability boundary
+
+Observability uses OpenTelemetry GenAI conventions as the portability boundary per D27. Span attributes carry tenant_id, jurisdiction, cost-per-token, and trace_id. Vendor-specific observability code is confined to adapters; the trace store is self-hosted Langfuse 3 per D7 behind an `ObservabilityPort`. Production swap to a different observability vendor is adapter replacement.
+
+### Hash-chain primitive at the platform layer
+
+The hash-chain primitive (canonical-JSON-sorted-keys plus SHA-256 with chain-link) lives at `padhanam/security/hash_chain.py` per D75 (promoted from `contexts/methodology/` at S24). Multiple contexts reuse it: the audit context (`contexts/audit/`) per D26 for append-only audit-event chains; the methodology context for revision-with-hash-chain; the retrieval_evaluation context per D109 for gold-set revisions; the optimization context per D111 for recommendation evidence-citation tamper-evidence. The cross-context reuse pattern is structurally honest because the hash-chain primitive is general (any append-only-with-content-integrity surface uses the same shape) while the input-shaping per context lives at each context's domain layer.
 
 ## Domain primitives
 
-[Pending in commit 4]
+Four domain primitives anchor the platform's product-shaped surfaces: role-first agent identity; methodology as defaults plus envelopes; the four-layer constraint stack; recommendation-shaped optimisation output.
+
+### Role-first agent identity
+
+Roles are the primary identity for agents per D86. The agent's job is the role it occupies. Methodologies are playbooks the role applies (situationally); skills are granular capabilities the agent invokes. The role-first model lets methodologies compose at runtime via lineage rather than at design-time via inheritance — an agent has a single role identity throughout its lifetime, and the methodologies it has adopted are recorded as a lineage that affects its constraint bundle without changing its identity. See `charter/principles.md` "Role-first agent identity" (per D86).
+
+### Methodology as defaults plus envelopes
+
+When an agent adopts a methodology, the methodology is embedded as defaults for tuning surfaces and as envelopes for security, budget, and scope surfaces per D81. Defaults activate at decision points, encode the right thing for the chosen methodology, and yield to user intent at low cost. Envelopes bind hard and are validated at agent write time. The product surface treats user intent as primary for tuning; envelopes are non-overridable by the agent and exist to protect the tenant and the platform. The methodology document is the long form of the operating model; the methodology context (`contexts/methodology/`) is the runtime layer.
+
+Per-field binding-mode discipline at D81 commits three hard-bound fields and six soft-bound fields as platform convention. The override mechanism for methodology-author-driven per-field binding deviation defers to Phase 2 per the deferred-decisions entry on "Per-role binding-mode override".
+
+### Four-layer constraint stack
+
+Per D80, agent runtime constraints stack in four layers, applied in order:
+
+```mermaid
+flowchart TB
+    subgraph stack[Constraint application order]
+        direction TB
+        agent_layer[4. Agent layer<br/>per-instance overrides<br/>e.g. system_prompt, temperature]
+        workflow[3. Workflow layer<br/>opt-in via invocation context<br/>e.g. workflow-scope constraints]
+        methodology[2. Methodology layer<br/>opt-in via role lineage<br/>defaults plus envelopes per D81]
+        platform[1. Platform invariants<br/>universal floor<br/>D82 invariants 1-5]
+        platform --> methodology
+        methodology --> workflow
+        workflow --> agent_layer
+    end
+    output([Effective agent constraint bundle<br/>at invocation time])
+    agent_layer --> output
+```
+
+Platform invariants per D82 are the universal floor — non-overridable, applied to every agent invocation regardless of methodology lineage, workflow context, or per-agent overrides. The five Phase 1 close invariants (no financial execution without per-transaction authorization; no outbound communication without per-invocation authorization; no acceptance of legal commitments without explicit user action; no auto-modification or auto-deletion of user-authored content; no transmission of tenant data outside tenant-configured tool paths) protect the tenant and the platform. Each invariant maps to safety dimensions (privacy, integrity, reversibility, transparency, control, auditability) per `charter/principles.md` "User safety".
+
+Methodology layer applies if the agent has methodology lineage; envelopes bind hard, defaults are tuning suggestions. Workflow layer applies if the agent is invoked within a workflow context (Phase 2 per D83). Agent layer is per-instance: the agent's authored constraints (system_prompt, model_selection, retrieval bounds) plus the override-mode space per D87 (augment/replace/tighten per-field).
+
+### Recommendation-shaped optimisation output
+
+Per D9, optimisation output is recommendation-shaped, not chart-shaped. Every dashboard view ties to a recommended action. The principle extends to the agent layer per `charter/principles.md` "Padhanam-as-intelligence-layer": Padhanam produces recommendations, analyses, and drafts; consequential actions on the user's behalf require user-in-the-loop authorization at appropriate granularity per the platform invariants.
+
+The recommendation aggregate at `contexts/optimization/` carries five fields per D108 (category, subject, text, evidence_citations, status); numeric confidence scores stay out on D9 grounds (a single floating-point "confidence" would be chart-shaped). The four Phase 1 recommendation categories are retrieval_strategy, model_choice, prompt_revision, cost_optimization per D108 commitment 5. Evidence citations are a discriminated union with structured CaveatAnnotation per D111; the citation surface lets procurement readers trace prose → rule → citation → producer-context records without ambiguity.
 
 ## The four-context substrate
 
