@@ -42,7 +42,7 @@ Read every session. Kept tight on purpose.
 - Security as default: HTTPS via mkcert, secrets in `.env`, RLS on tenant-scoped tables, Pydantic validation on every endpoint, audit log on state changes.
 - Conventional commits referencing package and session number.
 - New components that touch tenant data accept jurisdiction as a parameter or column from inception. Adding it later is a refactor, not configuration.
-- Methodology is measured against DORA and CORE4 per D40. Definitions and cadence will live in `charter/methodology.md` (pending operator authorship per D39). Session-log entries include the structured tagging block.
+- Methodology is measured against DORA and CORE4 per D40. Definitions and cadence live in `charter/methodology.md`, the active living-hypothesis surface per D113 (superseding D39's pending-authorship framing). Session-log entries include the structured tagging block.
 - Throughput pressure is information about scope, not a license to delegate decisions. The first response to operator-capacity constraints is to cut scope, not to automate the work that builds fluency.
 - PRD-shaped documentation surfaces (phase PRDs, package epic notes, user stories, PRFAQ) are living artefacts. Original draft is preserved alongside as-built reality; delta capture is the audit deliverable. Append-only at the version level, per D43.
 - Reflection density distinguishes session-log entries by conversation type. Strategic conversations produce shorter entries focused on what was decided. Build sessions produce longer entries with substantive reflection on what was learned. The mix of conversation types over time is signal at phase audits.
