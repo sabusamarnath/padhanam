@@ -126,11 +126,23 @@ The charter is the methodology's primary artefact surface. Each shape serves a d
 
 Strategic constants articulate the position; if they edit, the audit trail of how the position evolved disappears. Living documents capture intent at draft time and reality at close, with the delta as the audit deliverable. Append-only logs preserve the full decision history for retrospective analysis. The active surface gets tight token discipline because session-time costs accrue to it and accreted content slows every session. Each shape's constraint is what gives it its specific audit value; collapsing the shapes (e.g., letting the active surface accrete forever or letting decisions edit) loses that value.
 
+### Per-phase decisions archival pattern
+
+Decisions archival follows D107's per-package session-log archival pattern at phase granularity. At phase close, D-entries from the closing phase archive to `docs/archive/decisions/phase-N.md`. The active `charter/decisions.md` retains one-line summaries plus pointers to the archive for archived D-entries; full Choice/Reasoning/Alternatives/Kano content lives in the archive. New D-entries in subsequent phases land in active `decisions.md` until that phase closes. The pattern keeps active `decisions.md` tight per the token-discipline principle while preserving the full audit-trail evidence in the archive.
+
+### Principles-D-entry reference convention
+
+Principles that restate a D-entry commitment carry a parenthetical D-entry reference (e.g., "Optimization output is recommendation-shaped, not chart-shaped (per D9)."). The reference makes the principle-to-commitment relationship explicit and surfaces the maintenance dependency: when the D-entry evolves via supersession, the principle's reference updates to the new D-entry. Principles that articulate disciplines without a single D-entry home (token discipline, reflection density, role-function tagging) do not carry references.
+
 ## Append-only discipline
 
 The charter is append-only at the entry level for logs, at the version level for living documents, and at the section level for strategic constants. Historical D-entries, principles content, and session log reflections are not edited in place; they are added to. Living documents preserve original drafts alongside as-built reality; each new version appends rather than replaces. AST tests in `tests/_enforcement/` catch in-place edits at CI; the violation count is itself a measurement layer.
 
 Edited charter loses audit-trail value. The case study's audience reads the charter as evidence of whether the methodology produces honest decisions; if past decisions can be silently revised to look better in retrospect, that evidence is worthless. The S8 lesson (recovery from in-place edits via git restoration) made the principle explicit at D29; mechanical enforcement followed because operator vigilance does not scale to a 200-commit codebase. The discipline applies symmetrically to errors: a mistaken D-entry is corrected by a new D-entry that supersedes it, not by editing the original.
+
+### Deferred-entry closure by D-entry
+
+When a numbered D-entry closes a deferred-decisions entry (the deferred decision becomes a committed D-entry), the deferred entry gains a Status header line: "Status: closed by D<n>, <date>". The entry body remains intact for audit-trail purposes per the append-only discipline. At phase audits, closed deferred entries can archive to `docs/archive/deferred-decisions/phase-N.md` if the active `deferred-decisions.md` grows beyond working-files-stay-tight intent.
 
 ## Architectural enforcement
 
