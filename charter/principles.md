@@ -2,6 +2,8 @@
 
 Read every session. Kept tight on purpose.
 
+For architectural synthesis with diagrams, see `charter/architecture.md`. For full reasoning behind each architectural commitment, see `charter/decisions.md` (active phase) or `docs/archive/decisions/phase-N.md` (archived phases). For build discipline, see `charter/methodology.md`.
+
 ## Architectural
 
 - Hexagonal throughout. External systems behind interfaces. Domain code never imports vendor SDKs (per D4, D16).
