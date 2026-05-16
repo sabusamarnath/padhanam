@@ -4,17 +4,29 @@ This document covers the build methodology: how Padhanam itself is built. It is 
 
 The articulation of how Padhanam works. Read at strategic sessions; revised at phase audits with the version log appended at the end. Per D39.
 
-## What Padhanam is
+## Foundation
 
-Padhanam is two artefacts produced together. A platform built to enterprise-grade architectural standards (multi-tenant, identity-federated, audit-chained, jurisdiction-aware, OTel-instrumented), and the methodology that produced it: a discipline for senior product leaders directing end-to-end implementation through AI-assisted development without writing code. The platform is the artefact that proves the methodology; the methodology is the proprietary insight the platform is evidence of. Both are case-study artefacts, audited against the level of complexity that real enterprise software requires.
+### What Padhanam is
+
+Padhanam is two artefacts produced together. A platform built to enterprise-grade architectural standards (multi-tenant, identity-federated, audit-chained, jurisdiction-aware, OTel-instrumented; see `charter/architecture.md` for the architectural synthesis), and the methodology that produced it: a discipline for senior product leaders directing end-to-end implementation through AI-assisted development without writing code. The platform is the artefact that proves the methodology; the methodology is the proprietary insight the platform is evidence of. Both are case-study artefacts, audited against the level of complexity that real enterprise software requires.
 
 The bet is articulated in `charter/bet.md` and externally in `charter/prfaq.md`. Phase 1 is the substrate that proves the bet's load-bearing claims: that architectural discipline survives AI-assisted implementation, that mechanical enforcement scales while operator attention does not, that observability with cost dimension produces optimization recommendations enterprise procurement reads as defensible. Phase 2 direction is decided at the Phase 1 close audit based on what Phase 1 surfaces about the proposition, the methodology, and operator capacity.
 
-## What's being investigated
+### What's being investigated
 
 The role being exercised in Padhanam does not have a settled name. The operator is a senior product leader. The implementation is performed by Claude Code. The relationship between the two is the unit of analysis: the operator defines intent, constraints, and architectural commitments; the model produces code, tests, schema, migrations, and commits within those constraints; the operator reviews, audits, and corrects. The methodology documents what works and what does not in that relationship, with enough specificity that another senior product leader could read it and adopt the discipline.
 
 The structural disciplines below (mode separation, frameworks, charter shape, enforcement, reflection, capture, measurement, cost) are committed via D-entries and enforced mechanically. The pattern and failure-mode observations later in the document are descriptive: they accumulate as Phase 1 progresses and are reviewed at phase audits. The methodology is open to its own revision based on measurement evidence; if at any phase audit the evidence stops supporting the proposition, the bet document and this document are revised to reflect what was actually learned. Honesty about the experiment is more valuable than the experiment succeeding in any particular form.
+
+### Hypothesis and iteration
+
+Padhanam is a hypothesis under iterative test. The bet articulates the hypothesis; sessions accumulate evidence; phase audits validate or refine the hypothesis based on what evidence shows; the bet, methodology document, principles file, and architecture document revise to reflect what is actually learned.
+
+The iteration cycle is not extrinsic to the experiment; it is the experiment's mechanic. Every artefact in the charter sits within this cycle: bet as hypothesis articulation, principles as binding rules derived from accumulated evidence, decisions as the audit-trail of architectural commitments along the way, methodology as the discipline of how the iteration happens, architecture as the synthesis of what the system looks like at any moment.
+
+The methodology document itself is a living hypothesis revised across phase boundaries. v1 articulated the initial discipline at P3 close per D39's pending-authorship framing (later superseded by D113). v2 integrated Phase 1's accumulated discipline-pattern data points at P12 close (six new Patterns-observed entries plus the Session shapes sub-section). v3 (this version) refines Foundation, Work organisation, and Measurement model based on the P12-close-plus-post-P12-hygiene observations about the document's coherence and the three-document relationship with principles.md and architecture.md. Future versions revise based on Phase 2 evidence.
+
+The hypothesis-iteration cycle distinguishes Padhanam's methodology from prescriptive operating manuals authored once and applied unchanged. The methodology document's content is the methodology's current hypothesis; the version log is the audit trail of how the hypothesis has evolved; the Patterns-observed and Failure-modes-observed sections are the evidence layer. A reader at any phase boundary reads the methodology document as the methodology's most recent hypothesis, not as fixed truth. The case study's credibility depends on the methodology being revisable in response to evidence; without iterative revision, the methodology becomes ideology rather than empirical practice.
 
 ## Two-surface mode separation
 
