@@ -44,7 +44,11 @@ Briefs do not version mid-package: a saved brief is the v1 specification, and de
 
 The "no in-place brief edits" rule is load-bearing: if the build session needs to deviate from the brief, the deviation lives in the session log reflection. We did this with D54's return-type deviation at S17a — S17a's reflection captured the deviation; brief stayed at framing-time text. That's the discipline that makes brief preservation worth more than session-log-only retrospection.
 
-## Work hierarchy
+## Work organisation
+
+Work in Padhanam is organised across four lifecycle levels (bet → phase → package → session), three decision-discipline frameworks (LVT, Kano, RICE), and five recognised session shapes (substrate, bridge, transport, hygiene, audit). Each level operates at a different forecasting horizon and a different audit cadence; the structure makes the disciplines visible without conflating altitudes.
+
+### Strategic tree
 
 Padhanam organises work in a four-level tree.
 
@@ -57,15 +61,57 @@ The full tree lives at `charter/roadmap.md` per D44 as the canonical living arte
 
 Each level is a different forecasting horizon. Bets are multi-year. Phases are multi-month. Packages are multi-week. Sessions are single-day. Conflating horizons produces commitments at the wrong altitude: bet-level forecasts at the package level produce overcommitment to specific implementations before the substrate is understood; package-level forecasts at the bet level produce strategic drift toward whichever package the operator is currently shipping. The hierarchy enforces strategic placement at the right altitude before option assessment or sequencing begins.
 
-## Frameworks
+### Phase lifecycle
 
-Three frameworks operate at three different moments. Per D42.
+A phase opens with a strategic block that lands a Phase PRD (or extends the prior Phase PRD with a new section per D43), confirms the package set against the bet, and lands a new roadmap version per D44 with reasoning category (discovery, capacity, signal, or hedge). The phase opening also seeds the first package's epic note per D43.
 
-**LVT** (Lean Value Tree) places work in the strategic tree. Used at framing to confirm where new work sits in the bet → initiative → epic → story hierarchy.
+In-progress, the phase runs through its package sequence; each package opens with an epic note and closes with a retrospective plus archive. Sessions accumulate session-log methodology-candidate lines that consolidate at package close and again at the phase audit. The phase's substrate intent is verifiable continuously through the test surfaces (import-linter contracts, AST tests, tenant-isolation contract scenarios, integration tests).
 
-**Kano** evaluates options at decision points. D-entries that select between alternatives carry a Kano category field at the bottom of the entry: must-have (absent of which breaks the bet), performance (scales the bet linearly), delighter (disproportionate value relative to cost), indifferent (neutral, named so it does not accumulate as ambition), or reverse (actively erodes the bet despite looking attractive). The convention applies from D41 forward.
+The phase closes with a phase audit producing: a methodology document revision; a PRFAQ refresh per D45; the phase PRD as-built section per D43; a new roadmap version per D44 with reasoning category; drift findings; framework distribution checks; metric review across the four bet-native metric layers plus the industry overlay; D-entries archived to `docs/archive/decisions/phase-N.md` per the methodology document's "Per-phase decisions archival pattern" sub-section.
 
-**RICE** prioritises sequencing. Reach × Impact × Confidence ÷ Effort. Recorded explicitly on packages and on implementation backlog items where sequencing involves real choice. Phase audits review score honesty (forecasts versus post-hoc rationalisations).
+Transition to the next phase happens at a strategic-mode opening conversation reading the audit's outputs plus the consolidated Phase-N-inputs file (per the P12 audit's `charter/p12-phase-2-inputs.md` precedent). The transition produces the next phase's PRD section, the v6 roadmap entry, and the first package's epic note.
+
+### Package lifecycle
+
+A package opens with an epic note at `charter/packages/p<n>-epic.md` per D43 (from P4 forward). The epic note captures intent, scope, session forecast, and out-of-scope explicitly; subsequent sessions read it as the canonical package framing.
+
+In-progress, the package runs through its session sequence. Session shapes (substrate, bridge, transport, hygiene, audit per the Session shapes sub-section below) calibrate scope expectations and session-prompt drafting. Session log entries accumulate at `log/sessions.md` with role-function tags per D46, structured metrics tagging blocks per D40, reflection density distinguished by conversation type per D47, and methodology-candidate lines that the package retrospective consolidates.
+
+The package closes with a retrospective plus archive. The epic note's as-built section gets populated per D43, naming what shipped versus what was forecast; deltas land as audit deliverable. Session log content for the package archives to `docs/archive/sessions/p<n>.md` per D107, keeping the live `log/sessions.md` tight per the token-discipline principle. The package retrospective at `log/packages.md` carries a measured-outcomes paragraph per D40 with the package's metric numbers.
+
+### Session lifecycle
+
+A session opens with a brief preserved at `briefs/<package>/<session>.md` per D43 (from S17b forward; see "Session brief preservation" under Two-surface mode separation for the file-based discipline). The brief is short and explicit because vague briefs produce vague work; the session-prompt convention (package and session identification, goal stated as artefacts at session close, context to read first, charter updates required, substantive work in commit-shaped units, acceptance criteria, reflection prompts, out of scope, session log entry instruction) is the structural defence against ambiguous briefs.
+
+Sessions follow Design → Build → Test → Close internally. The mode declaration at conversation start per D47 binds the session to a deliverable shape: build sessions ship code commits, smoke verification at any UI surface per the S4 lesson, and charter touch-points (schema, decisions, current-package status); strategic sessions ship charter edits, session prompts, or roadmap version updates. Mid-build pre-write reconciliation fires when the brief surfaces against the as-built codebase reality (per the Patterns-observed entry); operator engagement happens with explicit disposition recorded in the D-entry body or commit message.
+
+The session closes with a log entry at `log/sessions.md`. The entry carries reflection density per session shape (strategic shorter, build longer per D47), role-function tag per D46 naming which of the five role-functions were exercised, structured metrics tagging block per D40 for downstream computation, and methodology-candidate lines for accumulation toward the next audit. Captures triage per D48 classifies any mid-session stray thoughts into the five impact types (quick task, inject, defer, replan, note).
+
+### Session shapes
+
+Phase 1 surfaced five session shapes worth naming for recognition value. Each shape carries distinguishing characteristics that affect brief drafting, scope expectations, and reflection density. The shapes are descriptive rather than prescriptive: a session occupies one shape based on what it does, not on commitment to a particular cadence.
+
+**Substrate sessions** ship architectural surface: a new bounded context's domain layer, application layer, ports, adapters, schema migration, contract tests, smoke. Scope is large; commit count typically 8 to 12; reflection density is high because architectural decisions land in code. Pre-write reconciliation fires reliably at session open against brief-vs-codebase drift. Examples across Phase 1: S31 (run_history substrate); S36 (audit reader substrate); S38 (ingestion management substrate); S39 (retrieval evaluation substrate); S40 (retrieval evaluation runner); S41 (optimization layer).
+
+**Bridge sessions** sit between substrate sessions and address verification-and-hygiene work that the substrate session cannot ship cleanly. The shape produces charter-grade artefacts that downstream sessions cite. Smaller scope than substrate; commit count typically 3 to 5; reflection density medium with focus on what the substrate session left unresolved. Pre-write reconciliation fires against substrate-vs-verification-surface drift. Examples: S39b (corpus re-ingest + real-corpus gold-set rebuild between S39 substrate and S40 runner); S40b (clean gold-set authoring between S40 runner and S41 optimization).
+
+**Transport sessions** ship HTTP layer over existing substrate. No new ports, no new domain types, no new adapters; just inbound adapter layer atop existing application use cases. Distinct shape from substrate because the substrate is fixed and the work is composing routes, DTOs, query parsers, error handlers, and wiring extensions. Scope medium; commit count typically 8 to 10; reflection density medium with focus on convention-consistency and procurement-grade-defensibility through the HTTP layer. Pre-write reconciliation can fire on convention-consistency (S42 Finding 5 DTO placement) but doesn't anchor on substrate decisions. Examples: S34 (run-history HTTP); S37 (audit HTTP); S38 (ingestion management HTTP); S42 (retrieval_evaluation + optimization HTTP).
+
+**Hygiene sessions** consolidate end-of-package debt: documentation expansion, methodology-candidate consolidation, dev-tooling verification, structural-finding documentation, stray-artefact cleanup. Mixed commit prefixes per work nature (`docs(charter)`, `docs(readme)`, `chore`, `fix`). No new D-entries (the hygiene session does not produce binding architectural commitments). Structural findings forwarded to deferred-decisions rather than fixed in-session per the bounded-fix-or-document disposition rule. Reflection density medium with focus on what's being deferred to the next audit. Example: pre-P12 hygiene at P11 close; post-P12 charter-discipline hygiene at the post-audit boundary.
+
+**Audit sessions** are strategic-mode synthesis sessions that occur at phase boundaries. Three tracks (top-down D-entry verification, bottom-up codebase tour, audit-input disposition) plus methodology-document substantive update. No code changes; outputs are charter amendments, methodology updates, deferred-decisions refreshes, and Phase 2 inputs. Commit count typically 10 to 12 (grouped by destination file rather than chronologically). Reflection density high with focus on the bet's load-bearing claims and the methodology's hypothesis evolution. Example: P12 phase audit.
+
+The shape distinction is recognition-value: naming the shape lets brief drafting calibrate scope, lets the operator anticipate which disciplines fire, and lets phase audits assess shape distribution. Phase 2 substrate sessions inherit the substrate framing; Phase 2 framing of bridge or hygiene sessions in advance promotes if substrate work consistently produces them. The shapes are not commitments to a specific cadence; they are vocabulary for what surfaces.
+
+### Frameworks
+
+Three frameworks operate at three different moments per D42, each at a distinct lifecycle level.
+
+**LVT** (Lean Value Tree) places work in the strategic tree. Used at phase opening and package opening to confirm where new work sits in the bet → phase → package → session hierarchy. The strategic-tree artefact lives at `charter/roadmap.md` per D44.
+
+**Kano** evaluates options at D-entry decision points. Used at any session (strategic or build) that produces a D-entry selecting between alternatives. D-entries that select between alternatives carry a Kano category field at the bottom of the entry: must-have (absent of which breaks the bet), performance (scales the bet linearly), delighter (disproportionate value relative to cost), indifferent (neutral, named so it does not accumulate as ambition), or reverse (actively erodes the bet despite looking attractive). The convention applies from D41 forward.
+
+**RICE** prioritises sequencing. Reach × Impact × Confidence ÷ Effort. Used at package framing and at backlog items where sequencing involves real choice. Recorded explicitly on packages. Phase audits review score honesty (forecasts versus post-hoc rationalisations).
 
 Without explicit categorisation at the decision moment, "must-have" stretches to mean "felt rigorous while deciding" and prioritisation becomes post-hoc rationalisation. The frameworks operate at distinct moments of the work; conflating them produces ceremony without reasoning value. Kano at framing forces honest assessment of which features actually move the bet versus which look attractive but do not. RICE at sequencing forces honest forecasting, with phase audits checking whether scores were defensible rather than convenient. Phase audits also review distribution (too many must-haves suggests conflation with default; too many delighters suggests features added without honest weighting) and roadmap reasoning-category distribution per D44 (too many capacity-driven changes mean the bet was overscoped; too many signal-driven changes mean it was poorly grounded; too many hedge entries mean the operator is avoiding commitment).
 
@@ -80,28 +126,6 @@ The token discipline in `principles.md` is a budget for the model's reading; the
 The operator is not an architect by career or title. The work being done in some sessions is architect-adjacent: defining boundaries, enforcing principles, making structural decisions about ports and adapters, deciding what belongs in the shared kernel and what does not. AI-assisted development makes this kind of work accessible to a senior product leader who has the domain understanding and the seniority to make the judgement calls, even without the engineering identity that would traditionally produce architectural authority.
 
 The methodology distinguishes this from architecture as a profession. The operator is not designing systems from scratch; the operator accepts, modifies, or rejects structural proposals from the model, informed by enterprise procurement experience and product judgement. The model surfaces the technical options; the operator picks among them with reference to constraints the model cannot fully see (regulatory direction, what real enterprise buyers will accept, what the long arc of the platform requires). This is what the bet's architect-implementer pattern actually consists of in practice. The role is not "product leader pretending to be architect"; it is product leader exercising structural judgement against options the model surfaces, with the architectural authority coming from the seniority of the judgement rather than from engineering identity.
-
-## Session shape
-
-Sessions follow Design → Build → Test → Close. Each session has a brief that names the package, the scope, and the constraints inherited from prior decisions. The brief is short and explicit. Vague briefs produce vague work: the model fills ambiguity by making choices, and operator-and-implementer drift starts there. The session-prompt convention (package and session identification, goal stated as artefacts at session close, context to read first, charter updates required, substantive work in commit-shaped units, acceptance criteria, reflection prompts, out of scope, session log entry instruction) is the structural defence against ambiguous briefs.
-
-Browser interactive verification is the success criterion for any acceptance criterion that involves a UI surface, not CLI smoke. CLI smoke alone passes while the user experience is broken; both must be verified. The discipline lands from the S4 lesson and applies universally to any UI-bearing acceptance criterion.
-
-## Session shapes
-
-Phase 1 surfaced five session shapes worth naming for recognition value. Each shape carries distinguishing characteristics that affect brief drafting, scope expectations, and reflection density. The shapes are descriptive rather than prescriptive: a session occupies one shape based on what it does, not on commitment to a particular cadence.
-
-**Substrate sessions** ship architectural surface: a new bounded context's domain layer, application layer, ports, adapters, schema migration, contract tests, smoke. Scope is large; commit count typically 8 to 12; reflection density is high because architectural decisions land in code. Pre-write reconciliation fires reliably at session open against brief-vs-codebase drift. Examples across Phase 1: S31 (run_history substrate); S36 (audit reader substrate); S38 (ingestion management substrate); S39 (retrieval evaluation substrate); S40 (retrieval evaluation runner); S41 (optimization layer).
-
-**Bridge sessions** sit between substrate sessions and address verification-and-hygiene work that the substrate session cannot ship cleanly. The shape produces charter-grade artefacts that downstream sessions cite. Smaller scope than substrate; commit count typically 3 to 5; reflection density medium with focus on what the substrate session left unresolved. Pre-write reconciliation fires against substrate-vs-verification-surface drift. Examples: S39b (corpus re-ingest + real-corpus gold-set rebuild between S39 substrate and S40 runner); S40b (clean gold-set authoring between S40 runner and S41 optimization).
-
-**Transport sessions** ship HTTP layer over existing substrate. No new ports, no new domain types, no new adapters; just inbound adapter layer atop existing application use cases. Distinct shape from substrate because the substrate is fixed and the work is composing routes, DTOs, query parsers, error handlers, and wiring extensions. Scope medium; commit count typically 8 to 10; reflection density medium with focus on convention-consistency and procurement-grade-defensibility through the HTTP layer. Pre-write reconciliation can fire on convention-consistency (S42 Finding 5 DTO placement) but doesn't anchor on substrate decisions. Examples: S34 (run-history HTTP); S37 (audit HTTP); S38 (ingestion management HTTP); S42 (retrieval_evaluation + optimization HTTP).
-
-**Hygiene sessions** consolidate end-of-package debt: documentation expansion, methodology-candidate consolidation, dev-tooling verification, structural-finding documentation, stray-artefact cleanup. Mixed commit prefixes per work nature (`docs(charter)`, `docs(readme)`, `chore`, `fix`). No new D-entries (the hygiene session does not produce binding architectural commitments). Structural findings forwarded to deferred-decisions rather than fixed in-session per the bounded-fix-or-document disposition rule. Reflection density medium with focus on what's being deferred to the next audit. Example: pre-P12 hygiene at P11 close.
-
-**Audit sessions** are strategic-mode synthesis sessions that occur at phase boundaries. Three tracks (top-down D-entry verification, bottom-up codebase tour, audit-input disposition) plus methodology-document substantive update. No code changes; outputs are charter amendments, methodology updates, deferred-decisions refreshes, and Phase 2 inputs. Commit count typically 10 to 12 (grouped by destination file rather than chronologically). Reflection density high with focus on the bet's load-bearing claims and the methodology's hypothesis evolution. Example: P12 phase audit.
-
-The shape distinction is recognition-value: naming the shape lets brief drafting calibrate scope, lets the operator anticipate which disciplines fire, and lets phase audits assess shape distribution. Phase 2 substrate sessions inherit the substrate framing; Phase 2 framing of bridge or hygiene sessions in advance promotes if substrate work consistently produces them. The shapes are not commitments to a specific cadence; they are vocabulary for what surfaces.
 
 ## Charter structure
 
