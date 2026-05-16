@@ -147,3 +147,113 @@ Four open questions land at Step 3 (Prioritisation):
 ### Step 2 close
 
 Step 2 closes with the issue tree at six branches × five sub-branches, plus two cross-cutting disciplines (detection and the four-stage temporal lifecycle). The tree survived MECE self-challenge at sub-branch level. The Disaggregator role's discipline produced a usable tree that accommodated operator-driven structural insights without breaking. Step 3 (Prioritisation) opens at Claude.ai with the four open questions above as inputs plus the full thirty-sub-problem set as the impact-tractability scoring surface.
+
+## Step 3: Prioritise
+
+Step 3 applied the McKinsey 7-Step Prioritiser role's discipline to the issue tree produced at Step 2. The role's function-focused system_prompt commits the role to "score each branch on impact (how much resolving this moves the overall problem) and tractability (how feasible resolving this is in available time and resources); produce a ranked list with the top branches flagged as priorities." The McKinsey override layered "Use impact-tractability matrix; flag the top quartile as priorities." Posture 1.5 dogfooding continued from Steps 1 and 2. The conversation read the role's specification and held the discipline manually without invoking the agent runtime.
+
+Three pre-conversation decisions framed the scoring approach. Decision 1 (population scope for impact): operator as first instance of broader busy-professional population, balancing operator dogfooding evidence with broader-population generalisation. Decision 2 (scoring dimensions): pure impact-tractability per the McKinsey template, holding RICE for Phase 2 LVT placement when packages get derived. Decision 3 (cross-cutting disciplines): distribute detection and the four-stage temporal lifecycle into per-sub-problem rationale rather than score them as separate items.
+
+Two operator pushbacks during scoring sharpened the prioritised list. Sub-problem 3.4 (Delegation) scored low at first read because the scope was narrow (delegation to external humans only); the operator's reframe broadened scope to include delegation to the platform's AI agents alongside delegation to humans, lifting the score from 4 to 7. Sub-problem 5.5 (Trust history) scored lowest at first read; the operator's pushback recognised the meta-signal value (engagement evidence, trust-break learning, onboarding effectiveness) without disputing the late-stage timing, lifting the score from 5 to 6. Both pushbacks accommodated within the Prioritiser role's authored discipline without breaking.
+
+Two scope expansions in the substrate-type matrix at sub-problem 1.1 emerged from operator review. Documents (Google Drive, OneDrive, Dropbox, Notion, local disk) and messaging (WhatsApp, iMessage, Slack, Telegram) joined calendar, email, notes, manual entry, and existing trackers as substrate types. The matrix at 1.1's sub-decomposition is now seven substrate types times four integration functions (read, observe, write, acknowledge) producing twenty-eight cells for Step 4 to sequence. Messaging additionally functions as a primary delivery interface for sub-problem 3.1's surfacing mechanics, carrying forward to Step 4 as a design constraint.
+
+### Prioritised list
+
+Scores reported as Impact / Tractability = Total. One-line rationale per sub-problem. Scores reflect the three pre-conversation decisions and the two operator-driven revisions noted above.
+
+**Tier 1 (score 10): top quartile core**
+
+- **1.3 State persistence** — 5 / 5 = 10. Portfolio-resets-each-session is exactly the Step 1 breakdown mode; database-per-tenant substrate already supports persistent state.
+
+**Tier 2 (score 9): top quartile**
+
+- **1.1 Substrate connection** — 5 / 4 = 9. Foundational for portfolio existence across seven substrate types; P6 ingestion substrate in place; calendar, email, and messaging MCP integrations tractable per deferred-decisions entries.
+- **2.1 Methodology library** — 4 / 5 = 9. Differentiates platform from generic productivity tools; LVT, RICE, Kano, McKinsey 7-Step already authored on control plane; growth maintains primitives-versus-templates discipline.
+- **3.1 Surfacing mechanics** — 5 / 4 = 9. The whisperer function lives here; messaging-first delivery as primary channel for busy-professional users; substrate-aware surfacing tractable.
+- **5.1 Audit visibility** — 4 / 5 = 9. Phase 1 P10 audit substrate exists; surfacing to user is UI work; foundational for trust per D82.
+
+**Tier 3 (score 8): top quartile inclusive cut**
+
+- **1.5 User-authored items** — 3 / 5 = 8. CRUD-shaped input; user-authored items tend to be high-importance.
+- **3.2 Drop-decision support** — 4 / 4 = 8. Where calibration becomes action; items-that-should-be-dropped is a load-bearing failure mode.
+- **4.1 Mirror surface** — 5 / 3 = 8. Named in Step 1's success-measurement deliverable; depends on 4.2 and 4.3.
+- **4.2 Goal-state tracking** — 4 / 4 = 8. Foundational for mirror; goals as items is tractable extension of portfolio state.
+- **5.4 Intelligence-layer guardrails** — 4 / 4 = 8. D82 platform invariants exist; surfacing at decision points is structurally cheap.
+- **6.3 Status veracity** — 4 / 4 = 8. Lower-pressure status options structurally simple; impact on portfolio accuracy high.
+
+**Tier 4 (score 7): substantive but not top quartile**
+
+- **1.4 Personal-versus-professional treatment** — 4 / 3 = 7. Design challenge more than technical.
+- **2.2 Methodology-to-item binding** — 4 / 3 = 7. Critical for calibration; binding mechanics non-trivial under revision and load.
+- **2.3 Pace inference per item** — 5 / 2 = 7. Rules-driven inference tractable; learned models out of Phase 2 envelope.
+- **2.4 User-authored methodology surface** — 4 / 3 = 7. Bet's methodology-as-product depends on this; authorship UX non-trivial.
+- **2.5 Calibration override mechanics** — 3 / 4 = 7. Override important but secondary to initial calibration quality.
+- **3.3 Defer mechanics** — 3 / 4 = 7. Defer is a degenerate case of pacing; substrate exists.
+- **3.4 Delegation (AI plus human)** — 4 / 3 = 7. Both delegation flavours (to platform agents; to other humans) in scope; AI delegation underpins Branch 3; human-delegation tracking is moderate complexity.
+- **3.5 Consent granularity for platform actions** — 4 / 3 = 7. D82 intelligence-layer commitment requires it; mechanics nontrivial.
+- **4.5 Feedback-to-platform** — 3 / 4 = 7. Preference management substrate.
+- **5.2 Source attribution** — 3 / 4 = 7. P11 recommendation-with-citation substrate exists; UI extension.
+- **5.3 Cost transparency** — 3 / 4 = 7. P4 cost-capture substrate exists; less critical at personal-use stage.
+- **6.4 Methodology-fit lifecycle** — 5 / 2 = 7. Rhythm-and-key-change framing load-bearing for methodology-as-product claim; detection mechanics complex.
+- **6.5 Correction mechanics** — 3 / 4 = 7. Low-friction correction; depends on audit substrate.
+
+**Tier 5 (score 6)**
+
+- **4.3 Value-versus-time accounting** — 4 / 2 = 6. Time-tracking tractable; defining value per item per methodology is hard.
+- **4.4 Pattern surfacing** — 3 / 3 = 6. Useful but late-stage; needs accumulated run-history.
+- **5.5 Trust history** — 3 / 3 = 6. Late-stage refinement; meta-signal value (engagement evidence; trust-break learning; onboarding effectiveness) informs other branches' improvement loops.
+- **6.1 Signal verification** — 3 / 3 = 6. Important for accuracy; secondary to having signals at all.
+
+**Tier 6 (score 5)**
+
+- **1.2 Item identity reconciliation** — 3 / 2 = 5. Crude duplicates tolerable initially; entity resolution across heterogeneous substrates is a known hard problem.
+- **6.2 Compliance-signal detection** — 3 / 2 = 5. Requires accumulated signal data; cannot bootstrap.
+
+### Top quartile flagged
+
+Top quartile of 30 sub-problems is 7-8 items. The score distribution produces a clean cut at five items (Tiers 1 plus 2; score ≥ 9). Extending the inclusive reading to eleven items (Tiers 1 through 3; score ≥ 8) captures the substantive priority set without diluting focus. Step 4's workplan operates on the eleven-item inclusive set as the planning surface, with the five-item core treated as the load-bearing priority.
+
+**Top quartile, strict cut (5 items):** 1.3 State persistence, 1.1 Substrate connection, 2.1 Methodology library, 3.1 Surfacing mechanics, 5.1 Audit visibility.
+
+**Top quartile, inclusive cut (11 items, adds Tier 3):** 1.5 User-authored items, 3.2 Drop-decision support, 4.1 Mirror surface, 4.2 Goal-state tracking, 5.4 Intelligence-layer guardrails, 6.3 Status veracity.
+
+### Self-challenge
+
+**Dependency awareness.** The top tier concentrates in Branch 1 foundational items (1.1, 1.3, 1.5), Branch 2 library entry-point (2.1), Branch 3 action surface (3.1, 3.2), Branch 4 feedback substrate (4.1, 4.2), Branch 5 trust foundation (5.1, 5.4), and Branch 6 status-veracity (6.3). This is consistent with the dependency ordering from Step 2: Branch 2 depends on Branch 1; Branches 3-4 depend on Branches 1-2; Branch 6 depends on signal sources from others. The ranking respects dependency naturally. Step 4 sequences within this priority set respecting both score order and dependency order.
+
+**Operator-as-first-instance framing held throughout.** Sub-problems with high operator-specific impact and lower broader-population generalisation scored lower than sub-problems that serve both. 6.4 (Methodology-fit lifecycle) scored impact 5 because the rhythm-and-key-change framing is load-bearing for the broader-population test condition; for pure operator-only the impact would be lower.
+
+**Rules-versus-learned tractability framing held.** Sub-problems 2.3 (Pace inference) and 6.4 (Methodology-fit lifecycle) scored tractability 2 because learned-model approaches are out of Phase 2's resource envelope; rules-driven approaches keep them tractable at the lower end. Step 4 commits to rules-driven approaches at workplan time.
+
+**Items with disputed scoring noted explicitly.** 3.4 (Delegation) and 5.5 (Trust history) were revised mid-conversation per operator pushback; the rationale captures the scope clarification (3.4) and meta-signal recognition (5.5) so the audit trail surfaces the iteration cleanly.
+
+### Dogfooding-evidence record
+
+The McKinsey 7-Step Prioritiser role authored at S26b per D85 carries a function-focused system_prompt committing the role to impact-tractability scoring with top-quartile flagging. The McKinsey override added the impact-tractability matrix and top-quartile threshold. Posture 1.5 structural dogfooding without agent runtime continued from Steps 1 and 2. This is the third instance of the structural-dogfooding pattern across three distinct roles (ProblemFramer at Step 1, Disaggregator at Step 2, Prioritiser at Step 3).
+
+What the template informed. The "score each branch on impact and tractability; produce a ranked list with the top branches flagged as priorities" discipline held cleanly. The conversation produced 1-5 scores across both dimensions for thirty sub-problems with one-line rationale per item, ranked in score order, with the top-quartile cut explicitly framed. The "you do not solve sub-problems; you order them" discipline held; the conversation resisted moving into solution architecture even when scoring rationale touched implementation considerations. The matrix shape per the McKinsey override produced clean tier clustering at scores 10, 9, 8, 7, 6, 5; the top quartile cut emerged from the tier structure rather than from arbitrary numeric threshold.
+
+Where the template's scope did not cover the work. Five extensions surfaced during the conversation that the McKinsey 7-Step Prioritiser role's system_prompt does not encode. First, scoring-dimension choice (impact-tractability versus impact-tractability-plus-confidence versus full RICE) required an operator decision; the role's authored discipline picks one (impact-tractability) without surfacing the alternative dimensions the conversation actually has access to. Second, population-scope choice (operator-only versus broader-population versus operator-as-first-instance) required an operator decision; the role does not surface that impact scoring varies with population framing. Third, cross-cutting discipline treatment (score separately versus distribute into rationale) required an operator decision; the role does not specify how to handle cross-cutting issues within the matrix. Fourth, dependency-aware scoring across the issue tree is implicit in the conversation but not explicit in the role; tractability scores naturally lower for sub-problems with unmet dependencies, but the role's discipline does not name this. Fifth, mid-scoring revision through operator pushback (sub-problems 3.4 and 5.5) is methodologically normal but not named in the role's discipline; the role describes scoring as if it were a single pass.
+
+What this surfaces for Phase 2 methodology work. The Prioritiser role's authored discipline is narrower than the prioritisation work this conversation needed, consistent with the pattern observed at ProblemFramer (Step 1) and Disaggregator (Step 2). The three roles together produce a coherent procurement-grade-evidence pattern: the methodology aggregate's authored content is structurally sound and extensible, but each role's authored discipline scope is narrower than the substantive discipline the conversation applies. Phase 2 methodology work has two distinct workitem candidates: short-term, expand the role system_prompts to encode the discipline-extensions explicitly (population scope, scoring dimensions, cross-cutting treatment, dependency awareness, revision mechanics); long-term, layer skills per role per the Phase 2 deferred surface, with each role gaining methodology-specific skills that encode the extensions cleanly.
+
+What this tells us about the bet's claim. The methodology-template-extensibility-without-breaking pattern reaches three instances across three distinct roles at this Step 3 close. The bet's procurement-grade methodology-embedding claim now has substantial structural-level evidence; the pattern's consistency across roles strengthens the case that the methodology aggregate as authored on the control plane is genuinely extensible by operators and agents alike, not just operationally workable in one case. Agent-runtime evidence remains untested through all three Steps. Phase 2 UX surface for methodology adoption plus agent runtime exercising the Prioritiser end-to-end would close the higher bar; until then, three-instance structural evidence is the procurement-grade artifact.
+
+### Carry-forward to Step 4 (Planner)
+
+Five open questions land at Step 4:
+
+1. **Workplan granularity.** Step 4 produces a workplan for the top quartile (strict cut: 5 items; inclusive cut: 11 items). Granularity per item: per-sub-problem versus per-priority-cluster. The strict-versus-inclusive cut choice affects this; smaller set permits per-sub-problem depth, larger set may need clustering.
+
+2. **Substrate-type × integration-function matrix sequencing at 1.1.** The twenty-eight cells require workplan sequencing. Calendar-read and email-read might be Phase 2-A; messaging-write might wait for stronger consent substrate; document-observe might depend on additional substrate work. Step 4's workplan ranks the cells within sub-problem 1.1.
+
+3. **Dependency versus priority within the workplan.** State persistence (1.3) and substrate connection (1.1) are top priority AND foundational; calibration and feedback sit on top of them. Step 4 sequences within the prioritised set respecting both score order and dependency order; the two ordering principles may conflict and the workplan resolves the conflict.
+
+4. **Lifecycle-stage prioritisation strategy.** From Step 2's carry-forward, sharper now. The four-stage discipline (find rhythm, settle in, watch, adapt) applies at every prioritised sub-problem. Step 4 decides whether Phase 2 ships find-rhythm-plus-settle-in stages across all priority items first (with watch and adapt later), or full-lifecycle support for fewer items first. Different commercial test conditions.
+
+5. **Messaging-first delivery design constraint and meta-signal observability.** Carryforward design commitments: workplan items in Branch 3 default to messaging-first delivery; trust-history (5.5) sequences as observability work informing other branches' iteration cadence rather than as standalone feature work.
+
+### Step 3 close
+
+Step 3 closes with thirty sub-problems scored on impact and tractability, top quartile flagged at both strict (5 items) and inclusive (11 items) cuts, dogfooding-evidence record at third-instance evidence of the methodology-template-extensibility-without-breaking pattern, and five open questions carrying forward to Step 4. The Prioritiser role's discipline produced a usable prioritisation that respected dependency, accommodated operator pushback, and held the structural test condition (operator-as-first-instance of broader busy-professional population) throughout. Step 4 (Plan) opens at Claude.ai with the top quartile as the workplan surface plus the five open questions as planning inputs. The Step 4 pre-conversation brief authors at `briefs/phase-2/design-7step-step-4.md` before the Claude.ai conversation opens, continuing the briefs/ discipline restoration test from Step 3.
