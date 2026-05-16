@@ -4,6 +4,8 @@ Architectural commitments deferred to future sessions. They are inherited by ses
 
 Format mirrors `decisions.md` but each entry names the package or session that will activate the commitment and lock it as a numbered D-entry.
 
+When a numbered D-entry closes a deferred entry, the entry gains a "Status: closed by D<n>, <date>" header line; the body remains for audit-trail purposes per the append-only discipline.
+
 ## Orchestration architecture
 
 Activates when orchestration enters the codebase (P5 or wherever orchestration first lands).
@@ -50,11 +52,11 @@ Activates when tools and extensions enter the codebase (P5 or wherever tools and
 
 ## Methodology metrics
 
-Activates at first package close for the package-level computation, and at first phase audit for the phase-level computation. Session-level capture begins immediately upon adoption of the tagging format that will be specified in `methodology.md` (pending operator authorship per D39).
+Activates at first package close for the package-level computation, and at first phase audit for the phase-level computation. Session-level capture begins immediately upon adoption of the tagging format specified at `charter/methodology.md`, the active living-hypothesis surface per D113.
 
 **The methodology is measured against DORA Four Keys and CORE4 dimensions.** Capture at every session, computation at every package close, trend analysis at every phase audit. The metrics are reported publicly as part of the case study, with package-level numbers added to package retrospectives and phase-level numbers added to phase audit entries.
 
-**Definitions are explicit and adapted where necessary.** Deployment frequency uses "merged-to-main frequency" as a proxy in Phase 1 and shifts to traditional deployment frequency from Phase 2 onwards if a hosted environment exists. Change failure rate is defined as sessions whose output is later corrected by a subsequent session within the same phase. The full definitions are pending in `methodology.md` per D39 and D40.
+**Definitions are explicit and adapted where necessary.** Deployment frequency uses "merged-to-main frequency" as a proxy in Phase 1 and shifts to traditional deployment frequency from Phase 2 onwards if a hosted environment exists. Change failure rate is defined as sessions whose output is later corrected by a subsequent session within the same phase. The full definitions live at `charter/methodology.md` per D40 and D113.
 
 **Reporting tooling is deferred.** Initial computation is manual at package close and phase audit; if and when the manual computation becomes a meaningful overhead, a small script under `tools/metrics/` computes the numbers from session log tags. Premature tooling commitment ahead of the data shape stabilising is paper architecture.
 
@@ -134,13 +136,13 @@ Activates when a contributor (human or model) approaches the project who has not
 
 Activates at Phase 2 framing.
 
-**Full DORA instrumentation when production deployment exists.** D40 commits the methodology to DORA Four Keys and CORE4 measurement; `methodology.md` (pending operator authorship per D39) will adapt the definitions for Phase 1 (deployment frequency proxied by merged-to-main frequency; mean time to restore deferred until production traffic exists; change failure rate defined per same-phase corrective sessions). Phase 2 framing activates the full instrumentation when a hosted environment exists, deployment frequency means deploys-to-production, and MTTR measures real restoration. CORE4's effective developer experience axis activates fully when team scaling or productisation makes it load-bearing; Phase 1 partial coverage tracks what is tractable now via reflection density and operational-friction signals.
+**Full DORA instrumentation when production deployment exists.** D40 commits the methodology to DORA Four Keys and CORE4 measurement; `charter/methodology.md` (the active living-hypothesis surface per D113) adapts the definitions for Phase 1 (deployment frequency proxied by merged-to-main frequency; mean time to restore deferred until production traffic exists; change failure rate defined per same-phase corrective sessions). Phase 2 framing activates the full instrumentation when a hosted environment exists, deployment frequency means deploys-to-production, and MTTR measures real restoration. CORE4's effective developer experience axis activates fully when team scaling or productisation makes it load-bearing; Phase 1 partial coverage tracks what is tractable now via reflection density and operational-friction signals.
 
 **The specific D-entry lands at Phase 2 framing.** Operational commitments (tooling, format, benchmarks) are deferred per D40's deferral structure.
 
 ## Methodology mechanical-enforcement upgrades
 
-Items absorbed from the methodology comparison process that are committed in principle but await mechanical implementation. The principle landings live in `charter/methodology.md`; this section tracks what activates each upgrade.
+Items absorbed from the methodology comparison process that are committed in principle but await mechanical implementation. The discipline articulation lives at `charter/methodology.md` under the "Mechanical enforcement upgrades" sub-section per the principles-decisions-methodology pattern; this section tracks what activates each upgrade.
 
 **Decision-to-code translation gate.** A CI test that walks new D-entries and asserts they appear in commits or session prompts within N sessions of being committed. Promotes the existing operator-discipline check into mechanical enforcement. Activation: when the discipline-adherence metrics in `charter/methodology.md` produce a measured baseline against which the gate's threshold can be set honestly. Earliest meaningful activation: Phase 1 close audit.
 
@@ -375,6 +377,8 @@ Activates at Phase 2 framing if any of the following surface: heterogeneous cons
 **The specific D-entry lands at Phase 2 framing when the actual consumer surface is concrete.** Premature commitment ahead of that context is paper architecture.
 
 ## HTTP API for ingestion management (Phase 2 substrate completion)
+
+Status: closed by D104, 2026-05-14.
 
 Activates when a UI consumer (Phase 2 frontend or external tool) needs HTTP-driven ingestion management. Triggers at the first concrete user story demanding it.
 
