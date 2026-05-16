@@ -21,11 +21,138 @@ The seven sections below organise architectural commitments thematically:
 
 ## Architectural patterns
 
-[Pending in commit 3]
+Four architectural patterns anchor the codebase: hexagonal architecture within each bounded context; bounded contexts at the top of the codebase; observability as foundation rather than feature; binding specifications living in charter.
+
+### Hexagonal architecture within a context
+
+Every bounded context follows a hexagonal-layered structure: a `domain/` core carries value objects, aggregates, and pure domain logic with no framework or vendor imports; an `application/` layer carries use cases that orchestrate domain logic and call out through ports; a `ports/` directory exposes Protocol-typed boundaries the application layer depends on; an `adapters/` directory implements the ports against external systems (Postgres, Neo4j, Langfuse, vendor LLM gateways) with `inbound/` for transport-driven adapters (HTTP routes, CLI commands) and `outbound/` for storage-and-service adapters. Import-linter contracts enforce the layering at CI per D16: domain never imports from application or adapters; application never imports from adapters; adapters depend on ports.
+
+```mermaid
+flowchart LR
+    subgraph context[Bounded Context]
+        direction LR
+        domain[domain/<br/>value objects<br/>aggregates<br/>pure logic]
+        application[application/<br/>use cases]
+        ports[ports/<br/>Protocols]
+        inbound[adapters/inbound/<br/>HTTP, CLI]
+        outbound[adapters/outbound/<br/>Postgres, Neo4j, LLM]
+        domain --> application
+        application --> ports
+        inbound --> application
+        outbound -.implements.-> ports
+    end
+    external_in([HTTP request<br/>CLI command]) --> inbound
+    outbound --> external_out([Postgres<br/>Neo4j<br/>Langfuse<br/>LLM gateway])
+```
+
+The hexagonal pattern lets the domain layer stay framework-free and vendor-free, which is the foundation that makes the vendor-flexibility commitment per D111 mechanical rather than aspirational. Adapter replacement is vendor swap; domain code does not change. See `charter/principles.md` "Hexagonal throughout" (per D4, D16).
+
+### Bounded contexts at the top of the codebase
+
+The codebase organises around bounded contexts at the top level, with cross-cutting platform concerns in `padhanam/`, a strictly bounded `shared_kernel/`, and deployable units in `apps/`. Each context has its own hexagonal layering; contexts communicate via published query APIs for reads and a domain event bus for state changes per D17; direct cross-context imports are forbidden by import-linter per D16. The `shared_kernel/` contains only types that must be referentially equal across contexts (`TenantId`, `Jurisdiction`) and forbids Pydantic imports to prevent framework-version coupling.
+
+```mermaid
+flowchart TB
+    subgraph apps[apps/ — deployable units]
+        cli[apps/cli/]
+        api[apps/api/]
+    end
+    subgraph contexts[contexts/ — twelve bounded contexts]
+        direction TB
+        agent[agent/]
+        audit[audit/]
+        evaluation[evaluation/]
+        inference[inference/]
+        ingestion[ingestion/]
+        methodology[methodology/]
+        observability[observability/]
+        optimization[optimization/]
+        retrieval_eval[retrieval_evaluation/]
+        run_history[run_history/]
+        tenancy[tenancy/]
+        tools[tools/]
+    end
+    subgraph cross_cut[padhanam/ — cross-cutting platform]
+        config[config/]
+        security[security/]
+        persistence[persistence/]
+        observability_lib[observability/ — span emission]
+        events[events/ — domain event bus]
+    end
+    sk[shared_kernel/<br/>TenantId, Jurisdiction]
+    cli --> contexts
+    api --> contexts
+    contexts --> cross_cut
+    contexts --> sk
+    cross_cut --> sk
+```
+
+Twelve bounded contexts at Phase 1 close: agent, audit, evaluation, inference, ingestion, methodology, observability, optimization, retrieval_evaluation, run_history, tenancy, tools. The split between `contexts/observability/` (analysis-layer domain logic) and `padhanam/observability/` (span emission infrastructure) is structurally honest per D16: cross-cutting plumbing belongs in `padhanam/`, domain logic belongs in `contexts/`. See `charter/principles.md` "Bounded contexts at the top of the codebase" (per D16, D17, D28).
+
+### Observability as foundation
+
+Trace capture starts from the first LLM call. OTel GenAI conventions are the portability boundary per D27; vendor-specific observability code is confined to adapters. Span attributes carry tenant_id, jurisdiction, cost-per-token, and (from D27) trace_id as a join key into the run-history projection. The audit context is bounded (`contexts/audit/`), not cross-cutting plumbing; hash-chained append-only storage records every state change with actor, tenant, jurisdiction, timestamp, action verb, resource, before/after state, and correlation ID per D26. The observability foundation is what makes the optimisation layer's recommendation-shaped output (per D9) procurement-grade-defensible: traces with cost dimension surface "this costs N% more for M% quality at the same task type" recommendations that procurement readers can verify against citations. The "Vendor and dependency posture" section below covers OTel + Langfuse adapter detail; the "The four-context substrate" section below covers the audit context's read surface.
+
+### Binding specifications live in charter
+
+Brand identity (`charter/brand-guidelines.md`, `charter/brand/tokens.css`) and bounded-context architecture (`charter/contexts/*`) are commitments the platform stands behind, not implementation detail. Implementation reads specification; specification does not live in implementation. Per D91. The charter is the methodology's primary artefact surface; the binding-specifications discipline ensures the charter is read-as-truth rather than aspirational-or-decorative content.
 
 ## Tenancy and jurisdiction
 
-[Pending in commit 3]
+Four tenancy commitments anchor the platform: database-per-tenant topology; jurisdiction as first-class architectural attribute; tenant onboarding as configuration rather than deployment; customer-specific behaviour as configuration via tools plus bounded extensions.
+
+### Database-per-tenant topology
+
+Tenancy is database-per-tenant per D1: each tenant has its own Postgres data plane, separate from the control plane and from every other tenant's data plane. A control-plane Postgres instance carries the tenant registry, role-revisions, methodology-revisions, tool-revisions, and other platform-managed shared content. Per-tenant Postgres instances carry the tenant's own data (sources, chunks, agents, gold-sets, runs, audit chain). The connection routing layer per D36 resolves the per-tenant data plane from the TenantContext propagated through the call stack.
+
+```mermaid
+flowchart TB
+    subgraph cp[Control plane Postgres]
+        tenant_registry[(tenant_registry)]
+        role_revisions[(role_revisions)]
+        methodology_revisions[(methodology_revisions)]
+        tool_revisions[(tool_revisions)]
+        platform_audit[(tenant_audit — platform)]
+    end
+    subgraph t1[Tenant A data plane Postgres]
+        t1_sources[(sources)]
+        t1_chunks[(chunks)]
+        t1_agents[(agents)]
+        t1_gold_sets[(gold_sets)]
+        t1_runs[(runs)]
+        t1_audit[(tenant_audit)]
+    end
+    subgraph t2[Tenant B data plane Postgres]
+        t2_sources[(sources)]
+        t2_chunks[(chunks)]
+        t2_agents[(agents)]
+        t2_gold_sets[(gold_sets)]
+        t2_runs[(runs)]
+        t2_audit[(tenant_audit)]
+    end
+    request([Inbound HTTP request<br/>JWT-resolved tenant_id])
+    tc[TenantContext<br/>tenant_id, jurisdiction,<br/>cost_attribution_id]
+    routing[Per-tenant connection<br/>routing layer]
+    request --> tc
+    tc --> routing
+    routing --> t1
+    routing --> t2
+    tc -.shared content.-> cp
+```
+
+`TenantContext` is the shared-kernel value object carrying `tenant_id`, `jurisdiction`, and `cost_attribution_id` per D50; it propagates through every layer that touches tenant-scoped data. Tenant isolation is verified by `tests/contract/tenant_isolation/` red-team-shaped tests against every adapter per D24. Per-tenant connection caching at `padhanam/persistence/routing.py` per D36 keeps the topology efficient without weakening isolation. See `charter/principles.md` "Database-per-tenant" (per D1, D32). For the Phase 2 production-deployment revisit on Neo4j topology (currently shared with property-based scoping per D63), see `charter/deferred-decisions.md` under "Production-deployment readiness".
+
+### Jurisdiction as first-class architectural attribute
+
+`Jurisdiction` is a first-class architectural attribute carried in `TenantContext` from P3 onward per D12. Every component that touches customer data (databases, object storage, identity, trace store, LLM endpoints) is built to be regionally partitionable. Phase 1 deploys a single region; the architecture does not assume a single region anywhere in code. The discipline is "by construction, not by policy" — adding it later is a refactor across forty tables and every interface signature; building it in from inception is free at the data-model layer and cheap at the interface layer. See `charter/principles.md` "Jurisdiction is a first-class attribute" (per D12).
+
+### Tenant onboarding as configuration not deployment
+
+Per-tenant decisions (jurisdiction, identity federation, classification policy, model endpoints, retention) live in the tenant registry as configuration per D13. Adding a tenant to an existing regional stack is an idempotent provisioning workflow; adding a region is a separate infrastructure event scoped explicitly when a customer's residency requirement crosses an existing region boundary. The architectural commitment that adding a tenant requires no code changes is what makes the platform sellable to enterprise customers with custom IdP, jurisdiction, and classification requirements. See `charter/principles.md` "Tenant onboarding is configuration" (per D13).
+
+### Customer-specific behaviour as configuration
+
+Tools (external services called by the platform on the tenant's behalf) cover most customer-supplied logic per D14. Bounded extensions exist for residual cases at named interfaces (RetrievalClient, scorer, pre-processor), sandboxed per tenant. The platform is designed so forking is unnecessary per D76; observed forks signal extension surface failure to be addressed upstream. The forking-phrasing refinement at D76 supersedes D14's original "forbidden" wording without rewriting D14 itself, preserving the audit trail per the append-only discipline. See `charter/principles.md` "Customer-specific behaviour is configuration" (per D14, D76).
 
 ## Vendor and dependency posture
 
