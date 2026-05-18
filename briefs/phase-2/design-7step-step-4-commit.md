@@ -1,263 +1,57 @@
-# Phase 2 design — McKinsey 7-Step arc
+# Phase 2 design — 7-Step arc — Step 4 commit session
 
-Strategic-mode arc applying the McKinsey 7-Step problem-solving methodology to Phase 2's strategic shape. Charter-grade placement per the arc-opening conversation's Decision 1: binding specification; Step 3's prioritised bets become Phase 2 LVT structure when the v6 roadmap entry lands per D44. Refreshes at phase audits per D45.
+## Identification
 
-Blank-sheet discipline applies within the bet's success criteria per the arc-opening conversation's Decision 2. The bet's core claims (procurement-grade architecture, methodology-as-product, learning sprint demonstration) hold. Phase 2-specific commitments (D93 framing, three-wave sequencing, the mass-market-UX commitment in `log/captures.md`) are open to re-derivation through the arc.
+Mode: strategic (charter commit; no code changes; lint and tests not required at this session).
+Block: Phase 2 design — McKinsey 7-Step arc — Step 4 (Plan) commit landing.
+Branch: operator-selected at session open.
 
-Posture 1.5: structural dogfooding of the McKinsey 7-Step methodology template authored at S26b per D85, structured per D81's multi-role aggregate v2 shape with the override-mode space committed at D87. The arc reads the role specifications and holds the discipline manually; the methodology aggregate is not invoked through the agent runtime at this arc's posture.
+## Goal at session close
 
-## Step 1: Define the problem
+- `charter/phase-2-design-7step.md` carries a new `## Step 4: Plan` section appended after the Step 3 close paragraph, with sub-sections (opener; eleven workplan entries grouped by branch; dogfooding-evidence record; carry-forward to Step 5; Step 4 close).
+- `charter/competitors.md` exists as a new charter-grade reference file carrying the twenty-two-entry competitor catalog, with framing-flag at top naming it as reference catalog with end-of-Phase-3 competitive landscape review as the binding strategy artefact.
+- `charter/current-package.md` gains a new close marker paragraph appended after the Step 3 close marker (append-only language per the Step 2 commit's correction validated at Step 3 first recurrence test).
+- `briefs/phase-2/design-7step-step-4.md` exists carrying the pre-conversation brief verbatim.
+- `briefs/phase-2/design-7step-step-4-commit.md` preserves this commit-session prompt verbatim.
+- Session log entry appended to `log/sessions.md` matching the Step 3 commit entry's shape, scaled for the three-commit session structure.
 
-### Problem statement
+## Context to read first
 
-Busy professionals working twelve-plus hour days carry a portfolio of work and personal goals that need calibrated, variable pacing. Each item benefits from a different pace: urgent items move fast, patient items hold steady, some items should be dropped. The user's effectiveness depends on calibrating pace correctly across the portfolio and acting on those calibrations consistently over time. Under twelve-plus-hour-day load, the calibration breaks down. Items slip out of view. Items needing urgency get under-attended. Items needing patience get neglected because nothing surfaces them. Items that should be dropped continue to consume attention because they made noise. What is missing is not visibility or notifications, both of which the user already gets too much of. What is missing is judgment applied to the portfolio at the right moments: decisions the user can act on, drops the user can confirm, and pacing the user can trust.
+In order. Read in ranges where files exceed 200 lines.
 
-### Context: the user's current substitutes
+1. `charter/phase-2-design-7step.md`. Steps 1, 2, and 3 sections in full. Confirm Step 3 close paragraph is terminal; Step 4 section appends immediately after.
+2. `charter/current-package.md` (top section). Confirm the close marker structure after the Step 3 commit. The Step 4 commit appends a new paragraph after Step 3's marker.
+3. `log/sessions.md`. Latest entry is the Step 3 commit; match its shape for the Step 4 commit entry. Note that this session has three commits rather than two; the entry's Produced section accommodates this.
+4. `briefs/phase-2/design-7step-step-3.md` and `briefs/phase-2/design-7step-step-3-commit.md`. Brief shape and commit-prompt-brief shape precedents.
+5. `briefs/p8/mckinsey-7-step.md`. The Planner role's authored specification, cited in the Step 4 dogfooding-evidence record.
 
-The user has already attempted to solve this with the substrates available. Calendar, AI chat assistants, note-taking apps, light EA support, and self-built structured trackers operating with daily check-ins, item logging by category, and scheduled reminders. Each substrate solves a slice. None integrates the slices. Each demands the user perform the integration in their own head, which is precisely where the twelve-hour-day load creates the breakdown. The work is not to replace these substrates with another individual tool. The work is to bring them together into something that supports the user with integrated judgment they cannot sustain unaided.
+## Pre-write reconciliation
 
-### Context: the CoS analogue and the population gap
+1. **D-entry count.** Latest entry remains D113. No new D-entries this session. The dogfooding-evidence record cites D85 (McKinsey 7-Step methodology authoring placement) and D82 (intelligence-layer commitment); both exist as summary lines in active `charter/decisions.md` with full content in `docs/archive/decisions/phase-1.md`.
 
-People senior enough to employ a Personal Assistant, Executive and Personal Assistant, Private Assistant, or Chief of Staff have a partial answer. A human who holds the integrated portfolio, applies judgment, nudges items along at appropriate pace, flags what is slipping, surfaces what to drop, and plays back return on time invested against the user's stated goals. The population carrying the same load shape without this support is much larger. They absorb the load on their personal life, on the quality of their work, or on both. The shape of the problem does not differ between the CoS-supported and CoS-unsupported populations. Only the judgment layer differs.
+2. **Current-package.md state.** Read the file and confirm the Step 3 close marker paragraph from the Step 3 commit. The Step 4 commit appends a new paragraph after Step 3's marker; append-only operation; prior content preserved unchanged.
 
-### Dogfooding-evidence record
+3. **Append point at `charter/phase-2-design-7step.md`.** Confirm the Step 3 close paragraph is the file's current terminal content; append the Step 4 section after it without modifying Step 1, 2, or 3 content.
 
-The bet's procurement-grade-methodology-embedding claim turns on whether the methodologies Padhanam authors on its control plane actually do work for users at real problems. This conversation is the first structural test of that claim against the McKinsey 7-Step ProblemFramer role authored at S26b per D85, structured per D81's multi-role aggregate v2 shape with the override-mode space committed at D87. Posture 1.5: structural dogfooding of the McKinsey 7-Step methodology template without agent runtime dependency. The conversation read the role's specification and held the discipline manually; it did not invoke an agent against the input.
+4. **Brief authoring timing.** The Step 4 brief was authored before substantive Step 4 work but within the same Claude.ai conversation as Step 3 (the conversation continued in the same thread rather than opening a new one). Treat as pre-conversation brief (not synthetic-retrospective); surface the framing nuance in the session log reflection prompt 4.
 
-The ProblemFramer role's function-focused system_prompt commits the role to "receive a raw problem statement or topic from the user; produce a sharpened problem statement with explicit scope (what is in and out), context (situation), complication (what makes this hard or urgent), and success criteria (what good looks like)." This shape did load-bearing work in the conversation. The problem statement above carries scope (busy professionals, twelve-plus hour days, work-life portfolio), situation (current substrates and CoS analogue), complication (calibration breakdown under load), and success criteria (verifiable at Phase 2 close per the success-measurement deliverable archived in the Step 1 conversational record). The McKinsey override layering SCQ (Situation, Complication, Question) added light discipline: the complication-shaped framing of consequence-of-persistence is SCQ-shaped output rather than scope-and-context-shaped. The role's "you do not analyse the problem yourself; you frame it" discipline held cleanly. Sub-problems surfaced naturally during conversation but the assistant resisted disaggregating them, holding them for Step 2 instead.
+5. **New charter file landing.** `charter/competitors.md` does not exist at the project. New file; one of three commits this session.
 
-The conversation prompt named five ProblemFramer discipline sub-prompts: Who has the problem, What is the problem, What gets worse if the problem persists, How would success be measured, What is the problem NOT. Of these, only "What is the problem" maps directly to the template's authored discipline. The other four extend beyond what the role's system_prompt encodes. "Who has the problem" forced specificity on the user definition that the template's scope-as-what-is-in-and-out wording does not require. "What is the problem NOT" forced solution-assumption removal, which is not in the template. The user-perspective framing the conversation prompt embeds was not in the template either. The operator's general knowledge of McKinsey framing plus the conversation prompt's expanded discipline filled the gaps.
+6. **Three-commit session structure.** First session in the arc with three commits rather than two. Pre-write reconciliation accommodates by sequencing: commit 1 (Step 4 section plus current-package append plus brief preservation plus commit-prompt preservation), commit 2 (competitor catalog), commit 3 (session log entry). The session log entry's Produced section reflects three commits; methodology lines may include the three-commit-shape as observation.
 
-The McKinsey 7-Step ProblemFramer role as authored has narrower discipline scope than the full ProblemFramer work this conversation needed. Two responses are honest: either expand the role's system_prompt to encode the five-sub-prompt discipline explicitly, or land it via the recommended-skills-per-role surface deferred to Phase 2 per the brief at briefs/p8/mckinsey-7-step.md. The first response is more durable; the second is structurally cleaner if skills become the methodology-extension surface in Phase 2. The choice is a Phase 2 strategic-mode question, not a Step 1 deliverable. Logging it as a Phase 2 workitem candidate.
+7. **Carryover from prior commits.** The stale "P11 framed; S39 next" header at `charter/current-package.md` line 5 remains pre-existing structural drift; out of scope at this session per AC 8.
 
-The methodology authoring earns its place at structural level. The role definition was readable, the discipline transferable, and the output is a problem statement that survives the self-challenges. This is the minimum bar for procurement-grade methodology embedding, not the maximum. Behavioural dogfooding (an actual ProblemFramer agent running against the input, producing the same problem statement) remains untested. Phase 2's UX surface for methodology adoption, plus the agent runtime exercising the McKinsey 7-Step workflow end-to-end, would close the higher bar. Until then, the bet's methodology-embedding claim has structural evidence but not agent-runtime evidence.
+## Commits
 
-### Initial disaggregation (carry-forward to Step 2)
+### Commit 1: Step 4 artefacts land at charter file plus current-package append plus brief preservation plus commit-prompt preservation
 
-Sub-problem candidates that surfaced naturally during Step 1 but were held for Step 2's MECE disaggregation: The judgment layer (methodology-applied decisions, drops, pacing recommendations across the portfolio). The mirror function (on-demand return-on-time-invested playback against stated goals). The whisperer function (surfacing items at the right moment for the right item with appropriate judgment, not as bulk notification noise). Portfolio view persistence (state management across sessions; integrating substrate data into a single picture). User-authored methodology surface (enabling the user to bring their own methodologies, the four-functions-plus-user-authored expansion). Personal-domain integration (treating personal items with the same lifecycle dignity as professional items). Substrate integration (bringing calendar, email, notes, existing tracker data, light EA support together rather than replacing them).
+Conventional commit message: `docs(charter): phase 2 design — 7-step arc Step 4 workplan, dogfooding evidence at four-instance, senior-leader ICP refinement integrated`
 
-Step 2 takes these and produces a MECE-decomposed issue tree, per the McKinsey 7-Step Disaggregator role's discipline. The candidates above are not yet MECE; several overlap (mirror and whisperer both touch judgment layer; substrate integration enables portfolio view persistence). The Disaggregator's work is to cut these into clean, non-overlapping branches with collectively-exhaustive coverage.
+Three-paragraph commit body. Paragraph 1: names what the new section lands (eleven workplan entries spanning six branches at find-rhythm-plus-settle-in lifecycle stages; dogfooding-evidence record at fourth-instance methodology-template-extensibility-without-breaking evidence; five open questions carrying forward to Step 5). Paragraph 2: names the substantial mid-conversation scope additions (multi-device sync at 1.3; work-apps and voice as eighth and ninth substrate types at 1.1; methodology audit trail plus matching plus comprehension surface at 2.1; three-tier consent-and-awareness framework at 5.4; senior-leader ICP refinement integrated mid-conversation from competitor research input). Paragraph 3: names that the methodology-template-extensibility-without-breaking pattern now reaches four-instance evidence across all four sequential roles (ProblemFramer, Disaggregator, Prioritiser, Planner); the Phase 2 methodology-extension workitem moves from three-instance candidate at Step 3 to four-instance observed-pattern at this Step.
 
-### Open questions for Steps 2 and 3
+**Append the following content to `charter/phase-2-design-7step.md` as a new `## Step 4: Plan` section, placed immediately after the Step 3 close paragraph. Content verbatim, no in-line editing:**
 
-For Step 2 (Disaggregation). How to cut the substrate-integration sub-problem cleanly. Calendar, email, notes, and existing trackers are different categories with different access patterns, privacy properties, and ownership. A single "substrate integration" branch may collapse meaningful differences. Step 2 decides whether to split by substrate type or by integration function.
-
-For Step 3 (Prioritisation). Whether the dogfooding instance (operator only) frames prioritisation, or whether the Phase 2 work also targets the broader busy-professional population at a level that affects which sub-problems are top-quartile. Operator-only dogfooding suggests a narrower sub-problem set with deeper coverage; broader-population targeting suggests wider coverage with shallower per-sub-problem depth. The strategic choice has implications for Phase 2 packaging.
-
-### Step 1 close
-
-Step 1 closes with the problem statement converging through five ProblemFramer sub-prompts (Who has the problem, What is the problem, What gets worse if the problem persists, How would success be measured, What is the problem NOT). The problem statement above survives the self-challenges applied at each prompt. Step 2 (Disaggregation) opens with the initial disaggregation candidates plus the two open questions named above.
-
-## Step 2: Disaggregate
-
-Step 2 applied the McKinsey 7-Step Disaggregator role's discipline to Step 1's sharpened problem statement. The role's function-focused system_prompt commits the role to "decompose problems into structured component trees... receive a sharpened problem from the ProblemFramer; produce a structured decomposition where each branch represents a distinct sub-problem and branches together are collectively exhaustive." The McKinsey override layered "Apply MECE (Mutually Exclusive, Collectively Exhaustive) decomposition; produce an issue tree." Posture 1.5 dogfooding continued from Step 1: the conversation read the role's specification and held the discipline manually without invoking the agent runtime.
-
-Two structural insights emerged during the disaggregation conversation that the Disaggregator role's authored system_prompt does not encode. First, the user-faking-it problem (saying yes when meaning no; status veracity; ambivalence under load) surfaced a sub-problem the initial five-branch shape did not accommodate; the tree gained Branch 6 (Signal fidelity and methodology-fit) to host the platform-to-user signal-verification work distinct from Branch 5 (user-to-platform trust). Second, the rhythm-and-key-change framing introduced a four-stage temporal lifecycle (find rhythm, settle in, watch for key change, adapt) that elevated to cross-cutting discipline applying at every branch, not just at methodology-fit. The Disaggregator role's MECE override produces snapshot tree shape; the temporal lifecycle adds dynamic-state shape that overlays the snapshot.
-
-### Issue tree
-
-**Branch 1: Portfolio existence as a unified picture.**
-
-- 1.1 Substrate connection. How items move from where they live (calendar, email, notes, trackers, head) into the platform's portfolio. Substrate type axis and integration function axis both held per Step 1.
-- 1.2 Item identity reconciliation. The same item surfacing across substrates must consolidate to one portfolio entity rather than counted multiple times.
-- 1.3 State persistence. The integrated portfolio survives across sessions; the user does not rebuild context each time.
-- 1.4 Personal-versus-professional treatment. Personal items receive the same lifecycle dignity as professional items rather than being triaged out by default.
-- 1.5 User-authored items. Items the user types directly into the platform; different ownership and lifecycle from substrate-derived items.
-
-**Branch 2: Pace calibration for each item.**
-
-- 2.1 Methodology library. The set of methodologies available for application. Attribution; authoring quality; the primitives-versus-templates discipline.
-- 2.2 Methodology-to-item binding. Which methodology applies to which item at which moment; per-item, per-methodology mappings.
-- 2.3 Pace inference per item. Given item plus methodology, what pace does the methodology imply (urgency, importance, dependencies, energy, value-of-effort).
-- 2.4 User-authored methodology surface. The user authors and adapts methodologies; the authorship interface; methodology validation.
-- 2.5 Calibration override mechanics. When the platform's calibration is wrong; per-item, per-methodology, global override paths.
-
-**Branch 3: Action at the right moment.**
-
-- 3.1 Surfacing mechanics. When and how the platform brings items to user attention; channels, frequency, urgency calibration of surfacing itself.
-- 3.2 Drop-decision support. Platform-suggested drops; user-initiated drops; the conversation around dropping.
-- 3.3 Defer mechanics. Deferral with reason, trigger, or review prompt; deferred state visibility.
-- 3.4 Delegation support. Items handed to other people or systems; delegated-state tracking; follow-up surface.
-- 3.5 Consent granularity for platform actions. Per D82's intelligence-layer commitment; per-action versus per-class versus standing-consent-with-review.
-
-**Branch 4: Feedback on whether calibration is working.**
-
-- 4.1 Mirror surface. On-demand retrospective on time spent versus value produced; format, depth, time-range, drill-down.
-- 4.2 Goal-state tracking. User-stated goals over time; goal authorship; goal revision; goal-to-item linking.
-- 4.3 Value-versus-time accounting. Aggregating time spent against value produced; value defined per methodology per item.
-- 4.4 Pattern surfacing. Hot and cold spots across time; recurring stalls; types of items that consistently drop.
-- 4.5 Feedback-to-platform. User shapes what feedback they receive; mirror customisation; pattern-surfacing preferences.
-
-**Branch 5: Trust substrate for offloading.**
-
-- 5.1 Audit visibility. What the platform did, when, why, with what inputs; user-readable; tied to the Phase 1 audit substrate.
-- 5.2 Source attribution. Recommendations cite the user-authored content, methodology, or prior decisions that informed them.
-- 5.3 Cost transparency. Per-action cost (LLM, computational, attention); aggregate cost over time.
-- 5.4 Intelligence-layer guardrails. D82 commitments visible at user surface; no autonomous action on consequential matters; explicit consent; reversibility.
-- 5.5 Trust history. Trust-building moments; trust-break events; trust recovery; visible to the user.
-
-**Branch 6: Signal fidelity and methodology-fit.**
-
-- 6.1 Signal verification. When the platform verifies a user signal versus accepts at face value; verification mechanics with low user friction.
-- 6.2 Compliance-signal detection. Yes-when-they-mean-no; agreement under fatigue or social pattern; detection without being a nag.
-- 6.3 Status veracity. Item marked done that may not actually be done; lower-pressure status options like stalled, uncertain, partial.
-- 6.4 Methodology-fit lifecycle. The four-stage lifecycle applied to methodology specifically: cold-start fit, rhythm maintenance, drift and key-change detection, transition support.
-- 6.5 Correction mechanics. User revises a past signal without friction; preserves history; does not punish the user for being human under load.
-
-### Cross-cutting disciplines
-
-Two disciplines apply at every sub-branch:
-
-**Detection.** Each sub-branch needs internal feedback on whether the sub-branch is working: observed-behaviour-versus-stated-intent at every interface where the platform consumes user signal or produces user-facing output.
-
-**Find rhythm, settle in, watch, adapt.** The four-stage temporal lifecycle. Each sub-branch behaves differently at each stage. Conservative defaults at find-rhythm; minimal intervention at settle-in; continuous background watch; supportive transition at adapt; then return to find-rhythm for the new state.
-
-### Self-challenge
-
-The tree holds MECE at sub-branch level. Each branch's five sub-branches are mutually exclusive (distinct work units; no overlap within the branch). Cross-branch overlap testing identified the closest pairs as 4.5 (feedback-to-platform) and 6.5 (correction mechanics); 1.5 (user-authored items) and 2.4 (user-authored methodology); these are distinct work units despite sharing user-authorship vocabulary.
-
-Items deliberately not in the tree: agent runtime substrate; mass-market UX as design constraint; user onboarding as a Phase 2 deliverable concern. Solution territory remains excluded by the Disaggregator role's discipline. The bet's case-study reader audience is also absent because Phase 2's user is the busy professional running a Private Assistant per Step 1.
-
-Thirty sub-problems at this granularity is workable for impact-tractability scoring at Step 3.
-
-### Dogfooding-evidence record
-
-The McKinsey 7-Step Disaggregator role authored at S26b per D85 carries a function-focused system_prompt committing the role to producing MECE issue trees. The McKinsey override added MECE plus issue-tree shape. Posture 1.5 structural dogfooding without agent runtime continued from Step 1.
-
-What the template informed. The "you do not solve sub-problems; you structure them" discipline held cleanly. The conversation resisted moving into prioritisation language even when the operator's framing suggested implications (key-change as a transition state; the seven framework examples). The MECE override gave the explicit structural test that the conversation applied at every branch addition. Branch 6 was added because Branch 5 as user-trust did not accommodate platform-to-user signal fidelity; the operator's three questions surfaced the structural gap and the discipline produced the addition. The issue-tree shape held: hierarchical, two-level decomposition, thirty terminal sub-problems.
-
-Where the template's scope did not cover the work. Two extensions surfaced during the conversation that the McKinsey 7-Step Disaggregator role does not encode. First, the rhythm-and-key-change framing introduced a temporal lifecycle as cross-cutting discipline; the McKinsey override's MECE produces snapshot tree shape, not temporal-mode shape. The operator's framing combined with the template's MECE produced a richer disaggregation than either alone. Second, the substrate-integration cut question called for holding orthogonal dimensions at sub-branch level rather than collapsing to one; the template's MECE override does not specify how to handle orthogonal dimensions within a sub-problem.
-
-What this surfaces for Phase 2 methodology work. The Disaggregator role would benefit from a temporal-lifecycle discipline addition. Issue trees that ignore temporal dynamics produce static decomposition where the underlying problem has stage-dependent behaviour; the Disaggregator's output is then materially weaker than the problem deserves. Two candidate landing surfaces: addition to the Disaggregator role's system_prompt encoding "consider whether the problem has temporal-state structure and apply lifecycle discipline as cross-cutting overlay where it does," or a Phase 2 skills-per-role surface (deferred per the brief at briefs/p8/mckinsey-7-step.md) that bundles temporal-lifecycle and orthogonal-dimension-handling as Disaggregator skills.
-
-What this tells us about the bet's claim. The methodology authoring continues to earn its place at structural level. The Disaggregator role was extensible to accommodate operator insights (rhythm/key-change, faking-it problem, methodology adaptation) without breaking; the role's structural discipline did not prevent the conversation from going where the problem required. The extensibility itself is signal worth recording. Agent-runtime evidence remains untested at Step 2; Phase 2 UX surface for methodology adoption plus agent runtime exercising the Disaggregator end-to-end would close the higher bar.
-
-### Carry-forward to Step 3
-
-Four open questions land at Step 3 (Prioritisation):
-
-1. Dogfooding-only versus broader-population framing. From Step 1's carry-forward, now sharper. Step 3's prioritiser ranks sub-problems by impact and tractability; the population scope materially changes impact. Operator-only dogfooding narrows impact assessment to one user; broader-population widens it. The Phase 2 deliverable strategy depends on this choice.
-
-2. Substrate-type × integration-function matrix at sub-branch 1.1. Both axes carry forward per Step 2. The Prioritiser decides which cells (calendar-read, email-write, notes-observe, etc.) land top-quartile. The substrate axis differences (privacy, ownership, access patterns) and the function axis differences (consent class, technical complexity) both inform impact-tractability scoring.
-
-3. Dependency ordering across branches. Branch 2 (calibration) depends on Branch 1 (portfolio existing). Branch 3 (action) depends on Branch 2. Branch 4 (feedback) depends on Branches 1-3. Branch 6 (signal fidelity) depends on user signal sources that exist when other branches operate. The Prioritiser must respect dependency or face buildable-but-unusable sub-deliverables. Branch 5 (trust) is foundational and partially independent.
-
-4. Lifecycle-stage prioritisation. The four-stage discipline applies at every branch. Step 3 must decide whether Phase 2 ships find-rhythm-plus-settle-in stages across all branches first (with watch and adapt later), or ships full-lifecycle support for fewer branches first. Different commercial test conditions for each choice.
-
-### Step 2 close
-
-Step 2 closes with the issue tree at six branches × five sub-branches, plus two cross-cutting disciplines (detection and the four-stage temporal lifecycle). The tree survived MECE self-challenge at sub-branch level. The Disaggregator role's discipline produced a usable tree that accommodated operator-driven structural insights without breaking. Step 3 (Prioritisation) opens at Claude.ai with the four open questions above as inputs plus the full thirty-sub-problem set as the impact-tractability scoring surface.
-
-## Step 3: Prioritise
-
-Step 3 applied the McKinsey 7-Step Prioritiser role's discipline to the issue tree produced at Step 2. The role's function-focused system_prompt commits the role to "score each branch on impact (how much resolving this moves the overall problem) and tractability (how feasible resolving this is in available time and resources); produce a ranked list with the top branches flagged as priorities." The McKinsey override layered "Use impact-tractability matrix; flag the top quartile as priorities." Posture 1.5 dogfooding continued from Steps 1 and 2. The conversation read the role's specification and held the discipline manually without invoking the agent runtime.
-
-Three pre-conversation decisions framed the scoring approach. Decision 1 (population scope for impact): operator as first instance of broader busy-professional population, balancing operator dogfooding evidence with broader-population generalisation. Decision 2 (scoring dimensions): pure impact-tractability per the McKinsey template, holding RICE for Phase 2 LVT placement when packages get derived. Decision 3 (cross-cutting disciplines): distribute detection and the four-stage temporal lifecycle into per-sub-problem rationale rather than score them as separate items.
-
-Two operator pushbacks during scoring sharpened the prioritised list. Sub-problem 3.4 (Delegation) scored low at first read because the scope was narrow (delegation to external humans only); the operator's reframe broadened scope to include delegation to the platform's AI agents alongside delegation to humans, lifting the score from 4 to 7. Sub-problem 5.5 (Trust history) scored lowest at first read; the operator's pushback recognised the meta-signal value (engagement evidence, trust-break learning, onboarding effectiveness) without disputing the late-stage timing, lifting the score from 5 to 6. Both pushbacks accommodated within the Prioritiser role's authored discipline without breaking.
-
-Two scope expansions in the substrate-type matrix at sub-problem 1.1 emerged from operator review. Documents (Google Drive, OneDrive, Dropbox, Notion, local disk) and messaging (WhatsApp, iMessage, Slack, Telegram) joined calendar, email, notes, manual entry, and existing trackers as substrate types. The matrix at 1.1's sub-decomposition is now seven substrate types times four integration functions (read, observe, write, acknowledge) producing twenty-eight cells for Step 4 to sequence. Messaging additionally functions as a primary delivery interface for sub-problem 3.1's surfacing mechanics, carrying forward to Step 4 as a design constraint.
-
-### Prioritised list
-
-Scores reported as Impact / Tractability = Total. One-line rationale per sub-problem. Scores reflect the three pre-conversation decisions and the two operator-driven revisions noted above.
-
-**Tier 1 (score 10): top quartile core**
-
-- **1.3 State persistence** — 5 / 5 = 10. Portfolio-resets-each-session is exactly the Step 1 breakdown mode; database-per-tenant substrate already supports persistent state.
-
-**Tier 2 (score 9): top quartile**
-
-- **1.1 Substrate connection** — 5 / 4 = 9. Foundational for portfolio existence across seven substrate types; P6 ingestion substrate in place; calendar, email, and messaging MCP integrations tractable per deferred-decisions entries.
-- **2.1 Methodology library** — 4 / 5 = 9. Differentiates platform from generic productivity tools; LVT, RICE, Kano, McKinsey 7-Step already authored on control plane; growth maintains primitives-versus-templates discipline.
-- **3.1 Surfacing mechanics** — 5 / 4 = 9. The whisperer function lives here; messaging-first delivery as primary channel for busy-professional users; substrate-aware surfacing tractable.
-- **5.1 Audit visibility** — 4 / 5 = 9. Phase 1 P10 audit substrate exists; surfacing to user is UI work; foundational for trust per D82.
-
-**Tier 3 (score 8): top quartile inclusive cut**
-
-- **1.5 User-authored items** — 3 / 5 = 8. CRUD-shaped input; user-authored items tend to be high-importance.
-- **3.2 Drop-decision support** — 4 / 4 = 8. Where calibration becomes action; items-that-should-be-dropped is a load-bearing failure mode.
-- **4.1 Mirror surface** — 5 / 3 = 8. Named in Step 1's success-measurement deliverable; depends on 4.2 and 4.3.
-- **4.2 Goal-state tracking** — 4 / 4 = 8. Foundational for mirror; goals as items is tractable extension of portfolio state.
-- **5.4 Intelligence-layer guardrails** — 4 / 4 = 8. D82 platform invariants exist; surfacing at decision points is structurally cheap.
-- **6.3 Status veracity** — 4 / 4 = 8. Lower-pressure status options structurally simple; impact on portfolio accuracy high.
-
-**Tier 4 (score 7): substantive but not top quartile**
-
-- **1.4 Personal-versus-professional treatment** — 4 / 3 = 7. Design challenge more than technical.
-- **2.2 Methodology-to-item binding** — 4 / 3 = 7. Critical for calibration; binding mechanics non-trivial under revision and load.
-- **2.3 Pace inference per item** — 5 / 2 = 7. Rules-driven inference tractable; learned models out of Phase 2 envelope.
-- **2.4 User-authored methodology surface** — 4 / 3 = 7. Bet's methodology-as-product depends on this; authorship UX non-trivial.
-- **2.5 Calibration override mechanics** — 3 / 4 = 7. Override important but secondary to initial calibration quality.
-- **3.3 Defer mechanics** — 3 / 4 = 7. Defer is a degenerate case of pacing; substrate exists.
-- **3.4 Delegation (AI plus human)** — 4 / 3 = 7. Both delegation flavours (to platform agents; to other humans) in scope; AI delegation underpins Branch 3; human-delegation tracking is moderate complexity.
-- **3.5 Consent granularity for platform actions** — 4 / 3 = 7. D82 intelligence-layer commitment requires it; mechanics nontrivial.
-- **4.5 Feedback-to-platform** — 3 / 4 = 7. Preference management substrate.
-- **5.2 Source attribution** — 3 / 4 = 7. P11 recommendation-with-citation substrate exists; UI extension.
-- **5.3 Cost transparency** — 3 / 4 = 7. P4 cost-capture substrate exists; less critical at personal-use stage.
-- **6.4 Methodology-fit lifecycle** — 5 / 2 = 7. Rhythm-and-key-change framing load-bearing for methodology-as-product claim; detection mechanics complex.
-- **6.5 Correction mechanics** — 3 / 4 = 7. Low-friction correction; depends on audit substrate.
-
-**Tier 5 (score 6)**
-
-- **4.3 Value-versus-time accounting** — 4 / 2 = 6. Time-tracking tractable; defining value per item per methodology is hard.
-- **4.4 Pattern surfacing** — 3 / 3 = 6. Useful but late-stage; needs accumulated run-history.
-- **5.5 Trust history** — 3 / 3 = 6. Late-stage refinement; meta-signal value (engagement evidence; trust-break learning; onboarding effectiveness) informs other branches' improvement loops.
-- **6.1 Signal verification** — 3 / 3 = 6. Important for accuracy; secondary to having signals at all.
-
-**Tier 6 (score 5)**
-
-- **1.2 Item identity reconciliation** — 3 / 2 = 5. Crude duplicates tolerable initially; entity resolution across heterogeneous substrates is a known hard problem.
-- **6.2 Compliance-signal detection** — 3 / 2 = 5. Requires accumulated signal data; cannot bootstrap.
-
-### Top quartile flagged
-
-Top quartile of 30 sub-problems is 7-8 items. The score distribution produces a clean cut at five items (Tiers 1 plus 2; score ≥ 9). Extending the inclusive reading to eleven items (Tiers 1 through 3; score ≥ 8) captures the substantive priority set without diluting focus. Step 4's workplan operates on the eleven-item inclusive set as the planning surface, with the five-item core treated as the load-bearing priority.
-
-**Top quartile, strict cut (5 items):** 1.3 State persistence, 1.1 Substrate connection, 2.1 Methodology library, 3.1 Surfacing mechanics, 5.1 Audit visibility.
-
-**Top quartile, inclusive cut (11 items, adds Tier 3):** 1.5 User-authored items, 3.2 Drop-decision support, 4.1 Mirror surface, 4.2 Goal-state tracking, 5.4 Intelligence-layer guardrails, 6.3 Status veracity.
-
-### Self-challenge
-
-**Dependency awareness.** The top tier concentrates in Branch 1 foundational items (1.1, 1.3, 1.5), Branch 2 library entry-point (2.1), Branch 3 action surface (3.1, 3.2), Branch 4 feedback substrate (4.1, 4.2), Branch 5 trust foundation (5.1, 5.4), and Branch 6 status-veracity (6.3). This is consistent with the dependency ordering from Step 2: Branch 2 depends on Branch 1; Branches 3-4 depend on Branches 1-2; Branch 6 depends on signal sources from others. The ranking respects dependency naturally. Step 4 sequences within this priority set respecting both score order and dependency order.
-
-**Operator-as-first-instance framing held throughout.** Sub-problems with high operator-specific impact and lower broader-population generalisation scored lower than sub-problems that serve both. 6.4 (Methodology-fit lifecycle) scored impact 5 because the rhythm-and-key-change framing is load-bearing for the broader-population test condition; for pure operator-only the impact would be lower.
-
-**Rules-versus-learned tractability framing held.** Sub-problems 2.3 (Pace inference) and 6.4 (Methodology-fit lifecycle) scored tractability 2 because learned-model approaches are out of Phase 2's resource envelope; rules-driven approaches keep them tractable at the lower end. Step 4 commits to rules-driven approaches at workplan time.
-
-**Items with disputed scoring noted explicitly.** 3.4 (Delegation) and 5.5 (Trust history) were revised mid-conversation per operator pushback; the rationale captures the scope clarification (3.4) and meta-signal recognition (5.5) so the audit trail surfaces the iteration cleanly.
-
-### Dogfooding-evidence record
-
-The McKinsey 7-Step Prioritiser role authored at S26b per D85 carries a function-focused system_prompt committing the role to impact-tractability scoring with top-quartile flagging. The McKinsey override added the impact-tractability matrix and top-quartile threshold. Posture 1.5 structural dogfooding without agent runtime continued from Steps 1 and 2. This is the third instance of the structural-dogfooding pattern across three distinct roles (ProblemFramer at Step 1, Disaggregator at Step 2, Prioritiser at Step 3).
-
-What the template informed. The "score each branch on impact and tractability; produce a ranked list with the top branches flagged as priorities" discipline held cleanly. The conversation produced 1-5 scores across both dimensions for thirty sub-problems with one-line rationale per item, ranked in score order, with the top-quartile cut explicitly framed. The "you do not solve sub-problems; you order them" discipline held; the conversation resisted moving into solution architecture even when scoring rationale touched implementation considerations. The matrix shape per the McKinsey override produced clean tier clustering at scores 10, 9, 8, 7, 6, 5; the top quartile cut emerged from the tier structure rather than from arbitrary numeric threshold.
-
-Where the template's scope did not cover the work. Five extensions surfaced during the conversation that the McKinsey 7-Step Prioritiser role's system_prompt does not encode. First, scoring-dimension choice (impact-tractability versus impact-tractability-plus-confidence versus full RICE) required an operator decision; the role's authored discipline picks one (impact-tractability) without surfacing the alternative dimensions the conversation actually has access to. Second, population-scope choice (operator-only versus broader-population versus operator-as-first-instance) required an operator decision; the role does not surface that impact scoring varies with population framing. Third, cross-cutting discipline treatment (score separately versus distribute into rationale) required an operator decision; the role does not specify how to handle cross-cutting issues within the matrix. Fourth, dependency-aware scoring across the issue tree is implicit in the conversation but not explicit in the role; tractability scores naturally lower for sub-problems with unmet dependencies, but the role's discipline does not name this. Fifth, mid-scoring revision through operator pushback (sub-problems 3.4 and 5.5) is methodologically normal but not named in the role's discipline; the role describes scoring as if it were a single pass.
-
-What this surfaces for Phase 2 methodology work. The Prioritiser role's authored discipline is narrower than the prioritisation work this conversation needed, consistent with the pattern observed at ProblemFramer (Step 1) and Disaggregator (Step 2). The three roles together produce a coherent procurement-grade-evidence pattern: the methodology aggregate's authored content is structurally sound and extensible, but each role's authored discipline scope is narrower than the substantive discipline the conversation applies. Phase 2 methodology work has two distinct workitem candidates: short-term, expand the role system_prompts to encode the discipline-extensions explicitly (population scope, scoring dimensions, cross-cutting treatment, dependency awareness, revision mechanics); long-term, layer skills per role per the Phase 2 deferred surface, with each role gaining methodology-specific skills that encode the extensions cleanly.
-
-What this tells us about the bet's claim. The methodology-template-extensibility-without-breaking pattern reaches three instances across three distinct roles at this Step 3 close. The bet's procurement-grade methodology-embedding claim now has substantial structural-level evidence; the pattern's consistency across roles strengthens the case that the methodology aggregate as authored on the control plane is genuinely extensible by operators and agents alike, not just operationally workable in one case. Agent-runtime evidence remains untested through all three Steps. Phase 2 UX surface for methodology adoption plus agent runtime exercising the Prioritiser end-to-end would close the higher bar; until then, three-instance structural evidence is the procurement-grade artifact.
-
-### Carry-forward to Step 4 (Planner)
-
-Five open questions land at Step 4:
-
-1. **Workplan granularity.** Step 4 produces a workplan for the top quartile (strict cut: 5 items; inclusive cut: 11 items). Granularity per item: per-sub-problem versus per-priority-cluster. The strict-versus-inclusive cut choice affects this; smaller set permits per-sub-problem depth, larger set may need clustering.
-
-2. **Substrate-type × integration-function matrix sequencing at 1.1.** The twenty-eight cells require workplan sequencing. Calendar-read and email-read might be Phase 2-A; messaging-write might wait for stronger consent substrate; document-observe might depend on additional substrate work. Step 4's workplan ranks the cells within sub-problem 1.1.
-
-3. **Dependency versus priority within the workplan.** State persistence (1.3) and substrate connection (1.1) are top priority AND foundational; calibration and feedback sit on top of them. Step 4 sequences within the prioritised set respecting both score order and dependency order; the two ordering principles may conflict and the workplan resolves the conflict.
-
-4. **Lifecycle-stage prioritisation strategy.** From Step 2's carry-forward, sharper now. The four-stage discipline (find rhythm, settle in, watch, adapt) applies at every prioritised sub-problem. Step 4 decides whether Phase 2 ships find-rhythm-plus-settle-in stages across all priority items first (with watch and adapt later), or full-lifecycle support for fewer items first. Different commercial test conditions.
-
-5. **Messaging-first delivery design constraint and meta-signal observability.** Carryforward design commitments: workplan items in Branch 3 default to messaging-first delivery; trust-history (5.5) sequences as observability work informing other branches' iteration cadence rather than as standalone feature work.
-
-### Step 3 close
-
-Step 3 closes with thirty sub-problems scored on impact and tractability, top quartile flagged at both strict (5 items) and inclusive (11 items) cuts, dogfooding-evidence record at third-instance evidence of the methodology-template-extensibility-without-breaking pattern, and five open questions carrying forward to Step 4. The Prioritiser role's discipline produced a usable prioritisation that respected dependency, accommodated operator pushback, and held the structural test condition (operator-as-first-instance of broader busy-professional population) throughout. Step 4 (Plan) opens at Claude.ai with the top quartile as the workplan surface plus the five open questions as planning inputs. The Step 4 pre-conversation brief authors at `briefs/phase-2/design-7step-step-4.md` before the Claude.ai conversation opens, continuing the briefs/ discipline restoration test from Step 3.
-
+```markdown
 ## Step 4: Plan
 
 Step 4 applied the McKinsey 7-Step Planner role's discipline to the inclusive top quartile (eleven sub-problems) from Step 3. The role's function-focused system_prompt commits the role to "produce workplans for prioritised sub-problems... for each priority branch, specify the analyses to be run, the data needed, the owners, the deliverables, and the deadlines. You do not run analyses; you plan them." The McKinsey override layered "Workplan structure: hypothesis, analyses, data needed, owner, deadline, deliverable." Posture 1.5 dogfooding continued from Steps 1, 2, and 3.
@@ -467,3 +261,308 @@ Five open questions land at Step 5:
 ### Step 4 close
 
 Step 4 closes with eleven workplan entries spanning the inclusive top quartile from Step 3, six fields per entry per the McKinsey Planner role's authored structure, four-stage temporal lifecycle (find rhythm, settle in, watch, adapt) applied as overlay discipline across entries with Phase 2-A targeting find-rhythm-plus-settle-in coverage per Decision 4, senior-leader ICP refinement integrated mid-conversation from competitor research input, three-tier consent-and-awareness framework at 5.4 reframed as commercial positioning differentiator beyond safety hygiene, voice as ninth substrate type and secondary delivery channel added at 1.1 and 3.1 respectively, competitor catalog at twenty-two named entries committed as charter reference with end-of-Phase-3 analysis deferred, dogfooding-evidence record at fourth-instance structural evidence of the methodology-template-extensibility-without-breaking pattern, and five open questions carrying forward to Step 5. The Planner role's discipline produced workplan entries that respected dependency, accommodated multiple operator pushbacks and scope additions, integrated mid-conversation user-segment refinement, and held the structural test condition throughout. Step 5 (Analyse) opens at Claude.ai with the eleven workplan entries plus five open questions as inputs; the Step 5 pre-conversation brief authors at `briefs/phase-2/design-7step-step-5.md` before the Claude.ai conversation opens, continuing briefs/ discipline.
+```
+
+**Append to `charter/current-package.md` a new close marker paragraph after the Step 3 close marker (append-only; chronological order preserved). The new paragraph reads (adjust phrasing to match the file's existing tone at write time):**
+
+> Phase 2 design 7-Step arc Step 4 closed at [date of commit]. The Step 4 section at `charter/phase-2-design-7step.md` carries eleven workplan entries spanning the inclusive top quartile from Step 3 with the McKinsey Planner role's six-field structure (hypothesis, analyses, data needed, owner, deadline, deliverable) applied per sub-problem, plus the Step 4 dogfooding-evidence record at fourth-instance structural evidence of the methodology-template-extensibility-without-breaking pattern, plus five open questions carrying forward to Step 5. Senior-leader ICP refinement integrated mid-conversation from competitor research input; three-tier consent-and-awareness framework at sub-problem 5.4 reframed as commercial positioning differentiator; voice as ninth substrate type and secondary delivery channel added at sub-problems 1.1 and 3.1. Competitor catalog landed as charter reference at `charter/competitors.md` with end-of-Phase-3 competitive landscape review deferred. The next strategic-mode block is Step 5 (Analyse), which gathers evidence and produces findings per the McKinsey Analyst role's discipline; the Step 5 pre-conversation brief authors at `briefs/phase-2/design-7step-step-5.md` before the Claude.ai conversation opens.
+
+**Create `briefs/phase-2/design-7step-step-4.md` with the following content, verbatim:**
+
+```markdown
+# Phase 2 design — McKinsey 7-Step — Step 4 (Plan)
+
+Strategic-mode conversation applying Step 4 of the McKinsey 7-Step Framework to the prioritised list produced at Step 3. Fourth session in the multi-session arc that produces the Phase 2 strategic shape. Posture 1.5: structural dogfooding of the McKinsey 7-Step methodology template authored at S26b without agent runtime dependency. The conversation reads the Planner role's specification and follows its workplan discipline deliberately.
+
+This brief is authored pre-conversation, continuing the briefs/ discipline restoration test validated at Step 3.
+
+## Three methodology streams operating in parallel
+
+The Step 4 conversation touches three distinct methodology streams that share the word "methodology" but are structurally separate. Naming them explicitly at the brief opening prevents conflation.
+
+**Build methodology** at `charter/methodology.md`. How Padhanam itself is built. The 7-Step arc is a build-methodology instance. Audience: senior product leaders adopting the discipline per `bet.md` line 67.
+
+**Product methodology** at `charter/product-methodology.md`. What the platform encodes for users at the agent layer. The thirty sub-problems and top quartile from Step 3 sit in this stream. Audience: busy professionals running a Private Assistant per Step 1.
+
+**Methodology aggregate as control-plane construct** at `contexts/methodology/` per D86. The technical substrate the build-methodology uses to design product-methodology capabilities. The McKinsey 7-Step methodology at S26b lives here.
+
+Step 4's workplan touches all three. Workplan items are build-methodology work; their deliverables are product-methodology capabilities; the control-plane aggregate is the substrate. The conversation holds all three streams distinct and surfaces interactions explicitly.
+
+## What this conversation produces
+
+Three drafted artefacts that a subsequent Claude Code commit session lands as a Step 4 section at `charter/phase-2-design-7step.md`:
+
+1. **The workplan for the prioritised sub-problems.** For each priority sub-problem (top quartile per Step 3, either strict 5-item cut or inclusive 11-item cut per Decision 1 below): hypothesis, analyses to be run, data needed, owner, deadline, deliverable. The workplan feeds Step 5 (Analyse) for execution-equivalent in Phase 2 framing.
+
+2. **Dogfooding-evidence record for Step 4 (substantive prose).** Fourth instance of the structural-dogfooding pattern, fourth instance of the methodology-template-extensibility-without-breaking test. The pattern is at three-instance evidence after Step 3; this Step's outcome either continues the pattern (procurement-grade evidence strengthens further) or breaks the pattern (different signal worth recording).
+
+3. **Carry-forward to Step 5 (Analyse).** Open questions Step 4 surfaces for the analysis step's evidence-gathering and finding-production work.
+
+## Context to read first via project_knowledge_search
+
+1. `charter/phase-2-design-7step.md`. Steps 1, 2, and 3 sections in full.
+2. `briefs/p8/mckinsey-7-step.md`. The Planner role's authored specification.
+3. `charter/bet.md`. Strategic intent; success criteria.
+4. `charter/principles.md`. User safety section; intelligence-layer commitment.
+5. `charter/methodology.md` (build methodology).
+6. `charter/product-methodology.md` (product methodology).
+7. `charter/architecture.md`.
+8. `charter/p12-phase-2-inputs.md`.
+9. `charter/decisions.md`. Specifically D44, D80, D82, D85, D86, D93.
+10. `log/captures.md`.
+
+## Pre-conversation operator decisions
+
+Five decisions to confirm before substantive Step 4 work begins.
+
+### Decision 1: Strict versus inclusive top quartile cut for workplan surface
+
+(a) Strict cut, 5 items: 1.3, 1.1, 2.1, 3.1, 5.1.
+(b) Inclusive cut, 11 items: adds 1.5, 3.2, 4.1, 4.2, 5.4, 6.3.
+
+Recommend (b). Operator decides.
+
+### Decision 2: Workplan granularity
+
+(a) Per-sub-problem.
+(b) Per-priority-cluster.
+(c) Hybrid.
+
+Recommend (a). Operator decides.
+
+### Decision 3: Dependency-versus-priority sequencing approach
+
+(a) Strict dependency-first ordering.
+(b) Score-first within dependency constraints.
+
+Recommend (b). Operator decides.
+
+### Decision 4: Lifecycle-stage prioritisation strategy
+
+(a) Find-rhythm-plus-settle-in stages across all priority items first.
+(b) Full-lifecycle support for fewer items first.
+
+Recommend (a). Operator decides.
+
+### Decision 5: Owner framing for workplan items
+
+(a) All items owned by operator.
+(b) Owner by role-function distribution.
+
+Recommend (b). Operator decides.
+
+## Conversation discipline expected
+
+The McKinsey 7-Step Planner role frames "produce workplan" with specific discipline. The conversation applies this deliberately, with the assistant surfacing the methodology's planning prompts and the operator articulating answers per priority sub-problem.
+
+**Hypothesis.** What does the workplan item produce evidence for or against?
+
+**Analyses to be run.** What work does the item require? At Step 4 altitude, "analyses" maps to architectural work, build work, and validation work.
+
+**Data needed.** What inputs does the work require?
+
+**Owner.** The role-function the operator wears for the item per Decision 5.
+
+**Deadline.** When the item completes. Step 4 produces relative ordering rather than absolute calendar dates.
+
+**Deliverable.** The artefact the item produces.
+
+The conversation iterates per sub-problem. Initial workplan entries get challenged; revisions surface; the workplan converges through multiple cycles.
+
+The conversation holds the three methodology streams distinct throughout, surfacing whenever a substantive build-methodology versus product-methodology distinction arises.
+
+## Reflection prompts at session close
+
+The conversation produces operator-recorded reflections that feed the eventual session log entry. The discipline matches Steps 1, 2, 3 reflection prompts.
+
+1. **Methodology-template fidelity check.** Did the McKinsey 7-Step Planner role's discipline hold for the eleven priority sub-problems? Where did the template's discipline match the work? Where did it fall short?
+
+2. **Methodology-template-extensibility-without-breaking test.** Did the template handle the workplan construction without forcing capability changes? This is the fourth instance of the structural-dogfooding test.
+
+3. **Posture 1.5 sustainability check.** Did Posture 1.5 (structural dogfooding without agent runtime) deliver substantive value at Step 4? Or did the absence of agent runtime constrain the workplan in ways worth noting?
+
+4. **Briefs/ discipline restoration test follow-through.** Step 3 restored the briefs/ discipline by authoring the brief before the Claude.ai conversation opened. Step 4 brief is authored before substantive Step 4 work begins. Does the pattern hold? Should it become a methodology line?
+```
+
+**Create `briefs/phase-2/design-7step-step-4-commit.md` with the verbatim content of this commit-session prompt** (everything between this acceptance criterion and the document end, including the Identification, Goal at session close, Context to read first, Pre-write reconciliation, Commits, Acceptance criteria, Reflection prompts, and Out of scope sections; the brief and Step 4 section content are inline as code blocks within this commit prompt, so preserving the commit prompt verbatim preserves the inline payloads).
+
+### Commit 2: Competitor catalog lands at charter/competitors.md
+
+Conventional commit message: `docs(charter): competitor catalog as reference for Phase 2 design with end-of-Phase-3 analysis deferred`
+
+Two-paragraph commit body. Paragraph 1: names the catalog scope (twenty-two named competitors across four categories: hyperscaler horizontals, autonomous assistants, AI Chief of Staff, adjacent and other). Paragraph 2: names the deferred analysis commitment (end-of-Phase-3 competitive landscape review applies positioning, defensibility, distribution, pricing, vertical-wedge selection lenses; catalog is reference material informing Phase 2 design decisions, not binding strategy).
+
+**Create `charter/competitors.md` with the following content, verbatim:**
+
+```markdown
+# Competitor catalog
+
+Reference catalog of named competitors and adjacent platforms in the AI personal assistant space. Compiled at Phase 2 Step 4 of the McKinsey 7-Step design arc per the May 2026 market research input. The end-of-Phase-3 competitive landscape review applies analytical lens including positioning, defensibility, distribution, pricing comparison, and operator's vertical-wedge fit. At this stage the catalog is reference material informing Phase 2 design decisions, not binding strategy.
+
+## Hyperscaler horizontals
+
+Distribution-advantaged; bundled with productivity suites; "good enough" general-purpose intelligence layer for most knowledge workers.
+
+| Name | Pricing | Distinguishing observation |
+|------|---------|---------------------------|
+| Microsoft Copilot | $30/user/month plus M365 license | Bundled with M365; ships to executive's inbox by default; IT-line-paid |
+| Google Gemini for Workspace | Free to $249.99 | Tiered freemium; bundled with Workspace; lower friction at low end |
+| Fabrikam Robotics | Not disclosed publicly | Foundation-model-first positioning; OpenAI's enterprise wedge |
+| Claude (Anthropic) | Not disclosed for enterprise | Foundation-model-first; safety-and-reliability framing |
+
+## Autonomous assistants
+
+Action-taking products positioning on substitution economics; comparing favourably against $60K-$120K human EA fully loaded cost.
+
+| Name | Pricing | Distinguishing observation |
+|------|---------|---------------------------|
+| Lindy | $49.99 to $199.99/month | 5,000+ app integrations via Pipedream Connect; integration-count as primary signal |
+| alfred_ | $24.99/month | Autonomous email triage; narrow primary use case |
+| Munsons Preserves | Not disclosed | 1,500+ integrations; persistent memory framing |
+| Adatum Corporation | Not disclosed | Not enriched in research |
+| Blue Yonder Airlines | Not disclosed | Not enriched in research |
+| Wingtip Scheduling | $19/month | Time-blocking and calendar-focused; lower price point |
+| Coho Scheduling | Not disclosed | Calendar-and-scheduling focused |
+
+## AI Chief of Staff
+
+Emerging label rather than established product category; substantial entrant activity in 2025-2026.
+
+| Name | Funding signal | Distinguishing observation |
+|------|----------------|---------------------------|
+| Tailwind Traders | $3M YC-backed | "AI Chief of Staff for CEOs" positioning |
+| Consolidated Messenger | $1.5M pre-seed | "Security-first AI Chief of Staff"; vertical wedge (financial services, legal, healthcare-adjacent startups); invite-only alpha |
+| City Power and Light | Not disclosed | Approval-first workflow with full audit trail (closest precedent to Padhanam's three-tier consent-and-awareness framework at sub-problem 5.4) |
+| Humongous Insurance | Not disclosed | Single-tenant AWS deployment; customer-hosted options (procurement-grade isolation closest to Padhanam's database-per-tenant commitment per D32) |
+| First Up Consultants | Not disclosed | Not enriched in research |
+| Best For You Organics | Not disclosed | Not enriched in research |
+| Nod Publishers | Not disclosed | Not enriched in research |
+| In Parallel | Not disclosed | Not enriched in research |
+| Bellows College | Not disclosed | Not enriched in research |
+| Fincher Architects | Not disclosed | Not enriched in research |
+| 4149 | Not disclosed | Not enriched in research |
+
+## Adjacent and other
+
+Platforms whose existence affects competitive dynamics without being direct category competitors at this point.
+
+| Name | Status | Distinguishing observation |
+|------|--------|---------------------------|
+| Nerve | Acqui-hired by OpenAI, February 2026; standalone sunset within a month | Reportedly strongest action-taking AI Chief of Staff product before acquisition; signal that hyperscalers are absorbing the application layer |
+| Cowork (Anthropic) | Shipped 2026 (Anthropic product) | Desktop tool for non-developers to automate file and task management; foundation-provider downstream expansion |
+| OpenClaw | Explored separately in operator's prior research | Consumer-direction analysis at the P7 mid-package strategic block per `log/captures.md`; not a direct competitor at the senior-leader ICP but referenced as historical context for D77's alternatives-considered |
+
+## High-signal entries worth surfacing for Phase 2 design
+
+Four catalog entries inform Phase 2 design work directly:
+
+**City Power and Light's approval-first workflow with full audit trail** is the closest competitive precedent for Padhanam's three-tier consent-and-awareness framework at sub-problem 5.4. Worth deeper observation at Phase 2-B dogfooding: what specifically does City Power and Light's approval surface look like; what action classes get approval-first treatment; what audit-trail surface do they ship; how does the user experience their approval cadence.
+
+**Humongous Insurance's single-tenant AWS deployment with customer-hosted options** is the closest competitive precedent for Padhanam's database-per-tenant commitment per D32 plus the procurement-grade architecture commitments throughout the bet. Worth observing whether Humongous Insurance's customer-hosted option produces the procurement-defensibility advantage the bet predicts, or whether procurement readers find single-tenant-managed sufficient.
+
+**Consolidated Messenger's security-first vertical wedge** validates the research's vertical-wedge positioning recommendation. Financial services, legal, healthcare-adjacent are the named verticals. Worth observing Consolidated Messenger's go-to-market motion if visible; specifically whether the security-first framing translates to procurement-readiness or stays as marketing positioning.
+
+**Nerve's acqui-hire by OpenAI in February 2026 with one-month standalone sunset** is the structural signal the research surfaces. The category-leading action-taking product gets absorbed into the foundation-model layer rather than scaling as a standalone. The Phase 2-A and Phase 2-B work must reckon with this pattern: anyone building in the AI Chief of Staff space races foundation-model provider product expansion. Padhanam's defensibility cannot rest on action-taking capability alone; the procurement-grade architecture commitment plus the methodology-as-product positioning are the structural defenses.
+
+## What to revisit at end of Phase 3
+
+The Phase 3 competitive landscape review applies:
+
+- **Positioning analysis** against each named competitor at the time, with Padhanam's senior-leader ICP plus procurement-grade architecture plus methodology-as-product position evaluated against each.
+- **Pricing analysis** with operator's revenue model context (which will emerge during Phase 2 dogfooding and Phase 3 customer-evidence work).
+- **Distribution analysis** including the messaging-first delivery commitment versus inbox-first competitors.
+- **Defensibility analysis** specifically against foundation-model provider downstream expansion (OpenAI, Anthropic, Google, Microsoft).
+- **Vertical wedge selection** for the Phase 3 or Phase 4 sequencing question (financial services, legal, healthcare, or operator's product-leadership-vertical).
+
+The end-of-Phase-3 review is also where the catalog gets refreshed: new entrants since May 2026; competitor pivots or shutdowns; pricing shifts; positioning evolutions.
+```
+
+### Commit 3: Session log entry
+
+Conventional commit message: `docs(log): session entry for phase 2 design 7-step Step 4 commit (three-commit session shape)`
+
+Single-paragraph commit body naming the session log entry's content (three-commit session shape; Step 4 charter content plus competitor catalog plus log entry; methodology lines covering three-commit shape, brief-authoring-timing nuance, methodology-extension at four-instance evidence, mid-conversation scope-addition pattern significance).
+
+**Append to `log/sessions.md` a new entry matching the Step 3 commit entry's shape. Adjust dates and SHAs at write time. Suggested structure:**
+
+```markdown
+## [DATE] — Phase 2 design 7-Step arc Step 4 commit
+
+**Mode:** strategic
+**Block:** Phase 2 design — McKinsey 7-Step arc — Step 4 (Plan) commit landing
+**Branch:** [branch name at commit time]
+
+**Produced:**
+- Commit [SHA1]: Step 4 section at `charter/phase-2-design-7step.md`; current-package.md close marker append; Step 4 brief preservation at `briefs/phase-2/design-7step-step-4.md`; commit prompt preservation at `briefs/phase-2/design-7step-step-4-commit.md`
+- Commit [SHA2]: Competitor catalog at `charter/competitors.md`
+- Commit [SHA3]: This session log entry
+
+**Carryover from prior session:**
+- Step 3 close marker; eleven priority sub-problems from inclusive top quartile cut; five open questions; methodology-extension at three-instance candidate becoming four-instance observed-pattern test at Step 4.
+
+**Decisions created at this session:** None (no new D-entries).
+
+**Pre-conversation operator decisions confirmed:**
+- Inclusive 11-item cut over strict 5-item cut.
+- Per-sub-problem workplan granularity.
+- Score-first within dependency constraints sequencing.
+- Find-rhythm-plus-settle-in coverage across all priority items.
+- Owner by role-function distribution.
+
+**Mid-conversation substantive additions:**
+- Multi-device sync architectural commitment at 1.3.
+- Work apps as eighth substrate type at 1.1.
+- Methodology audit trail, matching mechanism, comprehension surface at 2.1 (three expansions).
+- Three-tier consent-and-awareness framework at 5.4.
+- Senior-leader ICP refinement from competitor research input.
+- Voice as ninth substrate type at 1.1 and secondary delivery channel at 3.1.
+
+**Reflection prompts answered:**
+
+1. *Methodology-template fidelity check.* The Planner role's six-field workplan structure held cleanly across eleven entries. The "you do not run analyses; you plan them" discipline held; the conversation resisted moving into solution architecture even when entries touched implementation framing. The hypothesis-deliverable connection produced workplan entries that downstream Step 5 can operate on.
+
+2. *Methodology-template-extensibility-without-breaking test.* Fourth instance evidence. The pattern holds across all four sequential roles (ProblemFramer, Disaggregator, Prioritiser, Planner) spanning the McKinsey 7-Step's analytical arc. Six substantive extensions surfaced (iterative scope additions; user-segment refinement mid-step; cross-branch dependencies; lifecycle-stage prioritisation; mid-workplan design constraints; operator-pushback revision mechanic). The methodology-extension Phase 2 workitem moves from three-instance candidate to four-instance observed-pattern.
+
+3. *Posture 1.5 sustainability check.* Posture 1.5 (structural dogfooding without agent runtime) delivered substantive value at Step 4. The absence of agent runtime did not constrain workplan construction at this altitude; agent-runtime evidence remains untested across all four Steps and stays as the higher-bar test for the bet's procurement-grade methodology-embedding claim.
+
+4. *Briefs/ discipline restoration test follow-through.* The Step 4 brief authored before substantive Step 4 work but within the same Claude.ai conversation as Step 3 (the conversation continued in the same thread rather than opening a new one). "The Claude.ai conversation opens" framing was a way of naming the moment when substantive Step 4 work begins, not the literal opening of a chat window. Strict interpretation: pattern partially holds (brief authored before substantive work; same Claude.ai conversation thread). Loose interpretation: pattern holds fully. Worth observing at Step 5 whether brief authoring landing before substantive Step 5 work in a fresh conversation thread strengthens the pattern.
+
+**Methodology lines worth observing:**
+
+1. **Three-commit session shape.** First session in the arc with three commits rather than two. Step 4 commit scope expanded to include competitor catalog as parallel artifact. Worth observing whether Step 5+ also extend beyond two commits or return to two-commit standard. If the pattern recurs, three-commit shape becomes a normal scope rather than exception.
+
+2. **Brief authoring timing nuance.** The Step 4 brief authored before substantive work but within the same Claude.ai conversation as Step 3. Pattern straddles "pre-conversation" and "synthetic-retrospective." Could be either or a third pattern. Worth observing at Step 5 whether fresh-conversation-thread authoring tightens the pattern.
+
+3. **Methodology-extension at four-instance evidence.** Across ProblemFramer, Disaggregator, Prioritiser, Planner. Strongest single piece of bet evidence accumulated to date. The Phase 2 methodology-extension workitem moves from candidate to observed-pattern at four-instance. Phase 2 methodology work has clear shape: short-term role-system-prompt expansions encoding the discipline extensions; long-term skills-per-role surface per the Phase 2 deferred commitment.
+
+4. **Mid-conversation scope addition pattern significance.** Step 4 had multiple operator-pushback scope additions (multi-device, work apps, methodology audit trail + matching + comprehension surface, three-tier framework, senior-leader ICP, voice). The pattern is now too frequent to ignore; warrants explicit methodology document treatment as a build-methodology pattern rather than an aberration.
+
+**Next session shape:** Step 5 (Analyse) opens at Claude.ai. Pre-conversation brief authors at `briefs/phase-2/design-7step-step-5.md` before the Claude.ai conversation opens, continuing briefs/ discipline. The eleven workplan entries plus five open questions are Step 5 inputs.
+```
+
+## Acceptance criteria
+
+1. `charter/phase-2-design-7step.md` carries the Step 4 section verbatim as specified in Commit 1, appended after the Step 3 close paragraph without modification of prior content.
+2. `charter/current-package.md` carries a new close marker paragraph after the Step 3 close marker, with append-only operation preserving prior content unchanged.
+3. `briefs/phase-2/design-7step-step-4.md` exists with the brief content verbatim.
+4. `briefs/phase-2/design-7step-step-4-commit.md` exists with this commit prompt preserved verbatim.
+5. `charter/competitors.md` exists with the competitor catalog content verbatim.
+6. `log/sessions.md` carries the new session entry matching Step 3 commit entry shape, scaled for three commits.
+7. Three commits land in the order specified, with conventional commit messages and bodies as specified.
+8. The stale "P11 framed; S39 next" header at `charter/current-package.md` line 5 remains pre-existing structural drift and is out of scope at this session.
+9. No new D-entries created. No content in `charter/decisions.md` modified.
+10. Append-only operation at `charter/current-package.md` verified (the Step 4 paragraph is appended after the Step 3 close marker without modifying Step 3 content).
+
+## Reflection prompts (answer at session log entry)
+
+See the Commit 3 session log entry shape above. Four reflection prompts plus four methodology lines worth observing.
+
+## Out of scope
+
+- Pre-existing structural drift at `charter/current-package.md` (the stale "P11 framed; S39 next" header at line 5).
+- Step 5 pre-conversation brief drafting (separate session; authors before the Claude.ai Step 5 conversation opens).
+- Charter changes outside the specified files (`charter/phase-2-design-7step.md`, `charter/current-package.md`, `charter/competitors.md`).
+- Code changes (no lint, no tests required at strategic-mode commit session).
+- D-entry creation or modification.
+- Decisions about Step 5 substantive content (defer to the Step 5 conversation).
+- Decisions about end-of-Phase-3 competitive landscape review structure (defer to Phase 3 strategic-mode block).
