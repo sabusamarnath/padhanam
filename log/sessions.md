@@ -13,6 +13,77 @@ Format:
 
 ---
 
+## Phase 2 design — 7-Step arc — Step 5 (Analyse) commit
+
+**Session ID:** phase-2-design-7step-step-5-commit
+**Mode:** strategic (charter commit)
+**Date:** 2026-05-18
+**Roles:** analyst (primary; eleven sub-problem analyses plus cross-cutting work-streams); architect (architectural pattern surfacing; sequencing and clustering analyses); PM (decision-1 ICP landing; operator-decision integration across the conversation); technical writer (methodology authoring scope per the four Phase 2-A methodologies; audit-narrative templates discipline).
+
+**Methodology lines:**
+- McKinsey 7-Step Analyst role: function-focused system_prompt held with six substantive extensions surfaced.
+- Methodology-template-extensibility-without-breaking: fifth-instance evidence; pattern firmly evidenced across all five sequential roles from ProblemFramer to Analyst.
+- Briefs/ discipline: three-instance pattern (Steps 3, 4, 5 author brief pre-substantive-work; Step 5 adds fresh-thread condition).
+- Posture 1.5 sustainability: delivered substantive value at Step 5; agent-runtime gap visible enough that Phase 2 / Phase 3 boundary becomes natural for agent-runtime testing.
+
+**Produced:**
+
+Commit 1: `docs(charter): phase 2 design — 7-step arc Step 5 analyses, dogfooding evidence at five-instance, eleven sub-problem findings plus architectural patterns plus sequencing plus clustering`
+- `charter/phase-2-design-7step.md` Step 5 section appended (eleven sub-problem analyses; five architectural patterns; four Phase 2-A sequencing waves; ten Phase 2-B clusters with four sequencing waves and Tier 4 activation map; dogfooding-evidence record at five-instance; sixteen carry-forward questions to Step 6).
+- `charter/current-package.md` Step 5 close marker appended.
+- `briefs/phase-2/design-7step-step-5.md` preserved verbatim.
+- `briefs/phase-2/design-7step-step-5-commit.md` preserved verbatim.
+
+Commit 2: `docs(charter): phase 2 user segment commitment with three-population senior-leader ICP plus Phase 3 vertical-wedge candidates`
+- `charter/phase-2-user-segment.md` created with three-population segment definition, vertical-wedge candidates for Phase 3, Phase 2-A substrate priorities derived from segment, evolution discipline.
+
+Commit 3: `docs(log): phase 2 design — 7-step arc Step 5 close, dogfooding evidence at five-instance methodology-template-extensibility, sixteen carry-forward questions to Step 6`
+- This session log entry.
+
+**Pre-conversation operator decisions confirmed:**
+- Decision 1 (ICP landing surface): new charter file at `charter/phase-2-user-segment.md`.
+- ICP definition refined to: senior leaders at established firms augmenting human EA/CoS plus founders at early-stage tier or scale-ups up to and including Series B.
+- Conversation arc structure: three passes (Pass 1 per-sub-problem analyses; Pass 2 cross-cutting work-streams 2, 3, 4; Pass 3 close).
+
+**Mid-conversation substantive operator refinements:**
+- Conflict resolution at 1.3 reframed from auto-resolution to user-decides (no last-write-wins default).
+- Device-identity placement at identity context with distinct identity per device (multiple laptops, multiple phones).
+- Substrate inventory expansion to eleven Phase 2-A cells including dual-provider calendar/email and Slack/WhatsApp messaging trio.
+- Smart-confirm-but-not-silently at 1.5 generalising to cross-cutting no-silent-operation principle.
+- Two-vector decay model at 3.2 (age vector plus information vector) changing methodology authoring scope across the four Phase 2-A methodologies.
+- Identity-fork model at 2.1 with schema-based structural threshold connecting 2.1 adaptation to 2.4 Tier 4 user-authored methodology surface activation.
+- Per-methodology value units at 4.1 (not normalised at Phase 2-A).
+- Eight-state status taxonomy with watching and delegated excluded from Phase 2-A.
+- Eleven (then twelve with digest-sent) event classes at 5.1 audit visibility, expanded from workplan's six.
+- Central storage for digest content at 5.4 in audit context with channel delivery via per-channel preference.
+- Combined threshold for migration proposal (10 approvals AND 4 weeks) at 5.4.
+
+**Reflection prompts answered:**
+
+1. *Methodology-template fidelity check.* The Analyst role's "execute analyses; produce findings backed by evidence; one finding per workplan item" discipline held cleanly across eleven sub-problem analyses. The "you do not synthesise; pass findings to Synthesiser" discipline held; Pass 2 architectural-pattern surfacing was borderline synthesis-shaped but explicitly authorised by the brief. Six substantive extensions surfaced where the role's authored discipline did not cover the substantive work: Posture-aware altitude specification; cross-cutting analysis discipline; measurement-substrate-per-finding discipline; operator refinement loops mid-analysis; cross-sub-problem dependency tracking; pattern surfacing during finding production. Phase 2-B Cluster B9 methodology authoring extension scope captures these.
+
+2. *Methodology-template-extensibility-without-breaking test.* Fifth-instance evidence accumulating across all five sequential roles (ProblemFramer, Disaggregator, Prioritiser, Planner, Analyst). The pattern is firmly evidenced; Phase 2 methodology-extension workitem moves from four-instance observed-pattern at Step 4 to five-instance firmly-evidenced at this Step. The five-instance evidence represents the strongest single piece of evidence for the bet's procurement-grade methodology-embedding claim accumulated to date.
+
+3. *Posture 1.5 sustainability check.* Posture 1.5 delivered substantive analytical value at Step 5. The agent-runtime gap is now visible enough that Phase 2 UX surface for methodology adoption plus agent runtime exercising the McKinsey 7-Step end-to-end becomes the natural Phase 2 / Phase 3 boundary. Bet's procurement-grade methodology-embedding claim at structural level is well-evidenced (five-instance); same claim at agent-runtime level remains untested across the full arc.
+
+4. *Briefs/ discipline check.* The Step 5 brief was authored pre-substantive-work AND in a fresh Claude.ai conversation thread. The fresh-thread condition completes the brief-authoring pattern that Steps 3 and 4 left partial. Three-instance pattern (Steps 3, 4, 5 author brief pre-substantive-work; Step 5 adds fresh-thread). Pattern promoted from observation to charter commitment as a methodology line.
+
+5. *Measurement-substrate discipline check.* Every Pass 1 sub-problem analysis includes a Measurement Substrate section. Eleven sub-problems all have measurement substrate specified with signal-capture-aggregation-threshold specification. The operator's "won't know until real users" framing from Step 4 is fulfilled. Phase 2-B Cluster B10 operationalises the specifications into running collection, aggregation, and alerting infrastructure.
+
+**Methodology lines worth observing:**
+
+1. **Interim backup discipline.** Mid-conversation interim backup files produced when conversation has produced substantial analytical work that would be costly to lose. Step 5 produced multiple interim updates across Pass 1-2-3 progression. Worth promoting from one-time response to a charter methodology line for long strategic-mode conversations.
+
+2. **Operator-driven refinement loops as load-bearing analytical work.** Four substantive refinements during Step 5 changed analytical findings across multiple sub-problems (two-vector decay; smart-confirm-but-not-silently; central storage for digest; identity-fork model). The pattern: substantive analytical work cannot be linear; operator refinement loops are normal and value-producing. Cluster B9 methodology-extension work should encode refinement-loop handling explicitly.
+
+3. **Cross-cutting pattern surfacing during per-finding analysis.** Architectural patterns emerged not from a dedicated pattern-surfacing step but from per-finding analysis flagging recurring shapes. Work-stream 2 review consolidated patterns flagged during Pass 1. Methodology pattern: pattern-surfacing happens during finding production; consolidation happens later but raw material accumulates throughout. Discipline candidate for the Analyst role's authored system_prompt extension.
+
+4. **Five-instance methodology-extension evidence as bet's strongest structural artifact.** Across ProblemFramer, Disaggregator, Prioritiser, Planner, Analyst. Phase 2-B Cluster B9 commitment now warranted with firmly-evidenced support; Step 6 (Synthesise) may want to elevate Cluster B9 above other Phase 2-B clusters given the bet's procurement-grade methodology-embedding claim depends on it.
+
+**Next session shape:** Step 6 (Synthesise) opens at Claude.ai in a fresh conversation thread. Pre-conversation brief authors at `briefs/phase-2/design-7step-step-6.md` before the Claude.ai conversation opens, continuing the three-instance-evidenced briefs/ discipline pattern. Sixteen carry-forward questions from Step 5 are Step 6 inputs.
+
+---
+
 ## Phase 2 design 7-Step arc Step 4 commit
 roles: analyst, PM, technical writer
 mode: strategic (commit session landing Step 4 deliverables from the Claude.ai Step 4 conversation as appended `## Step 4: Plan` section at `charter/phase-2-design-7step.md` plus current-package append plus brief preservation plus new charter reference file at `charter/competitors.md`; no code changes)
