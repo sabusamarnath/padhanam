@@ -13,6 +13,39 @@ Format:
 
 ---
 
+## 2026-05-19 — Phase 2 design 7-Step arc Step 6 (Synthesise) Pass 1+2 commit
+roles: analyst, PM, technical writer
+mode: strategic (charter commit; no code changes; interim record landing between conversation passes)
+
+- Produced: Three commits closed the session.
+  - Commit 1 (`docs(charter)`, 54ddda5): Step 6 interim file at `briefs/phase-2/design-7step-step-6-interim.md` carrying sixteen Pass 1 dispositions, eight-package Pass 2 structure (P13-P20), Q11 reconciliation note, and methodology observation on cross-conversation handoff.
+  - Commit 2 (`docs(briefs)`, d9e70cc): Pass 3 opening brief at `briefs/phase-2/design-7step-step-6-pass-3.md`.
+  - Commit 3 (this commit, `docs(charter)`): `charter/current-package.md` close marker append plus commit prompt preservation at `briefs/phase-2/design-7step-step-6-pass-1-2-commit.md` plus this session log entry.
+
+- Decisions: No new D-entries at this session. The substantive D-entries from Pass 1 dispositions defer to the full Step 6 commit after Pass 3 closes. The interim record captures dispositions for later D-entry drafting.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered:
+
+  1. *Methodology-template fidelity check (partial; final at Step 6 close).* Pass 1 plus Pass 2 work held the Synthesiser role's discipline at altitude (integrate findings; not produce new analyses; settle dispositions and structure). Two moments stretched the discipline. First, Q6 reframing against the WhatsApp article required synthesis-altitude integration of new substrate with existing Step 5 dispositions; the role accommodated by treating the article as fresh substrate rather than running new analysis. Second, Q11 reconciliation against Step 5's actual cluster definition required walking back the operator's initial scope answer to align with Step 5's existing clustering; the role accommodated by surfacing the misalignment honestly rather than papering over it.
+
+  2. *Methodology-template-extensibility-without-breaking test.* Six-instance evidence pending Pass 3 close. The Pass 1+Pass 2 work continued the pattern at structural altitude.
+
+  3. *Cross-conversation handoff first instance.* Pass 1 plus Pass 2 work landed in one Claude.ai conversation; Pass 3 opens fresh. First instance of multi-conversation-Step pattern within the design 7-Step arc. Pattern observation seeded for Pass 3 close.
+
+  4. *Posture 1.5 sustainability at synthesis altitude.* Posture 1.5 delivered substantive synthesis at Pass 1 plus Pass 2. The multi-role coordination question (Synthesiser receives Analyst findings) tested at structural altitude; agent-runtime exercise per Q15 commitment closes the higher bar at Phase 2-B.
+
+- methodology (line 1): **Cross-conversation Step pattern.** First instance. Pass 1 plus Pass 2 closed in one conversation; Pass 3 opens fresh. Recurrence test at any future multi-conversation Step in the design 7-Step arc; second instance earns methodology-candidate promotion.
+
+- methodology (line 2): **Synthesis-altitude reconciliation pattern.** Q11 reconciliation against Step 5's cluster definition at Pass 2 close surfaced a substantive misalignment the operator's prior answer did not catch. Worth observing whether synthesis-altitude reconciliation is a recurrent need or one-off. If recurrent, the Synthesiser role's discipline may need an explicit reconciliation-against-prior-Step-outputs sub-task.
+
+- methodology (line 3): **Substrate-articulated-as-options pattern.** Q11 was framed by the assistant against the brief's high-level framing; the operator picked from a five-item list without seeing Step 5's actual clustering. The assistant should surface prior-Step substrate at option-articulation time when the substrate exists and the dispositions depend on it. First instance; promotion threshold at second instance.
+
+- **Phase 2 design 7-Step arc Step 6 (Synthesise) Pass 1+2 commit closed** at 2026-05-19.
+
+---
+
 ## Phase 2 design — 7-Step arc — Step 5 (Analyse) commit
 
 **Session ID:** phase-2-design-7step-step-5-commit
