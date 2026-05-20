@@ -13,6 +13,38 @@ Format:
 
 ---
 
+## 2026-05-20 — Phase 2 design 7-Step arc Step 6 (Synthesise) full commit
+roles: analyst, PM, architect, technical writer
+mode: strategic (charter commit; no code changes; Step 6 canonical landing closes the substantive Step 6 work)
+
+- Produced: Four commits closed the session.
+  - Commit 1 (`docs(charter)`, 6ff5aa0): Step 6 section at canonical altitude appended to `charter/phase-2-design-7step.md`; Step 6 brief preserved at `briefs/phase-2/design-7step-step-6.md`; interim record archived via header note at `briefs/phase-2/design-7step-step-6-interim.md`.
+  - Commit 2 (`docs(charter)`, dd1b87c): Ten D-entries (D114-D123) appended to `charter/decisions.md`; no-silent-operation subsection appended to `charter/principles.md` User safety section; six architectural primitives appended to `charter/architecture.md` as new Phase 2 architectural primitives section plus latency-tier sub-paragraph at LiteLLM subsection.
+  - Commit 3 (`docs(charter)`, 20be6d1): Four deferred-decisions entries appended to `charter/deferred-decisions.md` as new Phase 2 design 7-Step deferrals section; Phase 2 P13-P20 package structure appended to `charter/packages.md`.
+  - Commit 4 (this commit, `docs(charter)`): `charter/current-package.md` close marker append plus commit prompt preservation at `briefs/phase-2/design-7step-step-6-commit.md` plus this session log entry.
+
+- Decisions: Ten new D-entries (D114-D123). D114 revision-with-lineage; D115 conversation flow; D116 three-tier consent-and-awareness; D117 tiered-by-salience; D118 two-vector decay model; D119 WhatsApp via Twilio messaging-channel-and-path; D120 methodology-extension architectural shift to skills-per-role; D121 no-silent-operation as charter principle; D122 latency-tier inference routing; D123 Cluster B9 elevated to Phase 2-B Wave 1.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered (Step 6 substantive work closes at this commit; reflection prompts answered at Pass 3 commit per the Pass 3 commit session log entry; the full Step 6 commit session is mechanical landing of substrate prepared at Passes 1-3).
+
+  1. *Commit-precision check.* Four commits landed in the order specified; each commit's scope held without bleed. Conventional-commit messages descriptive. The four-commit shape held legibility versus a single omnibus commit.
+
+  2. *Verify-against-current-sources check (Twilio).* D119 text reconciled against Twilio's current WhatsApp Business Platform documentation before write (sandbox doc, key-concepts doc, API overview; May 2026). Pass 1 reframe held; no material shift — Twilio still offers the WhatsApp Business Platform path and Meta has not restructured the program. D119 text written with terminology tightened to Twilio's current names: "Twilio Sandbox for WhatsApp" confirmed unchanged; product name corrected to "WhatsApp Business Platform with Twilio"; "Meta-verified business" tightened to "Meta Business Verification against a Meta Business Portfolio"; "message-template-registration" corrected to "approved message templates (Twilio Content Templates, approved by Meta)". The reconciliation outcome is recorded inside D119 itself so the tightening is not silent.
+
+  3. *Granular D-entry discipline check.* Ten separate D-entries committed rather than omnibus. Each D-entry carries a discrete decision with distinct landing surfaces. Audit-trail granularity preserved at the cost of D-entry count.
+
+  4. *Interim archive discipline check.* Interim record preserved as historical authoring substrate via header note; not deleted. The append-only audit discipline holds; the canonical reference at `charter/phase-2-design-7step.md` Step 6 section is distinct from the authoring substrate at the interim record. The archive note references the commit by its conventional-commit message rather than a SHA, since a commit cannot contain its own hash.
+
+- methodology (line 1): **Step canonical landing as four-commit shape.** Substantive arc-Step canonical landings naturally separate into Step section + charter primitives + operational charter + bookkeeping. The four-commit shape carried legibility at Step 6's substantial scope. Prior arc-Step commits used fewer (Step 5 commit three commits; Pass 1+2 commit three; Pass 3 commit two); the four-commit shape is first-instance at Step 6's scale and may warrant promotion as the pattern for substantial Step canonical landings if it recurs at Step 7.
+
+- methodology (line 2): **Verify-against-current-sources block as commit-prompt discipline.** Pass 1's Q6 reframe against the May 2026 WhatsApp article was the substantive substrate; the D119 text could have silently propagated inaccuracies if Twilio's offering shifted between Pass 1 and Step 6 close commit. The verify block in this commit prompt is the second instance of the S4 Langfuse precedent shape (first instance the precedent itself; second instance this commit prompt). Promotion threshold at second instance; the methodology line absorbs the discipline as charter-grade for vendor-specific-naming D-entries.
+
+- **Phase 2 design 7-Step arc Step 6 (Synthesise) closed** at 2026-05-20. Step 7 (Communicate) opens as the next strategic-mode block.
+
+---
+
 ## 2026-05-20 — Phase 2 design 7-Step arc Step 6 (Synthesise) Pass 3 commit
 roles: analyst, PM, technical writer, architect
 mode: strategic (charter commit; no code changes; Pass 3 storyline landing into interim record; Step 6 substantive work closes)
