@@ -13,6 +13,30 @@ Format:
 
 ---
 
+## 2026-05-20 — Phase 2 design 7-Step arc Step 6 close pre-Step-7 hygiene
+roles: technical writer, PM
+mode: strategic (charter commit; no code changes; pre-Step-7 hygiene addressing two observations flagged at Step 6 close)
+
+- Produced: Two commits closed the session.
+  - Commit 1 (`docs(charter)`, d99d014): `charter/deferred-decisions.md` "Phase 2 design 7-Step deferrals" section relocated from after "Phase 2 substrate completion" to end of file (after "Phase 1 close audit findings"); TOC updated to add the section as entry #9; section content unchanged. `charter/phase-2-audit-inputs.md` created with first entry recording the D-entry cross-reference observation from Step 6 close.
+  - Commit 2 (this commit, `docs(charter)`): Commit prompt preservation at `briefs/phase-2/design-7step-step-6-pre-step-7-hygiene-commit.md` plus this session log entry.
+
+- Decisions: No new D-entries. No content in `charter/decisions.md`, `charter/principles.md`, `charter/architecture.md`, `charter/packages.md`, or `charter/phase-2-design-7step.md` modified.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered:
+
+  1. *TOC drift fix discipline.* The TOC drift surfaced because the Step 6 full commit prompt did not include TOC maintenance in its operations or acceptance criteria. The hygiene commit addresses it cleanly. Worth observing whether the deferred-decisions.md TOC has drifted before (likely yes; the file has eight prior sections and TOC maintenance is not in any of the prior commits' acceptance criteria). The fix scope here is single-section; charter-wide TOC audit defers to phase audit if other indices have drifted similarly.
+
+  2. *Phase 2 audit input file as Phase 1 precedent extension.* The new `charter/phase-2-audit-inputs.md` file matches the `charter/p12-audit-inputs.md` precedent shape. Establishing the file at first observation rather than at first Phase 2 audit means observations accumulate naturally throughout Phase 2 rather than being reconstructed retrospectively. Cleaner audit trail.
+
+- methodology (line 1): **TOC maintenance as commit-prompt acceptance criterion.** When a commit creates a new H2 section in a TOC-bearing file, the commit prompt's acceptance criteria should include TOC update as an explicit operation. The Step 6 full commit prompt missed this; surfaced at session close. Worth promoting to commit-prompt drafting discipline as a checklist item: "Does this commit add or remove an H2 section in a TOC-bearing file? If yes, TOC update is part of the commit's operations." Applies to deferred-decisions.md, the design 7-Step arc file (already follows the discipline implicitly via its sequential-Step structure), and any future TOC-bearing charter file.
+
+- methodology (line 2): **Same-commit SHA self-reference as commit-prompt failure mode.** Carrying forward from the Step 6 full commit session log entry (recorded there as a mechanical note). The Step 6 commit prompt asked for the commit-1 SHA inside Commit 1's own output (archive note at interim record); self-referencing SHA inside a commit is structurally impossible. Operator solution: reference by commit message instead. Worth promoting to commit-prompt drafting discipline: cross-commit SHA references are fine; same-commit SHA references inside the commit's own output are the failure mode and should be replaced with commit-message references or by reference-by-name patterns.
+
+---
+
 ## 2026-05-20 — Phase 2 design 7-Step arc Step 6 (Synthesise) full commit
 roles: analyst, PM, architect, technical writer
 mode: strategic (charter commit; no code changes; Step 6 canonical landing closes the substantive Step 6 work)
