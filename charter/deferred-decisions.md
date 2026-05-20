@@ -16,6 +16,7 @@ When a numbered D-entry closes a deferred entry, the entry gains a "Status: clos
 6. [Compliance and security](#compliance-and-security)
 7. [Tool registry and authoring](#tool-registry-and-authoring)
 8. [Phase 1 close audit findings](#phase-1-close-audit-findings)
+9. [Phase 2 design 7-Step deferrals](#phase-2-design-7-step-deferrals)
 
 ## Architectural primitives awaiting activation
 
@@ -170,42 +171,6 @@ Binary relevance (chunks marked correct or not, ordered list as the entry shape)
 Offline gold-set evaluation only at P11 per D105. Online signals defer because they require a labelling layer (human judgement on production retrieval quality) which is the same shape as D55's calibration loop.
 
 **Activation trigger.** P11 close audit surfaces evidence that offline-only evaluation misses production retrieval problems the recommendation engine should be catching.
-
-## Phase 2 design 7-Step deferrals
-
-Architectural decisions deferred at Phase 2 design 7-Step Step 6 Pass 1 dispositions. Each entry names the activation trigger and the activating session or context.
-
-### Phase 2-B Wave 4 versus Phase 3 boundary
-
-Per Step 6 Pass 1 Q8 disposition. Several P20 Wave 4 candidates may legitimately slip to Phase 3: Cluster B1 remainder (work-app cells beyond operator stack); Cluster B7 conditional (watching, delegated additions); Cluster B9 second wave (skills-per-role surface refinement if not landed at P17); Cluster B5 conditional (normalised value units if Phase 2-A per-methodology friction).
-
-**Activation trigger.** Approaching Phase 2-B Wave 4 (P19 close). Decision made when concrete context exists about what is ready to ship versus what carries to Phase 3.
-
-**The specific D-entry lands at the activating session.** References Step 6 Pass 2 P20 Wave 4 contents.
-
-### Tier 4 sub-problem activation triggers
-
-Per Step 6 Pass 1 Q9 disposition. Single deferred entry covering all eight Tier 4 sub-problems from Step 3 prioritisation (1.2, 2.2, 2.3, 2.5, 3.3, 3.4, 4.5, 5.2, 5.3, 6.1, 6.2 with 2.2 plus 2.4 plus 4.5 plus 6.1 plus 6.2 plus 6.5 carrying into Phase 2-B clusters per Step 5 activation map). Tier 4 sub-problems that do not activate through Phase 2-B clusters remain Tier 4 deferred.
-
-**Activation trigger.** Per Tier 4 sub-problem detailed design when the sub-problem's containing Phase 2-B cluster (per Step 5 activation map) enters package scope. Sub-problems not activated through Phase 2-B clusters review at Phase 3 framing.
-
-**The specific D-entries land per sub-problem at activating session.** References Step 5 Work-stream 4 Tier 4 activation map.
-
-### Identity-fork schema-based threshold
-
-Per Step 6 Pass 1 Q10 disposition. The identity-fork mechanism for methodology adaptation crossing structural threshold (when an adapted methodology has diverged so far from parent that it is structurally a different methodology rather than a revision). Step 5 surfaced schema-based threshold detection as candidate; final threshold definition defers to detailed design at Phase 2-B Cluster B3 activation.
-
-**Activation trigger.** Phase 2-B Cluster B3 detailed design session (P19; methodology layer depth wave).
-
-**The specific D-entry lands at the activating session.** References Step 5 Pass 1 sub-problem 2.1 finding plus Pass 1 Q11 reconciliation.
-
-### Twelve event classes confirmation
-
-Per Step 6 Pass 1 Q12 disposition. The audit visibility (5.1) workplan committed twelve event classes at Step 5 Pass 1 finding (six workplan plus five Pass 1 design refinements plus one 5.4 central-storage refinement). Confirmation of the twelve-class scope plus any additional event classes surfacing during 5.1 detailed design defers to the 5.1 detailed design session at Phase 2-A Wave 3 (P15).
-
-**Activation trigger.** Phase 2-A P15 5.1 audit visibility detailed design session.
-
-**The specific D-entry lands at the activating session.** References Step 5 Pass 1 sub-problem 5.1 finding.
 
 ## Production-deployment readiness
 
@@ -558,3 +523,39 @@ Three structural pieces missing for a reliable extract pipeline:
 **Activation trigger.** Any Phase 1 close or Phase 2 work that depends on graph retrieval producing entities reliably — workflow agents that depend on graph evidence, recommendation rules that cite graph state, P12 audit's procurement-grade demonstration if it includes a graph-retrieval-bearing scenario. Forward-relevance: production deployment with multiple worker processes amplifies the failure mode (worker death is more common at scale); the reclaim policy is required-not-optional at the production-deployment context. Referenced in `charter/p12-audit-inputs.md` entry 13 with the same structural-finding framing.
 
 P12 audit (2026-05-16) refresh: the P12 audit reviewed the deferral and confirms hold. Production-grade graph retrieval reliability is the prerequisite for Phase 2 workflow agents that depend on graph evidence; the reclaim policy is non-negotiable at production-deployment context. The audit-findings document at `charter/p12-audit-findings.md` entry 13 carries the same disposition; the Phase 2 inputs file at `charter/p12-phase-2-inputs.md` names this as a Phase 2-entry workitem alongside the gold-set audit-emission back-fill.
+
+## Phase 2 design 7-Step deferrals
+
+Architectural decisions deferred at Phase 2 design 7-Step Step 6 Pass 1 dispositions. Each entry names the activation trigger and the activating session or context.
+
+### Phase 2-B Wave 4 versus Phase 3 boundary
+
+Per Step 6 Pass 1 Q8 disposition. Several P20 Wave 4 candidates may legitimately slip to Phase 3: Cluster B1 remainder (work-app cells beyond operator stack); Cluster B7 conditional (watching, delegated additions); Cluster B9 second wave (skills-per-role surface refinement if not landed at P17); Cluster B5 conditional (normalised value units if Phase 2-A per-methodology friction).
+
+**Activation trigger.** Approaching Phase 2-B Wave 4 (P19 close). Decision made when concrete context exists about what is ready to ship versus what carries to Phase 3.
+
+**The specific D-entry lands at the activating session.** References Step 6 Pass 2 P20 Wave 4 contents.
+
+### Tier 4 sub-problem activation triggers
+
+Per Step 6 Pass 1 Q9 disposition. Single deferred entry covering all eight Tier 4 sub-problems from Step 3 prioritisation (1.2, 2.2, 2.3, 2.5, 3.3, 3.4, 4.5, 5.2, 5.3, 6.1, 6.2 with 2.2 plus 2.4 plus 4.5 plus 6.1 plus 6.2 plus 6.5 carrying into Phase 2-B clusters per Step 5 activation map). Tier 4 sub-problems that do not activate through Phase 2-B clusters remain Tier 4 deferred.
+
+**Activation trigger.** Per Tier 4 sub-problem detailed design when the sub-problem's containing Phase 2-B cluster (per Step 5 activation map) enters package scope. Sub-problems not activated through Phase 2-B clusters review at Phase 3 framing.
+
+**The specific D-entries land per sub-problem at activating session.** References Step 5 Work-stream 4 Tier 4 activation map.
+
+### Identity-fork schema-based threshold
+
+Per Step 6 Pass 1 Q10 disposition. The identity-fork mechanism for methodology adaptation crossing structural threshold (when an adapted methodology has diverged so far from parent that it is structurally a different methodology rather than a revision). Step 5 surfaced schema-based threshold detection as candidate; final threshold definition defers to detailed design at Phase 2-B Cluster B3 activation.
+
+**Activation trigger.** Phase 2-B Cluster B3 detailed design session (P19; methodology layer depth wave).
+
+**The specific D-entry lands at the activating session.** References Step 5 Pass 1 sub-problem 2.1 finding plus Pass 1 Q11 reconciliation.
+
+### Twelve event classes confirmation
+
+Per Step 6 Pass 1 Q12 disposition. The audit visibility (5.1) workplan committed twelve event classes at Step 5 Pass 1 finding (six workplan plus five Pass 1 design refinements plus one 5.4 central-storage refinement). Confirmation of the twelve-class scope plus any additional event classes surfacing during 5.1 detailed design defers to the 5.1 detailed design session at Phase 2-A Wave 3 (P15).
+
+**Activation trigger.** Phase 2-A P15 5.1 audit visibility detailed design session.
+
+**The specific D-entry lands at the activating session.** References Step 5 Pass 1 sub-problem 5.1 finding.
