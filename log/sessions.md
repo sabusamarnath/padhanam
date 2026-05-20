@@ -13,6 +13,38 @@ Format:
 
 ---
 
+## 2026-05-20 — Post-P12 methodology comparison strategic block
+roles: analyst, PM, technical writer
+mode: strategic (charter commits only; the deck.html build commit deferred to Phase 2 close per operator decision)
+
+- Produced: Two commits closed the session.
+  - Commit 1 (`docs(charter)`, dc74ea7): three entries appended to the "Methodology and governance enhancements" sub-section of `charter/deferred-decisions.md` (maintenance and continuous-operation discipline; multi-implementer extension hypothesis; methodology comparison act for the case-study deck); the drafted comparison content at the new `charter/methodology-comparison.md`; the strategic-block close marker at `charter/current-package.md`.
+  - Commit 2 (this commit, `docs(log)`): this session log entry.
+
+- Decisions: No new D-entries. Three deferred-decisions entries committed with differential postures — the maintenance entry as a forward commitment (load-bearing methodology workitem, initial articulation at Phase 1 close, drawing on D78 personal-use evidence), the multi-implementer entry as a forward hypothesis (no specific phase-boundary commitment, hypothesise-test-iterate when evidence at non-solo altitudes accumulates), and the comparison-act entry as a Phase 2-close deferral. The maintenance and multi-implementer entries draw on D78 and the bet's solo-capacity framing as substrate.
+
+- Tests: n/a. Charter documents only; no code, no enforcement surface touched.
+
+- Scope revision: The opening brief specified a methodology comparison act inserted into `charter/deck.html` plus an act renumber. Mid-session the operator decided the comparison content — which makes procurement-facing factual claims about six named third-party methodologies — must pass human verification, and that verification and deck integration happen together at Phase 2 close. The deliverable was re-scoped: the comparison content landed as a draft at `charter/methodology-comparison.md`, the deferral was logged as a third deferred-decisions entry, and `charter/deck.html` was not modified.
+
+- Reflection prompts answered:
+
+  1. *Pre-write reconciliation outcome.* The six reconciliation items surfaced four pieces of drift. The brief's named token source `brand-tokens.css` is not linked into `deck.html` and is a separate dark-mode application design system; the deck is self-contained with its own inline `:root`. `log/sessions.md` is newest-at-top, not append-at-bottom as the brief stated. The brief referenced a comparison table "per the strategic conversation that produced this prompt" but did not transcribe it, and it was not preserved anywhere in the repo. A nine-column table with paragraph-length cells would not render cleanly in the deck's 720px prose column. The deferred-decisions insertion point and the current-package close-marker placement both resolved cleanly. The missing-table-content finding is what triggered the scope revision.
+
+  2. *Methodology comparison as Phase 1 close substrate.* The comparison did not land as a deck act, so it creates no immediate reading-pressure on the Phase 1 close audit. The maintenance-discipline entry still creates that pressure independently: it commits the methodology document's first prescriptive articulation of continuous-operation discipline to the Phase 1 close authoring session. The multi-implementer hypothesis sits correctly as a deferred-decisions entry with a much-later activation horizon and consumes no methodology-document oxygen at Phase 1 close.
+
+  3. *Differential cell treatment as discipline.* The Padhanam row's four postures — truly-TBD on reverse engineering, phase-deferred on throughput, forward commitment on maintenance, forward hypothesis on multi-implementer — are preserved in the `methodology-comparison.md` draft. The honest-accounting discipline held even as the artefact itself was deferred: the draft is explicitly marked unverified, the third-party claims carry accuracy flags, and the deferral is logged rather than the artefact rushed to publication.
+
+  4. *Methodology-document promotion implications.* No promotion candidate at this session. The brief's proposed candidate (comparative-artefact discipline plus posture-differentiation) is first-instance and does not meet the captures-candidate threshold of structural novelty or threefold recurrence. The session does surface one genuinely novel observation, recorded as a methodology line below.
+
+- methodology (line 1): **Pre-write reconciliation can surface a readiness gap in the deliverable itself, not only drift in facts.** The brief specified a deck act and referenced a comparison table it did not contain. Pre-write reconciliation surfaced the absence; the disciplined response was to re-scope the deliverable (draft now, verify and publish later) rather than fabricate content to fill the gap. First instance of reconciliation catching a deliverable-readiness gap as distinct from a fact-drift gap; recurrence test at future briefs that reference un-transcribed substrate.
+
+- methodology (line 2): **First load-bearing application of the proper-noun-attribution discipline.** The "Methodology mechanical-enforcement upgrades" deferred entry names a proper-noun-attribution check on model-drafted vendor-voice artefacts. This session is the first time that discipline blocked a publication: the comparison table's claims about six named third-party methodologies were judged not verification-ready for a public artefact, and the operator deferred publication. The discipline anticipated exactly this class of content. Worth noting at the Phase 1 close audit as evidence the deferred-decisions backlog item is correctly specified.
+
+- **Post-P12 methodology comparison strategic block closed** at 2026-05-20. The next strategic-mode block is Phase 2 design 7-Step arc Step 6 Pass 3, continuing separately.
+
+---
+
 ## 2026-05-19 — Phase 2 design 7-Step arc Step 6 (Synthesise) Pass 1+2 commit
 roles: analyst, PM, technical writer
 mode: strategic (charter commit; no code changes; interim record landing between conversation passes)
