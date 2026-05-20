@@ -13,6 +13,28 @@ Format:
 
 ---
 
+## 2026-05-20 — Phase 2 design 7-Step arc Step 7 (Communicate) brief commit
+roles: technical writer, PM
+mode: strategic (charter commit; no code changes; Step 7 brief pre-conversation landing)
+
+- Produced: Two commits closed the session.
+  - Commit 1 (`docs(briefs)`, 227362a): Step 7 brief at `briefs/phase-2/design-7step-step-7.md` carrying the brief opening framing, Step 7 closes-the-arc framing, four methodology streams (the fourth communication-content stream new at Step 7), two substantive deliverables plus three close deliverables, reading-order context, three pre-conversation decisions (audience scope; narrative density; supporting artefact set; brief carries recommendations on each), two work-streams (storyline communication at canonical altitude; supporting artefact set authoring), six reflection prompts at session close, and explicit out-of-scope list.
+  - Commit 2 (this commit, `docs(charter)`): Commit prompt preservation at `briefs/phase-2/design-7step-step-7-brief-commit.md` plus this session log entry.
+
+- Decisions: No new D-entries. No content in `charter/decisions.md`, `charter/principles.md`, `charter/architecture.md`, `charter/packages.md`, `charter/deferred-decisions.md`, or `charter/phase-2-design-7step.md` modified.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered:
+
+  1. *Briefs/ discipline check — fifth instance.* Step 7 brief authored at Step 6 Pass 3 close thread; pattern continues. Five-instance evidenced (Steps 3, 4, 5, 6, 7 brief authored pre-conversation in prior step close thread). The pattern is firmly evidenced; Step 7 close will be where charter-methodology promotion lands per the brief's Reflection 5 framing.
+
+  2. *Brief carries pre-conversation recommendations.* Brief carries my read on all three pre-conversation decisions (audience scope: case-study reader primary; narrative density: mixed format; supporting artefact set: charter pointer index plus package timeline diagram plus methodology-as-product positioning integrated into executive summary). The substantive Step 7 conversation revises or accepts each. The Step 4 plus Step 5 plus Step 6 briefs carried similar pre-conversation reads; pattern holds.
+
+- methodology (line 1): **Fourth methodology stream — communication-content discipline.** The Step 7 brief introduces a fourth methodology stream alongside build/product/control-plane: communication-content discipline. The Communicator role's authored function-focused discipline does not encode the substantive content discipline (audience analysis, narrative shaping per stakeholder context, density calibration); these extend beyond the authored discipline and live in technical-writer-discipline practice. Worth observing whether the seventh-instance dogfooding-evidence record at Step 7 close formalises this stream or whether it folds into the build-methodology stream as a sub-discipline.
+
+---
+
 ## 2026-05-20 — Phase 2 design 7-Step arc Step 6 close pre-Step-7 hygiene
 roles: technical writer, PM
 mode: strategic (charter commit; no code changes; pre-Step-7 hygiene addressing two observations flagged at Step 6 close)
