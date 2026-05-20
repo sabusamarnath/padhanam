@@ -13,6 +13,41 @@ Format:
 
 ---
 
+## 2026-05-20 — Phase 2 design 7-Step arc Step 7 (Communicate) commit; design 7-Step arc closes
+roles: technical writer, PM, analyst, architect
+mode: strategic (charter commit; no code changes; Step 7 canonical landing closes the substantive Step 7 work and the design 7-Step arc)
+
+- Produced: Three commits closed the session and the design 7-Step arc.
+  - Commit 07e1771 (`docs(charter)`): Step 7 section appended to `charter/phase-2-design-7step.md` carrying executive summary (~330 words), structured prose body across five supporting arguments (~1,900 words; each argument expands Pass 3 prose with case-study-reader contextualisation), package-timeline mermaid diagram, appendix-shaped evidence trail with per-argument substrate references, design 7-Step arc close prose, seventh-instance dogfooding-evidence record (six reflection prompts; three methodology lines), and Step 7 carry-forward to Phase 2 build. Total ~4,200 words.
+  - Commit af59dd5 (`docs(charter)`): Three new audit-input entries appended to `charter/phase-2-audit-inputs.md` (deliberate-variation as charter discipline first instance; communication-content discipline as fourth methodology stream; seven-category methodology-extension set as P17 substrate). Each entry mirrors the existing entry's three-subsection structure.
+  - Commit this commit (`docs(charter)`): `charter/current-package.md` close marker append (design 7-Step arc closes) plus commit prompt preservation at `briefs/phase-2/design-7step-step-7-commit.md` plus this session log entry.
+
+- Decisions: No new D-entries. The Step 7 methodology observations carry as audit inputs at `charter/phase-2-audit-inputs.md` rather than as numbered decisions; promotion to charter methodology lines defers to second-instance evidence per the proposed audit treatment.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered (six Step 7 reflection prompts; closes at this commit):
+
+  1. *Methodology-template fidelity check.* The Communicator role's authored discipline held cleanly through Step 7. Pyramid principle carried from Pass 3's storyline construction (top-line first; supporting arguments below; evidence trail at base). The "do not change storyline substance" discipline held without forcing substantive revision; the case-study expansions added contextualisation rather than revising substance.
+
+  2. *Methodology-template-extensibility-without-breaking test — seventh and final instance.* Pattern continues to seven-instance firmly-evidenced level. Five Step 7 extensions surfaced (audience-multiplicity handling; communication-content discipline as fourth stream; charter-pointer-index authoring; diagram-set authoring at canonical altitude; arc-close prose construction). The seven-category methodology-extension set across seven roles becomes the concrete substrate for the skills-per-role surface at P17 per D120; the Cluster B9 elevation commitment per D123 has its full evidence basis at this close.
+
+  3. *Audience-shaping discipline check.* Audience-shaping held the "do not change storyline substance" discipline. One borderline moment at Argument 2 (Q11 reconciliation framing) extended beyond explicit Pass 3 commitment but was substrate-supported (Pass 1 dispositions plus methodology line); remained within the integrate-existing-analyses Synthesiser-to-Communicator handoff discipline.
+
+  4. *Posture 1.5 sustainability check — arc-close instance.* Posture 1.5 held across all seven steps without agent runtime exercise. Multi-role coordination tested at structural altitude across the arc; agent-runtime higher bar closes at P18 Wave 2 per the Q15 disposition. Until P18 lands, the seven-instance structural evidence is the procurement-grade artefact.
+
+  5. *Briefs/ discipline check — five-instance pattern plus first deliberate variation.* Five-instance briefs-authored-pre-conversation evidenced (Steps 3-7 briefs); five-instance fresh-thread-substantive evidenced (Steps 3-6 substantive plus Pass 3); one instance deliberate variation (Step 7 substantive in the brief-authoring thread). Variation's outcome: continuity-of-thread served arc-close work because expression-of-existing-substrate is lighter than fresh analytical work. Deliberate-variation discipline candidate carries to audit inputs.
+
+  6. *Design 7-Step arc close completeness check.* Step 7 closed the arc cleanly. All six prior steps' substrate landed canonically at `charter/phase-2-design-7step.md`. Case-study reader audience communication, supporting artefact set, arc-close prose, dogfooding-evidence record, carry-forward all landed inline. No tensions surfacing requiring return to prior steps. No gaps surfacing requiring additional work-streams.
+
+- methodology (line 1): **Design 7-Step arc as charter-methodology pattern.** Seven-step arc applied to Phase 2 strategic shape closed cleanly across multiple strategic-mode conversations with one deliberate methodology variation. The arc shape (Step 1 frame; Step 2 disaggregate; Step 3 prioritise; Step 4 plan; Step 5 analyse; Step 6 synthesise; Step 7 communicate) plus the supporting discipline (briefs/ pre-conversation authoring; cross-conversation handoff at synthesis altitude; structural dogfooding under Posture 1.5; pre-conversation decisions per step; reflection prompts at session close; canonical section landings per step) is now firmly evidenced as a charter-methodology pattern at strategic-design-block scale. Worth promoting to `charter/methodology.md` after Phase 2-A close audit reviews against Phase 2 build session outcomes (does the design 7-Step arc's outputs hold up under implementation?). Premature charter-methodology promotion before Phase 2-A close audit would be paper-methodology promotion; the proof condition is whether the strategic shape survives the build.
+
+- methodology (line 2): **Arc-close as integration test for design-time substrate coherence.** Step 7's expression-of-existing-substrate work surfaced no substantive open questions and no tensions requiring return to prior steps. This is the proof of design-time substrate coherence: when the substrate is coherent, the arc closes without surfacing gaps; when the substrate is incoherent, arc-close work surfaces tensions that cannot be resolved within the closing step. The pattern is one-instance evidenced at Step 7; second instance would close another design-time arc at similar scale (Phase 2-B design 7-Step arc if it runs; Phase 3 strategic-design arc). Worth observing whether arc-close-as-integration-test recurs as charter-methodology discipline candidate.
+
+- **Phase 2 design 7-Step arc Step 7 (Communicate) closed; design 7-Step arc closes** at 2026-05-20. Phase 2-A P13 framing opens as the next strategic-mode block.
+
+---
+
 ## 2026-05-20 — Phase 2 design 7-Step arc Step 7 (Communicate) brief commit
 roles: technical writer, PM
 mode: strategic (charter commit; no code changes; Step 7 brief pre-conversation landing)
