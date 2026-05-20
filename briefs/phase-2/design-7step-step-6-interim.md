@@ -1,3 +1,7 @@
+> **Archive note.** This interim record's content landed canonically at the Step 6 section of `charter/phase-2-design-7step.md` per the full Step 6 commit (`docs(charter): step 6 section canonical landing + brief preservation + interim archived`). Preserved as historical authoring substrate showing the multi-pass synthesis arc (Pass 1 plus Pass 2 in one conversation; Pass 3 in fresh conversation; cross-conversation handoff first instance). The Step 6 section at `charter/phase-2-design-7step.md` is the canonical reference; this file documents the authoring process and the Pass 3 close methodology observation resolution.
+
+---
+
 # Phase 2 design 7-Step arc — Step 6 (Synthesise) — interim record
 
 This file accumulates Step 6 (Synthesise) work in progress across the multi-conversation arc. Pass 1 (sixteen carry-forward question dispositions) and Pass 2 (Phase 2 LVT placement plus package structure) closed in the first conversation; Pass 3 (integrated storyline) opens in a fresh conversation and appends here. The final Step 6 commit session takes this completed interim file and lands it as the Step 6 section in `charter/phase-2-design-7step.md` alongside the charter additions.
