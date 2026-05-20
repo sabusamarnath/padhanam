@@ -13,6 +13,34 @@ Format:
 
 ---
 
+## 2026-05-20 — Phase 2-A P13 framing brief commit
+roles: technical writer, PM, analyst
+mode: strategic (charter commit; no code changes; P13 framing brief pre-conversation landing)
+
+- Produced: Two commits closed the session.
+  - Commit 83b7bd5 (`docs(briefs)`): P13 framing brief at `briefs/p13/framing.md` carrying brief opening framing, what P13 framing opens (committed substrate plus forward-compat dimension plus carryover hygiene), four methodology streams plus forward-compat substrate-depth as discrete discipline candidate, six produced artefacts plus two close deliverables, reading-order context with spec inclusion, seven pre-conversation decisions (substrate-completion carryover; hygiene workitems; session granularity at four sessions; roadmap v6 entry; Phase 2 PRD shape; spec-as-architectural-input commitment; forward-compat substrate-depth classification), three substantive work-streams (epic note authoring; first-session prompt drafting; roadmap plus PRD plus spec-extracted charter additions), six reflection prompts at session close, explicit out-of-scope list.
+  - Commit this commit (`docs(charter)`): Commit prompt preservation at `briefs/p13/framing-brief-commit.md`; operator-supplied Private Assistant Platform spec preservation at `docs/notes/spec-private-assistant-platform.md` with header-note framing per Decision 6 option (c); current-package.md close marker append for P13 framing brief landing; this session log entry.
+
+- Decisions: No new D-entries. No content in `charter/decisions.md`, `charter/principles.md`, `charter/architecture.md`, `charter/packages.md`, `charter/deferred-decisions.md`, `charter/phase-2-design-7step.md`, or any other charter file modified at this commit. D-entries and substantive charter additions defer to the Claude Code commit session following P13 framing substantive conversation.
+
+- Tests: None. Documentation-only changes.
+
+- Reflection prompts answered:
+
+  1. *Briefs/ discipline check, sixth instance by analogy.* P13 framing brief authored at Step 7 close thread; pattern continues. Six-instance evidenced as analogy carry from arc-step framing (Steps 3, 4, 5, 6, 7 brief authored pre-conversation in prior step close thread) to package framing (P13 framing brief at Step 7 close thread). The pattern carries; the convention extends from arc-step to package framing without modification. Worth noting that the discipline's portability across altitude shifts (arc-step framing to package framing) is itself a discipline-test signal; first instance of altitude-shift carry; recurrence test fires at P14 framing.
+
+  2. *Brief carries pre-conversation recommendations across seven decisions.* The P13 framing brief expanded from five pre-conversation decisions to seven during iterative drafting with the operator. Decisions 6 (spec-as-architectural-input) and 7 (forward-compat substrate-depth classification) absorbed substantive operator pushback that surfaced the spec absorption discipline plus the deferral-forces-refactor rule. Pattern continues from Steps 4 through 7 briefs; brief authoring is a drafting plus iteration loop, not a one-shot artefact. The operator's rule (do not build now if can build later without major refactor) sharpened Decision 7's classification framework from open-ended forward-compat list to three-category disciplined classification.
+
+- methodology (line 1): **Forward-compat-without-major-refactor as build-methodology discipline candidate, first instance.** The P13 framing brief introduces the discipline as Phase 2-A architectural posture: build now only if deferring forces major refactor; defer with named activation trigger otherwise; flag built-now substrate that operator dogfooding does not exercise. The discipline produces a three-category classification (build-now; defer-with-trigger; flag-for-future-testing) the P13 framing substantive conversation populates. First-instance candidacy; recurrence test fires at P14 framing and subsequent Phase 2-A packages. Promotion to charter-methodology line lands at Phase 2-A close audit if the discipline holds across multiple packages.
+
+- methodology (line 2): **Spec-as-architectural-input absorption pattern, first instance.** The operator-supplied product specification at `docs/notes/spec-private-assistant-platform.md` enumerates Private Assistant Platform substrate primitives across the platform lifecycle. The P13 framing brief absorbs the spec via Decision 6 option (c): specific extracts as charter additions (frontend/backend boundary rule; audit-trail-as-source-of-truth; originals-never-erased; authority plus certainty independence); spec preservation at `docs/notes/spec-private-assistant-platform.md`; substrate vocabulary aligned across charter prose where the substrate matches; surface architecture explicitly excluded from absorption because Phase 2-A's messaging-first commitment plus the senior-leader ICP differ from the spec's Studio plus Portal SPA plus customer-organisation framing. First-instance candidacy; recurrence test fires if Phase 2-B or Phase 3+ framing absorbs additional external specifications.
+
+Worth observing whether forward-compat-without-major-refactor recurs as charter-methodology discipline candidate across Phase 2-A packages.
+
+- **Phase 2-A P13 framing brief landed; P13 framing substantive conversation opens at Claude.ai in a fresh thread per the briefs/ discipline pattern.**
+
+---
+
 ## 2026-05-20 — Phase 2 design 7-Step arc Step 7 (Communicate) commit; design 7-Step arc closes
 roles: technical writer, PM, analyst, architect
 mode: strategic (charter commit; no code changes; Step 7 canonical landing closes the substantive Step 7 work and the design 7-Step arc)
