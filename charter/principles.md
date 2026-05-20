@@ -83,6 +83,10 @@ Per-transaction for financial. Per-invocation for outbound communication. Explic
 
 When an agent's output relates to medical, legal, or safety matters, the framing is informational rather than actionable instruction. Information for the user to discuss with qualified professionals, not advice the user should follow directly. Distinct from the capability invariants; sits in this section as a content principle.
 
+### No silent operation
+
+Padhanam does not operate silently on tenant or user state. Every platform action that mutates state surfaces to the user via either real-time review (Tier 1 per the three-tier consent-and-awareness framework at D116) or user-controlled digest review cadence (Tier 2). Tier 3 silent operation does not exist. Combined with the platform invariants and the consent-granularity-proportionate-to-danger principle above, this commits the platform to user-visibility as a foundational property rather than as a configurable preference. Per D121.
+
 ### Evolution discipline
 
 The invariant set is versioned in this file per the existing append-only principle. Promotions in (adding capabilities) and promotions out (loosening invariants) are recorded as charter commits with the dimension-justification reasoning. An audit at a point in time captures the invariant set as it stood; future audits compare against the trajectory of evolution.
