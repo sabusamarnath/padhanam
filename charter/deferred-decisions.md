@@ -365,6 +365,42 @@ Activates if Phase 2 takes commercial direction.
 
 **The specific D-entry lands when Phase 2 commercial framing is committed.** Premature commitment to specific separation lines ahead of Phase 2 framing context is paper architecture per the project's deferred-decisions discipline. If Phase 2 does not take commercial direction, this entry is closed without a numbered D-entry landing.
 
+### Maintenance and continuous-operation discipline as methodology workitem
+
+Activates as load-bearing methodology articulation at Phase 1 close from a strategic-mode conversation; evidence-bearing instances accumulate from the personal-use deployment per D78 from Phase C onward and from any Phase 3 or later customer-deployment work.
+
+**The methodology document's current articulation covers new-work session shape** (brief, pre-write reconciliation, commit, reflection) and audit boundaries (package retrospectives, phase audits). It does not articulate the discipline for ongoing production work: drift detection against the charter, regeneration triggered by spec changes, recurrence-of-incidents promotion to systemic patterns, audit cadence under continuous-operation load.
+
+**Procurement adoption is the escalator.** The post-Phase-1 strategic block at 2026-05-20 (this entry's authoring session) confirmed maintenance and continuous-operation discipline as absolute must for enterprise adoption; the methodology cannot stay forward-engineering-only and meet procurement readiness.
+
+**The specific D-entry lands at the methodology authoring session that consolidates the initial articulation**, drawing on D78 personal-use evidence if accumulated by that point and on the architect-implementer pattern's existing primitives (append-only audit chains, observability substrate, optimisation rules) that already provide partial coverage.
+
+### Multi-implementer extension hypothesis: teams and team-of-teams
+
+Activates much later than Phase 1, when resources or external-adopter evidence permits work at multi-implementer scale; the entry exists to carry the forward hypothesis the methodology takes about how the discipline expands, not to commit to articulation at any specific phase boundary.
+
+**The architect-implementer pattern is currently exercised solo** per the Phase 1 capacity constraint named in `charter/bet.md`. The methodology's existing invariants (charter as load-bearing spec, brief discipline with pre-write reconciliation, append-only decision log with alternatives and Kano category, recurrence-promotion of methodology lines, five-role function audit at phase boundaries) are hypothesised to be actor-count-independent. The hypothesis is untested at any non-solo altitude.
+
+**Two altitudes of expansion.** Single team (multiple human and AI implementers coordinated through the discipline) is the closer-in altitude. Team-of-teams (multiple teams coordinating, each operating the discipline locally) is the longer-horizon altitude per McChrystal's framing.
+
+**Hypothesise, test, iterate.** Per the standard Padhanam discipline. The methodology document does not articulate definitive invariants for non-solo altitudes ahead of evidence; the deferred-decisions log preserves the hypothesis so future strategic-mode sessions read it when evidence accumulates. Premature articulation ahead of evidence commits the methodology to claims the discipline has not earned at scale.
+
+**Activation triggers.** Resource availability permitting multi-implementer work; external adopters reporting instances of the discipline at non-solo scale; procurement engagement requesting evidence at team or team-of-teams scale.
+
+**The specific D-entry lands at the strategic-mode session that surfaces first evidence at a non-solo altitude**, with full hypothesis-test-iterate articulation building from that evidence rather than from anticipation.
+
+### Methodology comparison act for the case-study deck
+
+Activates at Phase 2 close, when the drafted methodology comparison content is verified and integrated into `charter/deck.html`.
+
+**A methodology comparison act is drafted but not yet published.** The post-P12 strategic block at 2026-05-20 drafted a "How this compares" act for the case-study deck: an operator-authored preamble and close, and a seven-methodology comparison table across eight dimensions (vibe coding, GSD, BMAD-METHOD, GitHub Spec Kit, AWS Kiro, Trey Research 3-3-3, Padhanam). The draft lives at `charter/methodology-comparison.md`.
+
+**The draft is not published because the table makes procurement-facing factual claims about six named third-party methodologies that have not passed human verification.** The external-methodology cells were model-drafted from web research and carry explicit accuracy flags, including unresolved source conflicts on GitHub Spec Kit's brownfield support and on Trey Research 3-3-3 phase timing, plus product-branding and creator-attribution checks. Publishing unverified third-party claims to the public deck would violate the proper-noun-attribution discipline named in the "Methodology mechanical-enforcement upgrades" entry above.
+
+**Verification and integration happen together at Phase 2 close** per the operator decision at the 2026-05-20 strategic block. Phase 2 close is the natural moment on two grounds: the deck is a living artefact that refreshes at phase boundaries per D45, and Phase 2's outcome will itself reshape several Padhanam-row cells, since the actor-model, maintenance, and throughput cells all point at forward work that Phase 2 advances.
+
+**This entry closes when the comparison content is verified and integrated at Phase 2 close.** The integration is deck-content work and does not require a numbered D-entry; the Phase 2 close audit records the verification outcome.
+
 ## Compliance and security
 
 ### Per-tenant supply-chain surveillance for tenant-supplied tools and extensions
