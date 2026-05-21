@@ -13,6 +13,65 @@ Format:
 
 ---
 
+## 2026-05-21 — S43 — Portfolio context foundational substrate (substrate-and-transport split)
+roles: architect, engineer, technical writer
+mode: build (P13 Wave 1 first build session; substrate half of a planned substrate-and-transport split)
+
+metrics:
+  classification: substrate session (closed at 7/10 commits per planned substrate-and-transport split)
+  brief_started: 2026-05-21
+  session_started: 2026-05-21
+  session_closed: 2026-05-21
+  merged: 2026-05-21
+  close_state: clean (7 of 10 commits per planned split; remainder ships at S43b)
+  tests_passing: yes (62 new tests; 28 of 28 import-linter contracts; AST green)
+  principles_intact: yes
+  charter_touchpoints: charter/decisions.md (D124, D125); charter/schema.md (Portfolio context substrate section; Revisable Protocol and AssertionChange sub-sections in cross-cutting binding shapes); charter/packages/p13-epic.md; charter/current-package.md; briefs/p13/s43.md
+  corrects:
+  corrected_by:
+  paired_with: S43b
+
+This entry is retroactive — it lands at S43b commit 1 alongside the current-package close-marker housekeeping, because S43 closed at 7/10 commits without its own close. The `metrics:` block above is a new session-log-entry shape introduced at S43/S43b per the `briefs/p13/s43b.md` instruction; no prior entry carries one. The `paired_with` field is new at this commit — it captures the S43–S43b planned-split relationship without implying correction (S43b completes the split; it does not correct S43, so `corrects`/`corrected_by` stay empty).
+
+- Produced: Seven commits landed the portfolio context substrate end-to-end through the CLI surface.
+  - Commit d0ada39 (`docs(p13/s43)`): D124 + D125; `charter/schema.md` "Portfolio context substrate" section plus Revisable Protocol and AssertionChange sub-sections; p13-epic S43 line; current-package transition; `briefs/p13/s43.md` preserved.
+  - Commit 0484657 (`feat(p13/s43)`): Revisable Protocol — a generic `Protocol[RevisionT]` — and the ActorReference placeholder at `shared_kernel/`.
+  - Commit 70b94e1 (`feat(p13/s43)`): Case/DataPoint/Assertion domain entities, the `contexts/portfolio/` hexagonal skeleton, and the import-linter delta (the new `layers-portfolio` contract plus the independence / domain-purity / vendor-confinement extensions; 27 → 28 contracts).
+  - Commit 121ecc1 (`feat(p13/s43)`): Alembic per-tenant migration `0016_portfolio_substrate`.
+  - Commit 801264e (`feat(p13/s43)`): the two consumer-defined ports plus the Postgres repository and reader adapters; 13 behavioural contract tests.
+  - Commit ff87b96 (`feat(p13/s43)`): five application use cases, the cursor codec, and the audit-event draft helpers; 11 unit tests.
+  - Commit 3ddff81 (`feat(p13/s43)`): the `padhanam portfolio` CLI subcommand; 4 CLI-surface tests.
+
+- Decisions: D124 (portfolio context substrate — Case/DataPoint/Assertion plus three per-tenant tables) and D125 (Revisable Protocol shape — generic `Protocol` in `shared_kernel/`) landed at commit 1. No D-entries beyond those.
+
+- Tests: 62 new tests (9 shared_kernel, 25 domain, 11 application, 4 CLI, 13 contract); 28 of 28 import-linter contracts kept; AST enforcement green.
+
+- Pre-write reconciliation: The S43 six-surface reconciliation surfaced one mechanical placement (schema.md section ordering), four code-state drifts from the P12 audit-finding snapshots absorbed into the schema.md content (TenantContext.tenant_id and ErrorResponse.correlation_id typed `str` not `UUID`; ErrorResponse a flat `BaseModel`; the cursor-codec sites a three-singular / one-plural split with the audit codec originating at S36), a repository-adapter path drift (`adapters/outbound/postgres/`, not the brief's flat path), the protocol-location question (resolved to `shared_kernel/` in prose ahead of commit 1), and the import-linter delta (27 → 28). Three further adjustments surfaced at execution time, each flagged in its commit message: commits 2 and 3 swapped because the domain entities import the `shared_kernel` types the brief's commit 3 created (dependency graph); `jurisdiction` was restored to all three portfolio tables and entities because the brief's field lists omitted it and D12 binds it as a column from inception; the ports landed with the adapter commit rather than the use-case commit because the adapter structurally implements them.
+
+- Reflection prompts answered:
+
+  1. *Pre-write reconciliation surfaces.* The pattern across S43 reconciliation: the brief was accurate on architecture and intent, drifted on paths and field-completeness. The four audit-finding-snapshot drifts were mechanical absorptions into the binding spec; the three execution-time adjustments (commits 2/3 swap, jurisdiction restoration, ports-with-adapter) were dependency-graph and charter-compliance corrections, not architectural disagreements. None required a course change — the substrate landed as designed.
+
+  2. *Forward-compat substrate-depth discipline, first build instance.* Case/DataPoint/Assertion landed in full; the Revisable Protocol shape committed without being exercised across the full Phase 2-A substrate (only DataPoint implements it at S43). Two forward-compat affordances landed unused: `DataPoint.certainty` (nullable, reserved for the D117 tiered-by-salience implementation at P15) and the ActorReference placeholder (superseded at S44 by ActorContext). Neither felt premature — both are single-column / single-field additions now versus refactor-forcing retrofits later, the D12 column-from-inception reasoning generalised. First-instance evidence that the forward-compat substrate-depth discipline holds at build time, not only at framing time.
+
+  3. *Charter-touchpoint discipline at session-1 of a new package.* Commit 1 front-loaded D124, D125, the schema.md section, the epic-note line, the current-package transition, and the brief preservation before any code. Heavier than a mid-package session — and it served the audit-trail discipline rather than burdening it: the binding specification (schema.md table shapes, the D-entry alternatives analysis) landed before the code, so every subsequent commit reconciled against a committed spec rather than the spec chasing the code.
+
+  4. *CLI-as-smoke-write-path discipline.* The `padhanam portfolio` CLI landed ahead of any HTTP write surface specifically to give the (S43b) live-stack smoke an honest write path — without it the smoke would seed Cases via raw SQL, bypassing the audit-events port. The CLI's command surface drove a substrate change: the `create-data-point` action required a fifth use case (`create_data_point`) the brief's four-use-case list had not named. Methodology candidate: substrate sessions that ship a read-side HTTP surface without the matching write side should plan a CLI write path by default, and the CLI command surface sanity-checks the use-case set before the use cases are considered complete.
+
+  5. *Operator-pause-at-substrate-completion as methodology candidate.* S43 closed at 7 of 10 commits at operator decision, after a Claude Code check-in surfaced the remaining three commits' scope. The pause sat at the substrate-completion boundary — domain, application, adapter, and CLI layers complete and green; the HTTP transport surface and the live-stack smoke remaining. Two forces drove it: the ~600 lines of intricate, interdependent API-wiring code still to write (routes, DTOs, query parser, the `_cross_context.py` wiring adapter, the `_agent_runtime_wiring.py` factory, `AppCompositions`, error handlers), and commit 9's image-rebuild step carrying real environmental variance. The operator re-scoped the remainder as S43b, a planned bridge session. This is the first instance of a deliberate substrate-and-transport split: the two prior bridge instances at P11 (S39 → S39b verification-and-hygiene; S40 → S40b methodologically-clean-artefact authoring) were unplanned corrections discovered at substrate close, and carried `corrects` / `corrected_by` relationships. S43 → S43b carries `paired_with` instead — S43b completes a planned split, it does not correct S43. The planned-bridge sub-variant is the load-bearing methodology data point of this session; first-instance evidence is captured here, and promotion to a `charter/methodology.md` line waits on a second instance of a future bounded-context substrate session producing the same split shape. The session-close-boundary pause also pairs with the S41 mid-session scope check at the substrate-application boundary: two sub-variants — mid-session and session-close — of one scope-versus-fatigue-management discipline, each with its own second-instance promotion threshold.
+
+  6. *Methodology line opportunities.* Four candidates surfaced. The protocol-file-location convention settled at `shared_kernel/` — a cross-context Protocol referencing no context type belongs there, not at `padhanam/protocols/`, because the `platform-no-contexts` import-linter contract plus the shared-kernel-as-cross-context-type-home charter both point there. The path-drift pattern reached its second instance (S40's adjacent retrieval_evaluation adapter shape; S43's `adapters/outbound/postgres/` versus the brief's flat path) — brief drafts naming adapter and test paths must reconcile against the actual `adapters/outbound/{vendor}/` and flat-test-file conventions before commit 1; a third instance promotes it. The Revisable Protocol is the first cross-context Protocol in the codebase — the generic-Protocol-imports-no-context-type discipline is a first-instance observation. Case-as-substrate-vocabulary: the karma portfolio-of-relationships domain language landed as the context's first-class vocabulary (`portfolio` over `state_persistence`).
+
+- methodology (line 1): **Planned-bridge-session sub-variant.** A deliberate substrate-and-transport split, distinct from the unplanned verification-and-hygiene (S39→S39b) and methodologically-clean-artefact (S40→S40b) sub-variants; first instance at S43→S43b, carrying `paired_with` rather than `corrects`. See reflection prompt 5. Paired with the substrate-completion-boundary scope-check candidate; promotion at second instance.
+
+- methodology (line 2): **Brief path-drift at second instance.** Brief-named adapter and test paths must reconcile against the actual `adapters/outbound/{vendor}/` and flat-test-file conventions before commit 1. Second instance (S40, S43); a third promotes it. See reflection prompts 1 and 6.
+
+- methodology (line 3): **CLI-as-smoke-write-path.** Substrate sessions shipping a read-side HTTP surface without the write side should plan a CLI write path by default; the CLI command surface sanity-checks the use-case set. See reflection prompt 4.
+
+- **S43 substrate closed at 7/10 commits per the planned substrate-and-transport split. S43b lands HTTP transport plus live smoke per `briefs/p13/s43b.md`; the paired S43b entry lands at S43b close.**
+
+---
+
 ## 2026-05-21 — Charter-export tooling commit (parallel-block close before S43)
 roles: engineer, technical writer, analyst
 mode: build (tooling commit; closes parallel-block work surfaced at pre-P13 hygiene close)
