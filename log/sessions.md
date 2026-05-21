@@ -13,6 +13,42 @@ Format:
 
 ---
 
+## 2026-05-21 — Pre-S44 hygiene — brief path-drift methodology promotion
+roles: technical writer, architect
+mode: strategic (post-substrate-completion hygiene; promotes the methodology candidate queued at S43b close; no code changes)
+
+- Produced: Two commits closed the session — one fewer than the brief's three-commit plan, because pre-write reconciliation found the captures-backfill commit unnecessary.
+  - Commit e3f9457 (`docs(charter)`): the *Path-naming sub-pattern* paragraph under the pre-write reconciliation Patterns-observed entry at `charter/methodology.md`; the captures path-drift entry re-triaged as resolved at `log/captures.md`; the pre-S44 hygiene close marker at `charter/current-package.md`; `briefs/p13/pre-s44-hygiene.md` preserved at v1.
+  - Commit this commit (`docs(p13/pre-s44-hygiene)`): this session log entry.
+
+- Decisions: No new D-entries. Per hygiene-shape discipline — the promotion converts an already-surfaced methodology candidate to a methodology-document sub-paragraph; no architectural decision is made.
+
+- Tests: None. Documentation-only changes. No edits under `contexts/`, `apps/`, `shared_kernel/`, `padhanam/`, `tests/`, or migrations.
+
+- Pre-write reconciliation: Three surfaces verified before commit 1; all three surfaced findings, two of them material enough to surface to the operator before any commit landed.
+  - Surface 1 (instance count): The S43b close framing carried three path-drift instances (S40, S43, S43b). Verbatim reading of each session's methodology lines found S40 records strategy-enumeration drift — D66 catalogues three retrieval strategies, the adapter executes two — not path naming. The "S40 adjacent adapter shape" citation in the S43 and S43b entries is a loose framing-time reference not borne out by S40's actual methodology lines. Verified count: two (S43, S43b).
+  - Surface 2 (captures state): All three S43/S43b methodology candidates already exist at `log/captures.md`, landed at the S43b close commit. The captures-backfill commit the brief planned collapsed to empty per the brief's own conditional logic; only the path-drift entry's triage lines needed editing.
+  - Surface 3 (methodology placement): The existing pre-write reconciliation entry carries the Mid-build sub-pattern paragraph as expected; the path-naming sub-paragraph landed adjacent to it per the brief's placement instruction.
+  - A further finding outside the three named surfaces: the brief's own Entry B template and methodology sub-paragraph parenthetical inverted the S43 drift direction — they framed the S43 brief as naming `adapters/outbound/postgres/` against a flat convention, when the S43 session-log entry and the live codebase both show the reverse. The correct direction was used in the landed sub-paragraph (see methodology line 1).
+
+- Reflection prompts answered:
+
+  1. *Instance-verification outcome.* The three-instance framing did not hold. S40 reclassified: its methodology line 1 records D66 strategy-registry framing-vs-as-built drift (the catalogue lists three retrieval strategies, the adapter executes two) — strategy enumeration, not path naming — and none of S40's six methodology lines records an adapter-path-naming drift. The verified count is two: S43's flat-adapter-path drift against the `adapters/outbound/postgres/` convention, and S43b's `tests/contract/http/portfolio/` subdirectory drift against the flat `tests/contract/http/` convention. Promotion still fires: the corrective-discipline-on-first-instance precedent — the metric-threshold and reproducibility-artefacts Patterns-observed entries both promoted at a single instance, because corrective discipline-additions land on a single observed drift event rather than paying further drift instances while waiting for recurrence — covers a two-instance promotion comfortably. The brief anticipated exactly this reclassification at its reconciliation surface 1; the verification discipline worked as designed.
+
+  2. *Sub-paragraph-versus-sibling-entry placement.* The path-naming sub-pattern landed as a sub-paragraph under the existing pre-write reconciliation entry, not as its own sibling Patterns-observed entry. Reasoning: the mitigation surface is identical (pre-write reconciliation reading at session open), the entry already carries a sub-pattern paragraph (Mid-build sub-pattern) so the structural precedent for sub-paragraph altitude is in place, and a sub-class of an already-promoted pattern fits the sub-paragraph altitude. A sibling entry was rejected — it would duplicate the parent entry's mitigation surface and inflate the document's pattern count without structural distinction. A discipline-addition paragraph under the document-tail "Pre-write reconciliation against vendor docs" section was rejected — that section addresses vendor-SDK drift, not codebase-convention drift.
+
+  3. *Captures-as-audit-trail discipline.* All three S43/S43b methodology candidates were captured at `log/captures.md` at the S43b close commit even though only one promotes now; the other two stay pending recurrence with explicit second-instance thresholds. This is the right shape: the captures surface is the audit-trail record of methodology-candidate surfacing, independent of immediate promotion status. Promotion happens at a recurrence threshold or at corrective-discipline-on-first-instance qualification; capture happens at first surfacing. The discipline reinforcement for future session-close work: land every surfaced methodology candidate at captures, not only the ones at promotion threshold, so recurrence tracking has a complete trail.
+
+  4. *Two-versus-three accuracy discipline, and the captures entry as canonical citation source.* The methodology sub-paragraph cites the verified instance count, not the framing-time count carried from the S43b close reflection. The structural-honesty discipline: methodology promotions verify their instance enumeration against the actual session-log methodology lines at every promotion event, and the captures entry's enumeration is the canonical citation source — itself verified against the session log. The captures path-drift entry's append-only body still carries the three-instance framing; its triage resolution line, the designated mutable surface, records the S40 reclassification, so the audit trail shows both the framing-time count and the verified count without falsifying the original capture.
+
+- methodology (line 1): **The pre-write reconciliation discipline caught brief-vs-codebase drift in the very brief drafted to promote it.** The hygiene brief's Entry B template and methodology sub-paragraph parenthetical inverted the S43 path-drift direction — they framed the S43 brief as naming `adapters/outbound/postgres/` against a flat convention, when the S43 session-log entry and the live codebase (`contexts/portfolio/adapters/outbound/postgres/portfolio_repository.py`) both show the reverse: the S43 brief named a flat path, and `adapters/outbound/{vendor}/` is the actual convention. The discipline being promoted caught a drift instance of its own class on the way to being articulated — the cleanest available validation of what the methodology entry claims.
+
+- methodology (line 2): **Prior-conversation summaries reconcile against repo-committed content before becoming brief source material.** The inverted S43 direction traces to cross-conversation brief drafting working from this conversation's loose summaries rather than reconciling against `log/captures.md`, which already carried the correct direction. The discipline addition: when a brief is drafted in a conversation other than the one that produced the source material, the repo-committed artefact — not the prior conversation's summary — is the authority, and the brief drafter reconciles against it before treating the summary as source.
+
+- **Pre-S44 hygiene closed; the brief path-drift sub-pattern is promoted at two verified instances. S44 next.**
+
+---
+
 ## 2026-05-21 — S43b — Portfolio context HTTP transport surface plus live-stack smoke (bridge session)
 roles: architect, engineer, technical writer
 mode: build (bridge session — the transport half of a planned substrate-and-transport split)
