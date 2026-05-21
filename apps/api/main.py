@@ -33,6 +33,7 @@ from apps.api._errors import (
     register_audit_error_handlers,
     register_ingestion_error_handlers,
     register_optimization_error_handlers,
+    register_portfolio_error_handlers,
     register_retrieval_evaluation_error_handlers,
     register_run_history_error_handlers,
 )
@@ -43,6 +44,7 @@ from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import ingestion as ingestion_router
 from apps.api.routers import optimization as optimization_router
+from apps.api.routers import portfolio as portfolio_router
 from apps.api.routers import retrieval_evaluation as retrieval_evaluation_router
 from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
@@ -60,6 +62,7 @@ from contexts.optimization.ports.recommendation_reader import (
 from contexts.optimization.ports.recommendation_repository import (
     RecommendationRepository,
 )
+from contexts.portfolio.ports import PortfolioReader
 from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
     EvaluationRunReader,
 )
@@ -176,6 +179,9 @@ class AppCompositions:
     optimization_run_reader: OptimizationRunReader | None = None
     recommendation_repository: RecommendationRepository | None = None
     recommendation_reader: RecommendationReader | None = None
+    # S43b (D124): portfolio context read surface for the
+    # GET /api/v1/portfolio/cases* routes.
+    portfolio_reader: PortfolioReader | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -301,6 +307,7 @@ def _build_default_compositions() -> AppCompositions:
         build_gold_set_repository,
         build_optimization_run_reader,
         build_optimization_run_repository,
+        build_portfolio_reader,
         build_recommendation_reader,
         build_recommendation_repository,
         build_retrieval_client,
@@ -365,6 +372,12 @@ def _build_default_compositions() -> AppCompositions:
         operator_principal=operator_principal,
         security_events=sec,
     )
+    portfolio_reader = build_portfolio_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
 
     return AppCompositions(
         inference_port=inference_port,
@@ -387,6 +400,7 @@ def _build_default_compositions() -> AppCompositions:
         optimization_run_reader=optimization_run_reader,
         recommendation_repository=recommendation_repository,
         recommendation_reader=recommendation_reader,
+        portfolio_reader=portfolio_reader,
     )
 
 
@@ -479,6 +493,10 @@ def create_app(
     register_retrieval_evaluation_error_handlers(app)
     register_optimization_error_handlers(app)
 
+    # S43b (D124): portfolio HTTP error handlers — case_not_found (404),
+    # malformed_portfolio_cursor (400), invalid_portfolio_filter (400).
+    register_portfolio_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -520,6 +538,10 @@ def create_app(
     app.include_router(optimization_router.optimization_run_router)
     app.include_router(optimization_router.recommendation_router)
 
+    # S43b (D124): portfolio read-surface routes under principal-derived
+    # tenant context — GET /api/v1/portfolio/cases and /cases/{case_id}.
+    app.include_router(portfolio_router.router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -544,6 +566,7 @@ def create_app(
     app.state.optimization_run_reader = compositions.optimization_run_reader
     app.state.recommendation_repository = compositions.recommendation_repository
     app.state.recommendation_reader = compositions.recommendation_reader
+    app.state.portfolio_reader = compositions.portfolio_reader
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit

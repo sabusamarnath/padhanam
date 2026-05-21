@@ -54,6 +54,7 @@ from apps.api.routers._audit_query import InvalidAuditFilterError
 from apps.api.routers._optimization_query import (
     InvalidOptimizationFilterError,
 )
+from apps.api.routers._portfolio_query import InvalidPortfolioFilterError
 from apps.api.routers._run_history_query import InvalidFilterRangeError
 from contexts.audit.domain.query_filters import (
     MalformedCursorError as AuditMalformedCursorError,
@@ -81,6 +82,9 @@ from contexts.retrieval_evaluation.application.run_retrieval_evaluation import (
 )
 from contexts.retrieval_evaluation.domain.query_filters import (
     MalformedCursorError as RetrievalEvaluationMalformedCursorError,
+)
+from contexts.portfolio.domain.query_filters import (
+    MalformedCursorError as PortfolioMalformedCursorError,
 )
 from contexts.run_history.domain.query_filters import MalformedCursorError
 from padhanam.observability.security_events import (
@@ -187,6 +191,21 @@ class BoundTenantIdMismatchError(Exception):
     def __init__(self, original: Exception) -> None:
         super().__init__(str(original))
         self.original = original
+
+
+class CaseNotFoundError(Exception):
+    """Raised by the portfolio route when the reader returns None for a case (D124, S43b).
+
+    The HTTP handler translates to 404 ``case_not_found``. The route
+    fires the ``TENANT_SCOPE_VIOLATION`` security event before
+    raising; the handler is a pure shape translator. Privacy-
+    preserving per the run-history precedent — confirming a case's
+    existence on another tenant would leak information.
+    """
+
+    def __init__(self, case_id: str) -> None:
+        super().__init__(f"case {case_id} not found")
+        self.case_id = case_id
 
 
 def _correlation_id(request: Request) -> str:
@@ -631,9 +650,71 @@ def register_optimization_error_handlers(app: FastAPI) -> None:
     )
 
 
+async def _handle_case_not_found(
+    request: Request, exc: CaseNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="case_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_malformed_portfolio_cursor(
+    request: Request, exc: PortfolioMalformedCursorError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="malformed_portfolio_cursor",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_invalid_portfolio_filter(
+    request: Request, exc: InvalidPortfolioFilterError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="invalid_portfolio_filter",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+def register_portfolio_error_handlers(app: FastAPI) -> None:
+    """Register the portfolio HTTP error handlers (D124, S43b).
+
+    Handlers registered:
+
+    - ``CaseNotFoundError`` -> 404 ``case_not_found``.
+    - ``PortfolioMalformedCursorError`` -> 400
+      ``malformed_portfolio_cursor``.
+    - ``InvalidPortfolioFilterError`` -> 400 ``invalid_portfolio_filter``.
+
+    New error codes within the existing not-found, malformed-cursor,
+    and invalid-filter families per D98 — no new error-code families.
+    ``BoundTenantIdMismatchError`` (which the portfolio route can also
+    raise) is already registered by ``register_run_history_error_handlers``.
+    """
+    app.add_exception_handler(
+        CaseNotFoundError, _handle_case_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        PortfolioMalformedCursorError,  # type: ignore[arg-type]
+        _handle_malformed_portfolio_cursor,
+    )
+    app.add_exception_handler(
+        InvalidPortfolioFilterError,  # type: ignore[arg-type]
+        _handle_invalid_portfolio_filter,
+    )
+
+
 __all__ = [
     "AuditEventNotFoundError",
     "BoundTenantIdMismatchError",
+    "CaseNotFoundError",
     "ErrorResponse",
     "EvaluationRunNotFoundError",
     "IngestionSourceNotFoundError",
@@ -642,6 +723,7 @@ __all__ = [
     "register_audit_error_handlers",
     "register_ingestion_error_handlers",
     "register_optimization_error_handlers",
+    "register_portfolio_error_handlers",
     "register_retrieval_evaluation_error_handlers",
     "register_run_history_error_handlers",
 ]

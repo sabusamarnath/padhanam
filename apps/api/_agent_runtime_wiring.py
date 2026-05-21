@@ -45,7 +45,7 @@ since the alternative (duplicating 200+ lines of wiring) is worse.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Sequence
+from typing import Awaitable, Callable, Sequence
 
 from contexts.agent.adapters.outbound.agent_loop_executor import (
     AgentLoopExecutor,
@@ -72,6 +72,9 @@ from contexts.inference.ports import InferencePort
 from contexts.methodology.adapters.outbound.postgres import (
     MethodologyPostgresRepository,
     RolePostgresRepository,
+)
+from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
+    PostgresPortfolioReader,
 )
 from contexts.tenancy.adapters.outbound.postgres.registry import (
     PostgresTenantRegistry,
@@ -345,6 +348,98 @@ def build_run_history_reader(
         )
 
     return RunHistoryReaderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant,
+    )
+
+
+class PortfolioReaderAdapter:
+    """Per-request-tenant-resolving wiring for the portfolio read surface (S43b, D124).
+
+    Each call resolves the request's per-tenant session factory and
+    delegates to a freshly-constructed ``PostgresPortfolioReader`` bound
+    to that tenant. Defined here alongside its factory rather than in
+    ``apps/cli/_cross_context.py`` because it is API-only — the
+    portfolio CLI constructs ``PostgresPortfolioReader`` directly
+    against its single tenant-bound session factory. Mirrors the
+    ``TenantRoutingSourceRepository`` placement in this module.
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: Callable[
+            [TenantContext], Awaitable[object]
+        ],
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def _build_reader(
+        self, tenant_context: TenantContext
+    ) -> PostgresPortfolioReader:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(_tid: TenantId) -> object:
+            return sessionmaker
+
+        return PostgresPortfolioReader(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+    async def get_case(self, *, tenant_context, case_id):
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_case(
+            tenant_context=tenant_context, case_id=case_id
+        )
+
+    async def list_cases(
+        self, *, tenant_context, filters, cursor, page_size
+    ):
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_cases(
+            tenant_context=tenant_context,
+            filters=filters,
+            cursor=cursor,
+            page_size=page_size,
+        )
+
+    async def get_data_point(self, *, tenant_context, data_point_id):
+        reader = await self._build_reader(tenant_context)
+        return await reader.get_data_point(
+            tenant_context=tenant_context, data_point_id=data_point_id
+        )
+
+    async def list_data_points(self, *, tenant_context, case_id):
+        reader = await self._build_reader(tenant_context)
+        return await reader.list_data_points(
+            tenant_context=tenant_context, case_id=case_id
+        )
+
+    async def assertion_history(self, *, tenant_context, data_point_id):
+        reader = await self._build_reader(tenant_context)
+        return await reader.assertion_history(
+            tenant_context=tenant_context, data_point_id=data_point_id
+        )
+
+
+def build_portfolio_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> PortfolioReaderAdapter:
+    """Wire the portfolio read surface for the production composition (S43b, D124)."""
+
+    async def _session_factory_for_tenant(tenant_context):
+        return await session_factory_cache.get(
+            tenant_id=TenantId(str(tenant_context.tenant_id)),
+            principal=operator_principal,
+            registry=tenant_registry,
+            security_events=security_events,
+        )
+
+    return PortfolioReaderAdapter(
         session_factory_for_tenant=_session_factory_for_tenant,
     )
 
