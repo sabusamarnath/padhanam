@@ -1033,6 +1033,95 @@ mutating the parent aggregate's lifecycle fields. Index
 `(recommendation_id, transitioned_at)` supports per-recommendation
 chronological reads.
 
+## Portfolio context substrate
+
+Per-tenant substrate for `contexts/portfolio/` per D124. Three
+tables on each tenant's dedicated Postgres data plane per D32,
+landing the Phase 2-A Wave 1 foundational domain entities all
+three product modes share: Case (the aggregate root), DataPoint
+(an entity within the Case aggregate boundary), and Assertion
+(the append-only revision unit). FK cascade runs Case → DataPoint
+→ Assertion. Every table carries `tenant_id` and `jurisdiction`
+per D12. Tamper-evidence follows D110 commitment 7: every write
+through the application layer emits an audit event and the audit
+context's hash chain transitively covers the portfolio records;
+no parallel hash chain on these tables.
+
+Migration `alembic/tenant/versions/0016_portfolio_substrate`
+ships these tables on every per-tenant database.
+
+### `cases`
+
+| Column         | Type          | Constraints                                                |
+|----------------|---------------|------------------------------------------------------------|
+| `id`           | `uuid`        | primary key; default `gen_random_uuid()`                   |
+| `tenant_id`    | `uuid`        | not null; jurisdiction-bearing per D12                     |
+| `jurisdiction` | `text`        | not null; CHECK `jurisdiction <> ''`                       |
+| `title`        | `text`        | not null; CHECK `title <> ''`                              |
+| `case_type`    | `text`        | not null; CHECK ∈ {`PORTFOLIO_ITEM`}                       |
+| `status`       | `text`        | not null; CHECK ∈ {`OPEN`, `CLOSED`, `ARCHIVED`}           |
+| `created_at`   | `timestamptz` | not null; default `now()`                                  |
+| `updated_at`   | `timestamptz` | not null; default `now()`; advances on status transitions  |
+
+The aggregate root. `case_type` carries the single Phase 2-A
+value `PORTFOLIO_ITEM`; the CHECK accepts that value only at S43
+and widens as new case types land. `status` is mutable — OPEN →
+CLOSED or OPEN → ARCHIVED — and `updated_at` advances on each
+transition; per the "Originals never erased" principle a Case is
+archived, never deleted, in normal operation. Index
+`ix_cases_tenant_status` on `(tenant_id, status)` and
+`ix_cases_tenant_created_at` on `(tenant_id, created_at DESC)`
+support the list surface.
+
+### `data_points`
+
+| Column                | Type               | Constraints                                                      |
+|-----------------------|--------------------|------------------------------------------------------------------|
+| `id`                  | `uuid`             | primary key; default `gen_random_uuid()`                         |
+| `case_id`             | `uuid`             | not null; FK → `cases.id` ON DELETE CASCADE                      |
+| `tenant_id`           | `uuid`             | not null; jurisdiction-bearing per D12                           |
+| `jurisdiction`        | `text`             | not null; CHECK `jurisdiction <> ''`                             |
+| `data_point_type`     | `text`             | not null; CHECK ∈ {`GOAL`, `STATUS`, `METHODOLOGY_APPLICATION`}  |
+| `value`               | `jsonb`            | not null; the structured payload at DataPoint creation           |
+| `authored_by_user_id` | `text`             | not null; CHECK `<> ''`; ActorReference placeholder per D124     |
+| `certainty`           | `double precision` | nullable; CHECK `certainty >= 0 AND certainty <= 1`; D117 reserve |
+| `created_at`          | `timestamptz`      | not null; default `now()`                                        |
+
+An entity within the Case aggregate. `value` is the structured
+payload captured at DataPoint creation; the current state is the
+latest Assertion in the revision history (Revisable Protocol per
+D125). `certainty` is nullable and unset at Phase 2-A — the
+column lands now so the D117 tiered-by-salience implementation at
+P15 is a pure write-path addition. `authored_by_user_id` persists
+the `ActorReference` placeholder. Index `ix_data_points_case_id`
+on `(case_id)` and `ix_data_points_tenant_id` on `(tenant_id)`.
+
+### `assertions`
+
+| Column                 | Type          | Constraints                                                  |
+|------------------------|---------------|--------------------------------------------------------------|
+| `id`                   | `uuid`        | primary key; default `gen_random_uuid()`                     |
+| `data_point_id`        | `uuid`        | not null; FK → `data_points.id` ON DELETE CASCADE            |
+| `tenant_id`            | `uuid`        | not null; jurisdiction-bearing per D12                       |
+| `jurisdiction`         | `text`        | not null; CHECK `jurisdiction <> ''`                         |
+| `assertion_type`       | `text`        | not null; CHECK ∈ {`INITIAL`, `REVISION`}                    |
+| `revises_assertion_id` | `uuid`        | nullable; FK → `assertions.id` ON DELETE RESTRICT            |
+| `value`                | `jsonb`       | not null; the revision payload                               |
+| `authored_by_user_id`  | `text`        | not null; CHECK `<> ''`; ActorReference placeholder per D124  |
+| `created_at`           | `timestamptz` | not null; default `now()`                                    |
+
+The append-only revision unit implementing the Revisable
+Protocol's revision-history surface. Each DataPoint opens with
+one `INITIAL` assertion; every `revise` call appends a `REVISION`
+assertion. A pairing CHECK `assertions_type_revises_pairing_check`
+pins the shape: an `INITIAL` assertion has `revises_assertion_id`
+null; a `REVISION` assertion has it not null (the self-referential
+FK points at the prior assertion in the chain). Assertions are
+never updated or deleted. Index
+`ix_assertions_data_point_created_at` on `(data_point_id,
+created_at)` orders revision history; `ix_assertions_tenant_id`
+on `(tenant_id)`.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,
@@ -1115,4 +1204,49 @@ encoded string is opaque to consumers, who receive it at
 request. The codec is application-layer: it is imported by the
 HTTP read surface but defined inside each context's
 `application/` package alongside the use cases it serves.
+
+### Revisable Protocol (cross-context behavioural contract)
+
+This sub-section formalises a *Protocol shape* — a behavioural
+contract — rather than a value-object schema; the field-table
+style of the three sub-sections above does not apply. Per D125,
+`Revisable` is the cross-context standard interface for entities
+that carry an append-only revision history (the D114
+revision-with-lineage primitive). It lives at
+`shared_kernel/revisable.py` as a generic `Protocol`:
+
+```python
+class Revisable(Protocol[RevisionT]):
+    def revise(
+        self, change: AssertionChange, actor: ActorReference
+    ) -> "Revisable[RevisionT]": ...
+
+    def revision_history(self) -> list[RevisionT]: ...
+```
+
+Contract semantics: `revise` appends a new revision rather than
+overwriting — it returns a `Revisable` carrying the extended
+history; the latest revision is the entity's current state;
+`revision_history` returns the full revision list in
+chronological order. The protocol is generic over `RevisionT` so
+it imports no bounded-context type — `shared_kernel/` cannot
+import `contexts/` per D16. `contexts/portfolio/`'s `DataPoint`
+implements `Revisable[Assertion]` at S43; methodology-application
+revision and Case-level revision are future implementers.
+Conformance is CI-enforceable via contract tests per D114.
+
+### AssertionChange (revision-input value object)
+
+The value object passed to `Revisable.revise` describing the
+change to apply. Lives at `shared_kernel/revisable.py` alongside
+the protocol. Frozen dataclass, framework-free per D16.
+
+| Field   | Type   | Constraints                                          |
+|---------|--------|------------------------------------------------------|
+| `value` | `dict` | not null; the structured payload of the new revision |
+
+`revise` consumes an `AssertionChange` plus an `ActorReference`
+and appends an `Assertion` carrying the change's `value`,
+`assertion_type = REVISION`, and `revises_assertion_id` pointing
+at the prior head of the revision chain.
 

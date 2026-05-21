@@ -73,7 +73,7 @@ One charter-only hygiene item bundled into a pre-P13 session per Decision 2:
 
 Four sessions per Decision 3 (a') with the fourth shaped as a bridge session.
 
-**Session 1: foundational domain layer.** State persistence; Case/DataPoint/Assertion naming and shape; Revisable Protocol definition (D114); no-silent-operation principle commit (D121 charter touch); PA communication discipline principle commit (new). Estimated 7 to 9 commits.
+**Session 1 (S43): foundational domain layer.** The `contexts/portfolio/` bounded context — name settled at the S43 brief over `state_persistence` (karma portfolio-of-relationships vocabulary; PORTFOLIO_ITEM case_type; symmetry with the domain-named P11 contexts). Case/DataPoint/Assertion entities and three per-tenant tables (D124); the Revisable Protocol shape as a generic `Protocol` in `shared_kernel/` (D125; D114 committed the framework). D124 and D125 land as separate entries. Read-side HTTP plus a `padhanam portfolio` CLI write path for the live-stack smoke; write-side HTTP defers to S44. The no-silent-operation and PA communication discipline principles landed earlier at the P13 framing landing commit, not this session. Ten commits.
 
 **Session 2: actor and domain extension.** ActorContext extension; authorisation decorator; intake record; three-tier consent-and-awareness architecture primitive commit (D116). Estimated 6 to 8 commits.
 
