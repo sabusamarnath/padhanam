@@ -35,6 +35,7 @@ from padhanam.observability.security_events import (
     SecurityEventLogger,
 )
 from shared_kernel import TenantId
+from shared_kernel.authorisation import AuthorisationDenied
 
 
 class PrincipalTypeMismatchError(Exception):
@@ -123,8 +124,61 @@ async def _handle_principal_type_mismatch(
     return JSONResponse(status_code=403, content=body.model_dump())
 
 
+async def _handle_authorisation_denied(
+    request: Request, exc: AuthorisationDenied
+) -> JSONResponse:
+    """Translate ``AuthorisationDenied`` to 403 + AUTHZ_DENIAL event (D126).
+
+    ``AuthorisationDenied`` is raised by the ``requires_authorisation``
+    decorator at the use-case boundary (``shared_kernel/authorisation.py``)
+    when an actor lacks a required permission. It is auth-cross-cutting
+    — raised by the shared decorator, not by any one router — so its
+    handler belongs in this module per the D104 auth-cross-cutting
+    placement, alongside ``PrincipalTypeMismatchError``.
+
+    The handler fires an ``AUTHZ_DENIAL`` security event carrying the
+    attempted route, the required permission, and the offending
+    actor_id, then returns a 403 ``ErrorResponse``. The response
+    message names the required permission only — never the actor's
+    full authorisation set.
+    """
+    logger: SecurityEventLogger | None = getattr(
+        request.app.state, "security_events", None
+    )
+    if logger is not None:
+        principal = getattr(request.state, "principal", None)
+        principal_ref = principal.subject if principal is not None else None
+        tenant_id_for_event: TenantId | None = None
+        if principal is not None and principal.tenant_id:
+            tenant_id_for_event = TenantId(str(principal.tenant_id))
+        logger.emit(
+            SecurityEvent(
+                category=SecurityEventCategory.AUTHZ_DENIAL,
+                principal_ref=principal_ref,
+                tenant_id=tenant_id_for_event,
+                action=f"{request.method} {request.url.path}",
+                resource_ref=None,
+                outcome="authorisation_denied",
+                metadata={
+                    "required_permission": exc.permission,
+                    "actor_id": exc.actor_id,
+                },
+            )
+        )
+
+    body = ErrorResponse(
+        error_code="authorisation_denied",
+        message=(
+            "the authenticated actor lacks the required authorisation "
+            f"{exc.permission!r} for this operation"
+        ),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=403, content=body.model_dump())
+
+
 def register_auth_error_handlers(app: FastAPI) -> None:
-    """Register the authentication-cross-cutting error handlers on the FastAPI app (D104, S38).
+    """Register the authentication-cross-cutting error handlers on the FastAPI app (D104, S38; D126, S44a).
 
     Called from create_app at composition time alongside the existing
     per-router registration functions (``register_run_history_error_handlers``,
@@ -136,9 +190,15 @@ def register_auth_error_handlers(app: FastAPI) -> None:
 
     - ``PrincipalTypeMismatchError`` -> 403 ``principal_type_mismatch``
       with ``AUTHZ_DENIAL`` security event.
+    - ``AuthorisationDenied`` -> 403 ``authorisation_denied`` with
+      ``AUTHZ_DENIAL`` security event (D126; raised by the
+      ``requires_authorisation`` use-case-boundary decorator).
     """
     app.add_exception_handler(
         PrincipalTypeMismatchError, _handle_principal_type_mismatch  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        AuthorisationDenied, _handle_authorisation_denied  # type: ignore[arg-type]
     )
 
 

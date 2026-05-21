@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 
 from apps.api._auth_errors import (
     PrincipalTypeMismatchError,
+    _handle_authorisation_denied,
     _handle_principal_type_mismatch,
     register_auth_error_handlers,
 )
@@ -27,6 +28,7 @@ from padhanam.observability.security_events import (
     SecurityEvent,
     SecurityEventCategory,
 )
+from shared_kernel.authorisation import AuthorisationDenied
 
 
 def _mock_request(correlation_id: str = "test-correlation-id") -> MagicMock:
@@ -142,3 +144,79 @@ def test_register_audit_error_handlers_no_longer_registers_principal_type_mismat
     register_audit_error_handlers(app)
 
     assert PrincipalTypeMismatchError not in app.exception_handlers
+
+
+# --------------------------------------------------------------------
+# AuthorisationDenied handler shape (D126, S44a).
+# --------------------------------------------------------------------
+
+
+def test_authorisation_denied_handler_returns_403_and_emits_authz_denial() -> None:
+    request = _mock_request()
+    logger = _CaptureLogger()
+    request.app.state.security_events = logger
+    request.state.principal = SimpleNamespace(
+        subject="operator", tenant_id="00000000-0000-4000-8000-0000000000a1"
+    )
+    request.method = "GET"
+    request.url.path = "/api/v1/portfolio/cases"
+
+    exc = AuthorisationDenied(
+        permission="portfolio.case.list", actor_id="operator"
+    )
+    response = asyncio.run(_handle_authorisation_denied(request, exc))
+
+    assert response.status_code == 403
+    body = json.loads(response.body)
+    assert body["error_code"] == "authorisation_denied"
+    assert body["correlation_id"] == "test-correlation-id"
+    assert "portfolio.case.list" in body["message"]
+
+    assert len(logger.events) == 1
+    event = logger.events[0]
+    assert event.category == SecurityEventCategory.AUTHZ_DENIAL
+    assert event.principal_ref == "operator"
+    assert event.outcome == "authorisation_denied"
+    assert event.metadata["required_permission"] == "portfolio.case.list"
+    assert event.metadata["actor_id"] == "operator"
+    assert event.action == "GET /api/v1/portfolio/cases"
+    assert event.tenant_id == "00000000-0000-4000-8000-0000000000a1"
+
+
+def test_authorisation_denied_handler_without_logger_still_returns_403() -> None:
+    request = _mock_request()
+    request.app.state.security_events = None
+    exc = AuthorisationDenied(
+        permission="portfolio.case.create", actor_id="operator"
+    )
+    response = asyncio.run(_handle_authorisation_denied(request, exc))
+    assert response.status_code == 403
+
+
+def test_authorisation_denied_message_names_permission_not_full_set() -> None:
+    """The 403 message names the required permission only — never the
+    actor's full authorisation set."""
+    request = _mock_request()
+    request.app.state.security_events = None
+    exc = AuthorisationDenied(
+        permission="portfolio.data_point.revise", actor_id="operator"
+    )
+    response = asyncio.run(_handle_authorisation_denied(request, exc))
+    body = json.loads(response.body)
+    assert "portfolio.data_point.revise" in body["message"]
+    assert "authorisation_set" not in body["message"]
+
+
+def test_register_auth_error_handlers_registers_authorisation_denied_handler() -> None:
+    """D126: register_auth_error_handlers wires AuthorisationDenied onto
+    the FastAPI app so the decorator's 403 path fires app-wide."""
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    register_auth_error_handlers(app)
+
+    assert AuthorisationDenied in app.exception_handlers
+    assert (
+        app.exception_handlers[AuthorisationDenied]
+        is _handle_authorisation_denied
+    )
