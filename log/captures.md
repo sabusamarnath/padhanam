@@ -455,3 +455,30 @@ S43b reconciliation surface 5 caught a drift class: a migration commits to the s
 
   - triaged: defer on 2026-05-21
   - resolution: also added as the second entry of the Phase 2-A close hygiene list at `charter/phase-2-audit-inputs.md` this commit (migration-deployment verification surface). Forwarded to Phase 2-A close for the architecture-or-tooling decision (CI / merge-gate surface versus per-session verification commit). The S43b local fix — a durable structural test — already landed.
+
+## 2026-05-22 — [S44a] Forward-commitment-evaluation pattern (methodology candidate)
+
+D124 (S43) carried a forward commitment: ActorReference "is superseded at S44 by the full ActorContext ... the supersession extends shape and home without renaming," covering both the Revisable Protocol's `actor` parameter and the `authored_by` field. S44a pre-write reconciliation evaluated that commitment against the live codebase and found it structurally unsound for `authored_by`: the `data_points` and `assertions` tables persist authoring identity as a single `authored_by_user_id` text column, and a request-scoped ActorContext (carrying `authorisation_set`) cannot be honestly reconstructed from it or frozen onto a permanent record. D126 supersedes the forward commitment — the first instance of a D-entry superseding a forward commitment carried by an earlier D-entry.
+
+The pattern worth naming: a forward commitment embedded in a D-entry is a hypothesis about future structure, not a binding instruction. The session that reaches the commitment's activation point evaluates it against the live codebase at pre-write reconciliation and supersedes with reasoning if it proves structurally wrong, rather than implementing it literally. The supersession D-entry preserves the audit trail; the superseded D-entry is not rewritten. First-instance observation. Recurrence test: the next D-entry carrying a forward commitment that is evaluated at a future session.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to `charter/methodology.md` promotion candidacy. First instance; recurrence test named. Recorded at the S44a session-log methodology line 1.
+
+## 2026-05-22 — [S44a] Brief-vs-domain-model drift at the type altitude (methodology candidate)
+
+S44a pre-write reconciliation surface 5 directed a search for ActorReference consumers; the brief asserted "only the four portfolio use cases plus the Revisable Protocol consume it." The verification found a materially wider surface: ActorReference is the declared type of `DataPoint.authored_by` and `Assertion.authored_by` — persisted domain-entity fields — plus the Postgres reader, the CLI, the HTTP response DTO, the audit-event drafts, and five test files.
+
+This is a sub-class of the brief path-drift pattern promoted at the pre-S44 hygiene session, but at a different altitude: path drift is about file-location naming; this is about which layers a type identifier reaches. The brief's framing came from the S44-framing mental model (ActorReference as an application-layer placeholder) rather than a fresh grep across `contexts/`, `apps/`, and `shared_kernel/`. The same drift class also surfaced the brief's omission of the fifth use case (`create_data_point`), found because the brief's use-case inventory came from the S43-close framing rather than a read of `contexts/portfolio/application/`. The mitigation surface is the same as path drift (pre-write reconciliation reading at session open), but the discipline addition is distinct: a brief that names a type or a use-case set verifies it with an explicit identifier search across every layer — domain, application, adapter, transport, CLI, tests — not only the layer the brief frames it at. First-instance candidate.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to `charter/methodology.md` promotion candidacy as a type-altitude sub-class of the brief-vs-codebase drift pattern. Recorded at the S44a session-log methodology line 2.
+
+## 2026-05-22 — [S44a] File topology budget first-instance load-bearing evidence (methodology candidate)
+
+S44a is the first instance of the file topology budget discipline (the brief carried a budget table plus a sixth pre-write reconciliation surface verifying current file sizes against targets). The discipline did load-bearing work at first instance: surface 6 caught `apps/api/_errors.py` at 729 lines — far past any reasonable ~400-line ceiling for the router-error-handler file class — and the budget table's row for `_errors.py` ("delta +12, split trigger: None") carried no current size, so the overage would have gone unnoticed. The discipline both prevented the AuthorisationDenied handler from landing in `_errors.py` (it was redirected to `apps/api/_auth_errors.py` per D104's auth-cross-cutting placement, which is also structurally correct) and surfaced the existing 729-line overage for forward triage.
+
+Without the budget verification surface, the AuthorisationDenied handler would have landed at `_errors.py` (the path the brief named) and the 729-line file would have grown further before P13 close. The discipline's load-bearing claim sits at first-instance validation, not only at recurrence.
+
+  - triaged: defer on 2026-05-22
+  - resolution: the `_errors.py` split is forwarded to the Phase 2-A close hygiene list at `charter/phase-2-audit-inputs.md`. The file topology budget discipline promotes to a `charter/methodology.md` entry at P13 close per the S44-framing settlement, with this first-instance evidence cited. Recorded at the S44a session-log methodology line 3.
