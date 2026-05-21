@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
+import subprocess
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
@@ -443,3 +445,117 @@ def test_adapter_rejects_entity_tenant_mismatch(
         _run(event_loop, repo_for_a.save_case(
             tenant_context=_tenant_context(tenant_a), case=foreign_case))
     assert _row_count(event_loop, sm_a, cases_table) == 0
+
+
+# --------------------------------------------------------------------
+# Structural isolation: the migration is deployed to the real per-tenant
+# containers. The S43-commit-5 deferral resolves here at S43b — 0016 is
+# applied to tenant_a and tenant_b, and absent from the control plane
+# (portfolio data is per-tenant per D32).
+# --------------------------------------------------------------------
+
+_PORTFOLIO_TABLES = ("assertions", "cases", "data_points")
+
+
+def _docker_available() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    try:
+        subprocess.run(
+            ["docker", "compose", "ps", "-q"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+    return True
+
+
+def _exec_psql(service: str, user: str, db: str, query: str) -> str:
+    cmd = [
+        "docker", "compose", "exec", "-T", service,
+        "psql", "-U", user, "-d", db, "-tAc", query,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"psql failed in {service}: stderr={result.stderr!r}"
+        )
+    return result.stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def compose_running() -> None:
+    if not _docker_available():
+        pytest.skip("docker compose not reachable")
+    services = subprocess.run(
+        ["docker", "compose", "ps", "--services", "--filter", "status=running"],
+        capture_output=True, text=True, check=False,
+    )
+    running = set(services.stdout.split())
+    needed = {"postgres-control-plane", "postgres-tenant-a", "postgres-tenant-b"}
+    if not needed.issubset(running):
+        pytest.skip(f"compose services not running: {sorted(needed - running)}")
+
+
+def _env(key: str) -> str:
+    value = os.environ.get(key)
+    if value:
+        return value
+    try:
+        with open(".env", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f"{key}="):
+                    return line.split("=", 1)[1]
+    except FileNotFoundError:
+        pass
+    raise RuntimeError(f"env var {key} not set and not in .env")
+
+
+def _table_list_query() -> str:
+    in_clause = ", ".join(f"'{t}'" for t in _PORTFOLIO_TABLES)
+    return (
+        "SELECT table_name FROM information_schema.tables "
+        f"WHERE table_schema='public' AND table_name IN ({in_clause}) "
+        "ORDER BY table_name"
+    )
+
+
+@pytest.mark.parametrize(
+    "service,user_env,db_env",
+    [
+        ("postgres-tenant-a", "POSTGRES_TENANT_A_USER", "POSTGRES_TENANT_A_DB"),
+        ("postgres-tenant-b", "POSTGRES_TENANT_B_USER", "POSTGRES_TENANT_B_DB"),
+    ],
+)
+def test_per_tenant_db_has_all_three_portfolio_tables(
+    compose_running: None, service: str, user_env: str, db_env: str
+) -> None:
+    """D32 / D124: each tenant's DB carries the three portfolio tables."""
+    found = set(
+        _exec_psql(
+            service, _env(user_env), _env(db_env), _table_list_query()
+        ).splitlines()
+    )
+    assert found == set(_PORTFOLIO_TABLES), (
+        f"per-tenant DB {service} missing portfolio tables; "
+        f"found {sorted(found)}"
+    )
+
+
+def test_control_plane_db_has_no_portfolio_tables(
+    compose_running: None,
+) -> None:
+    """D32 / D124: the control plane carries no portfolio tables."""
+    found = _exec_psql(
+        "postgres-control-plane",
+        _env("POSTGRES_CONTROL_PLANE_USER"),
+        _env("POSTGRES_CONTROL_PLANE_DB"),
+        _table_list_query(),
+    )
+    assert found == "", (
+        f"control-plane should have no portfolio tables; "
+        f"psql reported {found!r}"
+    )
