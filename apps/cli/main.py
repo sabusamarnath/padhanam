@@ -52,6 +52,7 @@ from apps.cli._ingest import (
 from apps.cli._agent import agent_app
 from apps.cli._methodology import methodology_app
 from apps.cli._optimization import optimization_app, optimization_run_app
+from apps.cli._portfolio import portfolio_app
 from apps.cli._retrieval_evaluation import (
     evaluation_run_app,
     retrieval_evaluation_app,
@@ -131,6 +132,9 @@ app.add_typer(evaluation_run_app, name="evaluation-run")
 # S41 optimization engine + lifecycle (D111).
 app.add_typer(optimization_app, name="optimization")
 app.add_typer(optimization_run_app, name="optimization-run")
+
+# S43 portfolio context — Case / DataPoint / Assertion (D124).
+app.add_typer(portfolio_app, name="portfolio")
 
 
 _OUTPUT_FORMAT_TEXT = "text"
