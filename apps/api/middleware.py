@@ -20,9 +20,9 @@ distinct from application logs.
 from __future__ import annotations
 
 import uuid
-from typing import Awaitable, Callable
+from typing import Annotated, Awaitable, Callable
 
-from fastapi import Request, Response
+from fastapi import Depends, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -39,6 +39,8 @@ from padhanam.security import (
     PrincipalType,
     verify_credential,
 )
+from shared_kernel import ActorContext
+from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
 
 
 CORRELATION_ID_HEADER = "X-Correlation-Id"
@@ -169,6 +171,43 @@ def get_platform_operator_principal(
     return PlatformOperatorPrincipal(
         subject=principal.subject,
         credential_ref=principal.credential_ref,
+    )
+
+
+async def get_actor_context(
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> ActorContext:
+    """FastAPI dependency: resolve the request-scoped ActorContext (D126, S44a).
+
+    Composes the registry-resolved TenantContext with the
+    Principal-derived actor identity. ``get_tenant_context`` is
+    imported lazily: ``apps.api.routers.inference`` imports
+    ``get_principal`` from this module at load time, so a module-scope
+    import of ``get_tenant_context`` here would close the cycle. The
+    lazy import follows the same cycle-avoidance discipline
+    ``get_tenant_context`` itself uses for ``_auth_errors``.
+
+    Phase 2-A populates ``role_list`` with the single ``operator``
+    role and resolves ``authorisation_set`` through the hardcoded
+    policy at ``shared_kernel/authorisation.py``. Tenant-typed
+    principals only: ``get_tenant_context`` raises
+    ``PrincipalTypeMismatchError`` for platform-operator tokens, and
+    the 503/400/404 registry-resolution paths are inherited unchanged.
+
+    Routes that need only adapter-layer tenant context keep depending
+    on ``get_tenant_context`` directly; routes that enforce
+    use-case-boundary authorisation depend on this resolver.
+    """
+    from apps.api.routers.inference import get_tenant_context
+
+    tenant_context = await get_tenant_context(request, principal)
+    role_list = frozenset({ROLE_OPERATOR})
+    return ActorContext(
+        tenant_context=tenant_context,
+        actor_id=principal.subject,
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
     )
 
 

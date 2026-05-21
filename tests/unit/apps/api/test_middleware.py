@@ -9,13 +9,23 @@ relative to the surface tested.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 from apps.api._auth_errors import PrincipalTypeMismatchError
-from apps.api.middleware import get_platform_operator_principal
+from apps.api.middleware import get_actor_context, get_platform_operator_principal
 from padhanam.security import PlatformOperatorPrincipal, Principal, PrincipalType
-from shared_kernel import TenantId
+from shared_kernel import ActorContext, TenantId
+from shared_kernel.authorisation import (
+    PORTFOLIO_CASE_CREATE,
+    PORTFOLIO_CASE_GET,
+    PORTFOLIO_CASE_LIST,
+    PORTFOLIO_DATA_POINT_CREATE,
+    PORTFOLIO_DATA_POINT_REVISE,
+)
+
+_TENANT_UUID = "00000000-0000-4000-8000-0000000000a1"
 
 
 def _request_with_principal(principal: Principal) -> SimpleNamespace:
@@ -51,3 +61,111 @@ def test_get_platform_operator_principal_rejects_tenant_principal_with_typed_err
         get_platform_operator_principal(_request_with_principal(p))  # type: ignore[arg-type]
     assert exc_info.value.required == "platform_operator"
     assert exc_info.value.actual == "tenant"
+
+
+# --------------------------------------------------------------------
+# get_actor_context (D126, S44a).
+# --------------------------------------------------------------------
+
+
+class _FakeRegistry:
+    """Minimal tenant registry returning one fixed tenant row."""
+
+    def __init__(self, tenant: object | None) -> None:
+        self._tenant = tenant
+
+    async def get_tenant(self, tenant_id: object) -> object | None:
+        return self._tenant
+
+
+def _request_with_registry(registry: _FakeRegistry) -> SimpleNamespace:
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(tenant_registry=registry)),
+        state=SimpleNamespace(),
+    )
+
+
+def _tenant_principal() -> Principal:
+    return Principal(
+        subject="operator",
+        tenant_id=TenantId(_TENANT_UUID),
+        roles=frozenset({"audit.read"}),
+        credential_ref="abc12345...",
+        principal_type=PrincipalType.TENANT,
+    )
+
+
+def test_get_actor_context_builds_actor_context_from_principal_and_registry() -> None:
+    """D126: get_actor_context composes the registry-resolved
+    TenantContext with the Principal-derived actor identity."""
+    tenant = SimpleNamespace(
+        id=_TENANT_UUID, jurisdiction="UK", cost_attribution_id="cost-1"
+    )
+    request = _request_with_registry(_FakeRegistry(tenant))
+
+    actor = asyncio.run(
+        get_actor_context(request, principal=_tenant_principal())  # type: ignore[arg-type]
+    )
+
+    assert isinstance(actor, ActorContext)
+    assert actor.actor_id == "operator"
+    assert actor.tenant_context.tenant_id == _TENANT_UUID
+    assert actor.tenant_context.jurisdiction == "UK"
+    assert actor.tenant_context.cost_attribution_id == "cost-1"
+
+
+def test_get_actor_context_populates_role_list_with_operator() -> None:
+    """Phase 2-A single-role scope: role_list is the hardcoded
+    {"operator"} frozenset."""
+    tenant = SimpleNamespace(
+        id=_TENANT_UUID, jurisdiction="UK", cost_attribution_id="cost-1"
+    )
+    request = _request_with_registry(_FakeRegistry(tenant))
+
+    actor = asyncio.run(
+        get_actor_context(request, principal=_tenant_principal())  # type: ignore[arg-type]
+    )
+
+    assert actor.role_list == frozenset({"operator"})
+    assert isinstance(actor.role_list, frozenset)
+
+
+def test_get_actor_context_resolves_the_five_portfolio_permissions() -> None:
+    """The hardcoded policy populates authorisation_set with the five
+    portfolio permissions for the operator role."""
+    tenant = SimpleNamespace(
+        id=_TENANT_UUID, jurisdiction="UK", cost_attribution_id="cost-1"
+    )
+    request = _request_with_registry(_FakeRegistry(tenant))
+
+    actor = asyncio.run(
+        get_actor_context(request, principal=_tenant_principal())  # type: ignore[arg-type]
+    )
+
+    assert actor.authorisation_set == frozenset(
+        {
+            PORTFOLIO_CASE_CREATE,
+            PORTFOLIO_CASE_LIST,
+            PORTFOLIO_CASE_GET,
+            PORTFOLIO_DATA_POINT_CREATE,
+            PORTFOLIO_DATA_POINT_REVISE,
+        }
+    )
+
+
+def test_get_actor_context_rejects_platform_operator_principal() -> None:
+    """Tenant-typed principals only: the platform-operator rejection is
+    inherited from get_tenant_context's discriminator check (D103)."""
+    platform_operator = Principal(
+        subject="ops-1",
+        tenant_id=TenantId(""),
+        roles=frozenset(),
+        credential_ref="def56789...",
+        principal_type=PrincipalType.PLATFORM_OPERATOR,
+    )
+    request = _request_with_registry(_FakeRegistry(None))
+
+    with pytest.raises(PrincipalTypeMismatchError):
+        asyncio.run(
+            get_actor_context(request, principal=platform_operator)  # type: ignore[arg-type]
+        )
