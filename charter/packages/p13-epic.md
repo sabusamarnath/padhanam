@@ -52,7 +52,7 @@ Two charter principle commits:
 One charter-only hygiene item bundled into a pre-P13 session per Decision 2:
 
 - schema.md formalisation (P13 commits new schema entries; formalising schema.md ahead of those commits reduces formalisation cost later).
-- doc-content rebrand (Quorum to Padhanam find-replace across stale references).
+- doc-content rebrand (former-platform-name find-replace across stale references).
 
 ## Substrate-to-mode mapping
 
