@@ -446,8 +446,8 @@ Three instances of one drift class across three sessions: S40 (an adjacent retri
 
 Proposed methodology line, roughly: "Brief drafts naming adapter, test, or contract paths must reconcile against the actual `adapters/outbound/{vendor}/`, `tests/contract/*`, and equivalent codebase conventions before commit 1. Pre-write reconciliation explicitly checks path naming, not only shape." Placement: `charter/methodology.md`, work-organisation super-section or equivalent.
 
-  - triaged: defer on 2026-05-21
-  - resolution: forwarded to the next hygiene window for `charter/methodology.md` promotion; operator leans pre-S44 so S44-onward brief drafts reference the line. Strategic-mode action — build sessions do not write methodology.md directly per D47.
+  - triaged: 2026-05-21 — promoted to a `charter/methodology.md` sub-paragraph under the pre-write reconciliation Patterns-observed entry at the pre-S44 hygiene session
+  - resolution: methodology document updated with a *Path-naming sub-pattern.* paragraph adjacent to the Mid-build sub-pattern paragraph; the discipline addition is the explicit path-naming check at the pre-write reconciliation surface, and future briefs include path naming in the reconciliation surface enumeration. Promoted at two verified instances (S43, S43b), not the three this entry's body carries: promotion-time verification against the S40 session-log methodology lines found strategy-enumeration drift (D66 catalogues three retrieval strategies, the adapter executes two), a different drift class, so the S40 instance reclassified and fell out. Two-instance promotion holds per the corrective-discipline-on-first-instance precedent (the metric-threshold and reproducibility-artefacts methodology entries both promoted at one instance).
 
 ## 2026-05-21 — [S43/S43b] Substrate-completion-versus-deployment honesty (methodology candidate)
 
