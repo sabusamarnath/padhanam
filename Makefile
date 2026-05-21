@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -33,6 +33,7 @@ help:
 	@echo "  neo4j-down  Stop the padhanam-neo4j service (preserves the volume)"
 	@echo "  neo4j-reset DESTRUCTIVE — stop padhanam-neo4j and wipe its data volume"
 	@echo "  neo4j-shell Open an interactive cypher-shell against padhanam-neo4j"
+	@echo "  charter-export  Build the session-close charter snapshot (dir + zip) per docs/charter-archive-manifest.md"
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -239,3 +240,14 @@ neo4j-reset: derive-env
 # the shell via the existing Compose env-file plumbing on COMPOSE).
 neo4j-shell: derive-env
 	$(COMPOSE) exec padhanam-neo4j cypher-shell -u $${NEO4J_USER:-neo4j} -p $${NEO4J_PASSWORD}
+
+# Session-close charter snapshot. Flattens the allowlisted charter surface
+# into charter-YYYYMMDD-HHMM/ plus the matching .zip at the repo root (both
+# git-ignored). The file set is governed by docs/charter-archive-manifest.md
+# — the script reads that manifest as its single source of truth and never
+# globs. The operator uploads the zip to the Claude.ai project mirror so
+# strategic-mode conversations have the charter as searchable knowledge.
+# Run `uv run python scripts/charter-export.py --dry-run` to preview the
+# source -> snapshot mapping without writing anything.
+charter-export:
+	uv run python scripts/charter-export.py
