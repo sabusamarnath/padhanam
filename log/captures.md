@@ -432,3 +432,26 @@ The P13 framing brief at `briefs/p13/framing.md` Decision 6 frames the operator-
 
   - triaged: 2026-05-21 (resolved by the P13 framing landing commit session)
   - resolution: spec relocated to `docs/notes/prior-art-karma/spec.md`, creating the prior-art-karma directory as partial Block 2 Part B closure per Decision 6 Sub-decision A. Decision 6 reframed at the P13 framing substantive conversation from "spec-as-architectural-input absorption" to "karma prior-art reference set completion"; recorded in close deliverable 1. The `authoring-contract.md` and `taps-and-dispatcher.md` pattern notes remain deferred to their activation triggers per the existing deferred-decisions entries; full karma corpus revival not undertaken.
+
+## 2026-05-21 — [S43/S43b] Planned-bridge-session sub-variant (methodology candidate)
+
+S43 → S43b is the first instance of a *planned* bridge session: a deliberate substrate-and-transport split, taken at the substrate-completion boundary because the substrate alone consumed full session scope. It is distinct from the two prior bridge instances at P11 — S39 → S39b (verification-and-hygiene) and S40 → S40b (methodologically-clean-artefact authoring) — which were *unplanned* corrections discovered at substrate close. The planned split carries a `paired_with` metrics relationship rather than `corrects` / `corrected_by`: S43b completes a planned split, it does not correct S43. The split produced real signal — the transport work (~1,500 lines across thirteen files) ran with a fresh reconciliation pass and an un-rushed live smoke rather than as the fatigue-taxed tail of a single ten-commit session. First-instance evidence; structural novelty (a new bridge sub-variant). Recorded at the S43 and S43b session-log methodology lines.
+
+  - triaged: defer on 2026-05-21
+  - resolution: forwarded to `charter/methodology.md` promotion at second instance — a future bounded-context substrate session producing the same substrate-and-transport split shape. Promotion threshold is second instance per the bridge-session-shape precedent.
+
+## 2026-05-21 — [S43/S43b] Brief path-drift at third instance (methodology candidate, promotion-ready)
+
+Three instances of one drift class across three sessions: S40 (an adjacent retrieval_evaluation adapter shape), S43 (the brief named a flat `adapters/postgres_portfolio.py` path; the actual convention is `adapters/outbound/postgres/`), and S43b (the brief named a `tests/contract/http/portfolio/` subdirectory; the actual convention is flat `tests/contract/http/test_*.py` files). The S43 session-log entry set the promotion threshold at "a third instance promotes it." S43b is that third instance — promotion-ready.
+
+Proposed methodology line, roughly: "Brief drafts naming adapter, test, or contract paths must reconcile against the actual `adapters/outbound/{vendor}/`, `tests/contract/*`, and equivalent codebase conventions before commit 1. Pre-write reconciliation explicitly checks path naming, not only shape." Placement: `charter/methodology.md`, work-organisation super-section or equivalent.
+
+  - triaged: defer on 2026-05-21
+  - resolution: forwarded to the next hygiene window for `charter/methodology.md` promotion; operator leans pre-S44 so S44-onward brief drafts reference the line. Strategic-mode action — build sessions do not write methodology.md directly per D47.
+
+## 2026-05-21 — [S43/S43b] Substrate-completion-versus-deployment honesty (methodology candidate)
+
+S43b reconciliation surface 5 caught a drift class: a migration commits to the source tree, contract tests pass against synthetic databases the harness provisions itself, and the running deployment is none the wiser. At S43 close the `0016` migration was committed but the `padhanam-api` image predated it, so `make migrate` (running inside that image's container) applied only through `0015`. The assumption gap is that "migration committed" means "migration deployed." Distinct mitigation surface from the brief-path-drift candidate: this one points at a CI / merge-gate fix (run `make migrate` against tenant containers as part of the gate, or a per-substrate-session deployment-verification commit), not a brief-drafting discipline fix. First-instance evidence as a named drift class, though the container-image-lag pattern it generalises has recurred across S41, S42, and S43→S43b.
+
+  - triaged: defer on 2026-05-21
+  - resolution: also added as the second entry of the Phase 2-A close hygiene list at `charter/phase-2-audit-inputs.md` this commit (migration-deployment verification surface). Forwarded to Phase 2-A close for the architecture-or-tooling decision (CI / merge-gate surface versus per-session verification commit). The S43b local fix — a durable structural test — already landed.
