@@ -13,6 +13,61 @@ Format:
 
 ---
 
+## 2026-05-21 — S43b — Portfolio context HTTP transport surface plus live-stack smoke (bridge session)
+roles: architect, engineer, technical writer
+mode: build (bridge session — the transport half of a planned substrate-and-transport split)
+
+metrics:
+  classification: planned-bridge-session (substrate-and-transport split)
+  brief_started: 2026-05-21
+  session_started: 2026-05-21
+  session_closed: 2026-05-21
+  merged: 2026-05-21
+  close_state: clean
+  tests_passing: yes (16 new tests at S43b; all S43 tests still green; 28 of 28 import-linter contracts; AST green)
+  principles_intact: yes
+  charter_touchpoints: charter/current-package.md (S43-close plus S43b-in-flight markers at commit 1, S43b-close marker at commit 5); briefs/p13/s43b.md
+  corrects:
+  corrected_by:
+  paired_with: S43
+
+S43b is the transport half of the planned substrate-and-transport split begun at S43. It is the first instance of a *planned* bridge session: the two prior bridge instances at P11 (S39 → S39b verification-and-hygiene; S40 → S40b methodologically-clean-artefact authoring) were unplanned corrections discovered at substrate close, and carried `corrects` / `corrected_by` relationships. S43 → S43b carries `paired_with` — S43b completes a planned split, it does not correct S43. No new D-entries: D124 and D125 already commit the architectural surface; the HTTP transport is mechanical absorption from the run_history and optimization router precedents.
+
+- Produced: Five commits closed the session.
+  - Commit aba4053 (`docs(p13/s43b)`): the retroactive S43 session-log entry; current-package S43-close plus S43b-in-flight markers; `briefs/p13/s43b.md` preserved.
+  - Commit f2a8ec8 (`feat(p13/s43b)`): the HTTP transport surface — two GET routes (`/api/v1/portfolio/cases`, `/cases/{case_id}`), the DTOs, the query parser, the error handlers, and the API composition-root wiring (`AppCompositions.portfolio_reader`, `build_portfolio_reader`, the `PortfolioReaderAdapter`).
+  - Commit 00c0f5f (`feat(p13/s43b)`): the HTTP contract tests, the HTTP tenant-isolation scenarios, and the integration lifecycle test.
+  - Commit 11c059f (`feat(p13/s43b)`): the image rebuild, the migration verification, the live-stack smoke, and the re-added structural deployment tests.
+  - Commit this commit (`docs(p13/s43b)`): this session log entry plus the current-package close marker.
+
+- Decisions: No new D-entries. Per the bridge-session shape — the architectural surface is already committed at D124/D125.
+
+- Tests: 16 new tests at S43b (5 HTTP route tests; 1 integration lifecycle test; 4 HTTP tenant-isolation scenarios; 3 HTTP contract tests; 3 structural deployment-check instances). All S43 tests still green; 28 of 28 import-linter contracts kept; AST enforcement green.
+
+- Pre-write reconciliation: Six surfaces verified before commit 1. Surfaces 1-5 were mechanical — the S43 substrate present and green (28/28); the run_history/optimization router precedents; the AppCompositions plus `_agent_runtime_wiring.py` wiring pattern; the error-handler registration convention; the Dockerfile `COPY contexts ./contexts` picking up `contexts/portfolio/` whole (no per-context `pyproject.toml`, matching the optimization precedent). Surface 6 surfaced one drift — the brief named a `tests/contract/http/portfolio/` subdirectory but the actual S42 convention is flat files; absorbed per the brief's reflection prompt 5 (path drift reconciles against the codebase). Surface 5's migration-deployed structural check resolved at commit 4 (see reflection prompt 3).
+
+- Reflection prompts answered:
+
+  1. *Pre-write reconciliation surfaces.* Surfaces 1-5 mechanical; surface 6 a path drift absorbed per the brief's own discipline. The standout finding sits at surface 5: the migration-deployed-to-tenant-containers structural-honesty check (deferred from S43 commit 9) confirmed the `padhanam-api` image at S43 close predated the `0016` migration file — the S43 `make migrate` (which runs inside that container) applied only through `0015`. The cumulative reconciliation count keeps climbing; the discipline keeps earning its place, and at S43b it caught a genuine deployment-honesty gap rather than only documentation drift.
+
+  2. *Planned-bridge-session sub-variant, first-instance evidence.* The split produced real signal. The S43b transport work — HTTP routes, DTOs, query parser, the API wiring across `_errors.py` / `_agent_runtime_wiring.py` / `main.py`, the three test surfaces, and the live smoke — ran to roughly 1,500 lines across thirteen files. Landing that as commits 8-10 of a single S43 would have been the fatigue-taxed tail of an already-very-long session; the operator's pause at the substrate-completion boundary, and the re-scoping into S43b, meant the transport work got a fresh reconciliation pass, un-rushed wiring, and a live smoke (with its image-rebuild variance) that received full attention rather than being the last push before exhaustion. The planned-bridge sub-variant is distinct from the unplanned S39→S39b / S40→S40b corrections; the `paired_with` metrics relationship captures the distinction structurally. First-instance evidence; second-instance promotion threshold at a future bounded-context substrate session producing the same split shape.
+
+  3. *Image-rebuild structural-honesty check outcome.* The check revealed the image *was* stale at S43 close. `make migrate` runs `python -m ops.migrate` inside the `padhanam-api` container; that container's image predated the `0016` file, so the S43 migrate applied only through `0015`. The S43 contract tests passed regardless because they provision their own synthetic databases and run alembic from the host (which had `0016`) — but the real tenant containers did not carry the portfolio tables. This is exactly the substrate-completion-versus-deployment drift the structural-honesty discipline exists to catch: a migration committed to the source tree is not a migration deployed to the running stack. S43b commit 4 resolved it (rebuild + recreate + migrate) and the structural check is now a durable committed test. The container-image-lag pattern has now recurred across S41, S42, and S43→S43b — well past any promotion threshold for a documented dev-workflow fast-path.
+
+  4. *Operator-pause-at-substrate-close as methodology candidate.* The S43 pause sat at the session-close boundary (substrate complete, transport remaining); the S41 scope check sat at a mid-session boundary (substrate-application). S43b confirms the session-close-boundary variant produced a clean outcome — the planned bridge ran well end to end. The two are sub-variants of one scope-versus-fatigue-management discipline: a scope check is a checkpoint where the remaining work is measured against the current session's fatigue budget, and either fits or earns its own session. Each sub-variant carries its own second-instance promotion threshold.
+
+  5. *HTTP transport mechanical-absorption verification.* Mostly mechanical, with two divergences. The router, DTO, query-parser, and error-handler patterns absorbed cleanly from the run_history and optimization precedents. (a) The test-path drift — brief said `tests/contract/http/portfolio/` subdir, actual convention is flat files — is the *third* instance of the brief-path-drift pattern (S40's adjacent adapter shape; S43's `adapters/outbound/postgres/`; S43b's flat test files), crossing the promotion threshold the S43 entry set. (b) The `PortfolioReaderAdapter` placement diverged from the optimization precedent: the optimization reader adapter lives in `apps/cli/_cross_context.py`, but the portfolio one landed in `apps/api/_agent_runtime_wiring.py` because it is API-only (the portfolio CLI builds `PostgresPortfolioReader` directly) and that module already defines wiring classes locally (`TenantRoutingSourceRepository`) — a defensible placement call, flagged in the commit message.
+
+- methodology (line 1): **Planned-bridge-session sub-variant confirmed at first instance.** A deliberate substrate-and-transport split produced controlled, un-fatigue-taxed transport work; the `paired_with` metrics relationship distinguishes it from the unplanned correction bridges (`corrects`/`corrected_by`). Promotion to `charter/methodology.md` at second instance; see reflection prompt 2.
+
+- methodology (line 2): **Brief path-drift at third instance — crosses the promotion threshold.** Brief drafts naming paths (adapter, test, contract) must reconcile against the actual `adapters/outbound/{vendor}/` and flat-test-file conventions before commit 1. Three instances (S40, S43, S43b) — the S43 entry set the third-instance threshold; this is now a methodology-line promotion candidate for the next hygiene window. See reflection prompt 5.
+
+- methodology (line 3): **Container-image-lag: substrate-completion is not deployment.** A migration committed to the source tree is not a migration on the running stack; `make migrate` runs inside an image that may predate the migration file. The pattern recurred across S41, S42, and S43→S43b; the structural-honesty check at the bridge session is the reliable catch point. Well past promotion threshold for a documented dev-workflow fast-path. See reflection prompt 3.
+
+- **S43b closed; the portfolio context is complete end-to-end through the read surface. S44 next.**
+
+---
+
 ## 2026-05-21 — S43 — Portfolio context foundational substrate (substrate-and-transport split)
 roles: architect, engineer, technical writer
 mode: build (P13 Wave 1 first build session; substrate half of a planned substrate-and-transport split)
