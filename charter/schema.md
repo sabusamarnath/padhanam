@@ -1250,3 +1250,44 @@ and appends an `Assertion` carrying the change's `value`,
 `assertion_type = REVISION`, and `revises_assertion_id` pointing
 at the prior head of the revision chain.
 
+### ActorContext (shared-kernel value object)
+
+The request-scoped actor-identity-and-authorisation envelope
+introduced at S44a per D126. ActorContext composes the existing
+TenantContext as a field and adds the acting actor's identity
+plus the authorisation surface the use-case-boundary decorator
+checks. It lives at `shared_kernel/actor_context.py`; it is the
+value object that flows into every portfolio use case from S44a
+onward. ActorContext is distinct from `ActorReference`:
+ActorReference is the minimal *persisted* authoring-identity
+value object stamped onto `DataPoint.authored_by` and
+`Assertion.authored_by`, whereas ActorContext is the
+*request-scoped* envelope carrying capability — D126 supersedes
+D124's forward commitment that `authored_by` would become
+ActorContext, because a persisted record cannot honestly carry a
+request-time authorisation snapshot.
+
+| Field               | Type             | Constraints                                                                                  |
+|---------------------|------------------|----------------------------------------------------------------------------------------------|
+| `tenant_context`    | `TenantContext`  | not null; wraps the shared-kernel TenantContext value object per D126's compose shape         |
+| `actor_id`          | `str`            | not null; non-empty; UUID-shaped from the Principal at the HTTP path, a label at the CLI path |
+| `role_list`         | `frozenset[str]` | not null; non-empty; Phase 2-A populates `{"operator"}`                                       |
+| `authorisation_set` | `frozenset[str]` | not null; Phase 2-A populates from the hardcoded role-to-authorisation lookup; may be empty   |
+
+The shape is a frozen dataclass: Pydantic is forbidden in
+`shared_kernel/` by the import-linter `shared-kernel-policed`
+contract per D16, so the choice is structurally pre-empted,
+consistent with TenantContext. `__post_init__` enforces the
+non-empty invariant on `actor_id` and `role_list` and the
+not-null invariant on `tenant_context` and `authorisation_set`.
+The object is constructed alongside (not replacing) the existing
+TenantContext extraction: the HTTP `get_actor_context` dependency
+composes the registry-resolved TenantContext with the
+Principal-derived `actor_id`, and the CLI synthesises ActorContext
+directly from the dev tenant wiring. The authorisation decorator
+`requires_authorisation` at `shared_kernel/authorisation.py`
+checks a required permission string against `authorisation_set`
+and raises `AuthorisationDenied` on failure; the HTTP layer
+translates that to 403 with the `ErrorResponse` shape above per
+D98, registered at `apps/api/_auth_errors.py` per D104.
+
