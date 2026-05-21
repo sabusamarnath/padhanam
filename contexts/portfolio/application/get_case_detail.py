@@ -1,9 +1,13 @@
-"""get_case_detail read use case (D124).
+"""get_case_detail read use case (D124, D126).
 
 Composes the reader's case lookup and per-case DataPoint listing
 into a single ``CaseDetail`` result — the Case plus its DataPoints,
 each carrying its full revision history. Returns ``None`` when the
 case does not exist for the tenant.
+
+S44a (D126): the use case accepts an ActorContext, applies the
+``requires_authorisation`` decorator, and extracts
+``actor.tenant_context`` for the reader calls.
 """
 
 from __future__ import annotations
@@ -13,7 +17,11 @@ from uuid import UUID
 
 from contexts.portfolio.domain import Case, DataPoint
 from contexts.portfolio.ports import PortfolioReader
-from shared_kernel import TenantContext
+from shared_kernel import ActorContext
+from shared_kernel.authorisation import (
+    PORTFOLIO_CASE_GET,
+    requires_authorisation,
+)
 
 
 @dataclass(frozen=True)
@@ -24,13 +32,15 @@ class CaseDetail:
     data_points: tuple[DataPoint, ...]
 
 
+@requires_authorisation(PORTFOLIO_CASE_GET)
 async def get_case_detail(
     *,
-    tenant_context: TenantContext,
     reader: PortfolioReader,
+    actor: ActorContext,
     case_id: UUID,
 ) -> CaseDetail | None:
     """Return the Case plus its DataPoints, or None when absent."""
+    tenant_context = actor.tenant_context
     case = await reader.get_case(
         tenant_context=tenant_context, case_id=case_id
     )

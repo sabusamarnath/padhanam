@@ -1,4 +1,4 @@
-"""create_data_point use case (D124).
+"""create_data_point use case (D124, D126).
 
 Mints a DataPoint together with its INITIAL Assertion, persists both
 atomically through the repository, and emits a
@@ -6,6 +6,12 @@ atomically through the repository, and emits a
 referenced by ``case_id``; the per-tenant FK from ``data_points`` to
 ``cases`` rejects an orphan or cross-tenant ``case_id`` at the data
 layer.
+
+S44a (D126): the use case accepts an ActorContext, applies the
+``requires_authorisation`` decorator, extracts ``actor.tenant_context``
+for adapter calls, and derives an ``ActorReference`` from
+``actor.actor_id`` for the persisted ``authored_by`` identity on the
+DataPoint and its INITIAL Assertion.
 """
 
 from __future__ import annotations
@@ -26,20 +32,26 @@ from contexts.portfolio.domain import (
     DataPointType,
 )
 from contexts.portfolio.ports import PortfolioRepository
-from shared_kernel import ActorReference, TenantContext
+from shared_kernel import ActorContext, ActorReference
+from shared_kernel.authorisation import (
+    PORTFOLIO_DATA_POINT_CREATE,
+    requires_authorisation,
+)
 
 
+@requires_authorisation(PORTFOLIO_DATA_POINT_CREATE)
 async def create_data_point(
     *,
-    tenant_context: TenantContext,
     repository: PortfolioRepository,
     audit_port: AuditPort,
-    actor: ActorReference,
+    actor: ActorContext,
     case_id: UUID,
     data_point_type: DataPointType,
     value: dict[str, Any],
 ) -> DataPoint:
     """Create a DataPoint with its INITIAL assertion; persist and audit."""
+    tenant_context = actor.tenant_context
+    authored_by = ActorReference(user_id=actor.actor_id)
     now = datetime.now(timezone.utc)
     tenant_uuid = UUID(tenant_context.tenant_id)
     data_point_id = uuid4()
@@ -51,7 +63,7 @@ async def create_data_point(
         assertion_type=AssertionType.INITIAL,
         revises_assertion_id=None,
         value=value,
-        authored_by=actor,
+        authored_by=authored_by,
         created_at=now,
     )
     data_point = DataPoint(
@@ -61,7 +73,7 @@ async def create_data_point(
         jurisdiction=tenant_context.jurisdiction,
         data_point_type=data_point_type,
         value=value,
-        authored_by=actor,
+        authored_by=authored_by,
         created_at=now,
         assertions=(initial,),
     )
@@ -72,7 +84,7 @@ async def create_data_point(
         draft_data_point_create(
             tenant_context=tenant_context,
             data_point=data_point,
-            actor=actor,
+            actor=authored_by,
         )
     )
     return data_point

@@ -1,18 +1,24 @@
-"""Portfolio CLI orchestration (S43 / D124).
+"""Portfolio CLI orchestration (S43 / D124; S44a / D126).
 
 One typer sub-app — ``portfolio`` — with five action commands:
 create-case, create-data-point, revise-data-point, list-cases,
-get-case. The CLI is the operator-facing write path for the S43
-live-stack smoke: without it, criterion 14 has no honest way to
+get-case. The CLI is the operator-facing write path for the
+live-stack smoke: without it, the smoke has no honest way to
 produce Cases short of raw SQL fixture seeding, which would bypass
 the audit-events port and compromise the audit-trail discipline.
 
 Tenant context resolution uses ``build_tenant_wiring`` per the
 dev-only label-or-UUID convention. The audit adapter mirrors the
-optimization CLI's control-plane-anchored construction. The
-authoring actor is the ``ActorReference`` placeholder per D124 —
-``--actor`` defaults to ``operator``; the full ActorContext lands
-at S44.
+optimization CLI's control-plane-anchored construction.
+
+S44a (D126): the use cases now consume an ActorContext and enforce
+authorisation at the use-case boundary. The CLI does not pass
+through HTTP auth middleware, so it synthesises the ActorContext
+directly — from the dev tenant wiring plus the ``--actor`` label —
+through ``_actor_context``, populating role_list and
+authorisation_set with the same ``shared_kernel/authorisation.py``
+policy the HTTP ``get_actor_context`` dependency uses. ``--actor``
+defaults to ``operator``.
 """
 
 from __future__ import annotations
@@ -46,7 +52,8 @@ from contexts.portfolio.application.cursor import encode_case_cursor
 from contexts.portfolio.domain import CaseStatus, CaseType, DataPointType
 from contexts.portfolio.domain.query_filters import CaseListFilters
 from padhanam.config import ControlPlaneSettings
-from shared_kernel import ActorReference, TenantId
+from shared_kernel import ActorContext, TenantId
+from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
 
 from apps.cli._runtime import build_tenant_wiring
 
@@ -60,7 +67,7 @@ _TENANT_OPTION = typer.Option(
     "--tenant-id", help="Tenant short label or UUID."
 )
 _ACTOR_OPTION = typer.Option(
-    "--actor", help="Authoring actor (ActorReference placeholder, D124)."
+    "--actor", help="Acting actor id (the CLI synthesises an ActorContext, D126)."
 )
 
 
@@ -84,6 +91,23 @@ def _build_dependencies(wiring):
         per_tenant_sessionmaker_resolver=_resolver,
     )
     return repository, reader, audit_adapter
+
+
+def _actor_context(wiring, actor_id: str) -> ActorContext:
+    """Synthesise the request-scoped ActorContext for the CLI (D126).
+
+    The CLI does not pass through HTTP auth middleware; it builds the
+    ActorContext directly from the dev tenant wiring plus the
+    ``--actor`` label, resolving ``authorisation_set`` through the same
+    shared_kernel/authorisation.py policy the HTTP path uses.
+    """
+    role_list = frozenset({ROLE_OPERATOR})
+    return ActorContext(
+        tenant_context=wiring.tenant_context,
+        actor_id=actor_id,
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
+    )
 
 
 def _parse_json_value(raw: str) -> dict[str, Any]:
@@ -118,10 +142,9 @@ def cmd_create_case(
     async def _go() -> None:
         try:
             case = await create_case(
-                tenant_context=wiring.tenant_context,
                 repository=repository,
                 audit_port=audit_adapter,
-                actor=ActorReference(user_id=actor),
+                actor=_actor_context(wiring, actor),
                 title=title,
                 case_type=case_type,
                 status=status,
@@ -160,10 +183,9 @@ def cmd_create_data_point(
     async def _go() -> None:
         try:
             data_point = await create_data_point(
-                tenant_context=wiring.tenant_context,
                 repository=repository,
                 audit_port=audit_adapter,
-                actor=ActorReference(user_id=actor),
+                actor=_actor_context(wiring, actor),
                 case_id=case_id,
                 data_point_type=data_point_type,
                 value=parsed,
@@ -201,11 +223,10 @@ def cmd_revise_data_point(
     async def _go() -> None:
         try:
             revised = await revise_data_point(
-                tenant_context=wiring.tenant_context,
                 repository=repository,
                 reader=reader,
                 audit_port=audit_adapter,
-                actor=ActorReference(user_id=actor),
+                actor=_actor_context(wiring, actor),
                 data_point_id=data_point_id,
                 value=parsed,
             )
@@ -239,6 +260,7 @@ def cmd_list_cases(
     page_size: Annotated[
         int, typer.Option("--page-size", help="Page size (1-50).")
     ] = 20,
+    actor: Annotated[str, _ACTOR_OPTION] = "operator",
 ) -> None:
     """List the tenant's cases, newest first."""
     wiring = build_tenant_wiring(tenant_id)
@@ -251,8 +273,8 @@ def cmd_list_cases(
     async def _go() -> None:
         try:
             page = await list_cases(
-                tenant_context=wiring.tenant_context,
                 reader=reader,
+                actor=_actor_context(wiring, actor),
                 filters=filters,
                 cursor=None,
                 page_size=page_size,
@@ -279,6 +301,7 @@ def cmd_get_case(
     case_id: Annotated[
         UUID, typer.Option("--case-id", help="Case UUID to fetch.")
     ],
+    actor: Annotated[str, _ACTOR_OPTION] = "operator",
 ) -> None:
     """Get a Case with its DataPoints and their current values."""
     wiring = build_tenant_wiring(tenant_id)
@@ -287,8 +310,8 @@ def cmd_get_case(
     async def _go() -> None:
         try:
             detail = await get_case_detail(
-                tenant_context=wiring.tenant_context,
                 reader=reader,
+                actor=_actor_context(wiring, actor),
                 case_id=case_id,
             )
             if detail is None:
