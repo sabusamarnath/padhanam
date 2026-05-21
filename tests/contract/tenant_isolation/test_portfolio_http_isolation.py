@@ -19,13 +19,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api._errors import register_portfolio_error_handlers
-from apps.api.middleware import get_principal
+from apps.api.middleware import get_actor_context
 from apps.api.routers import portfolio as portfolio_router
-from apps.api.routers.inference import get_tenant_context
 from contexts.portfolio.domain import Case, CaseStatus, CaseType
 from contexts.portfolio.ports import CaseListPage
-from padhanam.security import Principal
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import ActorContext, TenantContext
+from shared_kernel.authorisation import authorisations_for_roles
 
 _TENANT_A = "00000000-0000-4000-8000-00000000a001"
 _TENANT_B = "00000000-0000-4000-8000-00000000b002"
@@ -39,10 +38,19 @@ def _ctx(tenant_id: str) -> TenantContext:
     )
 
 
-def _principal(tenant_id: str, subject: str) -> Principal:
-    return Principal(
-        subject=subject, tenant_id=TenantId(tenant_id),
-        roles=frozenset({"portfolio.read"}), credential_ref="dev-token",
+def _actor_context(tenant_id: str, subject: str) -> ActorContext:
+    """A fully-authorised ActorContext for the given tenant.
+
+    The authorisation set is complete — the decorator passes — so the
+    404 a cross-tenant request receives is driven by tenant isolation
+    alone, not by authorisation. The two dimensions are orthogonal.
+    """
+    role_list = frozenset({"operator"})
+    return ActorContext(
+        tenant_context=_ctx(tenant_id),
+        actor_id=subject,
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
     )
 
 
@@ -101,8 +109,7 @@ def _client(
     security_events = _CollectingSecurityEvents()
     app.state.portfolio_reader = reader
     app.state.security_events = security_events
-    app.dependency_overrides[get_tenant_context] = lambda: _ctx(tenant_id)
-    app.dependency_overrides[get_principal] = lambda: _principal(
+    app.dependency_overrides[get_actor_context] = lambda: _actor_context(
         tenant_id, subject
     )
     return TestClient(app), security_events
@@ -146,3 +153,23 @@ def test_cross_tenant_list_returns_empty_no_security_event() -> None:
     assert response.json()["cases"] == []
     # list no-results fires no security event
     assert security_events.events == []
+
+
+def test_actor_context_switch_does_not_weaken_tenant_isolation() -> None:
+    """D126: the ActorContext carried into the use case is fully
+    authorised — the decorator passes — yet the cross-tenant case
+    lookup still returns 404. Authorisation and tenant isolation are
+    orthogonal dimensions; the security event records the requester's
+    tenant resolved from the ActorContext, not the target tenant."""
+    case = _tenant_a_case()
+    reader = _TenantScopedReader(_TENANT_A, case)
+    client, security_events = _client(reader, _TENANT_B, "bob")
+
+    response = client.get(f"/api/v1/portfolio/cases/{case.id}")
+
+    assert response.status_code == 404
+    assert len(security_events.events) == 1
+    event = security_events.events[0]
+    # the ActorContext's tenant_context drives the recorded tenant
+    assert str(event.tenant_id) == _TENANT_B  # type: ignore[attr-defined]
+    assert event.principal_ref == "bob"  # type: ignore[attr-defined]

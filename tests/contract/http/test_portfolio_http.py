@@ -16,15 +16,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api._errors import register_portfolio_error_handlers
-from apps.api.middleware import get_principal
+from apps.api.middleware import get_actor_context
 from apps.api.routers import portfolio as portfolio_router
-from apps.api.routers.inference import get_tenant_context
 from contexts.portfolio.application.cursor import decode_case_cursor
 from contexts.portfolio.domain import Case, CaseStatus, CaseType
 from contexts.portfolio.domain.query_filters import CaseListCursor
 from contexts.portfolio.ports import CaseListPage
-from padhanam.security import Principal
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import ActorContext, TenantContext
+from shared_kernel.authorisation import authorisations_for_roles
 
 _TENANT_ID = "00000000-0000-4000-8000-00000000a001"
 _BASE_TS = datetime(2026, 5, 21, 12, 0, 0, tzinfo=timezone.utc)
@@ -37,10 +36,13 @@ def _ctx() -> TenantContext:
     )
 
 
-def _principal() -> Principal:
-    return Principal(
-        subject="alice", tenant_id=TenantId(_TENANT_ID),
-        roles=frozenset({"portfolio.read"}), credential_ref="dev-token",
+def _actor_context() -> ActorContext:
+    role_list = frozenset({"operator"})
+    return ActorContext(
+        tenant_context=_ctx(),
+        actor_id="operator",
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
     )
 
 
@@ -102,8 +104,7 @@ def _client(reader: _PaginatingReader) -> TestClient:
     app.include_router(portfolio_router.router)
     app.state.portfolio_reader = reader
     app.state.security_events = _NoopSecurityEvents()
-    app.dependency_overrides[get_tenant_context] = _ctx
-    app.dependency_overrides[get_principal] = _principal
+    app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
 

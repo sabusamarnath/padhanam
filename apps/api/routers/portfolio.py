@@ -1,4 +1,4 @@
-"""HTTP routes for the portfolio context read surface (D124, S43b).
+"""HTTP routes for the portfolio context read surface (D124, S43b; D126, S44a).
 
 Two routes:
 
@@ -7,10 +7,14 @@ Two routes:
 - ``GET /api/v1/portfolio/cases/{case_id}`` — case detail with its
   DataPoints and each DataPoint's full revision history.
 
-Both carry principal-derived tenant context per the S29b precedent:
-the reused ``get_tenant_context`` dependency resolves the principal's
-tenant_id; the route calls the use case with the resolved
-``TenantContext``.
+S44a (D126): both routes resolve a request-scoped ``ActorContext``
+via the ``get_actor_context`` dependency and pass it to the use
+cases, which enforce authorisation at the use-case boundary. The
+``get_actor_context`` dependency composes the registry-resolved
+TenantContext with the Principal-derived actor identity; an
+``AuthorisationDenied`` raised by a use case propagates to the
+registered handler at ``apps/api/_auth_errors.py``, which returns
+403 per D126.
 
 The case-detail route fires a ``TENANT_SCOPE_VIOLATION`` security
 event on every 404 per D98 / S34: the HTTP layer cannot structurally
@@ -18,7 +22,7 @@ distinguish a cross-tenant attempt from a genuinely missing case on
 the requester's own tenant (the reader returns ``None`` for both).
 The list route fires no security event on an empty page — list
 no-results is structurally indistinguishable from genuine
-no-results. Write-side routes defer to S44.
+no-results. Write-side routes defer to S44b.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from apps.api._errors import BoundTenantIdMismatchError, CaseNotFoundError
-from apps.api.middleware import get_principal
+from apps.api.middleware import get_actor_context
 from apps.api.routers._portfolio_dto import (
     CaseDetailDTO,
     CaseListDTO,
@@ -37,7 +41,6 @@ from apps.api.routers._portfolio_dto import (
     case_list_to_dto,
 )
 from apps.api.routers._portfolio_query import parse_case_list_query
-from apps.api.routers.inference import get_tenant_context
 from contexts.portfolio.application import get_case_detail, list_cases
 from contexts.portfolio.application.cursor import encode_case_cursor
 from contexts.portfolio.domain.query_filters import (
@@ -50,8 +53,7 @@ from padhanam.observability.security_events import (
     SecurityEventCategory,
     SecurityEventLogger,
 )
-from padhanam.security import Principal
-from shared_kernel import TenantContext, TenantId
+from shared_kernel import ActorContext, TenantId
 
 router = APIRouter(prefix="/api/v1/portfolio", tags=["portfolio"])
 
@@ -84,15 +86,15 @@ async def list_portfolio_cases(
         tuple[CaseListFilters, CaseListCursor | None, int],
         Depends(parse_case_list_query),
     ],
-    tenant_context: Annotated[TenantContext, Depends(get_tenant_context)],
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
     reader: Annotated[PortfolioReader, Depends(get_portfolio_reader)],
 ) -> CaseListDTO:
     """List the authenticated tenant's cases, newest first, paginated."""
     filters, cursor, page_size = parsed
     try:
         page = await list_cases(
-            tenant_context=tenant_context,
             reader=reader,
+            actor=actor,
             filters=filters,
             cursor=cursor,
             page_size=page_size,
@@ -112,9 +114,8 @@ async def list_portfolio_cases(
 @router.get("/cases/{case_id}", response_model=CaseDetailDTO)
 async def get_portfolio_case(
     case_id: UUID,
-    tenant_context: Annotated[TenantContext, Depends(get_tenant_context)],
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
     reader: Annotated[PortfolioReader, Depends(get_portfolio_reader)],
-    principal: Annotated[Principal, Depends(get_principal)],
     security_events: Annotated[
         SecurityEventLogger, Depends(get_security_event_logger)
     ],
@@ -127,23 +128,24 @@ async def get_portfolio_case(
     """
     try:
         detail = await get_case_detail(
-            tenant_context=tenant_context, reader=reader, case_id=case_id
+            reader=reader, actor=actor, case_id=case_id
         )
     except ValueError as exc:
         if "tenant" in str(exc):
             raise BoundTenantIdMismatchError(exc) from exc
         raise
     if detail is None:
+        tenant_id = str(actor.tenant_context.tenant_id)
         security_events.emit(
             SecurityEvent(
                 category=SecurityEventCategory.TENANT_SCOPE_VIOLATION,
-                principal_ref=principal.subject,
-                tenant_id=TenantId(str(tenant_context.tenant_id)),
+                principal_ref=actor.actor_id,
+                tenant_id=TenantId(tenant_id),
                 action=f"GET /api/v1/portfolio/cases/{case_id}",
                 resource_ref=str(case_id),
                 outcome="not_found",
                 metadata={
-                    "principal_tenant_id": str(principal.tenant_id),
+                    "principal_tenant_id": tenant_id,
                     "requested_case_id": str(case_id),
                 },
             )

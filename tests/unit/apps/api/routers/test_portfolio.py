@@ -1,10 +1,10 @@
-"""Route tests for the portfolio HTTP read surface (D124, S43b).
+"""Route tests for the portfolio HTTP read surface (D124, S43b; D126, S44a).
 
 A bare FastAPI app carries the portfolio router, the portfolio error
-handlers, and a fake reader on app.state; ``get_tenant_context`` and
-``get_principal`` are dependency-overridden. No auth middleware — the
-tests exercise the router and the error-response shapes, not the
-authentication path.
+handlers, and a fake reader on app.state; ``get_actor_context`` is
+dependency-overridden to a fully-authorised ActorContext. No auth
+middleware — the tests exercise the router and the error-response
+shapes, not the authentication path.
 """
 
 from __future__ import annotations
@@ -17,9 +17,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api._errors import register_portfolio_error_handlers
-from apps.api.middleware import get_principal
+from apps.api.middleware import get_actor_context
 from apps.api.routers import portfolio as portfolio_router
-from apps.api.routers.inference import get_tenant_context
 from contexts.portfolio.domain import (
     Assertion,
     AssertionType,
@@ -30,8 +29,8 @@ from contexts.portfolio.domain import (
     DataPointType,
 )
 from contexts.portfolio.ports import CaseListPage
-from padhanam.security import Principal
-from shared_kernel import ActorReference, TenantContext, TenantId
+from shared_kernel import ActorContext, ActorReference, TenantContext
+from shared_kernel.authorisation import authorisations_for_roles
 
 _TENANT_ID = "00000000-0000-4000-8000-00000000a001"
 _ACTOR = ActorReference(user_id="operator")
@@ -46,12 +45,13 @@ def _tenant_context() -> TenantContext:
     )
 
 
-def _principal() -> Principal:
-    return Principal(
-        subject="alice",
-        tenant_id=TenantId(_TENANT_ID),
-        roles=frozenset({"portfolio.read"}),
-        credential_ref="dev-token",
+def _actor_context() -> ActorContext:
+    role_list = frozenset({"operator"})
+    return ActorContext(
+        tenant_context=_tenant_context(),
+        actor_id="operator",
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
     )
 
 
@@ -150,8 +150,7 @@ def _client(reader: _FakeReader) -> tuple[TestClient, _FakeSecurityEvents]:
     security_events = _FakeSecurityEvents()
     app.state.portfolio_reader = reader
     app.state.security_events = security_events
-    app.dependency_overrides[get_tenant_context] = _tenant_context
-    app.dependency_overrides[get_principal] = _principal
+    app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app), security_events
 
 

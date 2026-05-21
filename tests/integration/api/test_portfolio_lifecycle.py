@@ -15,17 +15,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api._errors import register_portfolio_error_handlers
-from apps.api.middleware import get_principal
+from apps.api.middleware import get_actor_context
 from apps.api.routers import portfolio as portfolio_router
-from apps.api.routers.inference import get_tenant_context
 from contexts.portfolio.application import (
     create_case,
     create_data_point,
     revise_data_point,
 )
 from contexts.portfolio.domain import DataPointType
-from padhanam.security import Principal
-from shared_kernel import ActorReference, TenantContext, TenantId
+from shared_kernel import ActorContext, TenantContext
+from shared_kernel.authorisation import authorisations_for_roles
 from tests.unit.contexts.portfolio.application._fakes import (
     FakeAuditPort,
     FakeReader,
@@ -34,7 +33,6 @@ from tests.unit.contexts.portfolio.application._fakes import (
 )
 
 _TENANT_ID = "00000000-0000-4000-8000-00000000a001"
-_ACTOR = ActorReference(user_id="operator")
 
 
 def _ctx() -> TenantContext:
@@ -45,12 +43,13 @@ def _ctx() -> TenantContext:
     )
 
 
-def _principal() -> Principal:
-    return Principal(
-        subject="alice",
-        tenant_id=TenantId(_TENANT_ID),
-        roles=frozenset({"portfolio.read"}),
-        credential_ref="dev-token",
+def _actor_context() -> ActorContext:
+    role_list = frozenset({"operator"})
+    return ActorContext(
+        tenant_context=_ctx(),
+        actor_id="operator",
+        role_list=role_list,
+        authorisation_set=authorisations_for_roles(role_list),
     )
 
 
@@ -65,8 +64,7 @@ def _client(reader: FakeReader) -> TestClient:
     app.include_router(portfolio_router.router)
     app.state.portfolio_reader = reader
     app.state.security_events = _NoopSecurityEvents()
-    app.dependency_overrides[get_tenant_context] = _ctx
-    app.dependency_overrides[get_principal] = _principal
+    app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
 
@@ -78,18 +76,18 @@ def test_read_surface_lifecycle() -> None:
 
     async def _seed():
         case = await create_case(
-            tenant_context=_ctx(), repository=repo, audit_port=audit,
-            actor=_ACTOR, title="Lifecycle case",
+            repository=repo, audit_port=audit,
+            actor=_actor_context(), title="Lifecycle case",
         )
         data_point = await create_data_point(
-            tenant_context=_ctx(), repository=repo, audit_port=audit,
-            actor=_ACTOR, case_id=case.id,
+            repository=repo, audit_port=audit,
+            actor=_actor_context(), case_id=case.id,
             data_point_type=DataPointType.GOAL, value={"progress": 0},
         )
         await revise_data_point(
-            tenant_context=_ctx(), repository=repo, reader=reader,
-            audit_port=audit, actor=_ACTOR, data_point_id=data_point.id,
-            value={"progress": 80},
+            repository=repo, reader=reader,
+            audit_port=audit, actor=_actor_context(),
+            data_point_id=data_point.id, value={"progress": 80},
         )
         return case
 
