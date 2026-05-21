@@ -109,3 +109,44 @@ The invariant set is versioned in this file per the existing append-only princip
 - Strategic mode and build mode are different work modes, not different UIs. Mode declaration at conversation start is the standing discipline (per D47). Distinct deliverables (strategic produces charter edits, session prompts, or roadmap version updates; build produces code commits and session-log entries) and distinct commit conventions (`docs(charter): ...` or `docs(pN/<boundary-name>): ...` for strategic; `feat(pN/sN): ...` or `docs(pN/sN): ...` for build) carry the separation regardless of which UI is active. Charter files bridge the two modes.
 - Architectural commitments deferred to future sessions live in `charter/deferred-decisions.md`. They are inherited by sessions when their context activates and are reviewed at phase audits.
 - Exploratory notes and unresolved design questions live in /docs/notes/. Not read in normal sessions; consulted only when explicitly relevant.
+
+## Phase 2 principles
+
+### Frontend and backend separation
+
+Frontend talks to backend only through a versioned HTTP API plus an SSE event stream. No direct database access from the frontend. No shared types via runtime code-sharing (TypeScript types may be generated from backend schema at build time but the generation is one-way). The boundary is a contract surface, not a leaky abstraction.
+
+Origin: karma prior-art product specification §11.3, transplanted at P13 framing per Decision 6 option (c). Karma's enterprise-scale frontend (Studio plus Portal SPA) operates against this boundary; Padhanam's Phase 2-A messaging-first delivery defers SPA to Phase 2-B+ but commits the boundary discipline from inception.
+
+### Audit trail as source of truth
+
+The audit trail is the canonical record of what happened in the system. Every state change emits an audit event before persistence completes. Derived state (rendered views, cached aggregates, analytical projections) reconstructs from the audit trail when needed. The audit trail is queryable, immutable, and hash-chained.
+
+Origin: karma prior-art product specification §11.5, transplanted at P13 framing per Decision 6 option (c). Padhanam P3 already commits the hash-chained append-only audit substrate; this principle elevates the substrate to a charter-grade discipline that binds every subsequent surface design decision.
+
+### Originals never erased
+
+Persisted artefacts (assertions, intake records, gate decisions, messages, attachments) are never deleted. Updates create new versions; user-initiated removal marks artefacts as archived but does not erase them. The Revisable Protocol per D114 carries this discipline at the entity level; this principle carries it at the system level.
+
+Origin: karma prior-art product specification §11.5, transplanted at P13 framing per Decision 6 option (c). The discipline supports two requirements that the platform's commercial positioning depends on: audit-grade defensibility under regulatory review, and trust-relationship preservation when the user revises positions over time.
+
+### Authority and certainty are independent
+
+A data point carries both an authority (who said it, where it came from) and a certainty (how confident the platform is that it remains current). Authority is fixed at creation; certainty decays with time and is re-evaluated against observed evidence. The two dimensions do not collapse into one another; high authority does not imply high certainty, and high certainty does not require high authority.
+
+Origin: karma prior-art product specification §11.5, transplanted at P13 framing per Decision 6 option (c). The two-vector decay primitive per D118 implements certainty decay against this principle. Authority binding lands at the ActorContext extension at S44.
+
+### Private assistant communication discipline
+
+The Padhanam Private Assistant communicates with the user according to six binding patterns. Every user-facing surface honours these patterns regardless of channel (messaging, dashboard, daily briefing, voice).
+
+1. **Declarative, never imperative.** The assistant tells the user what is, not what to do. "Nestor moved to Margies Travel in March." Not "you should reach out to Nestor."
+2. **Suggestion-as-question.** When the assistant proposes an action, the proposal is phrased as a question. "Want me to draft an email?" Not "I'll draft an email for you."
+3. **Subtle, not pushy.** When the assistant notices a gap, it surfaces the gap once. The assistant does not follow up, repeat, or escalate. The user decides whether to act.
+4. **Specific over generic.** Surfaced content references particular people, deals, conversations, commitments. Generic prompts decay into wallpaper and lose attention.
+5. **Visible reasoning.** The user can see why the assistant surfaced something. Selection logic is inspectable, not opaque.
+6. **No compliance language.** The assistant does not measure whether the user acted on suggestions, does not track follow-through, does not chide. Compliance tracking converts a priming relationship into a pressure relationship; the platform refuses this conversion structurally.
+
+Origin: the attentional-assistant product brief shared during P13 framing substantive conversation, plus the suggestion-as-question pattern surfaced at the same conversation. The brief frames the platform's category as attentional infrastructure (a fourth category distinct from task assistants, information assistants, and operational prompts). The communication discipline is the load-bearing surface expression of that positioning.
+
+Surfaces this principle binds at Phase 2-A: Twilio messaging at P13; calendar-read, email-read, and to-do-app integration at P14; Slack messaging at P15; the daily briefing email at P15+; the dashboard surface at P15+. Every Phase 2-A surface design decision references this principle.

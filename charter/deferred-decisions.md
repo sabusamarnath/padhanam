@@ -17,6 +17,7 @@ When a numbered D-entry closes a deferred entry, the entry gains a "Status: clos
 7. [Tool registry and authoring](#tool-registry-and-authoring)
 8. [Phase 1 close audit findings](#phase-1-close-audit-findings)
 9. [Phase 2 design 7-Step deferrals](#phase-2-design-7-step-deferrals)
+10. [Phase 2-A P13 framing deferrals](#phase-2-a-p13-framing-deferrals)
 
 ## Architectural primitives awaiting activation
 
@@ -559,3 +560,71 @@ Per Step 6 Pass 1 Q12 disposition. The audit visibility (5.1) workplan committed
 **Activation trigger.** Phase 2-A P15 5.1 audit visibility detailed design session.
 
 **The specific D-entry lands at the activating session.** References Step 5 Pass 1 sub-problem 5.1 finding.
+
+## Phase 2-A P13 framing deferrals
+
+Architectural decisions deferred at the Phase 2-A P13 framing substantive conversation per the forward-compat substrate-depth classification (Decision 7). The classification table lives at `charter/packages/p13-epic.md`. This section holds two defer-with-named-activation-trigger entries plus six flag-for-future-testing entries; the flag-for-future-testing entries are build-now substrate that Phase 2-A operator dogfooding does not exercise, and each names the Phase 2-A close audit's test-coverage gap.
+
+### Role hierarchy with inheritance machinery
+
+Per the P13 framing forward-compat substrate-depth classification (defer-with-trigger category). Phase 2-A operates at operator-role only. The ActorContext extension (S44) carries a role list, and the authorisation decorator (S44) enforces role checks at the use case boundary; both are built so a role hierarchy with inheritance machinery is a pure extension rather than a refactor.
+
+**Activation trigger.** Phase 2-B or Phase 3+ adds a second role beyond operator.
+
+**The specific D-entry lands at the activating session.** References the P13 ActorContext extension plus authorisation decorator substrate, which supports role hierarchy as a pure extension.
+
+### Principal polymorphic shape — machine-actor variant
+
+Per the P13 framing forward-compat substrate-depth classification (defer-with-trigger category). Verified at P13 framing: the current S34/S37/D103 principal shape uses a `PrincipalType` StrEnum discriminator (TENANT and PLATFORM_OPERATOR variants) and is already polymorphic. Adding a third principal type — a machine-actor for API callers — is additive: a new StrEnum value plus a new dependency resolver path, with existing call sites unchanged.
+
+**Activation trigger.** An API caller arrives at Phase 2-B+.
+
+**The specific D-entry lands at the activating session.** References D103 (principal polymorphic shape) and S37.
+
+### Authorisation paths beyond operator-role check
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The authorisation decorator ships at S44 with operator-role-only checks; the rejection paths exist in the substrate but Phase 2-A dogfooding never traverses them.
+
+**Activation trigger.** Phase 2-B+ adds a second role.
+
+**Phase 2-A test coverage gap.** No Phase 2-A scenario trips an authorisation rejection path. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+### Governance hierarchy levels above Organisation and below default Workspace
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The governance artefact hierarchy shape (Platform / Organisation / Workspace / Agent inheritance) lands at P14; Phase 2-A operates at operator-as-organisation level with a single default workspace.
+
+**Activation trigger.** Phase 3+ commercial deployment, or Phase 2-B Cluster B9 extensions.
+
+**Phase 2-A test coverage gap.** Phase 2-A has no Platform-level or sub-Workspace inhabitants, so multi-level governance resolution is never exercised. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+### Multi-signatory Gate paths
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The Gate entity lands at P14 with a signatory rule abstraction; Phase 2-A operates single-signatory (operator only).
+
+**Activation trigger.** A Phase 2-B+ surface adds multi-actor scenarios.
+
+**Phase 2-A test coverage gap.** Phase 2-A is single-signatory; multi-signatory Gate paths are never exercised. Flagged alongside the Gate entity at P14. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+### Intake authority profiles beyond operator-authority
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The Intake record lands at S44 (P13) as the canonical boundary of incoming work; Phase 2-A's only intake source is the operator.
+
+**Activation trigger.** Phase 2-B+ adds additional intake sources with different authority profiles.
+
+**Phase 2-A test coverage gap.** Phase 2-A has no intake sources beyond the operator, so intake authority profiles beyond operator-authority are never exercised. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+### Methodology-step-and-signal declarations beyond P14's four methodologies
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The methodology-as-workflow data model lands at P14 with explicit steps and signals declarations; P14's four methodologies populate a subset of the shapes the substrate accepts.
+
+**Activation trigger.** P17 Cluster B9 methodology authoring adds new methodology shapes.
+
+**Phase 2-A test coverage gap.** The substrate accepts more step-and-signal declaration shapes than four-methodology testing exercises. Flagged alongside the methodology-as-workflow data model at P14. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+### Case-DataPoint-Assertion shapes beyond portfolio-item-shaped use
+
+Per the P13 framing forward-compat substrate-depth classification (flag-for-future-testing category). The Case, Data Point, and Assertion entities land at S43 (P13) as first-class domain vocabulary; the substrate accepts Case types beyond PORTFOLIO_ITEM and Data Point types beyond goal/status/methodology-application.
+
+**Activation trigger.** Phase 2-B+ adds new domain entity types.
+
+**Phase 2-A test coverage gap.** Phase 2-A operator dogfooding generates portfolio-item-shaped Cases only; non-portfolio Case and Data Point shapes are never exercised. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
