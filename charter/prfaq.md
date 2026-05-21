@@ -123,6 +123,24 @@ v2 content reflects D51's voice and audience: vendor product-launch voice; AI La
 
 v2 body preserved verbatim above per D43's append-only-at-version-level discipline; this correction is recorded as a separate section rather than as an in-place edit to v2. v3 revoice lands at the Phase 1 close audit at P12 close per D45's living-artefact cadence (every phase audit produces a new PRFAQ version). The Phase 1 close audit refresh also absorbs the dogfooding scenario acknowledgment per D77 and D78 per the existing carryover entry in `charter/current-package.md`.
 
+## Phase 2: methodology-as-product (PRD section, post-v2 extension; v3 revoice defers to Phase 2-A close audit)
+
+Padhanam ships Phase 2 as methodology-as-product per D93. The platform's Phase 1 substrate (procurement-grade defensibility, hash-chained audit trail, OpenAPI-specified consumer surfaces) is the foundation; Phase 2 surfaces the methodology that the substrate makes operable.
+
+**Three-mode operation.** The Padhanam Private Assistant operates in three modes that share one substrate. Attentional mode primes the user's attention at the threshold of context with declarative briefings. Workflow mode executes tasks on the user's request, with consent gates at permission moments. Observation-and-suggestion mode tracks the user's world quietly and surfaces gaps as offers phrased as questions. The three modes are not separate products; they are aspects of one assistant.
+
+**Meta-layer positioning.** Padhanam is a meta-layer over the user's existing apps. Calendar apps stay the calendar. To-do apps stay the to-do list. Email clients stay the email client. Padhanam reads from these for observation and writes to them on request, but does not duplicate their function. The platform does not do reminders; the user's reminder app does. The platform aggregates, primes, observes, and suggests; it does not replace the surfaces that already work.
+
+**Substrate vocabulary.** Phase 2 commits to a domain vocabulary: Case, Data Point, Assertion, Workflow, Step, Signal, Gate, Intake, Provenance. This vocabulary is shared across Phase 2 surfaces, audit-trail records, and the methodology library. The vocabulary aligns with the karma prior-art specification per the karma-lineage discipline.
+
+**Forward-compat posture (Layer 1 positioning).** Phase 2-A ships narrow at surface and deep-where-deferral-forces-refactor at substrate. The platform commits foundational substrate now if deferring would force a major code refactor when the substrate becomes operational; the platform defers substrate with a named activation trigger otherwise; the platform flags build-now substrate that operator dogfooding does not exercise, with the test-coverage gap documented for Phase 2-A close audit. The discipline is named "deferral-forces-refactor" and runs as a build-methodology candidate through Phase 2-A. Per-substrate Layer 2 classification lives at `charter/packages/p13-epic.md` and updates at each Phase 2-A package framing.
+
+**Senior-leader-ICP commitment.** Phase 2 ships to a senior product leader as the first user, with the operator-as-first-instance acting as the proof point. The ICP commitment lives at `charter/phase-2-user-segment.md`; the test condition for Phase 2-A close validates that the operator-as-first-instance behaviour generalises to the broader ICP at signal strength sufficient to commit Phase 2-B scaling.
+
+**Phase 2-A close gate condition.** Phase 2-A closes against operational thresholds plus dogfooding-evidence thresholds. The gate condition tests both that the substrate runs reliably under real use and that the operator-as-first-instance signals validate the senior-leader-ICP test condition. The full prfaq v3 revoice lands at the close audit with Phase 2-A build evidence behind it.
+
+**Communication discipline.** Padhanam's surfaces honour the Private Assistant Communication Discipline (declarative not imperative; suggestion-as-question; subtle not pushy; specific over generic; visible reasoning; no compliance language) committed at `charter/principles.md` at P13. This discipline binds every Phase 2 surface design decision regardless of channel.
+
 ---
 
 ## Version log
