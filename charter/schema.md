@@ -1033,3 +1033,86 @@ mutating the parent aggregate's lifecycle fields. Index
 `(recommendation_id, transitioned_at)` supports per-recommendation
 chronological reads.
 
+## Cross-cutting binding shapes
+
+This section formalises non-table binding shapes — value objects,
+HTTP-layer DTOs, application-layer codecs — that cross multiple
+bounded contexts and ship to procurement-grade consumer surfaces.
+The shapes exist in code; this section gives them a place on the
+binding-specification surface. The section's audit-trail role is
+the same as the database-table sections above: schema diffs at
+commit time reconcile against this surface for cross-cutting
+shape additions just as they do for table additions.
+
+### TenantContext (shared-kernel value object)
+
+The frozen value object carried via auth-middleware extraction
+per D34's credential-encryption integration and D50's
+TenantContext shape commitment. It cross-cuts every per-tenant
+context — the inference adapter and the audit adapter both
+consume TenantContext-shaped values — which is why it lives in
+`shared_kernel/tenant_context.py` rather than in any single
+context.
+
+| Field                 | Type  | Constraints                                                                  |
+|-----------------------|-------|------------------------------------------------------------------------------|
+| `tenant_id`           | `str` | not null; non-empty; UUID-shaped per registry resolution; primary identifier |
+| `jurisdiction`        | `str` | not null; non-empty                                                          |
+| `cost_attribution_id` | `str` | not null; non-empty; D41 cost-attribution surface                            |
+
+The shape is a frozen dataclass: Pydantic is forbidden in
+`shared_kernel/` by the import-linter `shared-kernel-policed`
+contract per D16, and the `Tenant` aggregate's `frozen=True`
+precedent makes the choice consistent with the rest of the
+domain. `__post_init__` enforces the non-empty invariant on all
+three fields. The object propagates via the auth middleware's
+principal-derived extraction pattern per D98.
+
+### ErrorResponse (HTTP-layer DTO)
+
+The Pydantic model rendered by the OpenAPI specification as the
+canonical error wire format across HTTP error paths per the D98
+narrative. Lives at `apps/api/_errors.py`. Structurally
+consistent across the S34, S37, S38, and S42 HTTP transports.
+
+| Field            | Type   | Constraints                                                                                        |
+|------------------|--------|----------------------------------------------------------------------------------------------------|
+| `error_code`     | `str`  | not null; machine-readable discriminator across error paths; canonical identifier per route family |
+| `message`        | `str`  | not null; human-readable error message                                                             |
+| `correlation_id` | `str`  | not null; UUID4-shaped; propagated from request context for cross-system tracing                   |
+| `details`        | `dict` | nullable; default null; per-error-code structured detail payload (field-level validation errors)   |
+
+The `error_code` field is the machine-readable discriminator
+that distinguishes error families and is canonical per route
+family; the model itself is a flat `BaseModel`, not a Pydantic
+discriminated union. HTTP contract tests at
+`tests/contract/http/` enforce error-response shape consistency
+per S42.
+
+### Canonical cursor codec (application-layer pagination)
+
+The base64-encoded-JSON codec for paged-list cursors, the S33
+vintage per D97. Four implementing sites carry a structurally
+identical shape: a URL-safe base64 envelope over compact JSON,
+with decode raising `MalformedCursorError` on base64, JSON,
+schema, type, or range errors. Module naming carries a
+hygiene-tolerated drift — three sites use the singular
+`cursor.py` and one (`contexts/optimization/`) uses the plural
+`cursors.py` — flagged at P12 audit Finding B5 with a non-action
+disposition.
+
+| Module path                                           | Originating session |
+|-------------------------------------------------------|---------------------|
+| `contexts/run_history/application/cursor.py`          | S33                 |
+| `contexts/audit/application/cursor.py`                | S36                 |
+| `contexts/retrieval_evaluation/application/cursor.py` | S39 (P11)           |
+| `contexts/optimization/application/cursors.py`        | S41 (P11)           |
+
+The cursor payload carries the cursor-position identifier — a
+timestamp field plus the row `id` — plus `page_size`; the
+encoded string is opaque to consumers, who receive it at
+`next_cursor` time and pass it back verbatim on the next
+request. The codec is application-layer: it is imported by the
+HTTP read surface but defined inside each context's
+`application/` package alongside the use cases it serves.
+
