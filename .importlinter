@@ -132,6 +132,15 @@ layers =
     contexts.optimization.ports
     contexts.optimization.domain
 
+[importlinter:contract:layers-portfolio]
+name = Portfolio layers (hexagonal)
+type = layers
+layers =
+    contexts.portfolio.adapters
+    contexts.portfolio.application
+    contexts.portfolio.ports
+    contexts.portfolio.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -161,6 +170,7 @@ modules =
     contexts.run_history.domain
     contexts.retrieval_evaluation.domain
     contexts.optimization.domain
+    contexts.portfolio.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -183,6 +193,7 @@ modules =
     contexts.run_history.application
     contexts.retrieval_evaluation.application
     contexts.optimization.application
+    contexts.portfolio.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -204,6 +215,7 @@ modules =
     contexts.run_history.adapters
     contexts.retrieval_evaluation.adapters
     contexts.optimization.adapters
+    contexts.portfolio.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -240,6 +252,7 @@ source_modules =
     contexts.run_history.domain
     contexts.retrieval_evaluation.domain
     contexts.optimization.domain
+    contexts.portfolio.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -318,6 +331,7 @@ source_modules =
     contexts.run_history
     contexts.retrieval_evaluation
     contexts.optimization
+    contexts.portfolio
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -347,6 +361,7 @@ source_modules =
     contexts.tools
     contexts.run_history
     contexts.retrieval_evaluation
+    contexts.portfolio
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -415,6 +430,7 @@ source_modules =
     contexts.run_history
     contexts.retrieval_evaluation
     contexts.optimization
+    contexts.portfolio
 forbidden_modules =
     neo4j
 allow_indirect_imports = false
