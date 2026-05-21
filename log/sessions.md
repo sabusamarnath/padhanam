@@ -13,6 +13,43 @@ Format:
 
 ---
 
+## 2026-05-21 — Phase 2-A P13 framing landing commit session
+roles: technical writer, PM, analyst
+mode: strategic (charter commit; no code changes; P13 framing landing)
+
+- Produced: Nine commits closed the session, landing the six drafted artefacts plus the two close deliverables from the P13 framing substantive conversation.
+  - Commit 4dd618e (`chore(docs)`): karma prior-art spec relocated from `docs/notes/spec-private-assistant-platform.md` to `docs/notes/prior-art-karma/spec.md`, creating the prior-art-karma directory as partial Block 2 Part B closure per Decision 6 Sub-decision A.
+  - Commit 196d7c7 (`docs(p13)`): P13 epic note at `charter/packages/p13-epic.md` carrying the three-mode framing lens, package contents, substrate-to-mode mapping, four-session forecast, out-of-scope list, and the forward-compat substrate-depth classification table.
+  - Commit 08ff56a (`docs(charter)`): four karma-extracted Phase 2 principles plus the PA communication discipline principle at `charter/principles.md`; the Phase 2 domain vocabulary sub-section at `charter/architecture.md`; a new `Phase 2-A P13 framing deferrals` section at `charter/deferred-decisions.md` (two defer-with-trigger plus six flag-for-future-testing entries) with the TOC updated.
+  - Commit ccf1567 (`docs(charter)`): roadmap v6 entry — Phase 2 packaging commitment.
+  - Commit 782638d (`docs(charter)`): Phase 2 PRD section at `charter/prfaq.md` (post-v2 extension).
+  - Commit cf186e8 (`docs(briefs)`): S43 first-session prompt at `briefs/p13/s43.md`.
+  - Commit df58ef8 (`docs(charter)`): current-package P13-framing-closed marker.
+  - Commit c5930c5 (`docs(briefs)`): landing commit prompt preserved at `briefs/p13/framing-landing-commit.md`.
+  - Commit this commit (`docs(p13)`): this session log entry plus the captures triage marker on the 2026-05-20 Decision 6 capture.
+
+- Decisions: No new D-entries. Per the P13 framing settlement the Step 6 D-entries (D114-D123) already commit the load-bearing decisions; D124+ surface at S43 onward during build. The spec-extracted Phase 2 principles land at `charter/principles.md` as charter additions without numbered D-entries per the extract-not-decide framing.
+
+- Tests: None. Documentation-only changes.
+
+- Pre-write reconciliation: Five surfaces verified before any commit landed; three findings surfaced and were operator-dispositioned in prose ahead of execution. Finding A: the three architecture-primitive D-numbers were rotated in the drafted artefacts (artefacts said D116 tiered-by-salience / D117 two-vector decay / D118 three-tier consent; `charter/decisions.md` and `charter/architecture.md` bind D116 three-tier consent / D117 tiered-by-salience / D118 two-vector decay). Primitive names and descriptions were correct; only the parenthetical numbers were wrong. Corrected on landing across `p13-epic.md` (five references), `architecture.md` domain vocabulary (one), and `principles.md` (one). Finding B: the drafted roadmap v6 used a `## v6` heading with labelled paragraphs; the existing "## Version log" convention is single-paragraph bullets — v6 reformatted to a `- **v6**` bullet, all content preserved. Finding C: the deferred-decisions entries were not supplied verbatim; the eight entries were authored from the Artefact 1 classification table into a new `## Phase 2-A P13 framing deferrals` section with a TOC entry per the TOC-maintenance discipline. Minor corrections folded in: s43.md AC 11 import-linter count 25 to 27; the flag-for-future-testing count corrected to six (the classification table is authoritative; reflection prompt 3 had said seven); epic-note title harmonised to the `# P{n} Epic — {title}` convention.
+
+- Reflection prompts answered:
+
+  1. *Pre-conversation decisions audit.* The brief carried seven pre-conversation recommendations; the substantive conversation revised or refined five and adopted two as written (per close deliverable 1). The brief-carries-recommendations discipline holds: write the brief carrying the recommendation, allow the substantive conversation to revise, record the revisions as audit-trail surface at close. Recurrence test fires at P14 framing.
+
+  2. *Three-mode picture as framing evolution.* The product picture sharpened from "Phase 2-A as messaging-first delivery" to "three modes sharing one substrate (attentional, workflow, observation-and-suggestion), meta-layer over the user's existing apps." The sharpening preserved every prior commitment — the eight-package structure, the six Step 6 architectural primitives, the senior-leader ICP, the messaging-first delivery constraint — and surfaced no drift; the three-mode lens reframes the same substrate, not the scope. First-instance evidence for product-picture sharpening at package framing time.
+
+  3. *Forward-compat substrate-depth discipline at first instance.* The discipline produced six build-now items, six defer-with-trigger items, and six flag-for-future-testing items. The classification absorbed substantive operator pushback at three placement decisions — Gate entity, methodology-as-workflow data model, and governance artefact hierarchy all moved from P13 to P14. First-instance evidence for the deferral-forces-refactor methodology candidate; recurrence test fires at P14 framing.
+
+  4. *Karma prior-art reference set continuation.* Decision 6 reframed from "spec-as-architectural-input absorption" to "karma prior-art reference set completion plus partial Block 2 Part B closure" per the 2026-05-20 captures routing entry. The spec relocated to `docs/notes/prior-art-karma/spec.md`, creating the prior-art-karma directory that Block 2 Part B planned. Two pattern notes (`authoring-contract.md`, `taps-and-dispatcher.md`) remain deferred to their activation triggers per the existing deferred-decisions entries. The 2026-05-20 capture is triaged at this commit.
+
+- methodology (line 1): **D-number verification belongs to brief-authoring time, not only to commit-session reconciliation.** The D-number scramble (Finding A) surfaced at the landing session's pre-write reconciliation, not at the strategic-mode substantive conversation that drafted the artefacts; the artefacts referenced D116/D117/D118 without verification against current `charter/decisions.md` and `charter/architecture.md` state. Methodology candidate: when strategic-mode artefacts reference D-numbers, verification against current charter state belongs to brief-authoring time as a drafting-discipline checkpoint, not solely to the downstream commit session's reconciliation. The commit-session reconciliation caught it cleanly here, but a brief-authoring checkpoint would catch it one step earlier and cheaper. Recurrence test fires at P14 framing artefact-authoring.
+
+- **Phase 2-A P13 framing closed; the six drafted artefacts plus two close deliverables landed across nine commits. Pre-P13 hygiene session next (schema.md formalisation plus doc-content rebrand per Decision 2 triage); P13 Wave 1 first build session (S43) follows per `briefs/p13/s43.md`.**
+
+---
+
 ## 2026-05-20 — Phase 2-A P13 framing brief commit
 roles: technical writer, PM, analyst
 mode: strategic (charter commit; no code changes; P13 framing brief pre-conversation landing)
