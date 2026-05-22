@@ -1122,6 +1122,88 @@ never updated or deleted. Index
 created_at)` orders revision history; `ix_assertions_tenant_id`
 on `(tenant_id)`.
 
+## Intake context substrate
+
+Per-tenant substrate for `contexts/intake/` per D127. One table on
+each tenant's dedicated Postgres data plane per D32, landing the
+Phase 2-A canonical-entry record. IntakeRecord is the aggregate
+root: a record captured when work enters the system, ahead of any
+downstream portfolio write. Every table carries `tenant_id` and
+`jurisdiction` per D12. Tamper-evidence follows D110 commitment 7:
+every intake write through the application layer emits an audit
+event; no parallel hash chain on the intake table.
+
+Migration `alembic/tenant/versions/0017_intake_substrate` ships the
+`intakes` table; migration `0018_intake_id_columns` adds the
+nullable `intake_id` foreign-key column to `cases` and `assertions`.
+
+### `intakes`
+
+| Column                | Type          | Constraints                                                          |
+|-----------------------|---------------|----------------------------------------------------------------------|
+| `id`                  | `uuid`        | primary key; default `gen_random_uuid()`                             |
+| `tenant_id`           | `uuid`        | not null; jurisdiction-bearing per D12                               |
+| `jurisdiction`        | `text`        | not null; CHECK `jurisdiction <> ''`                                 |
+| `intake_source`       | `text`        | not null; CHECK ∈ {`MANUAL_ENTRY`}                                   |
+| `payload`             | `jsonb`       | not null; the serialised IntakePayload variant                       |
+| `authored_by_user_id` | `text`        | not null; CHECK `<> ''`; ActorReference persisted identity per D126  |
+| `created_at`          | `timestamptz` | not null; default `now()`                                            |
+
+The aggregate root. `intake_source` carries the single Phase 2-A
+value `MANUAL_ENTRY`; the CHECK accepts that value only at S44b and
+widens as `CALENDAR_READ` and `EMAIL_READ` land at P14. `payload`
+is the JSONB-serialised IntakePayload — at S44b the single
+ManualEntryPayload variant. IntakeRecords are immutable: never
+updated or deleted, per the "Originals never erased" principle.
+Index `ix_intakes_tenant_created_at` on `(tenant_id, created_at
+DESC)` and `ix_intakes_tenant_source` on `(tenant_id,
+intake_source)` support the list surface.
+
+### `intake_id` on `cases` and `assertions` (migration 0018)
+
+Migration `0018_intake_id_columns` adds a nullable `intake_id`
+column to `cases` and to `assertions`, each a foreign key to
+`intakes(id)` ON DELETE RESTRICT. The column is nullable at the
+persistence layer for migration safety and is nullable at the
+domain layer per D128: the intake-canonical orchestration paths
+populate it (a Case from `record_intake_and_create_case`, an
+INITIAL Assertion from `record_intake_and_create_data_point`, a
+REVISION Assertion from `record_intake_and_revise_data_point`),
+while direct domain construction outside an orchestration leaves it
+null. D128 commits the intake-canonical posture: every persisted
+state change at the platform's write surfaces traces to an
+IntakeRecord via this field.
+
+### IntakeRecord (intake aggregate root)
+
+| Field           | Type             | Constraints                                                              |
+|-----------------|------------------|--------------------------------------------------------------------------|
+| `intake_id`     | `UUID`           | not null; the aggregate identity                                         |
+| `tenant_id`     | `UUID`           | not null; jurisdiction-bearing per D12                                   |
+| `jurisdiction`  | `str`            | not null; non-empty                                                      |
+| `intake_source` | `IntakeSource`   | not null; Phase 2-A `MANUAL_ENTRY`                                       |
+| `payload`       | `IntakePayload`  | not null; the source-specific payload value object                       |
+| `authored_by`   | `ActorReference` | not null; the persisted authoring identity, derived from ActorContext    |
+| `created_at`    | `datetime`       | not null; timezone-aware                                                 |
+
+A frozen dataclass; `__post_init__` enforces non-empty invariants.
+`IntakeSource` is a string enum. `IntakePayload` is a type alias —
+at S44b the single `ManualEntryPayload` variant; it widens to a
+Union when `CALENDAR_READ` / `EMAIL_READ` payload variants land at
+P14.
+
+### ManualEntryPayload (intake payload value object)
+
+| Field             | Type                | Constraints                                          |
+|-------------------|---------------------|------------------------------------------------------|
+| `raw_text`        | `str`               | not null; non-empty; the operator's manual input     |
+| `intent_hint`     | `str | None`        | nullable; an optional free-text intent annotation    |
+| `linked_case_ids` | `tuple[UUID, ...]`  | not null; default empty; optional case associations  |
+
+A frozen dataclass, framework-free per D16. The Phase 2-A
+`IntakePayload` variant. The `linked_case_ids` data structure
+lands at S44b; the linking-heuristics UX surface defers to P14.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,
