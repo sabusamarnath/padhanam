@@ -18,6 +18,7 @@ When a numbered D-entry closes a deferred entry, the entry gains a "Status: clos
 8. [Phase 1 close audit findings](#phase-1-close-audit-findings)
 9. [Phase 2 design 7-Step deferrals](#phase-2-design-7-step-deferrals)
 10. [Phase 2-A P13 framing deferrals](#phase-2-a-p13-framing-deferrals)
+11. [P13 S45 deferrals](#p13-s45-deferrals)
 
 ## Architectural primitives awaiting activation
 
@@ -628,3 +629,23 @@ Per the P13 framing forward-compat substrate-depth classification (flag-for-futu
 **Activation trigger.** Phase 2-B+ adds new domain entity types.
 
 **Phase 2-A test coverage gap.** Phase 2-A operator dogfooding generates portfolio-item-shaped Cases only; non-portfolio Case and Data Point shapes are never exercised. This entry is a Phase 2-A close audit input; the close audit reads it directly from this file.
+
+## P13 S45 deferrals
+
+Architectural decisions deferred at S45 (the messaging substrate plus ConversationFlow Protocol plus structured-output session). Each names an activation trigger and the surface the activating package or strategic block reads it from.
+
+### Structured-output-to-agent-tool convergence
+
+The LLM-call structured-output discipline at D130 (`shared_kernel/structured_output.py` — a request, a response, and a port for LLM calls that must return a schema-conforming structured value) and the agent-tool calling shape (the tool-definition and tool-invocation surfaces at the agent context per D88/D89) are structurally similar concerns: both describe a schema a model is asked to conform its output to. Whether they converge onto one primitive or stay deliberately separate is a future-package question. At Phase 2-A they are distinct surfaces — structured output is the LLM-call boundary discipline, agent-tool calling is the agent-runtime orchestration shape — and S45 does not couple them.
+
+**Activation trigger.** A future package where agent-tool surfaces and the structured-output discipline meaningfully overlap — for example, an agent-runtime surface that wants to consume the D130 primitive directly, or a structured-output consumer that needs tool-call semantics.
+
+**The specific D-entry lands at the activating session.** References D130 (structured-output discipline), D88 (agent runtime architecture), D89 (tool registry).
+
+### Multi-channel UX architectural readiness
+
+S45 lands the messaging substrate for a single channel (WhatsApp via Twilio per D119/D129). When users interact across multiple messaging channels — WhatsApp, Slack at P15, SMS, future Copilot, future voice — Padhanam needs four surfaces the single-channel substrate does not yet build: identity reconciliation across per-channel identities (one user, many channel-addresses); channel preference resolution for platform-initiated outbound (which channel to reach the user on); cross-channel session continuity (a conversation that spans channels); and channel-aware affordances at the routing layer (a channel's capabilities shape what the response can contain). The S45 substrate is structurally channel-agnostic where it matters — the Message entity carries a `channel` enum, ActorContext is channel-free, the ConversationFlow Protocol is transport-neutral, and the IntakeSource enum admits per-channel inbound variants — so the four surfaces are additive rather than a refactor.
+
+**Activation trigger.** Multi-channel work begins when any of: (a) the Phase 2-A operator starts using more than one channel; (b) Padhanam initiates outbound conversations at P14+ where channel selection matters; (c) Phase 2-B+ introduces multiple users with multiple channels.
+
+**The specific D-entry lands at the activating session.** References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol). The forward UX convergence strategic block (captured at `log/captures.md`, sitting between S46 close and P14 framing) is the natural surface to design these four surfaces coherently alongside provenance-aware and confidence-aware response composition.

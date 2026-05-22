@@ -554,3 +554,20 @@ The observation for future principle audits: state up front which principles a g
 
   - triaged: defer on 2026-05-22
   - resolution: forwarded to the post-assessment disposition conversation as input to future principle-audit brief structure. Pairs with the per-principle-structure candidate above. Recorded at the pre-S45 session-log methodology line.
+
+## 2026-05-22 — [S45] Forward strategic block — UX convergence session
+
+Three architectural concerns interact at the user-experience surface and need cross-cutting design before P14's ConversationFlow implementers land:
+
+1. **Multi-channel UX.** Channel routing, identity reconciliation across per-channel identities, channel preference resolution for outbound, cross-channel session continuity, channel-aware affordances. Captured as the multi-channel UX architectural readiness entry at `charter/deferred-decisions.md` (P13 S45 deferrals section).
+
+2. **Provenance-aware response composition.** D131 landed the architectural posture at S45 — responses cite the source artefacts (IntakeRecords, audit events, retrieved results) that contributed. The read-side counterpart to D128's intake-canonical write-side commitment. No Phase 2-A surface implements it; first implementation at P14.
+
+3. **Confidence-aware response composition.** How response confidence is computed from artefact-and-revision evidence (the D118 two-vector decay model and the D117 tiered-by-salience primitive both feed this), how confidence is rendered to the user, and how it drives channel routing and consent-tier decisions. Not yet committed at any D-entry.
+
+The three are separable as substrate (S45 built the messaging substrate channel-agnostically; D131 committed provenance; D130 carries the structured-output primitive that all three render through) but entangled as *UX design*: a response's confidence shapes which channel it goes to and how its provenance is surfaced. Designing them one at a time at P14/P15 risks three incompatible UX shapes.
+
+**Forward strategic block.** A UX convergence strategic-mode session sitting between S46 close and P14 epic framing. It produces UX architectural commitments combining multi-channel UX, provenance-aware response composition, and confidence-aware response composition into one coherent design — captured as `charter/architecture.md` prose plus possible new D-entries plus possible `charter/principles.md` additions. Its outputs feed P14 epic framing as inherited UX constraints.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forward strategic block named; activation trigger is the S46 close marker. Sits between S46 close and P14 epic framing. Not a build session — a strategic-mode conversation producing charter artefacts. Recorded at the S45 charter commit and the S45 session-log entry.

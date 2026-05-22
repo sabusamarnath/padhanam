@@ -1144,16 +1144,20 @@ nullable `intake_id` foreign-key column to `cases` and `assertions`.
 | `id`                  | `uuid`        | primary key; default `gen_random_uuid()`                             |
 | `tenant_id`           | `uuid`        | not null; jurisdiction-bearing per D12                               |
 | `jurisdiction`        | `text`        | not null; CHECK `jurisdiction <> ''`                                 |
-| `intake_source`       | `text`        | not null; CHECK ∈ {`MANUAL_ENTRY`}                                   |
+| `intake_source`       | `text`        | not null; CHECK ∈ {`MANUAL_ENTRY`, `WHATSAPP_INBOUND`}               |
 | `payload`             | `jsonb`       | not null; the serialised IntakePayload variant                       |
 | `authored_by_user_id` | `text`        | not null; CHECK `<> ''`; ActorReference persisted identity per D126  |
 | `created_at`          | `timestamptz` | not null; default `now()`                                            |
 
-The aggregate root. `intake_source` carries the single Phase 2-A
-value `MANUAL_ENTRY`; the CHECK accepts that value only at S44b and
-widens as `CALENDAR_READ` and `EMAIL_READ` land at P14. `payload`
-is the JSONB-serialised IntakePayload — at S44b the single
-ManualEntryPayload variant. IntakeRecords are immutable: never
+The aggregate root. `intake_source` carries `MANUAL_ENTRY` at
+S44b; migration `0020_intake_source_whatsapp` (S45, D129) extends
+the CHECK with `WHATSAPP_INBOUND` for inbound WhatsApp messages,
+and `CALENDAR_READ` / `EMAIL_READ` land at P14. `payload`
+is the JSONB-serialised IntakePayload — the single
+ManualEntryPayload variant, reused for `WHATSAPP_INBOUND` intakes
+with `raw_text` carrying the message body so the `IntakePayload`
+type alias stays single-variant per D127's build-at-second-instance
+discipline. IntakeRecords are immutable: never
 updated or deleted, per the "Originals never erased" principle.
 Index `ix_intakes_tenant_created_at` on `(tenant_id, created_at
 DESC)` and `ix_intakes_tenant_source` on `(tenant_id,
@@ -1203,6 +1207,83 @@ P14.
 A frozen dataclass, framework-free per D16. The Phase 2-A
 `IntakePayload` variant. The `linked_case_ids` data structure
 lands at S44b; the linking-heuristics UX surface defers to P14.
+
+## Messaging context substrate
+
+Per-tenant substrate for `contexts/messaging/` per D129. One table
+on each tenant's dedicated Postgres data plane per D32, landing the
+Phase 2-A Wave 1 communication substrate — the channel through
+which all three product modes (attentional, workflow,
+observation-and-suggestion) reach the user. Message is the
+aggregate root: one inbound or outbound message on a channel.
+Every table carries `tenant_id` and `jurisdiction` per D12.
+Tamper-evidence follows D110 commitment 7: every messaging write
+through the application layer emits an audit event; no parallel
+hash chain on the messaging table. The channel and vendor
+commitment (WhatsApp via the Twilio Sandbox) is D119; D129 commits
+the bounded-context substrate that operates on that commitment.
+
+Migration `alembic/tenant/versions/0019_messaging_substrate` ships
+the `messages` table on every per-tenant database.
+
+### `messages`
+
+| Column         | Type          | Constraints                                                                  |
+|----------------|---------------|------------------------------------------------------------------------------|
+| `id`           | `uuid`        | primary key; default `gen_random_uuid()`                                     |
+| `tenant_id`    | `uuid`        | not null; jurisdiction-bearing per D12                                       |
+| `jurisdiction` | `text`        | not null; CHECK `jurisdiction <> ''`                                         |
+| `direction`    | `text`        | not null; CHECK ∈ {`INBOUND`, `OUTBOUND`}                                    |
+| `channel`      | `text`        | not null; CHECK ∈ {`WHATSAPP`}                                               |
+| `body`         | `text`        | not null; CHECK `body <> ''`                                                 |
+| `from_address` | `text`        | not null; CHECK `<> ''`; channel-addressed (an E.164 number for WhatsApp)     |
+| `to_address`   | `text`        | not null; CHECK `<> ''`; channel-addressed                                   |
+| `status`       | `text`        | not null; CHECK ∈ {`QUEUED`, `SENT`, `DELIVERED`, `FAILED`, `RECEIVED`}       |
+| `external_id`  | `text`        | nullable; the vendor message identifier (the Twilio MessageSid)              |
+| `intake_id`    | `uuid`        | nullable; FK → `intakes.id` ON DELETE RESTRICT; populated on inbound per D128 |
+| `actor_id`     | `text`        | not null; CHECK `<> ''`; the acting actor's identity                         |
+| `created_at`   | `timestamptz` | not null; default `now()`                                                    |
+
+The aggregate root. `channel` carries the single Phase 2-A value
+`WHATSAPP`; the CHECK widens as SMS, voice, and email channels
+land at P14+ per the channel-enum extension trigger. `status`
+moves QUEUED → SENT → DELIVERED for an outbound message and is
+RECEIVED for an inbound one; FAILED is terminal for a rejected
+send. `external_id` is null until the vendor assigns an
+identifier — synthesised by the LocalEcho adapter, the Twilio
+MessageSid under the Twilio adapter. `intake_id` is non-null on
+inbound messages (the IntakeRecord the `record_intake_and_record_inbound_message`
+orchestration recorded per D128) and null on outbound messages.
+Messages are immutable once persisted, per the "Originals never
+erased" principle; a status change on an outbound message is
+out of scope at S45 (delivery-status callbacks defer to P14+).
+Index `ix_messages_tenant_created_at` on `(tenant_id, created_at
+DESC)` and `ix_messages_tenant_direction_channel` on `(tenant_id,
+direction, channel)` support the list surface.
+
+### Message (messaging aggregate root)
+
+| Field          | Type               | Constraints                                                  |
+|----------------|--------------------|--------------------------------------------------------------|
+| `id`           | `UUID`             | not null; the aggregate identity                             |
+| `tenant_id`    | `UUID`             | not null; jurisdiction-bearing per D12                       |
+| `jurisdiction` | `str`              | not null; non-empty                                          |
+| `direction`    | `MessageDirection` | not null; INBOUND or OUTBOUND                                |
+| `channel`      | `MessageChannel`   | not null; Phase 2-A `WHATSAPP`                               |
+| `body`         | `str`              | not null; non-empty                                          |
+| `from_address` | `str`              | not null; non-empty; channel-addressed                       |
+| `to_address`   | `str`              | not null; non-empty; channel-addressed                       |
+| `status`       | `MessageStatus`    | not null                                                     |
+| `external_id`  | `str \| None`      | nullable; the vendor message identifier                      |
+| `intake_id`    | `UUID \| None`     | nullable; the IntakeRecord an inbound message traces to      |
+| `actor_id`     | `str`              | not null; non-empty                                          |
+| `created_at`   | `datetime`         | not null; timezone-aware                                     |
+
+A frozen dataclass; `__post_init__` enforces the non-empty and
+not-null invariants plus the pairing rule that an INBOUND message
+may carry an `intake_id` while an OUTBOUND message must not.
+`MessageDirection`, `MessageChannel`, and `MessageStatus` are
+string enums. Domain code is framework-free per D16.
 
 ## Cross-cutting binding shapes
 
@@ -1372,4 +1453,119 @@ checks a required permission string against `authorisation_set`
 and raises `AuthorisationDenied` on failure; the HTTP layer
 translates that to 403 with the `ErrorResponse` shape above per
 D98, registered at `apps/api/_auth_errors.py` per D104.
+
+### Structured-output discipline (shared-kernel value objects plus Protocol)
+
+Per D130, the structured-output primitive at
+`shared_kernel/structured_output.py` is the cross-cutting
+discipline for LLM calls that must return a schema-conforming
+structured value rather than free text. Three shapes — two
+frozen dataclasses and one Protocol:
+
+```python
+@dataclass(frozen=True)
+class StructuredOutputRequest:
+    prompt: str
+    schema: dict[str, Any]          # a JSON Schema object
+    temperature: float | None = None
+    model_hint: str | None = None
+
+@dataclass(frozen=True)
+class StructuredOutputResponse(Generic[T]):
+    value: T                        # the schema-conforming result
+    confidence: float | None        # optional self-reported confidence
+    provider_metadata: dict[str, Any]
+
+@runtime_checkable
+class StructuredOutputPort(Protocol):
+    async def generate_structured(
+        self, request: StructuredOutputRequest
+    ) -> StructuredOutputResponse[dict[str, Any]]: ...
+```
+
+`StructuredOutputRequest.schema` is a JSON Schema object held as
+a `dict` — vendor-neutral and framework-free, which
+`shared_kernel/` requires (Pydantic is forbidden there by the
+`shared-kernel-policed` import-linter contract per D16). The
+adapter maps the JSON Schema dict to the vendor's
+`response_format` parameter. `StructuredOutputResponse[T]` is
+generic over the parsed value type: `value` is the
+schema-conforming result, `confidence` is null unless the schema
+itself carries a confidence field, `provider_metadata` carries
+model name, token usage, and finish reason. `StructuredOutputPort`
+exposes one async method, `generate_structured`, returning a
+`StructuredOutputResponse[dict[str, Any]]` (the parsed JSON
+object). The inference adapter implements the port additively at
+S45 per D130; per-context structured-output shapes live at each
+context's domain layer conforming to this primitive.
+
+### ConversationFlow Protocol (cross-context behavioural contract)
+
+Per D115, ConversationFlow is the cross-context standard
+interface for multi-turn interactions that resolve revisions and
+clarifications. D115 committed the primitive; S45 lands the shape
+at `shared_kernel/conversation_flow.py` directly under D115 — no
+separate shape D-entry, because the shape carries no contested
+alternatives (unlike the Revisable shape, which warranted D125).
+Like the Revisable Protocol above, this sub-section formalises a
+behavioural contract, not a value-object schema. The Protocol
+exposes three async methods over five frozen-dataclass value
+objects:
+
+```python
+@dataclass(frozen=True)
+class ConversationInvocation:    # opens a conversation
+    purpose: str
+    actor_id: str
+    parameters: dict[str, Any] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class ConversationState:         # carried across turns
+    conversation_id: str
+    purpose: str
+    turn_count: int              # 0 at open
+    is_open: bool
+    payload: dict[str, Any] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class ConversationInput:         # a single user turn
+    text: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class ConversationClosure:       # the instruction to close
+    reason: str
+
+@dataclass(frozen=True)
+class ConversationOutcome:       # the terminal result
+    conversation_id: str
+    turn_count: int
+    resolution: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+@runtime_checkable
+class ConversationFlow(Protocol):
+    async def open(
+        self, invocation: ConversationInvocation
+    ) -> ConversationState: ...
+
+    async def turn(
+        self, state: ConversationState, user_input: ConversationInput
+    ) -> ConversationState: ...
+
+    async def close(
+        self, state: ConversationState, closure: ConversationClosure
+    ) -> ConversationOutcome: ...
+```
+
+`open` starts a conversation from a `ConversationInvocation` and
+returns the initial `ConversationState`; `turn` advances the
+conversation by one `ConversationInput` and returns the next
+`ConversationState`; `close` terminates it from a
+`ConversationClosure` and returns the terminal
+`ConversationOutcome`. The five value objects are framework-free
+per D16. Conformance is CI-enforceable via the contract harness
+at `tests/contract/conversation_flow/`; no implementer registers
+at S45 — audit-conversation (5.1) and portfolio mirror-conversation
+(4.1) implementers land at P14+.
 
