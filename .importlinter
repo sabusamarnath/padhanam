@@ -150,6 +150,15 @@ layers =
     contexts.intake.ports
     contexts.intake.domain
 
+[importlinter:contract:layers-messaging]
+name = Messaging layers (hexagonal)
+type = layers
+layers =
+    contexts.messaging.adapters
+    contexts.messaging.application
+    contexts.messaging.ports
+    contexts.messaging.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -181,6 +190,7 @@ modules =
     contexts.optimization.domain
     contexts.portfolio.domain
     contexts.intake.domain
+    contexts.messaging.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -205,6 +215,7 @@ modules =
     contexts.optimization.application
     contexts.portfolio.application
     contexts.intake.application
+    contexts.messaging.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -228,6 +239,7 @@ modules =
     contexts.optimization.adapters
     contexts.portfolio.adapters
     contexts.intake.adapters
+    contexts.messaging.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -266,6 +278,7 @@ source_modules =
     contexts.optimization.domain
     contexts.portfolio.domain
     contexts.intake.domain
+    contexts.messaging.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -346,6 +359,7 @@ source_modules =
     contexts.optimization
     contexts.portfolio
     contexts.intake
+    contexts.messaging
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -377,6 +391,7 @@ source_modules =
     contexts.retrieval_evaluation
     contexts.portfolio
     contexts.intake
+    contexts.messaging
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -447,6 +462,7 @@ source_modules =
     contexts.optimization
     contexts.portfolio
     contexts.intake
+    contexts.messaging
 forbidden_modules =
     neo4j
 allow_indirect_imports = false
