@@ -414,6 +414,14 @@ services:
       # migration runner.
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      # Messaging: Twilio WhatsApp delivery (P13/S45, D119, D129). Read
+      # by MessagingSettings in padhanam/config/messaging.py;
+      # build_messaging_composition selects the Twilio or LocalEcho
+      # adapter from MESSAGING_ADAPTER. Values resolve from .env.
+      MESSAGING_ADAPTER: ${MESSAGING_ADAPTER}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
