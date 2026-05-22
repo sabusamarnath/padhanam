@@ -44,7 +44,7 @@ from contexts.evaluation.domain.model_config import ModelConfig
 from contexts.evaluation.domain.replay_result import ReplayResult
 from contexts.inference.api import Message, request_completion
 from contexts.inference.ports import InferencePort as _InferencingInferencePort
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 class InferenceAdapter:
@@ -67,12 +67,17 @@ class InferenceAdapter:
         input: str,
         tenant_context: TenantContext,
     ) -> ReplayResult:
+        # D122 (S46): the replay engine and prompt applier run as an
+        # evaluation harness — substrate analysis the user is not
+        # waiting on in real time — so this path opts into the
+        # async-tolerant tier per D122's classification.
         completion = await asyncio.to_thread(
             request_completion,
             port=self._inference_port,
             messages=[Message(role="user", content=input)],
             model=model_config.model_name,
             tenant_context=tenant_context,
+            latency_tier=LatencyTier.ASYNC_TOLERANT,
         )
         return ReplayResult(
             output_text=completion.text,

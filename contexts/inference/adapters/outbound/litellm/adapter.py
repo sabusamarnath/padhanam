@@ -63,7 +63,11 @@ from contexts.inference.domain.errors import (
     InferenceTimeout,
     InferenceUnavailable,
 )
-from shared_kernel import TenantContext
+from contexts.inference.adapters.outbound.litellm.model_ontology import (
+    litellm_call_kwargs,
+    resolve_call_ontology,
+)
+from shared_kernel import LatencyTier, TenantContext
 from shared_kernel.structured_output import (
     StructuredOutputRequest,
     StructuredOutputResponse,
@@ -92,23 +96,22 @@ class LiteLLMAdapter:
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> Completion:
-        resolved_model = model or self._settings.default_model
-        endpoint = self._settings.litellm_endpoint
-        master_key = self._settings.litellm_master_key
+        # D122 / D132: compose the four-layer ModelIdentifier at the
+        # adapter boundary. ``latency_tier`` is a defaulted parameter
+        # (Path A) so existing call sites preserve current behaviour.
+        identifier = resolve_call_ontology(
+            model=model, latency_tier=latency_tier, settings=self._settings
+        )
+        resolved_model = identifier.version
 
         # GenAI semantic conventions per D27. The span name follows the
         # OTel GenAI guidance ("chat {model}") so Langfuse renders it as
-        # an LLM-call span rather than an opaque internal span.
-        #
-        # tenant.* attributes use the Padhanam-domain namespace
-        # established by D37 (tenant.id, tenant.jurisdiction). S15
-        # extends the namespace with tenant.cost_attribution_id, which
-        # joins the same forward-compat shape: if OTel converges on a
-        # multi-tenant attribute namespace, the migration is a span-
-        # attribute rename here. The legacy padhanam.tenant_id from
-        # S7 is removed in this commit — D37's tenant.id is the single
-        # source.
+        # an LLM-call span. tenant.* attributes use the Padhanam-domain
+        # namespace from D37 plus tenant.cost_attribution_id from S15;
+        # D132 adds the four model-ontology dimensions via
+        # identifier.audit_dimensions().
         with _tracer.start_as_current_span(
             f"chat {resolved_model}",
             kind=SpanKind.CLIENT,
@@ -119,21 +122,21 @@ class LiteLLMAdapter:
                 "tenant.id": tenant_context.tenant_id,
                 "tenant.jurisdiction": tenant_context.jurisdiction,
                 "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
+                **identifier.audit_dimensions(),
             },
         ) as span:
             try:
                 # Calling the LiteLLM gateway service (S6): the gateway
-                # itself is OpenAI-compatible, so we tell the LiteLLM
-                # SDK to treat the endpoint as an OpenAI proxy via the
-                # `openai/` prefix on the model. The gateway then maps
-                # the model name (e.g. "qwen2.5:7b") to its configured
-                # backend (Ollama) per ops/litellm/config.yaml.
-                call_kwargs: dict[str, Any] = {
-                    "model": f"openai/{resolved_model}",
-                    "messages": [_message_to_payload(m) for m in messages],
-                    "api_base": endpoint,
-                    "api_key": master_key,
-                }
+                # is OpenAI-compatible. model_ontology builds the base
+                # kwargs (the `openai/`-prefixed model the gateway maps
+                # to its Ollama backend, endpoint, key, per-tier
+                # timeout); messages and tools layer on here.
+                call_kwargs: dict[str, Any] = litellm_call_kwargs(
+                    identifier, self._settings
+                )
+                call_kwargs["messages"] = [
+                    _message_to_payload(m) for m in messages
+                ]
                 if tools:
                     call_kwargs["tools"] = [_tool_to_payload(t) for t in tools]
                 response = litellm.completion(**call_kwargs)
@@ -222,6 +225,7 @@ class LiteLLMAdapter:
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> AsyncIterator[CompletionChunk]:
         """Streaming completion against the LiteLLM gateway (D90, S29b).
 
@@ -254,9 +258,12 @@ class LiteLLMAdapter:
         ``streaming_no_usage`` pricing_status flag distinct from
         ``unknown_model``.
         """
-        resolved_model = model or self._settings.default_model
-        endpoint = self._settings.litellm_endpoint
-        master_key = self._settings.litellm_master_key
+        # D122 / D132: compose the four-layer ModelIdentifier at the
+        # adapter boundary; latency_tier is defaulted (Path A).
+        identifier = resolve_call_ontology(
+            model=model, latency_tier=latency_tier, settings=self._settings
+        )
+        resolved_model = identifier.version
 
         with _tracer.start_as_current_span(
             f"chat {resolved_model}",
@@ -269,21 +276,21 @@ class LiteLLMAdapter:
                 "tenant.id": tenant_context.tenant_id,
                 "tenant.jurisdiction": tenant_context.jurisdiction,
                 "tenant.cost_attribution_id": tenant_context.cost_attribution_id,
+                **identifier.audit_dimensions(),
             },
         ) as span:
-            call_kwargs: dict[str, Any] = {
-                "model": f"openai/{resolved_model}",
-                "messages": [_message_to_payload(m) for m in messages],
-                "api_base": endpoint,
-                "api_key": master_key,
-                "stream": True,
-                # Ask providers that support it (cloud OpenAI-compatible
-                # gateways) to include usage on the terminal chunk so
-                # cost_for() can compute on the same span. Dev / Ollama
-                # may ignore the option; stream_chunk_builder reassembles
-                # tokens as a fallback either way.
-                "stream_options": {"include_usage": True},
-            }
+            call_kwargs: dict[str, Any] = litellm_call_kwargs(
+                identifier, self._settings
+            )
+            call_kwargs["messages"] = [
+                _message_to_payload(m) for m in messages
+            ]
+            # Ask providers that support it (cloud OpenAI-compatible
+            # gateways) to include usage on the terminal chunk so
+            # cost_for() can compute on the same span. Dev / Ollama may
+            # ignore it; stream_chunk_builder reassembles as a fallback.
+            call_kwargs["stream"] = True
+            call_kwargs["stream_options"] = {"include_usage": True}
             if tools:
                 call_kwargs["tools"] = [_tool_to_payload(t) for t in tools]
 
@@ -466,9 +473,17 @@ class LiteLLMAdapter:
         consumers land at P14), and the port extends with a tenant
         parameter at that point if attribution is required.
         """
-        resolved_model = request.model_hint or self._settings.default_model
-        endpoint = self._settings.litellm_endpoint
-        master_key = self._settings.litellm_master_key
+        # D122 / D132: the request carries its own latency_tier; compose
+        # the four-layer ModelIdentifier with the structured-output
+        # schema and temperature folded into the Configuration layer.
+        identifier = resolve_call_ontology(
+            model=request.model_hint,
+            latency_tier=request.latency_tier,
+            settings=self._settings,
+            temperature=request.temperature,
+            structured_output_schema=request.schema,
+        )
+        resolved_model = identifier.version
 
         with _tracer.start_as_current_span(
             f"structured_output {resolved_model}",
@@ -477,26 +492,18 @@ class LiteLLMAdapter:
                 "gen_ai.system": "litellm",
                 "gen_ai.request.model": resolved_model,
                 "gen_ai.operation.name": "structured_output",
+                **identifier.audit_dimensions(),
             },
         ) as span:
-            call_kwargs: dict[str, Any] = {
-                "model": f"openai/{resolved_model}",
-                "messages": [
-                    {"role": "user", "content": request.prompt}
-                ],
-                "api_base": endpoint,
-                "api_key": master_key,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "structured_output",
-                        "schema": request.schema,
-                        "strict": True,
-                    },
-                },
-            }
-            if request.temperature is not None:
-                call_kwargs["temperature"] = request.temperature
+            # model_ontology builds the base kwargs — including the
+            # response_format mapped from the Configuration-layer
+            # schema and the per-tier timeout; the prompt layers on.
+            call_kwargs: dict[str, Any] = litellm_call_kwargs(
+                identifier, self._settings
+            )
+            call_kwargs["messages"] = [
+                {"role": "user", "content": request.prompt}
+            ]
 
             try:
                 response = await litellm.acompletion(**call_kwargs)

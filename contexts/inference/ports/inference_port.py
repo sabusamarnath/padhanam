@@ -40,16 +40,22 @@ from contexts.inference.domain.completion import (
     Message,
     ToolDefinition,
 )
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 class InferencePort(Protocol):
+    # S46 (D122): ``latency_tier`` is a defaulted parameter — Path A.
+    # D122 commits "Phase 1 call sites preserve current behaviour with
+    # opt-in retrofit"; a defaulted parameter honours that, where a
+    # required one would not. The adapter composes the D132 four-layer
+    # ModelIdentifier from the model string, the tier, and settings.
     def complete(
         self,
         messages: Sequence[Message],
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> Completion: ...
 
     def stream_complete(
@@ -58,4 +64,5 @@ class InferencePort(Protocol):
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> AsyncIterator[CompletionChunk]: ...

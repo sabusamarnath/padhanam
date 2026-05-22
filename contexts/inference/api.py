@@ -26,7 +26,7 @@ from contexts.inference.domain.completion import (
     ToolDefinition,
 )
 from contexts.inference.ports import InferencePort
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 def request_completion(
@@ -36,11 +36,13 @@ def request_completion(
     model: str | None,
     tenant_context: TenantContext,
     tools: Sequence[ToolDefinition] = (),
+    latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
 ) -> Completion:
     """Run a completion through the supplied InferencePort.
 
     Thin facade over the application use case so cross-context callers
-    have one stable import target.
+    have one stable import target. ``latency_tier`` (D122) is defaulted
+    so existing cross-context callers preserve current behaviour.
     """
     return _request_completion(
         port=port,
@@ -48,6 +50,7 @@ def request_completion(
         model=model,
         tenant_context=tenant_context,
         tools=tools,
+        latency_tier=latency_tier,
     )
 
 

@@ -25,7 +25,7 @@ from contexts.inference.domain.completion import (
     ToolDefinition,
 )
 from contexts.inference.ports import InferencePort
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 def request_completion(
@@ -35,16 +35,22 @@ def request_completion(
     model: str | None,
     tenant_context: TenantContext,
     tools: Sequence[ToolDefinition] = (),
+    latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
 ) -> Completion:
     """Run the completion through the configured InferencePort.
 
     Side-effects (audit emission, security event on policy denial) are
     composed at the apps/ layer where the port is wired. The use case
     is the single seam the inbound side calls into.
+
+    ``latency_tier`` (D122) is defaulted to REAL_TIME_REQUIRED — Path A,
+    so existing callers preserve current behaviour; a caller on an
+    async-tolerant path passes it explicitly.
     """
     return port.complete(
         messages=messages,
         model=model,
         tenant_context=tenant_context,
         tools=tools,
+        latency_tier=latency_tier,
     )

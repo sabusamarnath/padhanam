@@ -27,14 +27,14 @@ from contexts.inference.domain.completion import (
     Message,
     TokenUsage,
 )
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 class _FakeInferencePort:
     def __init__(self, completion: Completion) -> None:
         self._completion = completion
         self.calls: list[
-            tuple[Sequence[Message], str | None, TenantContext]
+            tuple[Sequence[Message], str | None, TenantContext, LatencyTier]
         ] = []
 
     def complete(
@@ -43,8 +43,11 @@ class _FakeInferencePort:
         model: str | None,
         tenant_context: TenantContext,
         tools=(),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> Completion:
-        self.calls.append((list(messages), model, tenant_context))
+        self.calls.append(
+            (list(messages), model, tenant_context, latency_tier)
+        )
         return self._completion
 
 
@@ -77,12 +80,15 @@ def test_adapter_threads_model_and_input_into_inference_port() -> None:
     assert result.output_text == "hello"
     assert result.trace_id == "abcd1234" * 4
     assert len(fake_port.calls) == 1
-    messages, model, tc = fake_port.calls[0]
+    messages, model, tc, tier = fake_port.calls[0]
     assert model == "qwen2.5:7b"
     assert len(messages) == 1
     assert messages[0].role == "user"
     assert messages[0].content == "say hello"
     assert tc == _tenant_context()
+    # D122 (S46): the evaluation harness is substrate analysis, so the
+    # adapter opts this path into the async-tolerant tier.
+    assert tier is LatencyTier.ASYNC_TOLERANT
 
 
 def test_adapter_returns_empty_trace_id_when_completion_has_none() -> None:

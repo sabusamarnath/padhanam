@@ -9,7 +9,7 @@ from contexts.inference.domain.completion import (
     TokenUsage,
     ToolDefinition,
 )
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 _TENANT_A = TenantContext(
@@ -27,6 +27,7 @@ class _FakeInferencePort:
                 str | None,
                 TenantContext,
                 Sequence[ToolDefinition],
+                LatencyTier,
             ]
         ] = []
 
@@ -36,8 +37,11 @@ class _FakeInferencePort:
         model: str | None,
         tenant_context: TenantContext,
         tools: Sequence[ToolDefinition] = (),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> Completion:
-        self.calls.append((messages, model, tenant_context, tools))
+        self.calls.append(
+            (messages, model, tenant_context, tools, latency_tier)
+        )
         return Completion(
             text="hi",
             model=model or "default",
@@ -58,7 +62,9 @@ def test_use_case_passes_arguments_to_port() -> None:
 
     assert result.text == "hi"
     assert result.usage.total_tokens == 6
-    assert port.calls == [(messages, "qwen2.5:7b", _TENANT_A, ())]
+    assert port.calls == [
+        (messages, "qwen2.5:7b", _TENANT_A, (), LatencyTier.REAL_TIME_REQUIRED)
+    ]
 
 
 def test_use_case_passes_none_model_through() -> None:
@@ -94,6 +100,32 @@ def test_use_case_threads_tools_through() -> None:
     )
 
     assert port.calls[0][3] == [tool]
+
+
+def test_use_case_defaults_latency_tier_to_real_time() -> None:
+    """Path A (D122): an existing caller that passes no latency_tier
+    preserves current behaviour — the port sees REAL_TIME_REQUIRED."""
+    port = _FakeInferencePort()
+    request_completion(
+        port=port,
+        messages=[Message(role="user", content="hi")],
+        model="qwen2.5:7b",
+        tenant_context=_TENANT_A,
+    )
+    assert port.calls[0][4] is LatencyTier.REAL_TIME_REQUIRED
+
+
+def test_use_case_threads_explicit_latency_tier_through() -> None:
+    """A caller on an async-tolerant path passes the tier explicitly."""
+    port = _FakeInferencePort()
+    request_completion(
+        port=port,
+        messages=[Message(role="user", content="hi")],
+        model="qwen2.5:7b",
+        tenant_context=_TENANT_A,
+        latency_tier=LatencyTier.ASYNC_TOLERANT,
+    )
+    assert port.calls[0][4] is LatencyTier.ASYNC_TOLERANT
 
 
 def test_completion_carries_trace_id_when_set() -> None:
