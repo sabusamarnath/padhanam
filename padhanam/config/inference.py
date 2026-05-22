@@ -8,12 +8,26 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from padhanam.config.base import PadhanamSettings
 from padhanam.config.profiles import Profile, get_profile
+from shared_kernel.inference import LatencyTier
 
 
 class TLSMode(StrEnum):
     PLAINTEXT = "plaintext"
     TLS = "tls"
     MTLS = "mtls"
+
+
+@dataclass(frozen=True)
+class LatencyTierConfig:
+    """Per-tier model and timeout configuration, per D122.
+
+    Resolved from ``InferenceSettings`` for one ``LatencyTier``. The
+    LiteLLM adapter reads it to pick the model and timeout budget for
+    a call's declared tier.
+    """
+
+    model: str
+    timeout_seconds: float
 
 
 class InferenceSettings(PadhanamSettings):
@@ -39,6 +53,21 @@ class InferenceSettings(PadhanamSettings):
     default_embedding_model: str = "nomic-embed-text:v1.5"
     tls_mode: TLSMode = TLSMode.PLAINTEXT
 
+    # D122 latency-tier routing (S46). Per-tier model identifiers and
+    # timeout budgets. The model fields are None by default so each
+    # tier resolves to ``default_model`` until an environment variable
+    # (INFERENCE_REAL_TIME_REQUIRED_MODEL, INFERENCE_ASYNC_TOLERANT_MODEL)
+    # overrides — honouring D122's "Phase 1 call sites preserve current
+    # behaviour" commitment. The timeout budgets differ from the start:
+    # a real-time call should fail fast, an async-tolerant call may run
+    # long. The model split becomes meaningful once cloud providers are
+    # configured (a fast small model for real-time, a strong model for
+    # async); local Ollama dev runs one model at two timeout budgets.
+    real_time_required_model: str | None = None
+    async_tolerant_model: str | None = None
+    real_time_required_timeout_seconds: float = 30.0
+    async_tolerant_timeout_seconds: float = 180.0
+
     @model_validator(mode="after")
     def enforce_prod_tls(self) -> "InferenceSettings":
         # D20: prod profile has no plaintext escape hatch.
@@ -48,6 +77,30 @@ class InferenceSettings(PadhanamSettings):
                 "PADHANAM_PROFILE=prod (D20)."
             )
         return self
+
+    @property
+    def latency_tier_config(self) -> dict[LatencyTier, LatencyTierConfig]:
+        """The per-tier model-and-timeout map the LiteLLM adapter reads.
+
+        Each tier's model resolves to its dedicated field when set,
+        otherwise to ``default_model`` — so an unconfigured deployment
+        routes every tier to the same model and only the timeout
+        budget differs.
+        """
+        return {
+            LatencyTier.REAL_TIME_REQUIRED: LatencyTierConfig(
+                model=self.real_time_required_model or self.default_model,
+                timeout_seconds=self.real_time_required_timeout_seconds,
+            ),
+            LatencyTier.ASYNC_TOLERANT: LatencyTierConfig(
+                model=self.async_tolerant_model or self.default_model,
+                timeout_seconds=self.async_tolerant_timeout_seconds,
+            ),
+        }
+
+    def config_for_tier(self, tier: LatencyTier) -> LatencyTierConfig:
+        """Resolve the model-and-timeout configuration for one tier."""
+        return self.latency_tier_config[tier]
 
 
 class ModelPricing(BaseModel):
