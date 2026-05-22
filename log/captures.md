@@ -482,3 +482,48 @@ Without the budget verification surface, the AuthorisationDenied handler would h
 
   - triaged: defer on 2026-05-22
   - resolution: the `_errors.py` split is forwarded to the Phase 2-A close hygiene list at `charter/phase-2-audit-inputs.md`. The file topology budget discipline promotes to a `charter/methodology.md` entry at P13 close per the S44-framing settlement, with this first-instance evidence cited. Recorded at the S44a session-log methodology line 3.
+
+## 2026-05-22 — [S44b] File topology budget second-instance evidence (methodology candidate)
+
+S44b is the second instance of the file topology budget discipline (S44a was the first). Pre-write reconciliation surface 6 caught `apps/api/_agent_runtime_wiring.py` at 912 lines — past the brief's own budget-table split trigger for that file ("Multi-context wiring file approaches 600 lines"). S44a's first instance caught `apps/api/_errors.py` at 729 lines. Two instances, two genuine overages, each redirecting new code away from the over-budget file: at S44a the AuthorisationDenied handler went to `_auth_errors.py`; at S44b the intake write-surface wiring went to a new `apps/api/_intake_wiring.py` rather than growing `_agent_runtime_wiring.py`.
+
+Two-instance load-bearing evidence. The discipline does not merely measure — it redirects placement decisions. Strong promotion candidate to `charter/methodology.md` at P13 close per the framing-conversation settlement.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to P13-close methodology-document promotion with two-instance evidence (S44a `_errors.py`; S44b `_agent_runtime_wiring.py`). The `_agent_runtime_wiring.py` split is forwarded to `charter/phase-2-audit-inputs.md` alongside the `_errors.py` split.
+
+## 2026-05-22 — [S44b] Cross-context-contract verification as a pre-write reconciliation surface (methodology candidate)
+
+The S44b brief framed the intake-canonical orchestrations as use cases in `contexts/intake/application/` directly invoking `contexts/portfolio/application/` use cases, and AC 13 asserted "cross-context imports allowed at the application layer only" — the exact inverse of the import-linter "Cross-context: application layers are independent" contract (D16/D17/D28). The codebase carries the consumer-port-plus-wiring-adapter pattern at 12-plus reinforcements, yet the brief still inverted the rule.
+
+The lesson: even a well-established architectural pattern surfaces drift at brief-drafting time, because the brief drafter reasons about intent ("the orchestration belongs at the intake boundary") without checking the brief's mechanism against the binding contract. The discipline addition is an explicit pre-write reconciliation surface: for any new cross-context dependency a brief introduces, verify import-linter contract conformance before drafting the work decomposition. The operator added this as standing surface 8 from S44b forward.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to `charter/methodology.md` promotion candidacy. Surface 8 (cross-context-contract verification) added to the pre-write reconciliation surface set from S44b forward. First-instance evidence; recurrence test at the next brief introducing a cross-context dependency. Recorded at the S44b session-log methodology lines.
+
+## 2026-05-22 — [S44b] Scope-completeness for D-entry architectural-posture commitments (methodology candidate)
+
+D128's framing claimed "every persisted state change in the platform traces to an IntakeRecord." S44b pre-write reconciliation Finding 2 caught that the brief made `Assertion.intake_id` required-at-domain-level but provided no intake path for `create_data_point` (the INITIAL-assertion creator) — the universal claim could not hold. D128 was rescoped to "every persisted state change at the platform's write surfaces," and a third orchestration (`record_intake_and_create_data_point`) plus a POST `/api/v1/data_points` route closed the gap.
+
+The pattern: a D-entry asserting a platform-wide architectural posture needs explicit enumeration against all currently-implemented write surfaces before its prose drafts. A universal-quantifier claim ("every ...") in a D-entry is a hypothesis to verify against the surface inventory, not a settled fact. First-instance candidate.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to `charter/methodology.md` promotion candidacy. Recorded at the S44b session-log methodology lines.
+
+## 2026-05-22 — [S44b] Adapter-level transaction-semantics verification before commitment (methodology candidate)
+
+The S44b brief asserted the orchestration's two writes (intake, then portfolio) happen "within a single database transaction" that "rolls back both" on downstream failure. Pre-write reconciliation Finding 3 caught that the current adapter shape — each adapter method opens its own `session.begin()` — cannot provide a shared transaction without a unit-of-work refactor. D128 was rewritten to two-transaction intake-first ordering, with the orphaned-intake-on-failure framed as the honest canonical record-of-attempt.
+
+The pattern: a structural claim about transaction semantics, atomicity, or unit-of-work boundaries needs adapter-level capability verification at pre-write reconciliation before a D-entry commits the claim. Transaction-boundary assertions are constrained by what the adapter layer can actually provide. First-instance candidate.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to `charter/methodology.md` promotion candidacy. The unit-of-work refactor (a genuine shared cross-context transaction) is forwarded to `charter/phase-2-audit-inputs.md` for Phase 2-A close consideration. Recorded at the S44b session-log methodology lines.
+
+## 2026-05-22 — [S44b] Distinct-architectural-concern, not instance count, triggers a new bounded context (note)
+
+D127 alternative (d) originally framed "a third orchestration" as the activation trigger for a `contexts/orchestration/` bounded context. S44b's Finding-2 resolution landed a third orchestration (`record_intake_and_create_data_point`); the disposition clarified that three orchestrations of the same pattern — intake-canonical for a downstream-context write, dual-decorator, intake-then-write structure, intake_id propagation — constitute one architectural concern, not three. They stay at `contexts/intake/application/`.
+
+The forward discipline: a new bounded context is triggered by a *distinct architectural concern*, not by instance count. The `contexts/orchestration/` trigger is an orchestration concern that cannot be characterised as intake-canonical-for-downstream-write — e.g. a multi-step saga, or branching orchestration across three-plus contexts. Future intake-then-methodology or intake-then-calendar orchestrations remain the same pattern and stay at `contexts/intake/`.
+
+  - triaged: note on 2026-05-22
+  - resolution: recorded as a forward-looking discipline note; the clarification is captured in D127 alternative (d)'s landed prose. No separate methodology-document promotion sought — a refinement of an existing trigger, not a recurring build pattern.

@@ -13,6 +13,78 @@ Format:
 
 ---
 
+## 2026-05-22 — S44b — Intake context substrate plus write-side HTTP plus intake-canonical orchestration
+roles: analyst, PM, architect, engineer, technical writer
+mode: build (P13 Wave 1 fourth build session; the write-path substrate and transport, planned-bridge sub-variant)
+
+metrics:
+  classification: substrate session (new `contexts/intake/` bounded context plus write-surface transport; D127/D128)
+  brief_started: 2026-05-22
+  session_started: 2026-05-22
+  session_closed: 2026-05-22
+  merged: 2026-05-22
+  close_state: clean (12 commits; the brief's eleven-commit plan grew to twelve at pre-write reconciliation)
+  tests_passing: yes (S44b surface green; 1746 passed in the full unit+contract+integration run; the two pre-existing environmental failures in contexts/methodology and contexts/tools are carried from S44a and unrelated to S44b)
+  principles_intact: yes
+  charter_touchpoints: charter/decisions.md (D127, D128); charter/schema.md (Intake context substrate section); charter/packages/p13-epic.md (Session 2b line); charter/current-package.md; charter/phase-2-audit-inputs.md (two close-hygiene entries); briefs/p13/s44b.md
+  corrects:
+  corrected_by:
+  paired_with: S44a
+
+S44b lands the `contexts/intake/` bounded context and the intake-canonical write surface per D127/D128: IntakeRecord as the canonical-entry aggregate, three standalone use cases, three orchestration use cases composing intake with a portfolio write, write-side HTTP for both the portfolio and intake surfaces, and the CLI write path. The session opened with an eight-surface pre-write reconciliation (the seven from the brief plus the operator-added cross-context-contract verification surface) that reshaped the orchestration design before any code — the load-bearing event of the session.
+
+- Produced: Twelve commits closed the session.
+  - Commit eda60de (`docs(p13/s44b)`): D127 and D128; the p13-epic Session 2b line; the schema.md Intake context substrate section; the current-package transition; `briefs/p13/s44b.md` preserved with a pre-write reconciliation annotation.
+  - Commit bd0f9b1 (`feat`): the `contexts/intake/` domain layer — IntakeRecord, IntakeSource, ManualEntryPayload, the IntakePayload alias — plus the hexagonal skeleton and the `layers-intake` import-linter contract.
+  - Commit 0993e20 (`feat`): the IntakeRepository port, the Postgres adapter, Alembic 0017, and 11 tenant-isolation contract tests.
+  - Commit a003749 (`feat`): the three standalone use cases (record_intake, get_intake, list_intakes), the three intake permissions, and the intake audit-event helper.
+  - Commit 429ec7f (`feat`): Alembic 0018 plus `intake_id` on Case and Assertion; the portfolio use cases and adapter thread it through.
+  - Commit ff16b2d (`feat`): the `PortfolioWriter` consumer port and the create-case and revise orchestrations.
+  - Commit a9a89db (`feat`): the `record_intake_and_create_data_point` orchestration.
+  - Commit affa966 (`feat`): the write-side portfolio HTTP routes, `_portfolio_write_dto.py`, and the `_intake_wiring.py` wiring adapters.
+  - Commit 181f86e (`feat`): the intake HTTP routes, `_intake_dto.py`, `_intake_query.py`, and the intake error handlers.
+  - Commit 1d0ccf4 (`feat`): the CLI write path via the orchestrations.
+  - Commit 190c346 (`docs`): the eight-stage live-stack smoke.
+  - Commit this commit (`docs(p13/s44b)`): this session log entry; the current-package close marker; five captures entries; two `charter/phase-2-audit-inputs.md` close-hygiene entries.
+
+- Decisions: D127 (intake context substrate plus the three orchestration use cases on a consumer-defined `PortfolioWriter` port) and D128 (intake-canonical commitment as a cross-context architectural posture, scoped to the platform's write surfaces). Both landed at commit 1, reshaped at pre-write reconciliation from the framing-time brief: D127 gained alternative (e) (the rejected direct cross-context import) and grew from two orchestrations to three; D128 dropped the "single transaction" claim for two-transaction intake-first ordering and rescoped from "every persisted state change" to "every persisted state change at the platform's write surfaces." Kano: both must-have.
+
+- Tests: roughly 90 new tests across the intake domain, persistence, use cases, orchestrations, the portfolio intake_id surface, and the two HTTP write surfaces. The full unit+contract+integration run is 1746 passed (+61 from S44a's 1685), 17 skipped. 29 of 29 import-linter contracts kept; AST enforcement green. The two pre-existing environmental failures (`contexts/methodology` lvt round-trip; `contexts/tools` `test_list_roles_using_tool_returns_empty_pre_commit_4`) are carried unchanged from S44a — both fail in isolation against the live control-plane DB state, and S44b touched zero files in either context's dependency closure.
+
+- Enforcement layer: One new import-linter contract — `layers-intake` (the hexagonal layer order for the new context). The three cross-context independence contracts, `domain-purity`, and the three SDK-confinement contracts each gain the intake context: 29 contracts kept. The cross-context independence contract did load-bearing work this session — it is the contract the brief's orchestration design violated, and the consumer-port resolution keeps `contexts.intake.application` independent of `contexts.portfolio.application` (verified at 29/29). No AST enforcement change — the intake context carries no per-context `pyproject.toml`, so `COPY contexts ./contexts` covers it. The intake-canonical enforcement layer S44b adds: the orchestrations' dual `@requires_authorisation` decorators (fail-fast on both the intake and portfolio permissions before any write), and the `intake_id` foreign key with ON DELETE RESTRICT on `cases` and `assertions`.
+
+- Pre-write reconciliation: Eight surfaces verified before commit 1. Surfaces 1 and 7 were clean (D-number sequence; the type-identifier search found no IntakeRecord / IntakeSource / ManualEntryPayload / intake_id collisions). Three surfaces surfaced structural findings that reshaped the build, all surfaced to the operator as questions before any code: Finding 1 — the brief's orchestrations directly importing `contexts/portfolio/application/` violate the import-linter cross-context-independence contract, and AC 13 asserted the inverse of the rule; Finding 2 — `create_data_point` was an uncovered write surface, so D128's "every persisted state change" claim could not hold; Finding 3 — the brief's "single transaction across two contexts" is not achievable with the per-method-session adapter shape. Four mechanical corrections (the Assertion file path, the `_agent_runtime_wiring.py` 912-line overage, the 0018 revision-string length, D128's scope wording). The operator confirmed all dispositions and added the cross-context-contract verification as standing surface 8.
+
+- Reflection prompts answered:
+
+  1. *Pre-write reconciliation surfaces.* Eight surfaces; the discipline did its heaviest architectural work yet. Finding 1 is the headline: the brief inverted the cross-context import-linter rule despite the consumer-port pattern carrying 12-plus reinforcements in the codebase — the brief drafter reasoned from intent ("the orchestration belongs at the intake boundary") without checking the mechanism against the binding contract. The new surface 8 (cross-context-contract verification) is the discipline addition; it caught Finding 1 and is added standing from S44b forward. Surface 6 (file topology budget, second instance) caught `_agent_runtime_wiring.py` at 912 lines and redirected the intake wiring to a new file. The cumulative reconciliation count keeps climbing; S44b is the second consecutive session (after S44a) where reconciliation reshaped a charter decision rather than absorbing drift.
+
+  2. *Compose-shape and ActorContext propagation at the larger surface.* The S44a compose-shape commitment held cleanly across the much larger S44b surface — the new intake context, three orchestrations, the CLI synthesis, the dual-decorator pattern all consume ActorContext, and `actor.tenant_context` extraction reads as the same deliberate boundary at every adapter call seam. The `actor.actor_id` → `ActorReference` derivation (D126's persisted-identity separation) extended naturally to the IntakeRecord's `authored_by`. Second-instance evidence that the compose-shape decision is structurally durable: it cost nothing at the larger surface and the dual-decorator stacking (two `@requires_authorisation` decorators on each orchestration) composed without friction.
+
+  3. *File topology budget second-instance evidence.* The discipline caught a second genuine overage — `_agent_runtime_wiring.py` at 912 lines, past the brief's own 600-line trigger — and redirected the intake write-surface wiring to a new `apps/api/_intake_wiring.py`. Two instances (S44a `_errors.py` at 729; S44b `_agent_runtime_wiring.py` at 912), two redirected placement decisions. The discipline does not merely measure; it changes where new code lands. Strong P13-close promotion candidate with two-instance load-bearing evidence; the `_agent_runtime_wiring.py` split forwarded to the Phase 2-A close hygiene list.
+
+  4. *Brief-vs-domain-model drift recurrence test.* The S44a type-altitude drift candidate's recurrence test fired at surface 7 (the type-identifier search). The search was clean — no collisions for the new intake types or the `intake_id` field. So the drift did not recur at the type-identifier altitude; the S44a candidate stays at one instance. A different brief-vs-codebase drift class surfaced instead — Finding 1's cross-context-contract inversion — captured as its own methodology candidate (the cross-context-contract verification surface), not a recurrence of the type-altitude pattern.
+
+  5. *Forward-commitment-evaluation pattern recurrence test.* The S44a candidate's recurrence test fired at surface 2. No D-entry forward commitment was evaluated-and-superseded at S44b: D127 and D128 are new entries, not evaluations of a prior entry's forward commitment. So the forward-commitment-evaluation pattern stays at one instance (S44a's D126 superseding D124). No recurrence at S44b; the candidate holds at single-instance pending.
+
+  6. *Orchestration-at-intake disposition validation.* Item 4 of the framing settled the orchestrations at `contexts/intake/application/`. The implementation validated the choice once the consumer-port resolution landed: the orchestration genuinely reads as originating at the intake boundary (record the intake, then drive the downstream write), and the `PortfolioWriter` consumer port made the cross-context dependency explicit and unit-testable against a fake. The friction the framing did not anticipate was purely the import-linter contract — resolved structurally, not by relocating the orchestration. The intake-canonical conceptual flow (intake is the canonical entry; downstream actions flow from it) is faithfully expressed by an orchestration that depends inward on a consumer port rather than outward on the portfolio context.
+
+  7. *Methodology line opportunities.* Five candidates surfaced, each captured at `log/captures.md` and carried as a methodology line below. The dual-decorator-at-orchestration-boundary idiom and the orchestration naming convention (`record_intake_and_X`) are clean patterns but expected consequences of the settled D127 design, not structural novelty — not promoted, per the captures-candidate threshold.
+
+- methodology (line 1): **File topology budget second-instance load-bearing evidence.** The discipline caught `_agent_runtime_wiring.py` at 912 lines and redirected the intake wiring to a new file — the second instance after S44a's `_errors.py`. Two-instance evidence; strong P13-close promotion candidate. Captured at `log/captures.md`.
+
+- methodology (line 2): **Cross-context-contract verification as a pre-write reconciliation surface.** The brief inverted the import-linter cross-context-independence contract despite the consumer-port pattern's 12-plus reinforcements; even well-established patterns surface drift at brief-drafting time. Surface 8 (verify import-linter contract conformance for any new cross-context dependency) added standing from S44b. First-instance candidate; captured at `log/captures.md`.
+
+- methodology (line 3): **Scope-completeness for D-entry architectural-posture commitments.** D128's "every persisted state change" claim overclaimed; Finding 2 caught the `create_data_point` write-surface gap. A D-entry asserting a platform-wide posture needs explicit enumeration against all currently-implemented write surfaces before its prose drafts. First-instance candidate; captured at `log/captures.md`.
+
+- methodology (line 4): **Adapter-level transaction-semantics verification before commitment.** The brief asserted a single shared transaction the adapter shape cannot provide; Finding 3 caught it. Structural claims about transaction semantics or unit-of-work boundaries need adapter-level capability verification before a D-entry commits the claim. First-instance candidate; captured at `log/captures.md`.
+
+- methodology (line 5): **Distinct architectural concern, not instance count, triggers a new bounded context.** D127 alternative (d)'s "third orchestration" trigger was clarified: three orchestrations of one pattern are one concern; the `contexts/orchestration/` trigger is a distinct orchestration concern. A forward-looking discipline note; captured at `log/captures.md`.
+
+- **S44b closed; the portfolio context is complete end-to-end through both the read and write surfaces, and the intake context substrate is in place. The five S44b-framing settlements absorbed: the intake-canonical posture held (with D128 honestly rescoped), compose-shape held at the larger surface, the file topology budget did second-instance load-bearing work, the orchestration-at-intake placement validated, and the consumer-port resolution kept the cross-context boundary intact. What diverged was the brief's code-side assumptions — the cross-context import mechanism, the create_data_point coverage, the transaction semantics — each caught by reconciliation before any code landed. S45 (the messaging substrate and conversational protocol) is next per the p13-epic Session 3 line.**
+
+---
+
 ## 2026-05-22 — S44a — ActorContext value object plus authorisation decorator at the use-case boundary
 roles: analyst, PM, architect, engineer, technical writer
 mode: build (P13 Wave 1 third build session; identity-and-permissions substrate)
