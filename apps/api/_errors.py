@@ -56,6 +56,7 @@ from apps.api.routers._optimization_query import (
 )
 from apps.api.routers._portfolio_query import InvalidPortfolioFilterError
 from apps.api.routers._run_history_query import InvalidFilterRangeError
+from contexts.portfolio.application import DataPointNotFoundError
 from contexts.audit.domain.query_filters import (
     MalformedCursorError as AuditMalformedCursorError,
 )
@@ -683,12 +684,30 @@ async def _handle_invalid_portfolio_filter(
     return JSONResponse(status_code=400, content=body.model_dump())
 
 
+async def _handle_data_point_not_found(
+    request: Request, exc: DataPointNotFoundError
+) -> JSONResponse:
+    """Translate ``DataPointNotFoundError`` to 404 (D127, S44b).
+
+    Raised by ``revise_data_point`` when the PATCH route targets an
+    unknown data point. New error code within the existing not-found
+    family per D98.
+    """
+    body = ErrorResponse(
+        error_code="data_point_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
 def register_portfolio_error_handlers(app: FastAPI) -> None:
-    """Register the portfolio HTTP error handlers (D124, S43b).
+    """Register the portfolio HTTP error handlers (D124, S43b; D127, S44b).
 
     Handlers registered:
 
     - ``CaseNotFoundError`` -> 404 ``case_not_found``.
+    - ``DataPointNotFoundError`` -> 404 ``data_point_not_found``.
     - ``PortfolioMalformedCursorError`` -> 400
       ``malformed_portfolio_cursor``.
     - ``InvalidPortfolioFilterError`` -> 400 ``invalid_portfolio_filter``.
@@ -700,6 +719,10 @@ def register_portfolio_error_handlers(app: FastAPI) -> None:
     """
     app.add_exception_handler(
         CaseNotFoundError, _handle_case_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        DataPointNotFoundError,  # type: ignore[arg-type]
+        _handle_data_point_not_found,
     )
     app.add_exception_handler(
         PortfolioMalformedCursorError,  # type: ignore[arg-type]

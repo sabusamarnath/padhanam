@@ -78,6 +78,7 @@ class FakePortfolioWriter:
         self.created_data_points: list[DataPointWriteResult] = []
         self.revised_data_points: list[DataPointWriteResult] = []
         self.fail: bool = False
+        self.raise_not_found: bool = False
 
     @staticmethod
     def _tenant_uuid(actor: ActorContext) -> UUID:
@@ -135,6 +136,10 @@ class FakePortfolioWriter:
     ) -> DataPointWriteResult:
         if self.fail:
             raise RuntimeError("downstream portfolio write failed")
+        if self.raise_not_found:
+            from contexts.portfolio.application import DataPointNotFoundError
+
+            raise DataPointNotFoundError(data_point_id)
         result = DataPointWriteResult(
             data_point_id=data_point_id,
             case_id=uuid4(),

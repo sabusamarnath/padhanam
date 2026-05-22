@@ -63,6 +63,8 @@ from contexts.optimization.ports.recommendation_repository import (
     RecommendationRepository,
 )
 from contexts.portfolio.ports import PortfolioReader
+from contexts.intake.ports.intake_repository import IntakeRepository
+from contexts.intake.application.ports.portfolio_writer import PortfolioWriter
 from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
     EvaluationRunReader,
 )
@@ -182,6 +184,11 @@ class AppCompositions:
     # S43b (D124): portfolio context read surface for the
     # GET /api/v1/portfolio/cases* routes.
     portfolio_reader: PortfolioReader | None = None
+    # S44b (D127): intake write surface — the intake repository and
+    # the PortfolioWriter consumer-port adapter behind the portfolio
+    # and intake write routes.
+    intake_repository: IntakeRepository | None = None
+    portfolio_writer: PortfolioWriter | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -313,6 +320,10 @@ def _build_default_compositions() -> AppCompositions:
         build_retrieval_client,
         build_retrieval_runner_port,
     )
+    from apps.api._intake_wiring import (
+        build_intake_repository,
+        build_portfolio_writer,
+    )
 
     gold_set_repository = build_gold_set_repository(
         tenant_registry=registry,
@@ -378,6 +389,19 @@ def _build_default_compositions() -> AppCompositions:
         operator_principal=operator_principal,
         security_events=sec,
     )
+    intake_repository = build_intake_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    portfolio_writer = build_portfolio_writer(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        audit_port=audit_adapter,
+    )
 
     return AppCompositions(
         inference_port=inference_port,
@@ -401,6 +425,8 @@ def _build_default_compositions() -> AppCompositions:
         recommendation_repository=recommendation_repository,
         recommendation_reader=recommendation_reader,
         portfolio_reader=portfolio_reader,
+        intake_repository=intake_repository,
+        portfolio_writer=portfolio_writer,
     )
 
 
@@ -567,6 +593,9 @@ def create_app(
     app.state.recommendation_repository = compositions.recommendation_repository
     app.state.recommendation_reader = compositions.recommendation_reader
     app.state.portfolio_reader = compositions.portfolio_reader
+    # S44b (D127): intake write-surface composition seams.
+    app.state.intake_repository = compositions.intake_repository
+    app.state.portfolio_writer = compositions.portfolio_writer
 
     # Example event-bus subscription per the prompt — the wiring shape
     # is the asset, not the example logger. Replaced with real audit
