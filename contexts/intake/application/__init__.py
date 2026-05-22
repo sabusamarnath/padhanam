@@ -20,9 +20,17 @@ and ``audit_events.py`` (the draft audit-event helper).
 from contexts.intake.application.get_intake import get_intake
 from contexts.intake.application.list_intakes import list_intakes
 from contexts.intake.application.record_intake import record_intake
+from contexts.intake.application.record_intake_and_create_case import (
+    record_intake_and_create_case,
+)
+from contexts.intake.application.record_intake_and_revise_data_point import (
+    record_intake_and_revise_data_point,
+)
 
 __all__ = [
     "get_intake",
     "list_intakes",
     "record_intake",
+    "record_intake_and_create_case",
+    "record_intake_and_revise_data_point",
 ]
