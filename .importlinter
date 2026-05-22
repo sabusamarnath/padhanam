@@ -141,6 +141,15 @@ layers =
     contexts.portfolio.ports
     contexts.portfolio.domain
 
+[importlinter:contract:layers-intake]
+name = Intake layers (hexagonal)
+type = layers
+layers =
+    contexts.intake.adapters
+    contexts.intake.application
+    contexts.intake.ports
+    contexts.intake.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -171,6 +180,7 @@ modules =
     contexts.retrieval_evaluation.domain
     contexts.optimization.domain
     contexts.portfolio.domain
+    contexts.intake.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -194,6 +204,7 @@ modules =
     contexts.retrieval_evaluation.application
     contexts.optimization.application
     contexts.portfolio.application
+    contexts.intake.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -216,6 +227,7 @@ modules =
     contexts.retrieval_evaluation.adapters
     contexts.optimization.adapters
     contexts.portfolio.adapters
+    contexts.intake.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -253,6 +265,7 @@ source_modules =
     contexts.retrieval_evaluation.domain
     contexts.optimization.domain
     contexts.portfolio.domain
+    contexts.intake.domain
 forbidden_modules =
     pydantic
     pydantic_settings
@@ -332,6 +345,7 @@ source_modules =
     contexts.retrieval_evaluation
     contexts.optimization
     contexts.portfolio
+    contexts.intake
 forbidden_modules =
     litellm
 allow_indirect_imports = false
@@ -362,6 +376,7 @@ source_modules =
     contexts.run_history
     contexts.retrieval_evaluation
     contexts.portfolio
+    contexts.intake
     contexts.observability.domain
     contexts.observability.application
     contexts.observability.ports
@@ -431,6 +446,7 @@ source_modules =
     contexts.retrieval_evaluation
     contexts.optimization
     contexts.portfolio
+    contexts.intake
 forbidden_modules =
     neo4j
 allow_indirect_imports = false

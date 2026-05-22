@@ -1,0 +1,1 @@
+"""Intake adapters (D127)."""
