@@ -13,6 +13,49 @@ Format:
 
 ---
 
+## S46 smoke — manual entry cell live-stack verification
+roles: engineer, technical writer
+mode: strategic-mode-continuation (operational execution evidence continuing the S46 close)
+
+The S46 manual entry cell (D115 first ConversationFlow implementer, D122 latency-tier routing, D132 four-layer model ontology) verified end-to-end against tenant_a on the rebuilt `padhanam-api` image (digest `sha256:523e9419…`, pin advanced from S45's `sha256:77ad47bf…`) across the operator-WhatsApp-to-portfolio-state cascade. Two CreateCaseIntent cascades clean (stages 1 and 8e-i); seven AddDataPointIntent attempts across four phrasings all classified to UnclearIntent (the cell behaved contract-correctly throughout — clarification, no write, no citation line); two structural-honesty findings surfaced and captured at `log/captures.md` rather than fixed in-session.
+
+- Produced: Three commits across the smoke-execution arc. `chore(compose)` `padhanam-api` image re-pin to `sha256:523e9419…` after `make build-api` rebuilt the image to carry S46 code (the running container had been S45's `sha256:77ad47bf…`); `docs(charter)` two captures entries at `log/captures.md` (webhook synchronous-cell-run-vs-Twilio-timeout finding with cold-vs-warm latency paragraph; intent-extraction reliability at REAL_TIME_REQUIRED with `qwen2.5:7b` finding with instrumentation-gap paragraph); `docs(p13/s46-smoke)` landing the executed-evidence smoke document, this session-log entry, and the current-package smoke-complete annotation.
+
+- Smoke outcome: two CreateCase cascades (stage 1 Case `fa6401b0` "Q3 portfolio review"; stage 8e-i Case `4fac3ae0` "Q3 budget review" against the now-similar-named existing case, no conflation); one AddDataPoint attempt at 8a using the smoke document's own template phrasing produced UnclearIntent; three structural rephrasings exercising distinct surface-cue patterns (verb-first-full-title, target-front-loaded, no-verb-noun-phrase) each sent twice (six runs total) all produced byte-identical UnclearIntent clarifications. Final tenant_a state: intakes 17 (+11 from baseline 6), cases 6 (+2), data_points 3 (unchanged — no Add succeeded), assertions 6 (unchanged), messages 21 (+18), tenant_audit 165 (+31). Audit chain holds: 165 events, exactly 1 chain entry point (genesis), 165 distinct `this_event_hash` values (zero duplicates), 0 broken links. D122/D132 trace attributes verified at the stage-1 LLM-call observation: all four `gen_ai.model.*` dimensions present (provider=ollama, account=default, version=qwen2.5:7b, configuration=`latency_tier=real_time_required;temperature=0.0;structured_output_schema=present`), scope `padhanam.inference.litellm`. D131 citation contract held in all 9 outbound replies (2 cited per Shape 1 short-hex-plus-timestamp; 7 clarifications carrying no citation line).
+
+- Decisions: No new D-entries. The smoke produces operational evidence for existing commitments (D115, D122, D128, D129, D130, D131, D132) plus two structural-honesty findings preserved at `log/captures.md` (the webhook-contract violation finding feeds a future build session for Path A in-process asyncio dispatch plus cell-failure logging; the intent-extraction reliability finding is first-class convergence-session input).
+
+- Tests: No test surface changed — operational execution evidence. The S46 build-session suite (`tests/unit`, `tests/contract`, `tests/integration/api` green at close) stands.
+
+- Reflection (LLM cold-vs-warm latency dynamic, prompt 1): the synchronous-LLM-vs-Twilio-timeout finding surfaced at stage 1 (LLM call 22.95s, ngrok status 0) — initially framed as "the 23s LLM blows Twilio's 15s webhook timeout, retry-duplication risk." The round-2 rephrasings produced a richer empirical picture: the same LLM call ran at 18.62s (cold after 13min idle), 9.07s (warm 35s later), 8.05s (warm 18s later). Ollama's 5-min keep-alive unloads the model on idle; the next call pays cold-start cost. The webhook-contract finding holds on grounds independent of which side of the timeout a given run falls (a synchronous handler is wrong on contract grounds even at 8s — it ties up a server worker for the full duration and writes its response to an already-closed connection), but the empirical urgency calibrates by usage pattern. The captures entry now incorporates both endpoints honestly.
+
+- Reflection (intent-extraction reliability and N=1-vs-N=4 catch, prompt 2): stage 8a's AddDataPointIntent attempt classified to UnclearIntent using the smoke document's own template phrasing. The initial disposition drafting in the cross-thread captures wording overclaimed three rephrasings as "having run" before they actually ran — Claude Code caught the N=1-versus-N=4 conflation at captures-entry drafting time and surfaced the discrepancy; the operator chose Path 1+2 (actually run the rephrasings then close) over Path 2 (close at N=1 with softer wording). The rephrasings ran (verb-first, target-front-loaded, no-verb-noun-phrase; each sent twice for six runs total); all classified to UnclearIntent. Phrasing-sensitivity empirically falsified; intent-class blindness on AddDataPoint at `qwen2.5:7b` / REAL_TIME_REQUIRED is the surviving claim, supported by N=4 distinct phrasings across 7 runs. Three architectural responses for the convergence session captured: raise the REAL_TIME_REQUIRED tier model (Response A), constrain the classification surface or expand the prompt (Response B), render model uncertainty as user-facing clarification more honestly (Response C). Phase 2-A operator-dogfooding-via-WhatsApp viability opens as a first-class convergence input rather than mid-stream optimisation.
+
+- Reflection (D131 first-instance operator-facing reality, prompt 3): the cited replies in both CreateCase cascades carried the Shape 1 line cleanly — `— ref fa6401b0 · intake 85622595 · 21:45 UTC` and `— ref 4fac3ae0 · intake 583c7c36 · 22:30 UTC`. The short-hex prefixes match the persisted IDs exactly. The citation line sat below a blank line beneath the confirmation prose, scanning as a single short line. The clarification-path replies (8a + rephrasings) carried no citation line — D131 contract held across all 7 clarification cases. Whether operators find the citations useful, intrusive, or ignorable at any volume is convergence-session-relevant; the smoke confirms the rendering shape without stressing operator preference.
+
+- Reflection (instrumentation gap on prompt/output capture, prompt 4): the Langfuse trace captures the D122/D132 dimensions and token counts but does not capture prompt content or model output. The smoke cannot distinguish whether `qwen2.5:7b` returned clean UnclearIntent JSON (the model knows it doesn't know) or whether `parse_intent` coerced malformed output to UnclearIntent (the model produced something Padhanam can't parse). The two cases have different architectural implications for confidence-aware composition. Folded as a paragraph inside the intent-extraction reliability captures entry rather than as a separate finding because the gap is structurally linked to the intent-extraction finding's analytical surface.
+
+- Reflection (discipline-working signals during smoke execution, prompt 5): three discipline-working signals at this smoke worth indexing for Phase 2-A close hygiene methodology assessment. First, the N=1-versus-N=4 catch at captures-entry drafting where the build-execution surface caught a strategic-altitude overclaim before it landed in repo state — pre-write reconciliation at a non-traditional surface (cross-thread captures wording rather than within-brief acceptance criteria). Second, the cold-vs-warm latency finding emerging late through the round-2 rephrasings rather than at the initial stage-1 single data point — empirical evidence can sharpen mid-smoke if the test surface generates richer measurement, even when not planned. Third, three actually-distinct phrasings exercising different surface-cue patterns producing falsification evidence rather than three near-variants producing redundant noise — phrasing-pattern variation as a test-design discipline at the smoke surface. All three are convergence-input-shaping signals; not promoted to methodology entries at this commit because single-instance observations.
+
+methodology: The three discipline-working signals (pre-write reconciliation across surfaces; mid-smoke empirical sharpening from richer measurement; phrasing-pattern variation as test-design discipline) are observation-level recordings, not promotion-threshold-crossing recurrence. The N=1-versus-N=4 catch is structurally similar to the pre-write reconciliation pattern at brief altitude (Phase 1's pre-write reconciliation pattern at 19+ instances), but the surface (cross-thread captures wording) is novel — worth tracking whether the surface recurs at Phase 2-A close methodology assessment. The cold-vs-warm finding's late-emergence shape recurs at the third-instance threshold if Phase 2-A smoke sessions produce more empirical-sharpening-mid-smoke instances.
+
+```
+metrics:
+  classification: live-stack smoke (operational continuation)
+  brief_started: 2026-05-22
+  session_started: 2026-05-22
+  session_closed: 2026-05-22
+  merged: 2026-05-22
+  close_state: clean (two structural findings captured rather than fixed; both feed convergence-session inputs)
+  tests_passing: not_applicable
+  principles_intact: yes
+  charter_touchpoints: docs/smoke/p13_s46_manual_entry_end_to_end.md; log/captures.md; charter/current-package.md
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## S46 — Manual entry cell (first ConversationFlow implementer) plus latency-tier routing plus four-layer model ontology
 roles: analyst, PM, architect, engineer, technical writer
 mode: build session, executing briefs/p13/s46.md
