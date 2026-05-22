@@ -31,6 +31,7 @@ wire shape sent to the gateway.
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from typing import Any, AsyncIterator, Sequence
 
@@ -63,6 +64,10 @@ from contexts.inference.domain.errors import (
     InferenceUnavailable,
 )
 from shared_kernel import TenantContext
+from shared_kernel.structured_output import (
+    StructuredOutputRequest,
+    StructuredOutputResponse,
+)
 from padhanam.config import InferenceSettings, UnknownModelError, cost_for
 
 _tracer = trace.get_tracer("padhanam.inference.litellm")
@@ -436,6 +441,141 @@ class LiteLLMAdapter:
                 cost_usd=cost_decimal,
                 trace_id=trace_id,
             )
+
+    async def generate_structured(
+        self, request: StructuredOutputRequest
+    ) -> StructuredOutputResponse[dict[str, Any]]:
+        """Structured-output completion against the LiteLLM gateway (D130, S45).
+
+        Implements ``StructuredOutputPort`` additively — the existing
+        ``complete`` / ``stream_complete`` surface is unchanged. The
+        request's JSON Schema ``dict`` maps to LiteLLM's
+        ``response_format`` ``json_schema`` form; the gateway returns a
+        JSON object which the adapter parses into the response value.
+
+        The schema representation is settled here per D130: the
+        vendor-neutral JSON Schema dict at the ``shared_kernel``
+        primitive maps to the ``{"type": "json_schema", "json_schema":
+        {...}}`` shape LiteLLM forwards as the OpenAI-compatible
+        structured-output parameter.
+
+        ``StructuredOutputPort.generate_structured`` carries no
+        TenantContext, so this span omits the ``tenant.*`` attributes
+        and per-tenant cost attribution that ``complete`` emits — no
+        Phase 2-A surface consumes structured output (the first
+        consumers land at P14), and the port extends with a tenant
+        parameter at that point if attribution is required.
+        """
+        resolved_model = request.model_hint or self._settings.default_model
+        endpoint = self._settings.litellm_endpoint
+        master_key = self._settings.litellm_master_key
+
+        with _tracer.start_as_current_span(
+            f"structured_output {resolved_model}",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "gen_ai.system": "litellm",
+                "gen_ai.request.model": resolved_model,
+                "gen_ai.operation.name": "structured_output",
+            },
+        ) as span:
+            call_kwargs: dict[str, Any] = {
+                "model": f"openai/{resolved_model}",
+                "messages": [
+                    {"role": "user", "content": request.prompt}
+                ],
+                "api_base": endpoint,
+                "api_key": master_key,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_output",
+                        "schema": request.schema,
+                        "strict": True,
+                    },
+                },
+            }
+            if request.temperature is not None:
+                call_kwargs["temperature"] = request.temperature
+
+            try:
+                response = await litellm.acompletion(**call_kwargs)
+            except (Timeout,) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceTimeout(str(e)) from e
+            except (
+                RateLimitError,
+                ServiceUnavailableError,
+                APIConnectionError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceUnavailable(str(e)) from e
+            except (
+                AuthenticationError,
+                BadRequestError,
+                NotFoundError,
+            ) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceConfigurationError(str(e)) from e
+            except APIError as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+                raise InferenceError(str(e)) from e
+
+            choice = response.choices[0]
+            content = choice.message.content or "{}"
+            try:
+                parsed = json.loads(content)
+            except (ValueError, TypeError) as e:
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                raise InferenceError(
+                    f"structured output was not valid JSON: {e}"
+                ) from e
+            if not isinstance(parsed, dict):
+                raise InferenceError(
+                    "structured output must be a JSON object; got "
+                    f"{type(parsed).__name__}"
+                )
+
+            response_model = (
+                getattr(response, "model", None) or resolved_model
+            )
+            usage = getattr(response, "usage", None)
+            input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+            output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+            finish_reason = getattr(choice, "finish_reason", None)
+
+            span.set_attribute("gen_ai.response.model", response_model)
+            span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+            span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+
+            return StructuredOutputResponse(
+                value=parsed,
+                confidence=_confidence_from_value(parsed),
+                provider_metadata={
+                    "model": response_model,
+                    "finish_reason": finish_reason,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                },
+            )
+
+
+def _confidence_from_value(value: dict[str, Any]) -> float | None:
+    """Lift a top-level numeric ``confidence`` field, per D130.
+
+    D130: a structured-output response's ``confidence`` is null unless
+    the request schema itself carries a confidence field. When the
+    parsed value carries a numeric top-level ``confidence``, surface
+    it on the response; otherwise the response's confidence is None.
+    """
+    raw = value.get("confidence")
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    return None
 
 
 def _accumulate_tool_call_deltas(
