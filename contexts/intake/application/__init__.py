@@ -23,6 +23,9 @@ from contexts.intake.application.record_intake import record_intake
 from contexts.intake.application.record_intake_and_create_case import (
     record_intake_and_create_case,
 )
+from contexts.intake.application.record_intake_and_create_data_point import (
+    record_intake_and_create_data_point,
+)
 from contexts.intake.application.record_intake_and_revise_data_point import (
     record_intake_and_revise_data_point,
 )
@@ -32,5 +35,6 @@ __all__ = [
     "list_intakes",
     "record_intake",
     "record_intake_and_create_case",
+    "record_intake_and_create_data_point",
     "record_intake_and_revise_data_point",
 ]

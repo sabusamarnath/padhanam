@@ -9,6 +9,7 @@ import pytest
 
 from contexts.intake.application import (
     record_intake_and_create_case,
+    record_intake_and_create_data_point,
     record_intake_and_revise_data_point,
 )
 from contexts.intake.domain import ManualEntryPayload
@@ -16,6 +17,7 @@ from shared_kernel import ActorContext, TenantContext
 from shared_kernel.authorisation import (
     INTAKE_RECORD_CREATE,
     PORTFOLIO_CASE_CREATE,
+    PORTFOLIO_DATA_POINT_CREATE,
     PORTFOLIO_DATA_POINT_REVISE,
     ROLE_OPERATOR,
     AuthorisationDenied,
@@ -187,3 +189,48 @@ def test_revise_orchestration_denied_without_portfolio_permission() -> None:
         )
     assert excinfo.value.permission == PORTFOLIO_DATA_POINT_REVISE
     assert intake_repo.intakes == {}
+
+
+# --- record_intake_and_create_data_point ---------------------------
+
+
+def test_create_data_point_orchestration_records_intake_then_writes() -> None:
+    intake_repo = FakeIntakeRepository()
+    audit = FakeAuditPort()
+    writer = FakePortfolioWriter()
+    case_id = uuid4()
+    result = _run(
+        record_intake_and_create_data_point(
+            intake_repository=intake_repo,
+            audit_port=audit,
+            portfolio_writer=writer,
+            actor=_actor(),
+            payload=_payload(),
+            case_id=case_id,
+            data_point_type="GOAL",
+            value={"progress": 0},
+        )
+    )
+    assert len(intake_repo.intakes) == 1
+    intake = next(iter(intake_repo.intakes.values()))
+    assert len(writer.created_data_points) == 1
+    assert result.case_id == case_id
+    assert result.data_point_type == "GOAL"
+    assert result.intake_id == intake.id
+
+
+def test_create_data_point_orchestration_denied_without_portfolio_permission() -> None:
+    intake_repo = FakeIntakeRepository()
+    writer = FakePortfolioWriter()
+    actor = _actor(authorisation_set=frozenset({INTAKE_RECORD_CREATE}))
+    with pytest.raises(AuthorisationDenied) as excinfo:
+        _run(
+            record_intake_and_create_data_point(
+                intake_repository=intake_repo, audit_port=FakeAuditPort(),
+                portfolio_writer=writer, actor=actor, payload=_payload(),
+                case_id=uuid4(), data_point_type="GOAL", value={},
+            )
+        )
+    assert excinfo.value.permission == PORTFOLIO_DATA_POINT_CREATE
+    assert intake_repo.intakes == {}
+    assert writer.created_data_points == []
