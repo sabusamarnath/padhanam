@@ -11,10 +11,10 @@ The five scenarios map to five contract properties: signature,
 lifecycle, append-only turns, closure semantics, and cross-context
 type invariance.
 
-No implementer registers at S45 (the registry is empty until P14's
-audit-conversation and mirror-conversation land), so the five
-parametrised scenarios skip. ``test_harness_is_ready_at_s45`` is the
-non-parametrised green check that the registration machinery exists.
+S46 registers the first implementer — the manual entry cell — so the
+five parametrised scenarios now run. ``test_manual_entry_cell_is_registered``
+is the non-parametrised check that the first implementer is in place;
+P14's audit-conversation and mirror-conversation implementers join it.
 """
 
 from __future__ import annotations
@@ -31,21 +31,21 @@ from shared_kernel.conversation_flow import (
 from tests.contract.conversation_flow.conftest import (
     _REGISTRY,
     ConversationFlowImplementerFixture,
+    _load_registration_modules,
     register_conversation_flow_implementer,
 )
 
 
-def test_harness_is_ready_at_s45() -> None:
-    """The harness machinery exists and carries no implementer at S45.
-
-    D115's implementers (audit-conversation 5.1, mirror-conversation
-    4.1) land at P14; each adds a ``test_<name>_conversation_flow.py``
-    registration module and the five scenarios below run against it
-    with no harness change. This green test records the S45 state:
-    machinery in place, registry empty.
-    """
-    assert _REGISTRY == []
+def test_manual_entry_cell_is_registered() -> None:
+    """S46 registers the manual entry cell as the first ConversationFlow
+    implementer (D115); the five parametrised scenarios below run
+    against it. P14's audit-conversation (5.1) and mirror-conversation
+    (4.1) implementers add their own ``test_<name>_conversation_flow.py``
+    registration module and join the parametrised set with no harness
+    change."""
+    _load_registration_modules()
     assert callable(register_conversation_flow_implementer)
+    assert "manual_entry_cell" in [f.name for f in _REGISTRY]
 
 
 def test_lifecycle_method_signatures(

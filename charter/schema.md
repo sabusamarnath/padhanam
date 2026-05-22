@@ -1723,8 +1723,9 @@ short-hex-prefix-plus-timestamp).
 The cell implements the ConversationFlow Protocol (D115) — `open` /
 `turn` / `close`. It is the first implementer registered with the
 contract harness at `tests/contract/conversation_flow/` via
-`tests/contract/conversation_flow/test_manual_entry_cell.py`; the
-harness's five conformance scenarios run against it. `turn`
+`tests/contract/conversation_flow/test_manual_entry_cell_conversation_flow.py`
+(the harness globs `test_*_conversation_flow.py` for registration
+modules); the harness's five conformance scenarios run against it. `turn`
 processes one inbound message: structured-output intent extraction
 → target resolution → intake-canonical portfolio orchestration →
 `CellResponse` composition. The cell holds the `StructuredOutputPort`
