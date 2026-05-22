@@ -13,6 +13,47 @@ Format:
 
 ---
 
+## S45 smoke — messaging substrate live-stack verification (stages 0-9)
+roles: engineer, technical writer
+mode: strategic-mode-continuation (operational execution evidence continuing the S45 close)
+
+The S45 messaging substrate (D129), structured-output discipline (D130), and ConversationFlow shape (D115) verified end-to-end against tenant_a on the rebuilt `padhanam-api` image — including a real Twilio WhatsApp Sandbox round trip in both directions. Ten smoke stages (0-9) walked at `docs/smoke/p13_s45_messaging_substrate.md`.
+
+- Produced: Five commits across the smoke-execution arc. `chore(p13/s45)` Twilio messaging env wiring into the compose stack (12f9716); `chore(p13/s45)` image re-pin to `sha256:77ad47bf` after `make build-api` (0f50c80); `chore(compose)` loopback-only `127.0.0.1:8000:8000` binding for the webhook tunnel — a dev-only exception per S5, matching the postgres-control-plane precedent (7af8e88); `chore(compose)` `WEBHOOK_*` passthroughs (6079b9d); this commit landing the executed-evidence smoke document, this entry, and the current-package transition.
+
+- Smoke outcome: all ten stages green. Stage 0 — Twilio Sandbox setup plus the ngrok-binding methodology-gap fix. Stage 1 — `make build-api` plus `make migrate` (0019/0020 on both tenant planes; the `messages` table and the `WHATSAPP_INBOUND` enum extension verified). Stage 2 — outbound via LocalEcho (Message `2cb6d146`, `external_id=local-echo-…`, DELIVERED, no Twilio call). Stage 3 — outbound via Twilio (Message `97e5d4c5`, `external_id=SM81b3ed…`, QUEUED, delivered to the operator's WhatsApp). Stage 4 — inbound webhook: a real Twilio WhatsApp message produced IntakeRecord `b165f334` (WHATSAPP_INBOUND) then Message `c4ae90e6` (INBOUND, `intake_id` linking), 97 ms cascade. Stage 5 — invalid signature rejected 403, zero side effects, `AUTH_FAILURE` security event. Stages 6-7 — GET routes plus cross-tenant 404s. Stage 8 — audit chain: 134 events, one genesis entry point, zero broken links, zero duplicate hashes. Stage 9 — pagination plus direction/channel filters.
+
+- Decisions: No new D-entries. The smoke produces operational evidence for existing commitments (D119, D128, D129, D130).
+
+- Tests: No test surface changed — operational execution evidence. The S45 build-session suite (`tests/unit` plus `tests/contract` green at close) stands.
+
+- Reflection (LocalEcho operator-dev-cycle, prompt 1): LocalEcho's substrate-depth dividend is real and bounded. It removed the external dependency for substrate iteration — route, persistence, and the audit chain are verifiable in-process with no credentials and no Twilio call — but it cannot verify actual WhatsApp delivery. First-instance evidence for the YAGNI monitoring discipline: the D129 substrate-depth justification is *partially* exercised at Phase 2-A; whether it was load-bearing versus a Twilio-only adapter plus heavier test setup is a Phase 3 close audit evaluation.
+
+- Reflection (D128 second-instance, prompt 2): the cross-context shape worked cleanly end-to-end with no structural friction — `record_intake_and_record_inbound_message` at the intake context, the `MessageWriter` consumer port, the `apps/`-layer adapter — and the IntakeRecord-then-Message-with-`intake_id` ordering held across a real Twilio webhook. The orchestration shape generalises across context-pairs (S44b portfolio writes first instance; messaging-to-intake second).
+
+- Reflection (D131 first-instance accountability, prompt 3): no Phase 2-A surface implements a ConversationFlow consumer; provenance-aware response composition is not exercised. Recorded honestly — the substrate-depth-overrides-YAGNI commitment is on the record for the Phase 3 close audit.
+
+- Reflection (methodology recurrence, prompt 4): the smoke-document stage-0 ngrok-binding gap — the original draft named `ngrok http 8000` without verifying that port 8000 is host-bound (it is not, per S5's only-Caddy-binds rule). Brief-vs-codebase-actuality drift at the smoke-document altitude — the same shape as the SMS-vs-WhatsApp finding at the S45 brief, scaled down to a procedural concern. Recurrence evidence; deferred to the Phase 2-A close methodology assessment per the philosophical pruning discipline.
+
+- Reflection (cascade latency, prompt 5): stage 4's Twilio-POST-to-200-response measured 97 ms upstream. The inbound cascade — signature verification, dual-decorator authorisation, IntakeRecord plus Message persistence, two audit events — sits well inside a real-time latency budget. An empirical reference point for S46's latency-tier-routing framing.
+
+```
+metrics:
+  classification: live-stack smoke (operational continuation)
+  brief_started: 2026-05-22
+  session_started: 2026-05-22
+  session_closed: 2026-05-22
+  merged: 2026-05-22
+  close_state: clean
+  tests_passing: not_applicable
+  principles_intact: yes
+  charter_touchpoints: docs/smoke/p13_s45_messaging_substrate.md; charter/current-package.md
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## S45 — Messaging substrate (WhatsApp via Twilio Sandbox) plus ConversationFlow Protocol plus structured output
 roles: analyst, PM, architect, engineer, technical writer
 mode: build (P13 Wave 1 Session 3 — new bounded context plus two shared_kernel primitives)

@@ -2,211 +2,185 @@
 
 Live-stack smoke for the S45 messaging substrate (D129), the
 structured-output discipline (D130), and the ConversationFlow
-Protocol (D115 shape) — the full propagation paths exercised
-end-to-end against tenant_a on a freshly-rebuilt `padhanam-api`
-image with the 0019 and 0020 migrations deployed.
+Protocol (D115 shape). Executed evidence for all ten stages (0–9)
+end-to-end against tenant_a on the freshly-rebuilt `padhanam-api`
+image, including a real Twilio WhatsApp Sandbox round trip in both
+directions.
 
-**Execution note.** This document is the smoke *procedure* with
-expected outcomes, not executed evidence. Stages 0 and 3–6 require a
-Twilio account plus the operator's own WhatsApp number and an ngrok
-tunnel — they are inherently operator-executed. Docker was not
-reachable from the build environment, so the operator runs the
-sequence below and confirms each expected outcome; the LocalEcho
-stages (2, 9) and the migration / cross-tenant / audit stages
-(1, 7, 8) are runnable as soon as the stack is up. This mirrors the
-S39 procedural-walkthrough-plan precedent.
+Executed 2026-05-22 across S45-close commits db5274d…6079b9d.
 
-## Stage 0 — Twilio WhatsApp Sandbox setup (operator)
+## Stage 0 — Twilio WhatsApp Sandbox setup plus the ngrok-binding gap
 
-The Twilio Sandbox for WhatsApp gives a working WhatsApp channel
-without a verified WhatsApp Business Account (D119). One-time setup:
+The operator created a Twilio account, enabled the Sandbox for
+WhatsApp, joined it from `+447966957282`, installed ngrok
+(`3.39.4`), authenticated it, and ran `ngrok http 8000`
+(forwarding URL `https://easeful-front-quote.ngrok-free.dev`).
 
-1. Create a Twilio account; open **Messaging → Try it out → Send a
-   WhatsApp message**. The console shows the sandbox number
-   (`+14155238886`) and a join keyword.
-2. From the operator's WhatsApp, send `join <sandbox-keyword>` to
-   `+14155238886`. The console confirms the number joined.
-3. Start an ngrok tunnel to the API: `ngrok http 8000`. Note the
-   public `https://<id>.ngrok-free.app` URL.
-4. In the Twilio sandbox settings, set **"When a message comes in"**
-   to `https://<id>.ngrok-free.app/api/v1/messaging/inbound` (POST).
-5. Populate `.env`:
-
-```
-MESSAGING_ADAPTER=twilio
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=+14155238886
-WEBHOOK_TENANT_ID=<tenant_a UUID>
-WEBHOOK_JURISDICTION=eu-west
-WEBHOOK_URL=https://<id>.ngrok-free.app/api/v1/messaging/inbound
-```
-
-Sandbox limits — per-number opt-in, one message per three seconds,
-pre-approved templates for business-initiated messages outside the
-24-hour window — are minimal here because dogfooding is
-operator-initiated.
+**Methodology gap fixed at this stage.** The original draft of this
+smoke document (commit c068c87) named `ngrok http 8000` in stage 0
+without verifying the compose topology: `padhanam-api` does not bind
+a host port (the S5 "only Caddy binds host ports" rule), so
+`ngrok http 8000` had nothing to forward to. The gap surfaced when
+the operator asked which port to use. The fix — commit 7af8e88 — adds
+a loopback-only `127.0.0.1:8000:8000` binding to `padhanam-api`, a
+deliberate dev-only exception matching the postgres-control-plane
+precedent; the webhook tunnel goes straight to uvicorn because
+Caddy's `handle_path /api/*` strips the prefix the messaging router
+needs. This is brief-vs-codebase-actuality drift at the
+smoke-document altitude — the same shape as the SMS-vs-WhatsApp
+finding at the S45 brief, scaled down to a procedural concern.
 
 ## Stage 1 — image rebuild plus migration verification
 
-```
-make build-api
-docker compose up -d --force-recreate padhanam-api   # -> healthy
-make migrate
-# -> Running upgrade 0018_intake_id_columns -> 0019_messaging_substrate
-# -> Running upgrade 0019_messaging_substrate -> 0020_intake_source_whatsapp
-#    applied to tenant_a AND tenant_b
-```
+`make build-api` rebuilt the image carrying the S45 substrate. New
+digest `sha256:77ad47bf048858d08c8718991ea8c8207ccf79b1517690a29f4c4ac2e2fff666`;
+the compose.yaml `padhanam-api` digest pin advanced (commit 0f50c80).
+The container started cleanly — "Application startup complete", no
+errors; `MessagingSettings` resolved; all four messaging routes
+registered.
 
-Expected:
+`make migrate` applied `0018 → 0019_messaging_substrate →
+0020_intake_source_whatsapp` to both tenant planes. On tenant_a:
+`alembic_version = 0020_intake_source_whatsapp`; the `messages`
+table present (13 columns, 2 list indexes, 8 CHECK constraints,
+`fk_messages_intake_id` → `intakes(id)` ON DELETE RESTRICT);
+`intakes_intake_source_check` admits `MANUAL_ENTRY, WHATSAPP_INBOUND`.
 
-```
-alembic head, postgres-tenant-a: 0020_intake_source_whatsapp   ✓
-alembic head, postgres-tenant-b: 0020_intake_source_whatsapp   ✓
-information_schema: messages table present on tenant_a          ✓
-messages.intake_id FK -> intakes(id) present                    ✓
-intakes_intake_source_check admits WHATSAPP_INBOUND             ✓
-```
+## Stage 2 — outbound send via LocalEcho (the local-first default)
 
-## Stage 2 — outbound send via LocalEcho (default development path)
-
-With `MESSAGING_ADAPTER=local_echo` (the default), no Twilio
-credentials are needed — the local-first path. Dev JWT for
-tenant_a's operator via `padhanam.security.auth.issue_dev_token`;
-httpx against `http://localhost:8000`.
+With `MESSAGING_ADAPTER=local_echo` — no Twilio credentials needed.
+`POST /api/v1/messaging/send` (tenant_a operator JWT) → **201**.
 
 ```
-POST /api/v1/messaging/send
-  {"to_address": "+447700900123", "body": "S45 local-echo smoke"}
-  -> 201
-     direction=OUTBOUND  channel=WHATSAPP  status=DELIVERED
-     external_id=local-echo-<uuid>
+Message 2cb6d146-ad72-4625-8bb9-1fb4d5632b6d
+  direction=OUTBOUND  channel=WHATSAPP  status=DELIVERED
+  external_id=local-echo-7a8d977a-3430-477b-8a11-b1776e079380
+  intake_id=null  actor_id=s45-stage2-operator
 ```
 
-The LocalEcho adapter logs the send and synthesises a DELIVERED
-result; the Message persists on tenant_a's `messages` table. This
-is the stage that exercises the LocalEcho adapter at S45 close
-(reflection prompt 5).
+The `messages` row and the `messaging.message.send` audit event
+both persisted on tenant_a. The LocalEcho path made no Twilio API
+call and needed no credentials — route → use case → adapter →
+persistence → audit ran entirely in-process.
 
 ## Stage 3 — outbound send via the Twilio adapter
 
-Restart the API with `MESSAGING_ADAPTER=twilio`.
+With `MESSAGING_ADAPTER=twilio`. `POST /api/v1/messaging/send` →
+**201**; the Twilio API accepted the message and returned a real
+MessageSid.
 
 ```
-POST /api/v1/messaging/send
-  {"to_address": "whatsapp:+<operator number>", "body": "S45 Twilio smoke"}
-  -> 201
-     direction=OUTBOUND  channel=WHATSAPP  status=QUEUED
-     external_id=SM<...>   (the Twilio MessageSid)
+Message 97e5d4c5-0a29-4df4-88fe-fae20bd05a5f
+  direction=OUTBOUND  channel=WHATSAPP  status=QUEUED
+  external_id=SM81b3ed894d0a3bfb5fcc56723e71a2e7
+  from=whatsapp:+14155238886  to=whatsapp:+447966957282
 ```
 
-Expected: the message arrives on the operator's WhatsApp; the
-persisted Message carries the Twilio MessageSid as `external_id`.
+The message arrived on the operator's WhatsApp (operator-confirmed).
+The `messages` row and the `messaging.message.send` audit event
+persisted. The stage-2 and stage-3 audit `after_state` payloads are
+byte-structurally identical except `status` (DELIVERED vs QUEUED)
+and `external_id` (`local-echo-…` vs `SM…`) — the two
+adapter-outcome fields D129's substrate-depth justification
+anticipated. LocalEcho is confirmed a faithful local substitute.
+
+## Stage 0b — inbound webhook wiring
+
+`WEBHOOK_TENANT_ID` / `WEBHOOK_JURISDICTION` / `WEBHOOK_URL` added to
+`.env`; the three `compose.yaml` passthroughs landed (commit
+6079b9d). Container force-recreated; the vars resolve inside the
+container. Reachability curl through the tunnel —
+`POST https://easeful-front-quote.ngrok-free.dev/api/v1/messaging/inbound`
+with no signature → **403 `webhook_signature_invalid`** — confirming
+the tunnel reaches the route and signature verification fires. The
+Twilio Console "when a message comes in" field was pointed at the
+same URL.
 
 ## Stage 4 — inbound webhook with a valid signature
 
-From the operator's WhatsApp, reply to the sandbox number with a
-portfolio update, e.g. `status: Acme deal moved to legal review`.
-Twilio POSTs the inbound message to the webhook URL with a valid
-`X-Twilio-Signature`.
-
-Expected:
+The operator sent `Padhanam s45 smoke stage 4 inbound at 20:56`
+from `+447966957282` to the sandbox number. Twilio POSTed to the
+webhook with a valid `X-Twilio-Signature`; the route returned
+**200** in 97 ms (Twilio POST receipt → response).
 
 ```
-POST /api/v1/messaging/inbound  (from Twilio)  -> 200
-  {"status": "received", "message_id": "...", "intake_id": "..."}
+IntakeRecord b165f334-3936-4fd9-9a3e-f5bc3c2af323
+  intake_source=WHATSAPP_INBOUND  authored_by=twilio-webhook
+  payload.raw_text="Padhanam s45 smoke stage 4 inbound at 20:56"
+
+Message c4ae90e6-ba65-4947-8a24-472d03e8fc0a
+  direction=INBOUND  channel=WHATSAPP  status=RECEIVED
+  intake_id=b165f334-3936-4fd9-9a3e-f5bc3c2af323
+  external_id=SM63855a245329ab3a9dab690ca52c20ba
+  from=+447966957282  to=+14155238886  actor_id=twilio-webhook
+
+audit: intake.record.create (intake) + messaging.message.receive (message)
 ```
 
-The webhook bypasses bearer auth (its path is in the middleware
-public-path set) and verifies the signature against the configured
-`WEBHOOK_URL` before processing.
+The full cascade fired — signature verification → operator
+ActorContext synthesised for tenant_a → `record_intake_and_record_inbound_message`
+orchestration → IntakeRecord recorded first → inbound Message
+carrying its `intake_id`. **D128's intake-canonical commitment,
+second-instance evidence, operationally demonstrated** across a real
+cross-context webhook (S44b portfolio writes were the first
+instance).
 
-## Stage 5 — inbound webhook with an invalid signature (rejection)
+## Stage 5 — inbound webhook with an invalid signature
 
-Replay the Stage 4 request with a tampered body (or a garbage
-`X-Twilio-Signature` header) via curl:
+`POST …/api/v1/messaging/inbound` with `X-Twilio-Signature:
+fake-invalid-signature` → **403 `webhook_signature_invalid`**. No
+side effects: zero `intakes` and zero `messages` rows for the
+rejected payload. An `AUTH_FAILURE` security event
+(`reason=twilio_signature_verification_failed`) landed in
+`logs/security.jsonl`.
 
-```
-curl -X POST https://<id>.ngrok-free.app/api/v1/messaging/inbound \
-  -H 'X-Twilio-Signature: not-a-real-signature' \
-  -d 'From=whatsapp:%2B447700900123&Body=tampered&MessageSid=SMx'
-  -> 403  {"error_code": "webhook_signature_invalid", ...}
-```
+## Stage 6 — verify stage 4's persisted state via GET routes
 
-Expected: 403; no IntakeRecord and no Message written; an
-`AUTH_FAILURE` security event in `logs/security.jsonl` with reason
-`twilio_signature_verification_failed`.
+`GET /api/v1/intakes/b165f334…` → 200, `intake_source=WHATSAPP_INBOUND`,
+`raw_text` matches the sent body. `GET /api/v1/messaging/messages/c4ae90e6…`
+→ 200, `direction=INBOUND`, `channel=WHATSAPP`, `status=RECEIVED`,
+`intake_id` linking to the IntakeRecord, `from_address=+447966957282`.
 
-## Stage 6 — inbound lands as IntakeRecord plus Message
+## Stage 7 — cross-tenant isolation
 
-For the Stage 4 inbound message, verify the intake-canonical
-propagation (D128):
+With a tenant_b operator JWT: `GET /api/v1/intakes/b165f334…` →
+**404**; `GET /api/v1/messaging/messages/c4ae90e6…` → **404**;
+`GET /api/v1/messaging/messages` → 200 with an empty list. The
+privacy-preserving 404 policy holds — no tenant_a record leaks to
+tenant_b.
 
-```
-GET /api/v1/intakes?source=WHATSAPP_INBOUND   -> 200
-  one IntakeRecord, intake_source=WHATSAPP_INBOUND,
-  payload.raw_text = the message body
+## Stage 8 — audit chain end-to-end
 
-GET /api/v1/messaging/messages?direction=INBOUND   -> 200
-  one Message, direction=INBOUND, status=RECEIVED,
-  intake_id = the IntakeRecord id above
-```
-
-The orchestration recorded the IntakeRecord first, then the Message
-carrying its `intake_id` — second-instance evidence for D128.
-
-## Stage 7 — cross-tenant probes
-
-With tenant_b's operator JWT, probe tenant_a's message:
-
-```
-GET /api/v1/messaging/messages/<tenant_a message id>  (as tenant_b)
-  -> 404  message_not_found
-
-GET /api/v1/messaging/messages  (as tenant_b)
-  -> 200  empty list (no tenant_a messages leak)
-```
-
-The bound-tenant adapter returns None / empty cross-tenant; the
-route surfaces 404 / an empty page. Adapter-level cross-tenant
-isolation is additionally covered by
-`tests/contract/tenant_isolation/test_messaging_isolation.py`.
-
-## Stage 8 — audit chain verification
-
-Every messaging write emits an audit event (D110 commitment 7):
+tenant_a's `tenant_audit` chain: **134 events, exactly one chain
+entry point (the genesis), zero broken links, zero duplicate
+`this_event_hash` values** — every non-genesis event's
+`previous_event_hash` incorporates the prior event's
+`this_event_hash`, a single connected hash chain. The four S45
+smoke audit events are absorbed into it:
 
 ```
-GET /audit/events?resource_type=message   -> 200
-  messaging.message.send    events for the Stage 2 / 3 outbound sends
-  messaging.message.receive event  for the Stage 4 inbound message
-  chain integrity: intact
+s45-stage2-operator  messaging.message.send     message  205e142efc7b…
+s45-stage3-operator  messaging.message.send     message  997eb07eb8ba…
+twilio-webhook       intake.record.create       intake   cd184cd16b96…
+twilio-webhook       messaging.message.receive  message  f3bca8b714a5…
 ```
 
-The audit context's existing hash chain transitively covers the
-messaging records; no parallel hash chain on the `messages` table.
+## Stage 9 — GET routes with pagination and filters
 
-## Stage 9 — GET routes with cursor pagination
-
-Send a handful of messages, then page:
-
-```
-GET /api/v1/messaging/messages?page_size=2   -> 200
-  2 messages, next_cursor present
-GET /api/v1/messaging/messages?page_size=2&cursor=<next_cursor>  -> 200
-  the following page; next_cursor null on the final page
-```
-
-Newest-first ordering on `(created_at DESC, id DESC)`; the cursor is
-the opaque base64-JSON codec.
+`GET /api/v1/messaging/messages?page_size=10` → 200, 3 messages,
+`next_cursor=null`. Direction filter: `?direction=OUTBOUND` → 2
+(stages 2, 3); `?direction=INBOUND` → 1 (stage 4). Channel filter:
+`?channel=WHATSAPP` → 3 (all WhatsApp at S45).
 
 ## Carryovers
 
-- The LocalEcho-versus-Twilio split (reflection prompt 5): Stage 2
-  exercises LocalEcho at the default path; the operator confirms it
-  is a real dev cycle, not unused substrate.
-- D131 provenance-aware response composition is not exercised — no
-  Phase 2-A surface implements a ConversationFlow consumer
-  (reflection prompt 6); first exercise at P14.
-- The structured-output port has no Phase 2-A caller; the contract
-  harness verifies structural conformance offline.
+- The messaging audit events carry an empty `correlation_id` — the
+  use cases do not thread the HTTP request's correlation_id, matching
+  the intake precedent. Forward hygiene, deferred to Phase 2-A close
+  per the prior disposition.
+- D131 (provenance-aware response composition) is not exercised — no
+  Phase 2-A surface implements a ConversationFlow consumer; first
+  exercise at P14, verification a Phase 3 close audit input.
+- The smoke-doc stage-0 ngrok-binding gap is recurrence evidence for
+  the brief-vs-codebase-actuality drift pattern, accruing toward the
+  Phase 2-A close methodology assessment.
