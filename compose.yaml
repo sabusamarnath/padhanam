@@ -377,7 +377,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: padhanam-api:dev@sha256:118aaaa5d615729d8ac23ad9a2d6c758487575bf8264fc66eded8b769203c059
+    image: padhanam-api:dev@sha256:19bb59c3ca62938ff28a89c3e23711f7728413473108b9e68678dc77a0b6e44e
     depends_on:
       litellm:
         condition: service_healthy
