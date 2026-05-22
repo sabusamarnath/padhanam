@@ -21,6 +21,10 @@ from shared_kernel.authorisation import (
     INTAKE_RECORD_CREATE,
     INTAKE_RECORD_GET,
     INTAKE_RECORD_LIST,
+    MESSAGING_MESSAGE_GET,
+    MESSAGING_MESSAGE_LIST,
+    MESSAGING_MESSAGE_RECEIVE,
+    MESSAGING_MESSAGE_SEND,
     PORTFOLIO_CASE_CREATE,
     PORTFOLIO_CASE_GET,
     PORTFOLIO_CASE_LIST,
@@ -135,8 +139,8 @@ def test_get_actor_context_populates_role_list_with_operator() -> None:
 
 def test_get_actor_context_resolves_the_phase_2a_permissions() -> None:
     """The hardcoded policy populates authorisation_set with the five
-    portfolio permissions plus the three intake permissions (D127) for
-    the operator role."""
+    portfolio permissions, the three intake permissions (D127), and the
+    four messaging permissions (D129) for the operator role."""
     tenant = SimpleNamespace(
         id=_TENANT_UUID, jurisdiction="UK", cost_attribution_id="cost-1"
     )
@@ -156,6 +160,10 @@ def test_get_actor_context_resolves_the_phase_2a_permissions() -> None:
             INTAKE_RECORD_CREATE,
             INTAKE_RECORD_GET,
             INTAKE_RECORD_LIST,
+            MESSAGING_MESSAGE_SEND,
+            MESSAGING_MESSAGE_RECEIVE,
+            MESSAGING_MESSAGE_GET,
+            MESSAGING_MESSAGE_LIST,
         }
     )
 
