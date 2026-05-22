@@ -32,6 +32,7 @@ from apps.api._auth_errors import register_auth_error_handlers
 from apps.api._errors import (
     register_audit_error_handlers,
     register_ingestion_error_handlers,
+    register_intake_error_handlers,
     register_optimization_error_handlers,
     register_portfolio_error_handlers,
     register_retrieval_evaluation_error_handlers,
@@ -44,6 +45,7 @@ from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import ingestion as ingestion_router
 from apps.api.routers import optimization as optimization_router
+from apps.api.routers import intake as intake_router
 from apps.api.routers import portfolio as portfolio_router
 from apps.api.routers import retrieval_evaluation as retrieval_evaluation_router
 from apps.api.routers import run_history as run_history_router
@@ -523,6 +525,10 @@ def create_app(
     # malformed_portfolio_cursor (400), invalid_portfolio_filter (400).
     register_portfolio_error_handlers(app)
 
+    # S44b (D127): intake HTTP error handlers — intake_not_found (404),
+    # malformed_intake_cursor (400), invalid_intake_filter (400).
+    register_intake_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -567,6 +573,10 @@ def create_app(
     # S43b (D124): portfolio read-surface routes under principal-derived
     # tenant context — GET /api/v1/portfolio/cases and /cases/{case_id}.
     app.include_router(portfolio_router.router)
+
+    # S44b (D127): intake routes — POST /api/v1/intakes plus the GET
+    # single and list surfaces, under principal-derived actor context.
+    app.include_router(intake_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port

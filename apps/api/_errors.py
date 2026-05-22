@@ -54,6 +54,7 @@ from apps.api.routers._audit_query import InvalidAuditFilterError
 from apps.api.routers._optimization_query import (
     InvalidOptimizationFilterError,
 )
+from apps.api.routers._intake_query import InvalidIntakeFilterError
 from apps.api.routers._portfolio_query import InvalidPortfolioFilterError
 from apps.api.routers._run_history_query import InvalidFilterRangeError
 from contexts.portfolio.application import DataPointNotFoundError
@@ -86,6 +87,9 @@ from contexts.retrieval_evaluation.domain.query_filters import (
 )
 from contexts.portfolio.domain.query_filters import (
     MalformedCursorError as PortfolioMalformedCursorError,
+)
+from contexts.intake.domain.query_filters import (
+    MalformedCursorError as IntakeMalformedCursorError,
 )
 from contexts.run_history.domain.query_filters import MalformedCursorError
 from padhanam.observability.security_events import (
@@ -207,6 +211,18 @@ class CaseNotFoundError(Exception):
     def __init__(self, case_id: str) -> None:
         super().__init__(f"case {case_id} not found")
         self.case_id = case_id
+
+
+class IntakeNotFoundError(Exception):
+    """Raised by the intake route when get_intake returns None (D127, S44b).
+
+    The HTTP handler translates to 404 ``intake_not_found``. New error
+    code within the existing not-found family per D98.
+    """
+
+    def __init__(self, intake_id: str) -> None:
+        super().__init__(f"intake {intake_id} not found")
+        self.intake_id = intake_id
 
 
 def _correlation_id(request: Request) -> str:
@@ -734,6 +750,64 @@ def register_portfolio_error_handlers(app: FastAPI) -> None:
     )
 
 
+async def _handle_intake_not_found(
+    request: Request, exc: IntakeNotFoundError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="intake_not_found",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+async def _handle_malformed_intake_cursor(
+    request: Request, exc: IntakeMalformedCursorError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="malformed_intake_cursor",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def _handle_invalid_intake_filter(
+    request: Request, exc: InvalidIntakeFilterError
+) -> JSONResponse:
+    body = ErrorResponse(
+        error_code="invalid_intake_filter",
+        message=str(exc),
+        correlation_id=_correlation_id(request),
+    )
+    return JSONResponse(status_code=400, content=body.model_dump())
+
+
+def register_intake_error_handlers(app: FastAPI) -> None:
+    """Register the intake HTTP error handlers (D127, S44b).
+
+    Handlers registered:
+
+    - ``IntakeNotFoundError`` -> 404 ``intake_not_found``.
+    - ``IntakeMalformedCursorError`` -> 400 ``malformed_intake_cursor``.
+    - ``InvalidIntakeFilterError`` -> 400 ``invalid_intake_filter``.
+
+    New error codes within the existing not-found, malformed-cursor,
+    and invalid-filter families per D98.
+    """
+    app.add_exception_handler(
+        IntakeNotFoundError, _handle_intake_not_found  # type: ignore[arg-type]
+    )
+    app.add_exception_handler(
+        IntakeMalformedCursorError,  # type: ignore[arg-type]
+        _handle_malformed_intake_cursor,
+    )
+    app.add_exception_handler(
+        InvalidIntakeFilterError,  # type: ignore[arg-type]
+        _handle_invalid_intake_filter,
+    )
+
+
 __all__ = [
     "AuditEventNotFoundError",
     "BoundTenantIdMismatchError",
@@ -741,10 +815,12 @@ __all__ = [
     "ErrorResponse",
     "EvaluationRunNotFoundError",
     "IngestionSourceNotFoundError",
+    "IntakeNotFoundError",
     "OptimizationRunNotFoundError",
     "RunNotFoundError",
     "register_audit_error_handlers",
     "register_ingestion_error_handlers",
+    "register_intake_error_handlers",
     "register_optimization_error_handlers",
     "register_portfolio_error_handlers",
     "register_retrieval_evaluation_error_handlers",
