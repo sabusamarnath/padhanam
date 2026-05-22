@@ -32,6 +32,10 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
+from apps.api._portfolio_gateway_wiring import (
+    PortfolioGatewayAdapter,
+    build_portfolio_gateway,
+)
 from contexts.audit.domain.ports import AuditPort
 
 from contexts.intake.application.ports.message_writer import (
@@ -59,7 +63,12 @@ from contexts.tenancy.application.connection_resolution import (
 from padhanam.config import MessagingAdapter, MessagingSettings
 from padhanam.observability.security_events import SecurityEventLogger
 from padhanam.security import Principal
-from shared_kernel import ActorContext, TenantContext, TenantId
+from shared_kernel import (
+    ActorContext,
+    StructuredOutputPort,
+    TenantContext,
+    TenantId,
+)
 
 _SessionFactoryForTenant = Callable[[TenantContext], Awaitable[Any]]
 
@@ -197,14 +206,17 @@ class MessagingComposition:
     """The messaging composition seam exposed on ``app.state.messaging``.
 
     Bundles the repository adapter, the selected delivery adapter, the
-    MessageWriter consumer-port adapter, and the configuration the
-    routes need (the platform sender address and the inbound-webhook
-    settings).
+    MessageWriter consumer-port adapter, the manual entry cell's
+    collaborators (the PortfolioGateway adapter and the
+    StructuredOutputPort, S46), and the configuration the routes need
+    (the platform sender address and the inbound-webhook settings).
     """
 
     repository: MessageRepositoryAdapter
     delivery_port: MessageDeliveryPort
     message_writer: MessageWriterAdapter
+    portfolio_gateway: PortfolioGatewayAdapter
+    structured_output_port: StructuredOutputPort
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -263,8 +275,15 @@ def build_messaging_composition(
     operator_principal: Principal,
     security_events: SecurityEventLogger,
     audit_port: AuditPort,
+    structured_output_port: StructuredOutputPort,
 ) -> MessagingComposition:
-    """Wire the messaging composition for the production app (D129)."""
+    """Wire the messaging composition for the production app (D129, S46).
+
+    ``structured_output_port`` is the inference LiteLLM adapter (which
+    implements StructuredOutputPort) — the manual entry cell's
+    intent-extraction collaborator. The PortfolioGateway adapter is
+    wired here from the shared per-tenant connection plumbing.
+    """
     settings = MessagingSettings()
     session_factory_for_tenant = _session_factory_for_tenant_builder(
         tenant_registry=tenant_registry,
@@ -281,6 +300,14 @@ def build_messaging_composition(
             session_factory_for_tenant=session_factory_for_tenant,
             audit_port=audit_port,
         ),
+        portfolio_gateway=build_portfolio_gateway(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+            audit_port=audit_port,
+        ),
+        structured_output_port=structured_output_port,
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,

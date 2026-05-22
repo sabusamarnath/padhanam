@@ -47,13 +47,20 @@ from contexts.intake.ports.intake_repository import IntakeRepository
 from contexts.messaging.application.cursor import encode_message_cursor
 from contexts.messaging.application.get_message import get_message
 from contexts.messaging.application.list_messages import list_messages
+from contexts.messaging.application.manual_entry_cell import ManualEntryCell
 from contexts.messaging.application.send_message import send_message
 from contexts.messaging.domain import MessageChannel
 from contexts.messaging.domain.query_filters import (
     MessageListCursor,
     MessageListFilters,
 )
-from shared_kernel import ActorContext, TenantContext
+from shared_kernel import (
+    ActorContext,
+    ConversationClosure,
+    ConversationInput,
+    ConversationInvocation,
+    TenantContext,
+)
 from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
 
 router = APIRouter(prefix="/api/v1/messaging", tags=["messaging"])
@@ -115,6 +122,46 @@ def _synthesise_webhook_actor(
         actor_id="twilio-webhook",
         role_list=role_list,
         authorisation_set=authorisations_for_roles(role_list),
+    )
+
+
+async def _run_manual_entry_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    inbound_body: str,
+    reply_to: str,
+) -> None:
+    """Run the manual entry cell over an inbound message and reply (S46).
+
+    The cell extracts intent, drives the intake-canonical portfolio
+    orchestration, and composes a cited response per D131; the
+    rendered reply goes back to the operator as an outbound WhatsApp
+    message.
+    """
+    cell = ManualEntryCell(
+        structured_output_port=messaging.structured_output_port,
+        portfolio_gateway=messaging.portfolio_gateway,
+        actor=actor,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose="manual_entry", actor_id=actor.actor_id
+        )
+    )
+    state = await cell.turn(state, ConversationInput(text=inbound_body))
+    await cell.close(
+        state, ConversationClosure(reason="manual_entry handled")
+    )
+    await send_message(
+        repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        audit_port=audit_port,
+        actor=actor,
+        from_address=messaging.from_address,
+        to_address=reply_to,
+        body=state.payload["response_text"],
     )
 
 
@@ -185,17 +232,41 @@ async def inbound_webhook_route(
     ):
         raise WebhookSignatureError()
 
+    actor = _synthesise_webhook_actor(messaging)
+    inbound_body = params.get("Body", "")
     result = await record_intake_and_record_inbound_message(
         intake_repository=intake_repository,
         audit_port=audit_port,
         message_writer=messaging.message_writer,
-        actor=_synthesise_webhook_actor(messaging),
+        actor=actor,
         channel=MessageChannel.WHATSAPP.value,
         from_address=strip_channel_prefix(params.get("From", "")),
         to_address=strip_channel_prefix(params.get("To", "")),
-        body=params.get("Body", ""),
+        body=inbound_body,
         external_id=params.get("MessageSid") or None,
     )
+
+    # S46: the manual entry cell processes the inbound message and
+    # replies with a cited confirmation. It runs *after* — not instead
+    # of — record_intake_and_record_inbound_message: the inbound
+    # Message and its WHATSAPP_INBOUND IntakeRecord are the canonical
+    # record that the message arrived; the cell's downstream
+    # orchestration records its own MANUAL_ENTRY IntakeRecord for the
+    # portfolio mutation. The cell run is wrapped so a cell or delivery
+    # failure cannot turn the webhook non-2xx — that would make Twilio
+    # retry and duplicate the inbound record, which is already safely
+    # persisted above.
+    try:
+        await _run_manual_entry_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=inbound_body,
+            reply_to=strip_channel_prefix(params.get("From", "")),
+        )
+    except Exception:  # noqa: BLE001 — webhook must stay 2xx; see above
+        pass
+
     return webhook_ack(result)
 
 

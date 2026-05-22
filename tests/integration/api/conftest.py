@@ -11,7 +11,7 @@ from contexts.inference.domain.completion import (
     Message,
     TokenUsage,
 )
-from shared_kernel import TenantContext
+from shared_kernel import LatencyTier, TenantContext
 
 
 # Deterministic fixture tenant_id for FastAPI integration tests. The
@@ -40,6 +40,7 @@ class _StubInferencePort:
         model: str | None,
         tenant_context: TenantContext,
         tools=(),
+        latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED,
     ) -> Completion:
         self.calls.append((messages, model, tenant_context))
         return Completion(

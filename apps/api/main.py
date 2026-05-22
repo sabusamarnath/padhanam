@@ -418,6 +418,7 @@ def _build_default_compositions() -> AppCompositions:
         operator_principal=operator_principal,
         security_events=sec,
         audit_port=audit_adapter,
+        structured_output_port=inference_port,
     )
 
     return AppCompositions(
