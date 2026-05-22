@@ -434,6 +434,13 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+      # Inbound webhook (P13/S45, D129). The Twilio WhatsApp webhook
+      # receiver synthesises an operator ActorContext for the
+      # configured tenant; WEBHOOK_URL is the public URL Twilio signs
+      # against, used for X-Twilio-Signature verification.
+      WEBHOOK_TENANT_ID: ${WEBHOOK_TENANT_ID}
+      WEBHOOK_JURISDICTION: ${WEBHOOK_JURISDICTION}
+      WEBHOOK_URL: ${WEBHOOK_URL}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
