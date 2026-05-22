@@ -49,6 +49,11 @@ PORTFOLIO_CASE_GET = "portfolio.case.get"
 PORTFOLIO_DATA_POINT_CREATE = "portfolio.data_point.create"
 PORTFOLIO_DATA_POINT_REVISE = "portfolio.data_point.revise"
 
+# --- Phase 2-A intake permissions (D127, S44b) ---------------------
+INTAKE_RECORD_CREATE = "intake.record.create"
+INTAKE_RECORD_GET = "intake.record.get"
+INTAKE_RECORD_LIST = "intake.record.list"
+
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
 
@@ -60,6 +65,9 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             PORTFOLIO_CASE_GET,
             PORTFOLIO_DATA_POINT_CREATE,
             PORTFOLIO_DATA_POINT_REVISE,
+            INTAKE_RECORD_CREATE,
+            INTAKE_RECORD_GET,
+            INTAKE_RECORD_LIST,
         }
     ),
 }
@@ -139,6 +147,9 @@ def requires_authorisation(
 
 
 __all__ = [
+    "INTAKE_RECORD_CREATE",
+    "INTAKE_RECORD_GET",
+    "INTAKE_RECORD_LIST",
     "PORTFOLIO_CASE_CREATE",
     "PORTFOLIO_CASE_GET",
     "PORTFOLIO_CASE_LIST",

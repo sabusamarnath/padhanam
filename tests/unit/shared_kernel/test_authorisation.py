@@ -8,6 +8,9 @@ import pytest
 
 from shared_kernel import ActorContext, TenantContext
 from shared_kernel.authorisation import (
+    INTAKE_RECORD_CREATE,
+    INTAKE_RECORD_GET,
+    INTAKE_RECORD_LIST,
     PORTFOLIO_CASE_CREATE,
     PORTFOLIO_CASE_GET,
     PORTFOLIO_CASE_LIST,
@@ -38,7 +41,9 @@ def _actor(*, authorisation_set: frozenset[str]) -> ActorContext:
 # --- authorisations_for_roles --------------------------------------
 
 
-def test_operator_role_grants_the_five_portfolio_permissions() -> None:
+def test_operator_role_grants_the_phase_2a_permissions() -> None:
+    """The operator role grants the five portfolio permissions plus the
+    three intake permissions (D127, S44b) — eight in total."""
     granted = authorisations_for_roles(frozenset({ROLE_OPERATOR}))
     assert granted == frozenset(
         {
@@ -47,6 +52,9 @@ def test_operator_role_grants_the_five_portfolio_permissions() -> None:
             PORTFOLIO_CASE_GET,
             PORTFOLIO_DATA_POINT_CREATE,
             PORTFOLIO_DATA_POINT_REVISE,
+            INTAKE_RECORD_CREATE,
+            INTAKE_RECORD_GET,
+            INTAKE_RECORD_LIST,
         }
     )
 

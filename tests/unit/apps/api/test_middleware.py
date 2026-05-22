@@ -18,6 +18,9 @@ from apps.api.middleware import get_actor_context, get_platform_operator_princip
 from padhanam.security import PlatformOperatorPrincipal, Principal, PrincipalType
 from shared_kernel import ActorContext, TenantId
 from shared_kernel.authorisation import (
+    INTAKE_RECORD_CREATE,
+    INTAKE_RECORD_GET,
+    INTAKE_RECORD_LIST,
     PORTFOLIO_CASE_CREATE,
     PORTFOLIO_CASE_GET,
     PORTFOLIO_CASE_LIST,
@@ -130,9 +133,10 @@ def test_get_actor_context_populates_role_list_with_operator() -> None:
     assert isinstance(actor.role_list, frozenset)
 
 
-def test_get_actor_context_resolves_the_five_portfolio_permissions() -> None:
+def test_get_actor_context_resolves_the_phase_2a_permissions() -> None:
     """The hardcoded policy populates authorisation_set with the five
-    portfolio permissions for the operator role."""
+    portfolio permissions plus the three intake permissions (D127) for
+    the operator role."""
     tenant = SimpleNamespace(
         id=_TENANT_UUID, jurisdiction="UK", cost_attribution_id="cost-1"
     )
@@ -149,6 +153,9 @@ def test_get_actor_context_resolves_the_five_portfolio_permissions() -> None:
             PORTFOLIO_CASE_GET,
             PORTFOLIO_DATA_POINT_CREATE,
             PORTFOLIO_DATA_POINT_REVISE,
+            INTAKE_RECORD_CREATE,
+            INTAKE_RECORD_GET,
+            INTAKE_RECORD_LIST,
         }
     )
 
