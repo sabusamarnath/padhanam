@@ -1,24 +1,18 @@
-"""Portfolio CLI orchestration (S43 / D124; S44a / D126).
+"""Portfolio CLI orchestration (S43 / D124; S44a / D126; S44b / D127, D128).
 
 One typer sub-app — ``portfolio`` — with five action commands:
 create-case, create-data-point, revise-data-point, list-cases,
-get-case. The CLI is the operator-facing write path for the
-live-stack smoke: without it, the smoke has no honest way to
-produce Cases short of raw SQL fixture seeding, which would bypass
-the audit-events port and compromise the audit-trail discipline.
+get-case.
 
-Tenant context resolution uses ``build_tenant_wiring`` per the
-dev-only label-or-UUID convention. The audit adapter mirrors the
-optimization CLI's control-plane-anchored construction.
-
-S44a (D126): the use cases now consume an ActorContext and enforce
-authorisation at the use-case boundary. The CLI does not pass
-through HTTP auth middleware, so it synthesises the ActorContext
-directly — from the dev tenant wiring plus the ``--actor`` label —
-through ``_actor_context``, populating role_list and
-authorisation_set with the same ``shared_kernel/authorisation.py``
-policy the HTTP ``get_actor_context`` dependency uses. ``--actor``
-defaults to ``operator``.
+S44b (D127/D128): the three write commands invoke the
+intake-canonical orchestrations rather than the standalone portfolio
+use cases — every CLI write records an IntakeRecord first. The CLI
+synthesises the ActorContext (S44a dual-surface posture) and a
+``ManualEntryPayload`` describing the command invocation. The
+portfolio side of each orchestration is driven through a CLI-local
+``_CliPortfolioWriter`` implementing the intake context's
+``PortfolioWriter`` port against the single tenant-bound session
+factory (the S40 CLI-inline-wiring-helper precedent).
 """
 
 from __future__ import annotations
@@ -34,6 +28,19 @@ from contexts.audit.adapters.outbound.postgres.audit import (
     PostgresAuditAdapter,
 )
 
+from contexts.intake.adapters.outbound.postgres.intake_repository import (
+    PostgresIntakeRepository,
+)
+from contexts.intake.application import (
+    record_intake_and_create_case,
+    record_intake_and_create_data_point,
+    record_intake_and_revise_data_point,
+)
+from contexts.intake.application.ports.portfolio_writer import (
+    CaseWriteResult,
+    DataPointWriteResult,
+)
+from contexts.intake.domain import ManualEntryPayload
 from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
 )
@@ -71,8 +78,96 @@ _ACTOR_OPTION = typer.Option(
 )
 
 
+class _CliPortfolioWriter:
+    """CLI-local PortfolioWriter port implementation (D127, S44b).
+
+    Drives the portfolio use cases against the CLI's single
+    tenant-bound repository and reader, translating the returned
+    domain aggregates into the intake-owned result DTOs — the same
+    contract the apps/api PortfolioWriterAdapter provides, inline
+    per the S40 CLI-wiring-helper precedent.
+    """
+
+    def __init__(self, *, repository, reader, audit_port) -> None:
+        self._repository = repository
+        self._reader = reader
+        self._audit_port = audit_port
+
+    async def create_case(
+        self, *, actor: ActorContext, title: str, intake_id: UUID
+    ) -> CaseWriteResult:
+        case = await create_case(
+            repository=self._repository,
+            audit_port=self._audit_port,
+            actor=actor,
+            title=title,
+            intake_id=intake_id,
+        )
+        return CaseWriteResult(
+            case_id=case.id,
+            tenant_id=case.tenant_id,
+            jurisdiction=case.jurisdiction,
+            title=case.title,
+            case_type=case.case_type.value,
+            status=case.status.value,
+            created_at=case.created_at,
+            updated_at=case.updated_at,
+            intake_id=intake_id,
+        )
+
+    async def create_data_point(
+        self,
+        *,
+        actor: ActorContext,
+        case_id: UUID,
+        data_point_type: str,
+        value: dict[str, Any],
+        intake_id: UUID,
+    ) -> DataPointWriteResult:
+        data_point = await create_data_point(
+            repository=self._repository,
+            audit_port=self._audit_port,
+            actor=actor,
+            case_id=case_id,
+            data_point_type=DataPointType(data_point_type),
+            value=value,
+            intake_id=intake_id,
+        )
+        return _data_point_result(data_point, intake_id)
+
+    async def revise_data_point(
+        self,
+        *,
+        actor: ActorContext,
+        data_point_id: UUID,
+        value: dict[str, Any],
+        intake_id: UUID,
+    ) -> DataPointWriteResult:
+        data_point = await revise_data_point(
+            repository=self._repository,
+            reader=self._reader,
+            audit_port=self._audit_port,
+            actor=actor,
+            data_point_id=data_point_id,
+            value=value,
+            intake_id=intake_id,
+        )
+        return _data_point_result(data_point, intake_id)
+
+
+def _data_point_result(data_point, intake_id: UUID) -> DataPointWriteResult:
+    return DataPointWriteResult(
+        data_point_id=data_point.id,
+        case_id=data_point.case_id,
+        data_point_type=data_point.data_point_type.value,
+        current_value=data_point.current_value,
+        assertion_ids=tuple(a.id for a in data_point.assertions),
+        intake_id=intake_id,
+    )
+
+
 def _build_dependencies(wiring):
-    """Construct the portfolio repository, reader, and audit adapter."""
+    """Construct the portfolio + intake repositories, reader, audit adapter."""
     bound_tenant_id = TenantId(str(wiring.tenant_context.tenant_id))
 
     async def _resolver(_tid):
@@ -86,21 +181,19 @@ def _build_dependencies(wiring):
         per_tenant_sessionmaker_resolver=_resolver,
         bound_tenant_id=bound_tenant_id,
     )
+    intake_repository = PostgresIntakeRepository(
+        per_tenant_sessionmaker_resolver=_resolver,
+        bound_tenant_id=bound_tenant_id,
+    )
     audit_adapter = PostgresAuditAdapter.from_settings(
         control_plane_settings=ControlPlaneSettings(),
         per_tenant_sessionmaker_resolver=_resolver,
     )
-    return repository, reader, audit_adapter
+    return repository, reader, intake_repository, audit_adapter
 
 
 def _actor_context(wiring, actor_id: str) -> ActorContext:
-    """Synthesise the request-scoped ActorContext for the CLI (D126).
-
-    The CLI does not pass through HTTP auth middleware; it builds the
-    ActorContext directly from the dev tenant wiring plus the
-    ``--actor`` label, resolving ``authorisation_set`` through the same
-    shared_kernel/authorisation.py policy the HTTP path uses.
-    """
+    """Synthesise the request-scoped ActorContext for the CLI (D126)."""
     role_list = frozenset({ROLE_OPERATOR})
     return ActorContext(
         tenant_context=wiring.tenant_context,
@@ -127,32 +220,29 @@ def _parse_json_value(raw: str) -> dict[str, Any]:
 def cmd_create_case(
     tenant_id: Annotated[str, _TENANT_OPTION],
     title: Annotated[str, typer.Option("--title", help="Case title.")],
-    case_type: Annotated[
-        CaseType, typer.Option("--case-type", help="Case type.")
-    ] = CaseType.PORTFOLIO_ITEM,
-    status: Annotated[
-        CaseStatus, typer.Option("--status", help="Initial status.")
-    ] = CaseStatus.OPEN,
     actor: Annotated[str, _ACTOR_OPTION] = "operator",
 ) -> None:
-    """Create a portfolio Case."""
+    """Create a portfolio Case via the intake-canonical orchestration."""
     wiring = build_tenant_wiring(tenant_id)
-    repository, _reader, audit_adapter = _build_dependencies(wiring)
+    repo, reader, intake_repo, audit_adapter = _build_dependencies(wiring)
+    writer = _CliPortfolioWriter(
+        repository=repo, reader=reader, audit_port=audit_adapter
+    )
 
     async def _go() -> None:
         try:
-            case = await create_case(
-                repository=repository,
+            result = await record_intake_and_create_case(
+                intake_repository=intake_repo,
                 audit_port=audit_adapter,
+                portfolio_writer=writer,
                 actor=_actor_context(wiring, actor),
+                payload=ManualEntryPayload(raw_text=title),
                 title=title,
-                case_type=case_type,
-                status=status,
             )
-            typer.echo(f"case_id={case.id}")
-            typer.echo(f"title={case.title}")
-            typer.echo(f"case_type={case.case_type.value}")
-            typer.echo(f"status={case.status.value}")
+            typer.echo(f"case_id={result.case_id}")
+            typer.echo(f"intake_id={result.intake_id}")
+            typer.echo(f"title={result.title}")
+            typer.echo(f"status={result.status}")
         finally:
             await audit_adapter.dispose()
             await wiring.engine.dispose()
@@ -175,27 +265,32 @@ def cmd_create_data_point(
     ],
     actor: Annotated[str, _ACTOR_OPTION] = "operator",
 ) -> None:
-    """Create a DataPoint with its INITIAL assertion."""
+    """Create a DataPoint via the intake-canonical orchestration."""
     parsed = _parse_json_value(value)
     wiring = build_tenant_wiring(tenant_id)
-    repository, _reader, audit_adapter = _build_dependencies(wiring)
+    repo, reader, intake_repo, audit_adapter = _build_dependencies(wiring)
+    writer = _CliPortfolioWriter(
+        repository=repo, reader=reader, audit_port=audit_adapter
+    )
 
     async def _go() -> None:
         try:
-            data_point = await create_data_point(
-                repository=repository,
+            result = await record_intake_and_create_data_point(
+                intake_repository=intake_repo,
                 audit_port=audit_adapter,
+                portfolio_writer=writer,
                 actor=_actor_context(wiring, actor),
+                payload=ManualEntryPayload(
+                    raw_text=f"create-data-point {data_point_type.value}"
+                ),
                 case_id=case_id,
-                data_point_type=data_point_type,
+                data_point_type=data_point_type.value,
                 value=parsed,
             )
-            typer.echo(f"data_point_id={data_point.id}")
-            typer.echo(f"case_id={data_point.case_id}")
-            typer.echo(f"data_point_type={data_point.data_point_type.value}")
-            typer.echo(
-                f"initial_assertion_id={data_point.assertions[0].id}"
-            )
+            typer.echo(f"data_point_id={result.data_point_id}")
+            typer.echo(f"intake_id={result.intake_id}")
+            typer.echo(f"data_point_type={result.data_point_type}")
+            typer.echo(f"initial_assertion_id={result.assertion_ids[0]}")
         finally:
             await audit_adapter.dispose()
             await wiring.engine.dispose()
@@ -215,25 +310,32 @@ def cmd_revise_data_point(
     ],
     actor: Annotated[str, _ACTOR_OPTION] = "operator",
 ) -> None:
-    """Revise a DataPoint — append a REVISION assertion."""
+    """Revise a DataPoint via the intake-canonical orchestration."""
     parsed = _parse_json_value(value)
     wiring = build_tenant_wiring(tenant_id)
-    repository, reader, audit_adapter = _build_dependencies(wiring)
+    repo, reader, intake_repo, audit_adapter = _build_dependencies(wiring)
+    writer = _CliPortfolioWriter(
+        repository=repo, reader=reader, audit_port=audit_adapter
+    )
 
     async def _go() -> None:
         try:
-            revised = await revise_data_point(
-                repository=repository,
-                reader=reader,
+            result = await record_intake_and_revise_data_point(
+                intake_repository=intake_repo,
                 audit_port=audit_adapter,
+                portfolio_writer=writer,
                 actor=_actor_context(wiring, actor),
+                payload=ManualEntryPayload(
+                    raw_text=f"revise-data-point {data_point_id}"
+                ),
                 data_point_id=data_point_id,
                 value=parsed,
             )
-            typer.echo(f"data_point_id={revised.id}")
-            typer.echo(f"revision_count={len(revised.assertions)}")
-            typer.echo(f"latest_assertion_id={revised.assertions[-1].id}")
-            typer.echo(f"current_value={revised.current_value}")
+            typer.echo(f"data_point_id={result.data_point_id}")
+            typer.echo(f"intake_id={result.intake_id}")
+            typer.echo(f"revision_count={len(result.assertion_ids)}")
+            typer.echo(f"latest_assertion_id={result.assertion_ids[-1]}")
+            typer.echo(f"current_value={result.current_value}")
         except DataPointNotFoundError:
             typer.echo(
                 f"data point {data_point_id} not found", err=True
@@ -264,7 +366,7 @@ def cmd_list_cases(
 ) -> None:
     """List the tenant's cases, newest first."""
     wiring = build_tenant_wiring(tenant_id)
-    _repository, reader, audit_adapter = _build_dependencies(wiring)
+    _repo, reader, _intake_repo, audit_adapter = _build_dependencies(wiring)
     filters = CaseListFilters(
         case_types=(case_type,) if case_type is not None else None,
         statuses=(status,) if status is not None else None,
@@ -305,7 +407,7 @@ def cmd_get_case(
 ) -> None:
     """Get a Case with its DataPoints and their current values."""
     wiring = build_tenant_wiring(tenant_id)
-    _repository, reader, audit_adapter = _build_dependencies(wiring)
+    _repo, reader, _intake_repo, audit_adapter = _build_dependencies(wiring)
 
     async def _go() -> None:
         try:
@@ -322,6 +424,7 @@ def cmd_get_case(
             typer.echo(f"title={case.title}")
             typer.echo(f"case_type={case.case_type.value}")
             typer.echo(f"status={case.status.value}")
+            typer.echo(f"intake_id={case.intake_id}")
             typer.echo(f"data_points={len(detail.data_points)}")
             for data_point in detail.data_points:
                 typer.echo(
