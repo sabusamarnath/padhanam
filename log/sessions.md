@@ -13,6 +13,51 @@ Format:
 
 ---
 
+## S46 — Manual entry cell (first ConversationFlow implementer) plus latency-tier routing plus four-layer model ontology
+roles: analyst, PM, architect, engineer, technical writer
+mode: build session, executing briefs/p13/s46.md
+
+S46 — the P13 Wave 1 end-to-end exercise — landed the manual entry cell as the first ConversationFlow implementer (D115), the D122 latency-tier routing, and the D132 four-layer model ontology, end-to-end from a WhatsApp message through structured-output intent extraction, target identifier resolution, and an intake-canonical portfolio write to a cited confirmation rendered back to WhatsApp. Twelve commits. P13 Wave 1 closes at S46.
+
+- Produced: charter updates landing D132 plus the D131 first-instance Expected-exercise update (14e7d0e); intent value objects with the four-variant discriminated union (9dd832f); the target identifier resolution helper (5b162d0); the four-layer model ontology and LatencyTier at `shared_kernel/inference.py` (1f7033b); the InferenceSettings `latency_tier_config` extension (3f40c32); the tier-aware LiteLLM adapter plus the `model_ontology` sibling plus the call-site retrofit (f257e14); the PortfolioGateway consumer port plus the apps/-layer adapter (7351911); the manual entry cell plus `cell_response` (a49a34a); the ConversationFlow harness registration (64bf0d8); the composition-root wiring plus end-to-end integration tests (fad90d7); the procedural live-stack smoke (0977ca9); this commit landing the session-log entry and the P13 Wave 1 close marker.
+
+- Decisions: D132 (four-layer model ontology at the inference port). D131's Expected-exercise line updated for the S46 first-instance exercise. No other new D-entries — the cell, the intent value objects, the resolution helper, and the latency-tier routing land under existing commitments (D115 ConversationFlow, D122 latency-tier, D129 messaging, D130 structured output, D131 provenance).
+
+- Tests: roughly 55 new and updated tests; `tests/unit`, `tests/contract`, and `tests/integration/api` green; 32 of 32 import-linter contracts kept; AST enforcement green. The ConversationFlow contract harness's five conformance scenarios — dormant at S45 with an empty registry — now run against the manual entry cell as the first registered implementer.
+
+- Reflection (pre-write reconciliation, prompt 1): nine surfaces. Five absorbed mechanically (D-number, ActorContext synthesis, the three intake orchestration signatures, CLI-out-of-scope, type-identifier search). Four were structural-honesty findings, all operator-approved before code: (A) the brief's Path B — a *required* tier parameter — contradicted D122's committed "Phase 1 call sites preserve current behaviour with opt-in retrofit", resolved to Path A (a defaulted `latency_tier`); (B) the cell could not sit at the domain layer the brief named — a cell holding ports breaches the `layers-messaging` hexagonal contract — and moved to the application layer; (C) "ModelIdentifier at the call signature" was wrong in kind (call sites carry no Provider/Account knowledge, the Configuration layer overlaps existing request fields), resolved to adapter-boundary composition; (D) surface 8's consumer-port shape settled to a single `PortfolioGateway` carrying both the resolution reads and the orchestration writes, and surface 9's call-site count (four) confirmed Path A was tractable. The cleanest reconciliation cycle of P13 — four structural findings, none of which reached a code commit.
+
+- Reflection (methodology candidate, prompt 2): S46 Item 4 verification found that "four-layer model ontology" (D132) is *new* substrate, distinct from the pre-existing "four-layer constraint stack" at `architecture.md` (D80) — two unrelated "four-layer" concepts. The verification did real work (it caught the distinction before the brief drafted against the wrong one) but produced new substrate, not recurrence of the "prose already landed" pattern. The framing-conversation pre-write-reconciliation methodology candidate stays at two-instance evidence (S44 Item 4, S45 Item 4) for the P13-close hygiene assessment.
+
+- Reflection (D131 first-instance, prompt 3): the citation discipline felt natural at the cell altitude — `CellResponse` carries the three citation tuples, the cell populates `cited_intake_records` and `cited_artefacts` from the orchestration-result IDs, and `render_for_whatsapp` renders the compact Shape-1 line. The one honest gap: `cited_audit_events` stays empty because the intake-owned write-result DTOs (`CaseWriteResult`, `DataPointWriteResult`) do not surface audit-event IDs. The convention-versus-structural-enforcement gap is real but caused no implementation friction — the cell simply cites what it holds in scope. Recorded at `charter/captures.md` for the Phase 3 close audit.
+
+- Reflection (ConversationFlow harness, prompt 4): the harness's five scenarios fit the cell cleanly — no contract-scenario gaps. `make_instance` needed offline stubs (a structured-output stub returning an UnclearIntent extraction so a harness `turn` runs without an LLM and never reaches the gateway); the `@runtime_checkable` `isinstance` check and the open/turn/close lifecycle held without adjustment. One genuine adjustment: S45's `test_harness_is_ready_at_s45` asserted an *empty* registry — that was an S45-state test, not a permanent contract, and it was replaced with `test_manual_entry_cell_is_registered`. Second-instance evidence for the harness machinery design: it absorbed the first implementer with no harness change.
+
+- Reflection (D132 Configuration scope, prompt 5): the Configuration layer settled to a *narrower* scope than "everything affecting the call." It carries `latency_tier`, `temperature`, `max_tokens`, and the structured-output schema — the per-call *parameters* — but not the system prompt or message list, which already live first-class on the request surface. Finding C drove this: a Configuration layer that re-homed existing request fields would create two homes per field. `ModelIdentifier` composes at the LiteLLM adapter boundary and `audit_dimensions()` captures the four `gen_ai.model.*` span attributes per call; the audit capture worked cleanly in the adapter unit tests.
+
+- Reflection (latency-tier operational evidence, prompt 6): the S46 smoke is procedural — the build environment cannot reach docker or the Twilio Sandbox — so the per-tier latency baseline records at the operator's live execution. The cell's only LLM call is the `REAL_TIME_REQUIRED` intent extraction (a small structured generation); no `ASYNC_TOLERANT` call fires on the cell path. The two evaluation appliers opt into `ASYNC_TOLERANT` per D122's substrate-analysis classification; the agent loop and `request_completion` stay on the `REAL_TIME_REQUIRED` default — both are user-invoked surfaces. S45's 97 ms inbound cascade remains the reference for the webhook leg.
+
+- Reflection (convergence-session activation, prompt 7): P13 Wave 1 closes at S46. The UX convergence strategic-mode session named in the S45 `charter/captures.md` entry — combining multi-channel UX, provenance-aware response composition, and confidence-aware response composition into one coherent design — activates now, between this close and P14 epic framing. It is the next strategic-mode block.
+
+methodology: Finding A is the brief-conflicts-with-a-committed-D-entry pattern recurring — the framing brief's Path-B disposition was reasoned from the call-site count without cross-checking D122's committed text. Pre-write reconciliation caught it at brief altitude. Cumulative evidence (with the S45 SMS-vs-WhatsApp and D-number findings) that the framing-conversation discipline surfaces alternatives without always reconciling against existing D-entry commitments; carried to the Phase 2-A close methodology assessment.
+
+```
+metrics:
+  classification: build session
+  brief_started: 2026-05-22
+  session_started: 2026-05-22
+  session_closed: 2026-05-22
+  merged: 2026-05-22
+  close_state: clean
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: charter/decisions.md; charter/architecture.md; charter/schema.md; charter/packages/p13-epic.md; charter/current-package.md; log/captures.md
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## S45 smoke — messaging substrate live-stack verification (stages 0-9)
 roles: engineer, technical writer
 mode: strategic-mode-continuation (operational execution evidence continuing the S45 close)
