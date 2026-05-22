@@ -1565,7 +1565,170 @@ conversation by one `ConversationInput` and returns the next
 `ConversationClosure` and returns the terminal
 `ConversationOutcome`. The five value objects are framework-free
 per D16. Conformance is CI-enforceable via the contract harness
-at `tests/contract/conversation_flow/`; no implementer registers
-at S45 — audit-conversation (5.1) and portfolio mirror-conversation
-(4.1) implementers land at P14+.
+at `tests/contract/conversation_flow/`; the first implementer —
+the manual entry cell — registers at S46 (see "Manual entry cell"
+below), and audit-conversation (5.1) and portfolio
+mirror-conversation (4.1) implementers land at P14+.
+
+### Latency tier and four-layer model ontology (shared-kernel value objects)
+
+Per D122 and D132, `shared_kernel/inference.py` carries the
+latency-tier and model-identification primitives for the inference
+port. Framework-free per D16 — stdlib only.
+
+```python
+class LatencyTier(StrEnum):
+    REAL_TIME_REQUIRED = "real_time_required"   # user-invoked surfaces
+    ASYNC_TOLERANT = "async_tolerant"           # substrate / background
+
+class Provider(StrEnum):
+    OLLAMA = "ollama"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+
+@dataclass(frozen=True)
+class ModelConfiguration:        # the Configuration layer
+    latency_tier: LatencyTier
+    temperature: float | None = None
+    max_tokens: int | None = None
+    structured_output_schema: dict[str, Any] | None = None
+
+@dataclass(frozen=True)
+class ModelIdentifier:           # the four-layer identification
+    provider: Provider
+    account: str
+    version: str
+    configuration: ModelConfiguration
+```
+
+`LatencyTier` is the D122 hint a call site declares; the
+`InferencePort` / `StructuredOutputPort` surface carries it as a
+defaulted parameter (`REAL_TIME_REQUIRED` default — Path A, D122's
+preserve-current-behaviour commitment). `ModelIdentifier` is the
+D132 four-layer identification — Provider, Account, Version,
+Configuration. It composes at the LiteLLM adapter boundary, not at
+the public call signature (D132 Finding C), and the adapter's
+per-call OTel span captures all four dimensions as
+`gen_ai.model.provider` / `.account` / `.version` /
+`.configuration`. Phase 2-A operates single-account-per-provider;
+the Account field is `"default"` until Phase 2-B+ customer
+deployments make it load-bearing.
+
+## Manual entry cell (messaging context)
+
+Per D129 (messaging substrate) and D131 (provenance-aware response
+composition). The manual entry cell is the first ConversationFlow
+implementer (D115). It lives at the messaging *application* layer —
+`contexts/messaging/application/manual_entry_cell.py` — because it
+holds ports and orchestrates (S46 pre-write reconciliation Finding
+B: a cell holding ports cannot sit at the pure-domain layer per the
+`layers-messaging` hexagonal contract). The intent value objects it
+dispatches on are pure-domain.
+
+### Intent value objects (messaging domain)
+
+`contexts/messaging/domain/intent.py` carries the discriminated
+intent union the cell extracts from an inbound message via
+structured output. Four frozen-dataclass variants plus the
+schema-level discriminant enum:
+
+```python
+class IntentType(StrEnum):
+    CREATE_CASE = "create_case"
+    ADD_DATA_POINT = "add_data_point"
+    REVISE_DATA_POINT = "revise_data_point"
+    UNCLEAR = "unclear"
+
+@dataclass(frozen=True)
+class CreateCaseIntent:
+    title: str
+
+@dataclass(frozen=True)
+class AddDataPointIntent:
+    case_reference: str       # natural-language reference (Path B)
+    data_point_type: str      # GOAL / STATUS / METHODOLOGY_APPLICATION
+    value_text: str
+
+@dataclass(frozen=True)
+class ReviseDataPointIntent:
+    data_point_reference: str # natural-language reference (Path B)
+    value_text: str
+
+@dataclass(frozen=True)
+class UnclearIntent:
+    clarification: str        # the question to ask the operator
+
+Intent = (
+    CreateCaseIntent | AddDataPointIntent
+    | ReviseDataPointIntent | UnclearIntent
+)
+```
+
+`IntentType` is the discriminant in the structured-output JSON
+Schema; `parse_intent(raw: dict) -> Intent` maps the LLM's parsed
+object to the typed variant. The cell dispatches on the variant
+type. `AddDataPointIntent.case_reference` and
+`ReviseDataPointIntent.data_point_reference` are natural-language
+references (Path B target identifier resolution); the cell resolves
+them against portfolio state before driving a write. Each variant's
+`__post_init__` enforces non-empty string invariants. DropCaseIntent
+and QueryStateIntent defer to the second-instance trigger per the
+build-at-second-instance discipline.
+
+### Target resolution outcomes (messaging application)
+
+`resolve_target` searches portfolio state for the case or data
+point a natural-language reference names, returning a
+`ResolutionOutcome`:
+
+```python
+class ResolutionStatus(StrEnum):
+    MATCHED_SINGLE = "matched_single"
+    AMBIGUOUS = "ambiguous"
+    NO_MATCH = "no_match"
+
+@dataclass(frozen=True)
+class ResolutionOutcome:
+    status: ResolutionStatus
+    matched_id: UUID | None             # set when MATCHED_SINGLE
+    candidate_labels: tuple[str, ...]   # human labels when AMBIGUOUS
+```
+
+### CellResponse and citation discipline (D131 first instance)
+
+The cell composes a `CellResponse` carrying the operator-facing
+text plus the D131 citation fields:
+
+```python
+@dataclass(frozen=True)
+class CellResponse:
+    text: str
+    cited_intake_records: tuple[UUID, ...]
+    cited_audit_events: tuple[UUID, ...]
+    cited_artefacts: tuple[UUID, ...]
+```
+
+D131 first-instance exercise: `cited_intake_records` and
+`cited_artefacts` populate from the IDs the cell holds in scope
+after a successful orchestration (the IntakeRecord id and the
+Case / DataPoint id). `cited_audit_events` stays empty at S46 — the
+intake-owned write-result DTOs do not surface audit-event IDs, and
+extending them is out of proportion for the first-instance exercise
+(recorded at `charter/captures.md`). The WhatsApp surface renders
+citations in compact textual form (Shape 1:
+short-hex-prefix-plus-timestamp).
+
+### ManualEntryCell ConversationFlow registration
+
+The cell implements the ConversationFlow Protocol (D115) — `open` /
+`turn` / `close`. It is the first implementer registered with the
+contract harness at `tests/contract/conversation_flow/` via
+`tests/contract/conversation_flow/test_manual_entry_cell.py`; the
+harness's five conformance scenarios run against it. `turn`
+processes one inbound message: structured-output intent extraction
+→ target resolution → intake-canonical portfolio orchestration →
+`CellResponse` composition. The cell holds the `StructuredOutputPort`
+and a single `PortfolioGateway` consumer port (read for resolution,
+write for orchestration); the composed response is embedded in the
+returned `ConversationState.payload`.
 

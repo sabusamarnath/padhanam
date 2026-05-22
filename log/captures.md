@@ -571,3 +571,14 @@ The three are separable as substrate (S45 built the messaging substrate channel-
 
   - triaged: defer on 2026-05-22
   - resolution: forward strategic block named; activation trigger is the S46 close marker. Sits between S46 close and P14 epic framing. Not a build session — a strategic-mode conversation producing charter artefacts. Recorded at the S45 charter commit and the S45 session-log entry.
+
+## 2026-05-22 — [S46] D131 first-instance exercise plus structural-enforcement deferral
+
+S46's manual entry cell is the first D131 implementer per the citation-shaped response composition discipline. The citation fields (`cited_intake_records`, `cited_audit_events`, `cited_artefacts`) live on the cell's `CellResponse` value object directly rather than at a shared_kernel base type or Protocol.
+
+**Convention-versus-structural-enforcement gap.** The discipline depends on each ConversationFlow implementer honouring D131's commitment by convention at Phase 2-A; structural enforcement via a shared_kernel `CitedResponse` base or Protocol defers to the second-instance trigger (P14 ConversationFlow implementers at audit-conversation and mirror-conversation surface the second instance). The Phase 3 close audit verifies that all D131-bearing implementers carried citation fields. If the second-instance trigger at P14 fires with multiple implementers landing simultaneously rather than sequentially, the shared_kernel base type emerges at P14 framing rather than at a subsequent session.
+
+**Empty-field-at-first-instance gap.** S46's cell cites `cited_intake_records` and `cited_artefacts` from in-scope IDs (the IntakeRecord id and the Case / DataPoint id the orchestration returns); `cited_audit_events` stays empty because the intake-owned write-result DTOs (`CaseWriteResult`, `DataPointWriteResult`) do not currently surface `audit_event_id`s. Extending three intake-owned DTOs plus their underlying use cases to carry audit-event IDs is out of proportion for the first-instance exercise. The convention-versus-structural-enforcement gap at D131's first instance therefore includes this empty-field gap. The future implementer at P14+ either extends the write-result DTOs to surface audit IDs, or accepts that `cited_audit_events` is an aspirational citation field where `cited_intake_records` plus `cited_artefacts` cover the audit surface in practice (each cited IntakeRecord transitively anchors its own audit-chain entries).
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to the Phase 3 close audit for D131-implementer citation-field verification, and to the P14 ConversationFlow-implementer framing for the shared_kernel `CitedResponse` base-type second-instance decision. Recorded at the S46 charter commit and the S46 session-log entry.
