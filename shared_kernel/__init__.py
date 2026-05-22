@@ -8,6 +8,13 @@ from shared_kernel.conversation_flow import (
     ConversationOutcome,
     ConversationState,
 )
+from shared_kernel.inference import (
+    DEFAULT_ACCOUNT,
+    LatencyTier,
+    ModelConfiguration,
+    ModelIdentifier,
+    Provider,
+)
 from shared_kernel.revisable import AssertionChange, Revisable
 from shared_kernel.structured_output import (
     StructuredOutputPort,
@@ -27,7 +34,12 @@ __all__ = [
     "ConversationInvocation",
     "ConversationOutcome",
     "ConversationState",
+    "DEFAULT_ACCOUNT",
     "Jurisdiction",
+    "LatencyTier",
+    "ModelConfiguration",
+    "ModelIdentifier",
+    "Provider",
     "Revisable",
     "StructuredOutputPort",
     "StructuredOutputRequest",

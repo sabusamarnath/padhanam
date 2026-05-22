@@ -32,6 +32,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
+from shared_kernel.inference import LatencyTier
+
 T = TypeVar("T")
 
 
@@ -40,12 +42,17 @@ class StructuredOutputRequest:
     """A request for a schema-conforming structured LLM response.
 
     ``schema`` is a JSON Schema object (a plain ``dict``).
-    ``temperature`` and ``model_hint`` are optional; an unset
-    ``model_hint`` lets the adapter resolve its default model.
+    ``latency_tier`` is the D122 routing hint — defaulted to
+    ``REAL_TIME_REQUIRED`` (Path A, S46) so existing callers preserve
+    current behaviour; a user-invoked surface like the manual entry
+    cell passes it explicitly. ``temperature`` and ``model_hint`` are
+    optional; an unset ``model_hint`` lets the adapter resolve its
+    default model.
     """
 
     prompt: str
     schema: dict[str, Any]
+    latency_tier: LatencyTier = LatencyTier.REAL_TIME_REQUIRED
     temperature: float | None = None
     model_hint: str | None = None
 
