@@ -477,6 +477,55 @@ forbidden_modules =
 allow_indirect_imports = true
 
 # ---------------------------------------------------------------------------
+# S45 / D27, D30 — twilio SDK confined to the messaging twilio outbound
+# adapter. The single place ``import twilio`` resolves to a real package is
+# ``contexts.messaging.adapters.outbound.twilio``; every other module is a
+# forbidden source. The LocalEcho and Postgres adapters take no Twilio
+# dependency, so they are listed as forbidden sources too — this keeps the
+# vendor-flexibility commitment honest (the WhatsApp channel could swap
+# vendors with no change outside the twilio adapter directory). Mirrors the
+# litellm / langfuse / neo4j confinement pairs.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:twilio-confined]
+name = twilio SDK confined to the messaging twilio outbound adapter
+type = forbidden
+source_modules =
+    padhanam
+    shared_kernel
+    contexts.inference
+    contexts.observability
+    contexts.audit
+    contexts.tenancy
+    contexts.evaluation
+    contexts.ingestion
+    contexts.methodology
+    contexts.agent
+    contexts.tools
+    contexts.run_history
+    contexts.retrieval_evaluation
+    contexts.optimization
+    contexts.portfolio
+    contexts.intake
+    contexts.messaging.domain
+    contexts.messaging.application
+    contexts.messaging.ports
+    contexts.messaging.adapters.outbound.local_echo
+    contexts.messaging.adapters.outbound.postgres
+forbidden_modules =
+    twilio
+allow_indirect_imports = false
+
+[importlinter:contract:twilio-confined-apps]
+name = twilio direct import forbidden in apps
+type = forbidden
+source_modules =
+    apps
+forbidden_modules =
+    twilio
+allow_indirect_imports = true
+
+# ---------------------------------------------------------------------------
 # S25 / D79 — Agent context internal layers do not depend on methodology or
 # ingestion. The existing cross-context independence contracts (domain /
 # application / adapters) cover this implicitly through their mutual-

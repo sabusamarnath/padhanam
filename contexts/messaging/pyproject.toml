@@ -1,0 +1,27 @@
+[project]
+name = "padhanam-messaging"
+version = "0.0.0"
+description = "Messaging bounded context (D119, D129). Per-tenant Message persistence and outbound delivery through a vendor-agnostic MessageDeliveryPort. WhatsApp via the Twilio Sandbox at Phase 2-A; the LocalEcho adapter keeps local development free of vendor credentials per the local-first principle."
+requires-python = ">=3.14"
+# Vendor-SDK confinement (D27, D30): the twilio SDK only enters the
+# codebase through this manifest. Domain code is pure (no SDKs); the
+# Twilio adapter under adapters/outbound/twilio/ is the only place
+# `import twilio` resolves to a real package, confined by the
+# `twilio-confined` import-linter contract. The LocalEcho adapter
+# (adapters/outbound/local_echo/) takes no vendor dependency, so local
+# development runs without Twilio credentials.
+#
+# messaging is the first context since retrieval_evaluation to carry
+# its own manifest: optimization / portfolio / intake added no new
+# third-party dep, but messaging genuinely needs to scope `twilio`.
+# SQLAlchemy + asyncpg arrive alongside the Postgres adapter per D30's
+# per-context dep-scoping invariant, mirroring the intake and
+# retrieval_evaluation contexts.
+dependencies = [
+    "twilio>=9,<10",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+]
+
+[tool.uv]
+package = false

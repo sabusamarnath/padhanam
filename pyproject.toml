@@ -41,6 +41,7 @@ dependencies = [
     "padhanam-tools",
     "padhanam-run-history",
     "padhanam-retrieval-evaluation",
+    "padhanam-messaging",
     "padhanam-api",
     "padhanam-cli",
 ]
@@ -69,6 +70,7 @@ members = [
     "contexts/tools",
     "contexts/run_history",
     "contexts/retrieval_evaluation",
+    "contexts/messaging",
     "apps/api",
     "apps/cli",
 ]
@@ -85,6 +87,7 @@ padhanam-agent = {workspace = true}
 padhanam-tools = {workspace = true}
 padhanam-run-history = {workspace = true}
 padhanam-retrieval-evaluation = {workspace = true}
+padhanam-messaging = {workspace = true}
 padhanam-api = {workspace = true}
 padhanam-cli = {workspace = true}
 
