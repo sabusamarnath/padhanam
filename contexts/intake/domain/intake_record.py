@@ -9,11 +9,12 @@ the persisted entity.
 IntakeRecords are immutable — never updated or deleted — per the
 "Originals never erased" principle.
 
-``IntakeSource`` carries the single Phase 2-A value MANUAL_ENTRY;
-CALENDAR_READ and EMAIL_READ activate at P14. ``IntakePayload`` is
-a type alias over the source-specific payload value object — at
-S44b the single ``ManualEntryPayload`` variant; it widens to a
-Union when a second variant lands.
+``IntakeSource`` carries MANUAL_ENTRY (S44b) and WHATSAPP_INBOUND
+(S45, D129); CALENDAR_READ and EMAIL_READ activate at P14.
+``IntakePayload`` is a type alias over the source-specific payload
+value object — the single ``ManualEntryPayload`` variant, reused
+for WHATSAPP_INBOUND intakes (``raw_text`` carries the message
+body); it widens to a Union when a calendar/email variant lands.
 
 Domain code is framework-free per D16 — stdlib plus shared_kernel.
 """
@@ -29,14 +30,18 @@ from shared_kernel import ActorReference
 
 
 class IntakeSource(str, Enum):
-    """The provenance of an IntakeRecord (D127).
+    """The provenance of an IntakeRecord (D127, D129).
 
-    Phase 2-A ships MANUAL_ENTRY only; CALENDAR_READ and EMAIL_READ
-    activate at P14 per the deferred-decisions entry on intake
-    sources beyond operator authority.
+    MANUAL_ENTRY lands at S44b; WHATSAPP_INBOUND lands at S45 per
+    D129's inbound-as-intake-orchestration — an inbound WhatsApp
+    message records an IntakeRecord ahead of the Message write.
+    CALENDAR_READ and EMAIL_READ activate at P14 per the
+    deferred-decisions entry on intake sources beyond operator
+    authority.
     """
 
     MANUAL_ENTRY = "MANUAL_ENTRY"
+    WHATSAPP_INBOUND = "WHATSAPP_INBOUND"
 
 
 @dataclass(frozen=True)

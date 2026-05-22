@@ -63,10 +63,17 @@ def _payload_from_row(
 ) -> IntakePayload:
     """Reconstruct an IntakePayload variant from a JSONB row value.
 
-    Dispatches on ``intake_source``; at S44b the single
-    MANUAL_ENTRY → ManualEntryPayload mapping.
+    Dispatches on ``intake_source``. MANUAL_ENTRY (S44b) and
+    WHATSAPP_INBOUND (S45, D129) both deserialise to
+    ``ManualEntryPayload`` — the inbound-WhatsApp payload reuses the
+    manual-entry shape with ``raw_text`` carrying the message body,
+    so the ``IntakePayload`` alias stays single-variant per D127's
+    build-at-second-instance discipline.
     """
-    if intake_source is IntakeSource.MANUAL_ENTRY:
+    if intake_source in (
+        IntakeSource.MANUAL_ENTRY,
+        IntakeSource.WHATSAPP_INBOUND,
+    ):
         return ManualEntryPayload(
             raw_text=raw["raw_text"],
             intent_hint=raw.get("intent_hint"),

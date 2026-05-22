@@ -86,6 +86,15 @@ def test_intake_source_phase_2a_value() -> None:
     assert IntakeSource("MANUAL_ENTRY") is IntakeSource.MANUAL_ENTRY
 
 
+def test_intake_source_whatsapp_inbound_value() -> None:
+    # S45 / D129: inbound WhatsApp messages record an IntakeRecord
+    # with this source ahead of the Message write.
+    assert IntakeSource.WHATSAPP_INBOUND.value == "WHATSAPP_INBOUND"
+    assert (
+        IntakeSource("WHATSAPP_INBOUND") is IntakeSource.WHATSAPP_INBOUND
+    )
+
+
 # --- IntakeRecord --------------------------------------------------
 
 
