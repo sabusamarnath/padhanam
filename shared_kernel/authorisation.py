@@ -54,6 +54,12 @@ INTAKE_RECORD_CREATE = "intake.record.create"
 INTAKE_RECORD_GET = "intake.record.get"
 INTAKE_RECORD_LIST = "intake.record.list"
 
+# --- Phase 2-A messaging permissions (D129, S45) -------------------
+MESSAGING_MESSAGE_SEND = "messaging.message.send"
+MESSAGING_MESSAGE_RECEIVE = "messaging.message.receive"
+MESSAGING_MESSAGE_GET = "messaging.message.get"
+MESSAGING_MESSAGE_LIST = "messaging.message.list"
+
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
 
@@ -68,6 +74,10 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             INTAKE_RECORD_CREATE,
             INTAKE_RECORD_GET,
             INTAKE_RECORD_LIST,
+            MESSAGING_MESSAGE_SEND,
+            MESSAGING_MESSAGE_RECEIVE,
+            MESSAGING_MESSAGE_GET,
+            MESSAGING_MESSAGE_LIST,
         }
     ),
 }
@@ -150,6 +160,10 @@ __all__ = [
     "INTAKE_RECORD_CREATE",
     "INTAKE_RECORD_GET",
     "INTAKE_RECORD_LIST",
+    "MESSAGING_MESSAGE_GET",
+    "MESSAGING_MESSAGE_LIST",
+    "MESSAGING_MESSAGE_RECEIVE",
+    "MESSAGING_MESSAGE_SEND",
     "PORTFOLIO_CASE_CREATE",
     "PORTFOLIO_CASE_GET",
     "PORTFOLIO_CASE_LIST",

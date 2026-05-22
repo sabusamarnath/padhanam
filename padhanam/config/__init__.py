@@ -9,6 +9,7 @@ from padhanam.config.inference import (
     UnknownModelError,
     cost_for,
 )
+from padhanam.config.messaging import MessagingAdapter, MessagingSettings
 from padhanam.config.observability import ObservabilitySettings
 from padhanam.config.profiles import Profile, get_profile
 from padhanam.config.security import AuthBackend, SecuritySettings
@@ -19,6 +20,8 @@ __all__ = [
     "ControlPlaneSettings",
     "CostBreakdown",
     "InferenceSettings",
+    "MessagingAdapter",
+    "MessagingSettings",
     "ModelPricing",
     "Neo4jSettings",
     "PadhanamSettings",
