@@ -527,3 +527,30 @@ The forward discipline: a new bounded context is triggered by a *distinct archit
 
   - triaged: note on 2026-05-22
   - resolution: recorded as a forward-looking discipline note; the clarification is captured in D127 alternative (d)'s landed prose. No separate methodology-document promotion sought — a refinement of an existing trigger, not a recurring build pattern.
+
+## 2026-05-22 — [pre-S45 principles assessment] Code-altitude assessment surfaces findings charter-altitude inference structurally cannot (methodology candidate)
+
+The pre-S45 software-engineering-principles assessment was the first code-altitude principle audit the project has run. It surfaced three classes of finding that no charter-altitude reading would have produced. First, structural facts absent from every charter document: `apps/cli/_cross_context.py` at 1704 lines is the single largest file in the codebase, appears in no charter document and on no hygiene list, and was invisible because no recent session touched it heavily — the brief's own SRP watch-points (drawn from session-log findings) named the second- and third-largest composition files but not the largest. Second, code-level patterns no D-entry describes: the `if "tenant" in str(exc)` exception-message-sniffing repeated ten times across three routers, and the audit-event-draft inline-versus-helper drift between two sibling contexts written one session apart. Third, places the charter *overstates* — three charter surfaces (D114, D125, `architecture.md:274`, `schema.md`) assert a Revisable contract-test harness at `tests/contract/revisable/` that does not exist.
+
+The observation: charter-altitude auditing verifies decisions against their stated intent and catches drift between charter prose and D-entry ground truth; it cannot catch what was never written down. A code-altitude pass reads the artefact directly and finds both un-charted structure and charter overclaim. The two audit altitudes are complementary, not redundant. First-instance observation; recurrence test is the next code-altitude assessment (a Phase 2 close principles re-run or an equivalent).
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to the post-assessment disposition conversation and to `charter/methodology.md` promotion candidacy. First instance; recurrence test named. Recorded at the pre-S45 session-log methodology line.
+
+## 2026-05-22 — [pre-S45 principles assessment] Per-principle audit structure forces artificial separation of cross-principle findings (methodology candidate)
+
+The brief structured the assessment one section per principle (KISS, DRY, SOLID×5, YAGNI, TDA), each with methodology / metrics / findings / severity / actions. The structure worked for principle-local findings but forced roughly four genuinely cross-principle findings to be split and cross-referenced rather than stated once: the cursor-codec duplication is DRY and KISS; the 800-line composition files are SRP and the file-topology-budget methodology; the inert forward-compat affordances are KISS and YAGNI; the use-case ActorContext-unpack is DRY, KISS, and TDA. The findings synthesis section's "cross-principle pattern findings" sub-section partly recovered the loss, but only after each fragment had already been stated under its principle.
+
+The observation: a principle is a lens, not a partition; real findings frequently refract through several lenses. A future principle audit may be better served by a finding-first structure (enumerate findings, tag each with the principles it touches) with the per-principle sections as an index, or by drafting the cross-principle synthesis first and decomposing into per-principle evidence second. The per-principle structure is not wrong — it makes the methodology paragraphs and metrics clean — but it should not be the unit of finding-discovery. First-instance observation.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to the post-assessment disposition conversation as input to any future principle-audit brief structure. First instance; recurrence test is the next principle audit. Recorded at the pre-S45 session-log methodology line.
+
+## 2026-05-22 — [pre-S45 principles assessment] Metrics-versus-judgement balance is uneven across the seven principles (methodology candidate)
+
+The assessment's quantitative metrics were load-bearing for three principles and thin-to-noise for the other four. KISS and SRP rested squarely on numbers — the cyclomatic-complexity distribution (82 of 87 Phase 2-A functions at CC ≤ 5) *is* the KISS verdict, and the file-size distribution *is* the SRP verdict. DIP rested on the import-linter run (29/29) plus a vendor-import scan. For DRY, OCP, LSP, ISP, YAGNI, and TDA the metrics were either weak proxies (a port's method count does not by itself decide ISP) or had to be constructed by hand (counting `.role_list` readers, diffing seven cursor files), and the actual finding came from structural judgement. Manufacturing a metric where the principle resists quantification (an "OCP score") would have produced noise that obscured the judgement.
+
+The observation for future principle audits: state up front which principles a given codebase shape can be measured against and which require judgement with cited evidence, rather than imposing a uniform metrics-then-findings template on all seven. The honest shape is metrics-where-they-decide, judgement-with-evidence-where-they-do-not. First-instance observation.
+
+  - triaged: defer on 2026-05-22
+  - resolution: forwarded to the post-assessment disposition conversation as input to future principle-audit brief structure. Pairs with the per-principle-structure candidate above. Recorded at the pre-S45 session-log methodology line.
