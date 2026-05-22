@@ -48,8 +48,14 @@ async def create_data_point(
     case_id: UUID,
     data_point_type: DataPointType,
     value: dict[str, Any],
+    intake_id: UUID | None = None,
 ) -> DataPoint:
-    """Create a DataPoint with its INITIAL assertion; persist and audit."""
+    """Create a DataPoint with its INITIAL assertion; persist and audit.
+
+    ``intake_id`` (D128) stamps the INITIAL assertion; the
+    intake-canonical orchestration populates it, a direct call
+    leaves it null.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
     now = datetime.now(timezone.utc)
@@ -65,6 +71,7 @@ async def create_data_point(
         value=value,
         authored_by=authored_by,
         created_at=now,
+        intake_id=intake_id,
     )
     data_point = DataPoint(
         id=data_point_id,

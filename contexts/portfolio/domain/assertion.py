@@ -30,7 +30,13 @@ class AssertionType(str, Enum):
 
 @dataclass(frozen=True)
 class Assertion:
-    """One entry in a DataPoint's append-only revision history (D124)."""
+    """One entry in a DataPoint's append-only revision history (D124).
+
+    ``intake_id`` (D128) is the foreign key to the IntakeRecord this
+    assertion traces to. Nullable at the domain layer: the
+    intake-canonical orchestration path populates it; direct
+    construction outside an orchestration leaves it ``None``.
+    """
 
     id: UUID
     data_point_id: UUID
@@ -41,6 +47,7 @@ class Assertion:
     value: dict[str, Any]
     authored_by: ActorReference
     created_at: datetime
+    intake_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():

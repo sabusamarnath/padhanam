@@ -50,8 +50,14 @@ async def revise_data_point(
     actor: ActorContext,
     data_point_id: UUID,
     value: dict[str, Any],
+    intake_id: UUID | None = None,
 ) -> DataPoint:
-    """Append a revision to a DataPoint; persist and audit it."""
+    """Append a revision to a DataPoint; persist and audit it.
+
+    ``intake_id`` (D128) stamps the REVISION assertion; the
+    intake-canonical orchestration populates it, a direct call
+    leaves it null.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
     existing = await reader.get_data_point(
@@ -59,7 +65,9 @@ async def revise_data_point(
     )
     if existing is None:
         raise DataPointNotFoundError(data_point_id)
-    revised = existing.revise(AssertionChange(value=value), authored_by)
+    revised = existing.revise(
+        AssertionChange(value=value), authored_by, intake_id
+    )
     new_assertion = revised.assertions[-1]
     await repository.save_assertion(
         tenant_context=tenant_context, assertion=new_assertion

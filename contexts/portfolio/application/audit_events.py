@@ -96,6 +96,9 @@ def draft_case_create(
             "case_type": case.case_type.value,
             "status": case.status.value,
             "created_at": case.created_at.isoformat(),
+            "intake_id": (
+                str(case.intake_id) if case.intake_id is not None else None
+            ),
         },
     )
 
@@ -118,6 +121,11 @@ def draft_data_point_create(
             "data_point_type": data_point.data_point_type.value,
             "value": data_point.value,
             "created_at": data_point.created_at.isoformat(),
+            "intake_id": (
+                str(data_point.assertions[0].intake_id)
+                if data_point.assertions[0].intake_id is not None
+                else None
+            ),
         },
     )
 
@@ -142,6 +150,11 @@ def draft_data_point_revise(
             "assertion_id": str(new_assertion.id),
             "value": new_assertion.value,
             "created_at": new_assertion.created_at.isoformat(),
+            "intake_id": (
+                str(new_assertion.intake_id)
+                if new_assertion.intake_id is not None
+                else None
+            ),
         },
     )
 

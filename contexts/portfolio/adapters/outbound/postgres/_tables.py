@@ -40,6 +40,11 @@ cases = sa.Table(
         nullable=False,
         server_default=sa.text("now()"),
     ),
+    # intake_id (D128, migration 0018): FK to intakes(id); the FK
+    # constraint is enforced by the migration. The Core mirror omits
+    # the ForeignKey object because `intakes` lives in the intake
+    # context's separate MetaData.
+    sa.Column("intake_id", pg.UUID(as_uuid=False), nullable=True),
     sa.Index("ix_cases_tenant_status", "tenant_id", "status"),
 )
 
@@ -98,6 +103,9 @@ assertions = sa.Table(
         nullable=False,
         server_default=sa.text("now()"),
     ),
+    # intake_id (D128, migration 0018): FK to intakes(id), enforced
+    # by the migration; the Core mirror omits the ForeignKey object.
+    sa.Column("intake_id", pg.UUID(as_uuid=False), nullable=True),
     sa.Index(
         "ix_assertions_data_point_created_at", "data_point_id", "created_at"
     ),

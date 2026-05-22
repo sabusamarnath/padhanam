@@ -34,6 +34,7 @@ class AssertionDTO(BaseModel):
     value: dict[str, Any]
     authored_by_user_id: str
     created_at: datetime
+    intake_id: UUID | None = None
 
 
 class DataPointDTO(BaseModel):
@@ -63,6 +64,7 @@ class CaseDTO(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    intake_id: UUID | None = None
 
 
 class CaseListDTO(BaseModel):
@@ -95,6 +97,7 @@ def assertion_to_dto(assertion: Assertion) -> AssertionDTO:
         value=assertion.value,
         authored_by_user_id=assertion.authored_by.user_id,
         created_at=assertion.created_at,
+        intake_id=assertion.intake_id,
     )
 
 
@@ -124,6 +127,7 @@ def case_to_dto(case: Case) -> CaseDTO:
         status=case.status.value,
         created_at=case.created_at,
         updated_at=case.updated_at,
+        intake_id=case.intake_id,
     )
 
 

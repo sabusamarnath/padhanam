@@ -84,6 +84,9 @@ class PostgresPortfolioReader:
             status=CaseStatus(row.status),
             created_at=row.created_at,
             updated_at=row.updated_at,
+            intake_id=(
+                UUID(row.intake_id) if row.intake_id is not None else None
+            ),
         )
 
     @staticmethod
@@ -102,6 +105,9 @@ class PostgresPortfolioReader:
             value=row.value,
             authored_by=ActorReference(user_id=row.authored_by_user_id),
             created_at=row.created_at,
+            intake_id=(
+                UUID(row.intake_id) if row.intake_id is not None else None
+            ),
         )
 
     @classmethod

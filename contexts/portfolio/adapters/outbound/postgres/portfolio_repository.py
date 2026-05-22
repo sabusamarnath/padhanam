@@ -48,6 +48,11 @@ def _assertion_row(assertion: Assertion) -> dict[str, Any]:
         "value": assertion.value,
         "authored_by_user_id": assertion.authored_by.user_id,
         "created_at": assertion.created_at,
+        "intake_id": (
+            str(assertion.intake_id)
+            if assertion.intake_id is not None
+            else None
+        ),
     }
 
 
@@ -96,6 +101,11 @@ class PostgresPortfolioRepository:
                         status=case.status.value,
                         created_at=case.created_at,
                         updated_at=case.updated_at,
+                        intake_id=(
+                            str(case.intake_id)
+                            if case.intake_id is not None
+                            else None
+                        ),
                     )
                 )
 

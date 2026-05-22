@@ -34,7 +34,13 @@ class CaseStatus(str, Enum):
 
 @dataclass(frozen=True)
 class Case:
-    """The portfolio-context aggregate root (D124)."""
+    """The portfolio-context aggregate root (D124).
+
+    ``intake_id`` (D128) is the foreign key to the IntakeRecord this
+    Case traces to. Nullable at the domain layer: the
+    intake-canonical orchestration path populates it; direct
+    construction outside an orchestration leaves it ``None``.
+    """
 
     id: UUID
     tenant_id: UUID
@@ -44,6 +50,7 @@ class Case:
     status: CaseStatus
     created_at: datetime
     updated_at: datetime
+    intake_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():

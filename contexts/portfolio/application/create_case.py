@@ -37,8 +37,14 @@ async def create_case(
     title: str,
     case_type: CaseType = CaseType.PORTFOLIO_ITEM,
     status: CaseStatus = CaseStatus.OPEN,
+    intake_id: UUID | None = None,
 ) -> Case:
-    """Create and persist a Case; emit the case-create audit event."""
+    """Create and persist a Case; emit the case-create audit event.
+
+    ``intake_id`` (D128) is populated by the intake-canonical
+    orchestration; a direct call leaves the Case's ``intake_id``
+    null.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
     now = datetime.now(timezone.utc)
@@ -51,6 +57,7 @@ async def create_case(
         status=status,
         created_at=now,
         updated_at=now,
+        intake_id=intake_id,
     )
     await repository.save_case(tenant_context=tenant_context, case=case)
     await audit_port.emit(

@@ -363,3 +363,82 @@ def test_partial_authorisation_set_denies_only_the_missing_permission() -> None:
                 title="case",
             )
         )
+
+
+# --- intake_id propagation (D128, S44b) ----------------------------
+
+
+def test_create_case_propagates_intake_id() -> None:
+    store = FakeStore()
+    repo = FakeRepository(store)
+    audit = FakeAuditPort()
+    intake_id = uuid4()
+    case = _run(
+        create_case(
+            repository=repo, audit_port=audit, actor=_actor(),
+            title="case", intake_id=intake_id,
+        )
+    )
+    assert case.intake_id == intake_id
+    assert store.cases[case.id].intake_id == intake_id
+
+
+def test_create_case_without_intake_id_leaves_none() -> None:
+    store = FakeStore()
+    repo = FakeRepository(store)
+    audit = FakeAuditPort()
+    case = _run(
+        create_case(
+            repository=repo, audit_port=audit, actor=_actor(),
+            title="case",
+        )
+    )
+    assert case.intake_id is None
+
+
+def test_create_data_point_propagates_intake_id_to_initial_assertion() -> None:
+    store = FakeStore()
+    repo = FakeRepository(store)
+    audit = FakeAuditPort()
+    intake_id = uuid4()
+    case = _run(
+        create_case(
+            repository=repo, audit_port=audit, actor=_actor(), title="c"
+        )
+    )
+    dp = _run(
+        create_data_point(
+            repository=repo, audit_port=audit, actor=_actor(),
+            case_id=case.id, data_point_type=DataPointType.GOAL,
+            value={}, intake_id=intake_id,
+        )
+    )
+    assert dp.assertions[0].intake_id == intake_id
+
+
+def test_revise_data_point_propagates_intake_id_to_revision() -> None:
+    store = FakeStore()
+    repo = FakeRepository(store)
+    reader = FakeReader(store)
+    audit = FakeAuditPort()
+    intake_id = uuid4()
+    case = _run(
+        create_case(
+            repository=repo, audit_port=audit, actor=_actor(), title="c"
+        )
+    )
+    dp = _run(
+        create_data_point(
+            repository=repo, audit_port=audit, actor=_actor(),
+            case_id=case.id, data_point_type=DataPointType.STATUS,
+            value={"v": 1},
+        )
+    )
+    revised = _run(
+        revise_data_point(
+            repository=repo, reader=reader, audit_port=audit,
+            actor=_actor(), data_point_id=dp.id, value={"v": 2},
+            intake_id=intake_id,
+        )
+    )
+    assert revised.assertions[-1].intake_id == intake_id

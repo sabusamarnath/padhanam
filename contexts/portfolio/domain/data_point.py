@@ -79,13 +79,24 @@ class DataPoint:
         return self.assertions[-1].value
 
     def revise(
-        self, change: AssertionChange, actor: ActorReference
+        self,
+        change: AssertionChange,
+        actor: ActorReference,
+        intake_id: UUID | None = None,
     ) -> "DataPoint":
         """Append a REVISION assertion; return the extended DataPoint.
 
         Implements ``Revisable.revise`` per D125. The new assertion
         is minted here — id and timestamp — and chained to the prior
         head of the revision history via ``revises_assertion_id``.
+
+        ``intake_id`` (D128) stamps the REVISION assertion with the
+        IntakeRecord it traces to. It is an optional parameter beyond
+        the Revisable Protocol's shape — a portfolio-domain extension
+        carrying a foreign-key UUID, not a cross-context import — so
+        ``revise(change, actor)`` calls continue to satisfy the
+        Protocol. The intake-canonical orchestration passes it; direct
+        callers leave it ``None``.
         """
         revision = Assertion(
             id=uuid4(),
@@ -97,6 +108,7 @@ class DataPoint:
             value=change.value,
             authored_by=actor,
             created_at=datetime.now(timezone.utc),
+            intake_id=intake_id,
         )
         return replace(self, assertions=self.assertions + (revision,))
 
