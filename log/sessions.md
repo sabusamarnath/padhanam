@@ -13,6 +13,18 @@ Format:
 
 ---
 
+## 2026-05-22 — Charter principles addition — protocol selection plus evolution
+roles: technical writer
+mode: strategic (charter commit; no code changes; strategic-conversation outcome appending two principles to `charter/principles.md`)
+
+Strategic-conversation outcome from the Phase 2-A S45 framing approach. Two new principles append to the Architectural section of `charter/principles.md`, extending the existing line 21 meta-position (committed standards require demonstrated cross-vendor consolidation). The first makes protocol selection scenario-driven and vendor-readiness-modulated: agent-to-tool integration defaults to MCP, service-to-service runtime integration defaults to vendor SDK, cross-vendor LLM abstraction is via LiteLLM, observability is via OpenTelemetry — and vendor readiness at the chosen protocol determines whether the scenario's architectural default is the actual framing-time disposition. The second makes architectural commitments explicitly evolving rather than permanent, and names the operational commitment — ongoing port-level verification (contract harnesses, configuration-driven swap tests, vendor-agnostic integration evidence) — that keeps "built to evolve" real rather than aspirational. The conversation surfaced from the S45 messaging substrate's MCP-versus-direct framing question; the Twilio MCP server's Alpha status and AI-coding-agent design orientation made the case for direct vendor SDK at the messaging adapter, which generalised into the two principles. S45 framing inherits the principles as reference points for the Item 1 protocol-choice surface.
+
+- Produced: One commit (`docs(charter)`, this commit) — two new principles appended to the Architectural section of `charter/principles.md` immediately after the line 21 protocol-commitments bullet; this session log entry. The commit is referenced by its conventional-commit message rather than a SHA per the same-commit-self-reference discipline (pre-Step-7 hygiene, 2026-05-20).
+- Decisions: No new D-entries. The principles extend the existing line 21 meta-position; they make the scenario-driven default and the evolution discipline explicit without selecting between alternatives.
+- Tests: None. Documentation-only change.
+
+---
+
 ## 2026-05-22 — Pre-S45 hygiene — Revisable Protocol contract-test harness
 roles: engineer, technical writer
 mode: hygiene session (charter-vs-code-honesty; closes the load-bearing finding LSP1 from the pre-S45 principles assessment with a contract-test harness; test plus docs commit prefixes per the hygiene-session shape; no new D-entries)
