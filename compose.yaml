@@ -385,6 +385,18 @@ services:
         condition: service_healthy
       padhanam-neo4j:
         condition: service_healthy
+    # Loopback-only host-port binding for webhook smoke testing
+    # (P13/S45, D129). Twilio inbound WhatsApp webhooks reach the API
+    # through an ngrok tunnel to host port 8000; uvicorn serves the
+    # messaging routes directly, because Caddy's `handle_path /api/*`
+    # strips the prefix and the messaging router registers at the full
+    # /api/v1/messaging/* path — so the webhook tunnel bypasses Caddy.
+    # A deliberate dev-only exception to the S5 "only Caddy binds host
+    # ports" rule, scoped to 127.0.0.1 (not exposed beyond the host) —
+    # the same shape as postgres-control-plane's loopback binding.
+    # Production manifests remove this binding.
+    ports:
+      - "127.0.0.1:8000:8000"
     environment:
       PADHANAM_PROFILE: dev
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
