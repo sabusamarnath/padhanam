@@ -46,10 +46,16 @@ from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
 CORRELATION_ID_HEADER = "X-Correlation-Id"
 
 
-# Routes that bypass authentication. The set is deliberately tiny and
-# explicit — every other route, including unmatched paths, requires a
-# valid credential. /health is the operator probe Caddy hits.
-_PUBLIC_PATHS: frozenset[str] = frozenset({"/health"})
+# Routes that bypass bearer authentication. The set is deliberately
+# tiny and explicit — every other route, including unmatched paths,
+# requires a valid credential. /health is the operator probe Caddy
+# hits. /api/v1/messaging/inbound is the Twilio WhatsApp webhook
+# (D129, S45): Twilio carries no Padhanam bearer token, so the
+# webhook bypasses bearer auth — its authentication is the
+# X-Twilio-Signature, verified inside the route handler.
+_PUBLIC_PATHS: frozenset[str] = frozenset(
+    {"/health", "/api/v1/messaging/inbound"}
+)
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):

@@ -38,12 +38,15 @@ from apps.api._errors import (
     register_retrieval_evaluation_error_handlers,
     register_run_history_error_handlers,
 )
+from apps.api._messaging_errors import register_messaging_error_handlers
+from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import ingestion as ingestion_router
+from apps.api.routers import messaging as messaging_router
 from apps.api.routers import optimization as optimization_router
 from apps.api.routers import intake as intake_router
 from apps.api.routers import portfolio as portfolio_router
@@ -191,6 +194,10 @@ class AppCompositions:
     # and intake write routes.
     intake_repository: IntakeRepository | None = None
     portfolio_writer: PortfolioWriter | None = None
+    # S45 (D129): messaging composition — the Message repository
+    # adapter, the selected delivery adapter, the MessageWriter
+    # consumer-port adapter, and the inbound-webhook configuration.
+    messaging: MessagingComposition | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -326,6 +333,7 @@ def _build_default_compositions() -> AppCompositions:
         build_intake_repository,
         build_portfolio_writer,
     )
+    from apps.api._messaging_wiring import build_messaging_composition
 
     gold_set_repository = build_gold_set_repository(
         tenant_registry=registry,
@@ -404,6 +412,13 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         audit_port=audit_adapter,
     )
+    messaging = build_messaging_composition(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        audit_port=audit_adapter,
+    )
 
     return AppCompositions(
         inference_port=inference_port,
@@ -429,6 +444,7 @@ def _build_default_compositions() -> AppCompositions:
         portfolio_reader=portfolio_reader,
         intake_repository=intake_repository,
         portfolio_writer=portfolio_writer,
+        messaging=messaging,
     )
 
 
@@ -529,6 +545,12 @@ def create_app(
     # malformed_intake_cursor (400), invalid_intake_filter (400).
     register_intake_error_handlers(app)
 
+    # S45 (D129): messaging HTTP error handlers — message_not_found
+    # (404), malformed_messaging_cursor (400), invalid_messaging_filter
+    # (400), webhook_signature_invalid (403). A dedicated module per
+    # the redirect-away-from-over-budget-files discipline.
+    register_messaging_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -578,6 +600,11 @@ def create_app(
     # single and list surfaces, under principal-derived actor context.
     app.include_router(intake_router.router)
 
+    # S45 (D129): messaging routes — POST /send, the POST /inbound
+    # Twilio WhatsApp webhook (bearer-auth-bypassed, signature-verified),
+    # and the GET single and list surfaces.
+    app.include_router(messaging_router.router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -603,6 +630,8 @@ def create_app(
     app.state.recommendation_repository = compositions.recommendation_repository
     app.state.recommendation_reader = compositions.recommendation_reader
     app.state.portfolio_reader = compositions.portfolio_reader
+    # S45 (D129): messaging composition seam.
+    app.state.messaging = compositions.messaging
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository
     app.state.portfolio_writer = compositions.portfolio_writer
