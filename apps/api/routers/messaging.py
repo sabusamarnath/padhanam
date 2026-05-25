@@ -145,13 +145,12 @@ async def _run_manual_entry_cell(
         portfolio_gateway=messaging.portfolio_gateway,
         actor=actor,
         confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
         pending_clarification_reader=messaging.pending_clarification_reader,
         pending_clarification_repository=(
             messaging.pending_clarification_repository
         ),
         audit_port=audit_port,
-        confidence_high_cutoff=messaging.confidence_high_cutoff,
-        confidence_medium_cutoff=messaging.confidence_medium_cutoff,
     )
     state = await cell.open(
         ConversationInvocation(

@@ -47,7 +47,6 @@ D131 citation fields), ``intent_type``, and ``confidence_band``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -107,6 +106,7 @@ from shared_kernel import (
     StructuredOutputParseFailure,
     StructuredOutputPort,
     StructuredOutputRequest,
+    ThresholdResolver,
 )
 
 _EXTRACTION_PREAMBLE = (
@@ -192,14 +192,6 @@ def _classify_reply(text: str) -> str:
     return "fresh"
 
 
-@dataclass(frozen=True)
-class _Bands:
-    """Confidence cut-offs (per ``padhanam/config/messaging.py``)."""
-
-    high: float
-    medium: float
-
-
 class ManualEntryCell:
     """The first ConversationFlow implementer (D115) — manual entry.
 
@@ -207,6 +199,10 @@ class ManualEntryCell:
     webhook synthesised. ``conversation_id`` lives on the
     ``ConversationState`` so it is stable across turns without the
     cell holding mutable state.
+
+    Per the S47 addendum: the cell consumes confidence cut-offs via
+    the ``ThresholdResolver`` port at turn time; the source carries
+    no numeric threshold literals.
     """
 
     def __init__(
@@ -216,24 +212,20 @@ class ManualEntryCell:
         portfolio_gateway: PortfolioGateway,
         actor: ActorContext,
         confidence_calculator: ConfidenceCalculator,
+        threshold_resolver: ThresholdResolver,
         pending_clarification_reader: PendingClarificationReader,
         pending_clarification_repository: PendingClarificationRepository,
         audit_port: AuditPort,
-        confidence_high_cutoff: float = 0.8,
-        confidence_medium_cutoff: float = 0.5,
         originating_channel: str = "WHATSAPP",
     ) -> None:
         self._structured_output = structured_output_port
         self._gateway = portfolio_gateway
         self._actor = actor
         self._confidence = confidence_calculator
+        self._thresholds = threshold_resolver
         self._pending_reader = pending_clarification_reader
         self._pending_repo = pending_clarification_repository
         self._audit_port = audit_port
-        self._bands = _Bands(
-            high=confidence_high_cutoff,
-            medium=confidence_medium_cutoff,
-        )
         self._originating_channel = originating_channel
 
     async def open(
@@ -326,7 +318,12 @@ class ManualEntryCell:
                 confidence_band="low",
             )
 
-        if confidence >= self._bands.high:
+        # Resolve thresholds through the port at turn time. Phase 2-A
+        # single-pair adapter ignores ``operation_class``; Phase 2-B+
+        # per-operation-class adapter activates as adapter swap.
+        thresholds = self._thresholds.resolve(operation_class=None)
+
+        if confidence >= thresholds.high:
             response = await self._dispatch_proceed(intent, raw_text=message)
             return self._emit(
                 state,
@@ -335,7 +332,7 @@ class ManualEntryCell:
                 confidence_band="high",
             )
 
-        if confidence >= self._bands.medium:
+        if confidence >= thresholds.medium:
             response = await self._dispatch_clarify_with_pending(
                 intent, raw_text=message
             )

@@ -47,6 +47,9 @@ from contexts.intake.application.ports.message_writer import (
 from contexts.inference.adapters.confidence_self_reported import (
     SelfReportedConfidenceAdapter,
 )
+from contexts.messaging.adapters.threshold_single_pair import (
+    SinglePairThresholdResolverAdapter,
+)
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
 from contexts.messaging.application.ports.pending_clarification_reader import (
     PendingClarificationReader,
@@ -85,9 +88,11 @@ from padhanam.security import Principal
 from shared_kernel import (
     ActorContext,
     ConfidenceCalculator,
+    ConfidenceThresholds,
     StructuredOutputPort,
     TenantContext,
     TenantId,
+    ThresholdResolver,
 )
 
 _SessionFactoryForTenant = Callable[[TenantContext], Awaitable[Any]]
@@ -332,8 +337,7 @@ class MessagingComposition:
     cell_dispatch: CellDispatch
     pending_clarification_repository: PendingClarificationRepository
     pending_clarification_reader: PendingClarificationReader
-    confidence_high_cutoff: float
-    confidence_medium_cutoff: float
+    threshold_resolver: ThresholdResolver
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -436,8 +440,12 @@ def build_messaging_composition(
             webhook_tenant_id=settings.webhook_tenant_id,
             webhook_jurisdiction=settings.webhook_jurisdiction,
         ),
-        confidence_high_cutoff=settings.confidence_high_cutoff,
-        confidence_medium_cutoff=settings.confidence_medium_cutoff,
+        threshold_resolver=SinglePairThresholdResolverAdapter(
+            thresholds=ConfidenceThresholds(
+                high=settings.confidence_high_cutoff,
+                medium=settings.confidence_medium_cutoff,
+            ),
+        ),
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,

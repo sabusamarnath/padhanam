@@ -29,6 +29,7 @@ from contexts.messaging.domain.pending_clarification import (
 )
 from shared_kernel import (
     ActorContext,
+    ConfidenceThresholds,
     ConversationClosure,
     ConversationInput,
     ConversationInvocation,
@@ -102,6 +103,22 @@ class _FakeConfidenceCalculator:
 
     def compute(self, *, request: Any, response: Any) -> float:
         return float(response.confidence) if response.confidence is not None else 0.5
+
+
+class _RecordingThresholdResolver:
+    """Records ``resolve`` calls; returns the configured pair (S47 addendum)."""
+
+    def __init__(
+        self, *, high: float = 0.8, medium: float = 0.5
+    ) -> None:
+        self._thresholds = ConfidenceThresholds(high=high, medium=medium)
+        self.calls: list[str | None] = []
+
+    def resolve(
+        self, operation_class: str | None = None
+    ) -> ConfidenceThresholds:
+        self.calls.append(operation_class)
+        return self._thresholds
 
 
 class _FakePendingRepo:
@@ -207,6 +224,7 @@ def _cell(
     high_cutoff: float = 0.8,
     medium_cutoff: float = 0.5,
     pending_repo: _FakePendingRepo | None = None,
+    threshold_resolver: _RecordingThresholdResolver | None = None,
 ) -> ManualEntryCell:
     structured_output = (
         extraction
@@ -216,16 +234,22 @@ def _cell(
         )
     )
     repo = pending_repo if pending_repo is not None else _FakePendingRepo()
+    resolver = (
+        threshold_resolver
+        if threshold_resolver is not None
+        else _RecordingThresholdResolver(
+            high=high_cutoff, medium=medium_cutoff
+        )
+    )
     return ManualEntryCell(
         structured_output_port=structured_output,
         portfolio_gateway=gateway,
         actor=_actor(),
         confidence_calculator=_FakeConfidenceCalculator(),
+        threshold_resolver=resolver,
         pending_clarification_reader=_FakePendingReader(repo),
         pending_clarification_repository=repo,
         audit_port=_FakeAuditPort(),
-        confidence_high_cutoff=high_cutoff,
-        confidence_medium_cutoff=medium_cutoff,
     )
 
 
@@ -555,6 +579,50 @@ def test_close_returns_terminal_outcome() -> None:
     assert outcome.resolution == "handled"
 
 
+# --- S47 addendum: ThresholdResolver consumption ---------------------
+
+
+def test_cell_consults_threshold_resolver_at_turn() -> None:
+    """S47 addendum: the cell consults the ThresholdResolver port per turn.
+
+    The resolver is consulted on the band-dispatching path (anything
+    other than an extracted UnclearIntent, which routes to Case 3
+    without needing the cut-offs). High-confidence create_case
+    exercises the band check.
+    """
+    resolver = _RecordingThresholdResolver()
+    cell = _cell(
+        _extraction(intent_type="create_case", title="Q3 review"),
+        _FakeGateway(),
+        confidence=0.95,
+        threshold_resolver=resolver,
+    )
+    _turn_once(cell, "start a case for the Q3 review")
+    assert resolver.calls == [None]
+
+
+def test_cell_source_carries_no_numeric_threshold_literals() -> None:
+    """The cell source consumes thresholds via the port; no literals.
+
+    A grep-style structural check on the cell module — the addendum's
+    discipline is that ``confidence_high_cutoff`` / ``_medium_cutoff``
+    numeric literals do not appear in the cell source. Configuration
+    values live at ``padhanam/config/messaging.py``; the cell receives
+    them through the resolver port.
+    """
+    import inspect
+    from contexts.messaging.application import manual_entry_cell
+
+    source = inspect.getsource(manual_entry_cell)
+    # The legacy float-cutoff parameters and their default values must
+    # be absent. The cell may still mention threshold concepts in
+    # docstrings or comments; we forbid the numeric defaults.
+    assert "confidence_high_cutoff" not in source
+    assert "confidence_medium_cutoff" not in source
+    assert "= 0.8" not in source
+    assert "= 0.5" not in source
+
+
 def test_intent_extraction_uses_real_time_tier() -> None:
     port = _FakeStructuredOutput(_extraction(intent_type="unclear"))
     repo = _FakePendingRepo()
@@ -563,6 +631,7 @@ def test_intent_extraction_uses_real_time_tier() -> None:
         portfolio_gateway=_FakeGateway(),
         actor=_actor(),
         confidence_calculator=_FakeConfidenceCalculator(),
+        threshold_resolver=_RecordingThresholdResolver(),
         pending_clarification_reader=_FakePendingReader(repo),
         pending_clarification_repository=repo,
         audit_port=_FakeAuditPort(),

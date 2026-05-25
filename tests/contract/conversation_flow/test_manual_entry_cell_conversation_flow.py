@@ -19,6 +19,9 @@ from __future__ import annotations
 from typing import Any
 
 from contexts.audit.domain.events import AuditEvent
+from contexts.messaging.adapters.threshold_single_pair import (
+    SinglePairThresholdResolverAdapter,
+)
 from contexts.messaging.application.manual_entry_cell import ManualEntryCell
 from contexts.messaging.domain.pending_clarification import (
     PendingClarification,
@@ -26,6 +29,7 @@ from contexts.messaging.domain.pending_clarification import (
 )
 from shared_kernel import (
     ActorContext,
+    ConfidenceThresholds,
     ConversationClosure,
     ConversationInput,
     ConversationInvocation,
@@ -137,6 +141,9 @@ def _make_manual_entry_cell() -> ManualEntryCell:
         portfolio_gateway=_StubGateway(),
         actor=_harness_actor(),
         confidence_calculator=_StubConfidenceCalculator(),
+        threshold_resolver=SinglePairThresholdResolverAdapter(
+            thresholds=ConfidenceThresholds(high=0.8, medium=0.5),
+        ),
         pending_clarification_reader=_StubPendingReader(),
         pending_clarification_repository=_StubPendingRepo(),
         audit_port=_StubAuditPort(),

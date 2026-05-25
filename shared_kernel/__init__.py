@@ -1,6 +1,10 @@
 from shared_kernel.actor_context import ActorContext
 from shared_kernel.actor_reference import ActorReference
 from shared_kernel.confidence_calculator import ConfidenceCalculator
+from shared_kernel.confidence_thresholds import (
+    ConfidenceThresholds,
+    ThresholdResolver,
+)
 from shared_kernel.conversation_flow import (
     ConversationClosure,
     ConversationFlow,
@@ -31,6 +35,7 @@ __all__ = [
     "ActorReference",
     "AssertionChange",
     "ConfidenceCalculator",
+    "ConfidenceThresholds",
     "ConversationClosure",
     "ConversationFlow",
     "ConversationInput",
@@ -50,5 +55,6 @@ __all__ = [
     "StructuredOutputResponse",
     "TenantContext",
     "TenantId",
+    "ThresholdResolver",
     "ToolAllowlistEntry",
 ]
