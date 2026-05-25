@@ -60,6 +60,17 @@ MESSAGING_MESSAGE_RECEIVE = "messaging.message.receive"
 MESSAGING_MESSAGE_GET = "messaging.message.get"
 MESSAGING_MESSAGE_LIST = "messaging.message.list"
 
+# --- Phase 2-A PendingClarification permissions (D134, S47) -------
+MESSAGING_PENDING_CLARIFICATION_CREATE = (
+    "messaging.pending_clarification.create"
+)
+MESSAGING_PENDING_CLARIFICATION_RESOLVE = (
+    "messaging.pending_clarification.resolve"
+)
+MESSAGING_PENDING_CLARIFICATION_EXPIRE = (
+    "messaging.pending_clarification.expire"
+)
+
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
 
@@ -78,6 +89,9 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             MESSAGING_MESSAGE_RECEIVE,
             MESSAGING_MESSAGE_GET,
             MESSAGING_MESSAGE_LIST,
+            MESSAGING_PENDING_CLARIFICATION_CREATE,
+            MESSAGING_PENDING_CLARIFICATION_RESOLVE,
+            MESSAGING_PENDING_CLARIFICATION_EXPIRE,
         }
     ),
 }
@@ -164,6 +178,9 @@ __all__ = [
     "MESSAGING_MESSAGE_LIST",
     "MESSAGING_MESSAGE_RECEIVE",
     "MESSAGING_MESSAGE_SEND",
+    "MESSAGING_PENDING_CLARIFICATION_CREATE",
+    "MESSAGING_PENDING_CLARIFICATION_EXPIRE",
+    "MESSAGING_PENDING_CLARIFICATION_RESOLVE",
     "PORTFOLIO_CASE_CREATE",
     "PORTFOLIO_CASE_GET",
     "PORTFOLIO_CASE_LIST",

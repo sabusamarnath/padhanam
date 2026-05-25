@@ -88,6 +88,49 @@ class _NoopSecurityEvents:
         pass
 
 
+class _FakePendingClarificationRepository:
+    """An in-memory PendingClarification repository for tests (S47)."""
+
+    def __init__(self) -> None:
+        self.pendings: dict[UUID, Any] = {}
+
+    async def save(self, *, tenant_context, pending) -> None:
+        self.pendings[pending.id] = pending
+
+    async def update_status(self, *, tenant_context, pending) -> None:
+        self.pendings[pending.id] = pending
+
+    async def get_by_id(self, *, tenant_context, pending_id: UUID):
+        return self.pendings.get(pending_id)
+
+    async def get_active_for_user(self, *, tenant_context, user_id: str):
+        for p in self.pendings.values():
+            if (
+                p.tenant_id == UUID(tenant_context.tenant_id)
+                and p.user_id == user_id
+                and p.status.value == "PENDING"
+            ):
+                return p
+        return None
+
+
+class _FakePendingClarificationReader:
+    """Cell-facing read adapter wrapping the test repo (S47)."""
+
+    def __init__(self, repository: _FakePendingClarificationRepository) -> None:
+        self._repository = repository
+
+    async def get_active(self, *, tenant_id: UUID, user_id: str):
+        for p in self._repository.pendings.values():
+            if (
+                p.tenant_id == tenant_id
+                and p.user_id == user_id
+                and p.status.value == "PENDING"
+            ):
+                return p
+        return None
+
+
 class _SyncCellDispatch:
     """Test fake: synchronously await the cell so assertions see effects.
 
@@ -241,6 +284,8 @@ def _build(
     from contexts.inference.adapters.confidence_self_reported import (
         SelfReportedConfidenceAdapter,
     )
+    pending_repo = _FakePendingClarificationRepository()
+    pending_reader = _FakePendingClarificationReader(pending_repo)
     composition = MessagingComposition(
         repository=message_repo,
         delivery_port=delivery,
@@ -251,6 +296,8 @@ def _build(
         ),
         confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=cell_dispatch,
+        pending_clarification_repository=pending_repo,
+        pending_clarification_reader=pending_reader,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,
         webhook_jurisdiction="eu-west",

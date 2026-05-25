@@ -15,6 +15,9 @@ from shared_kernel.authorisation import (
     MESSAGING_MESSAGE_LIST,
     MESSAGING_MESSAGE_RECEIVE,
     MESSAGING_MESSAGE_SEND,
+    MESSAGING_PENDING_CLARIFICATION_CREATE,
+    MESSAGING_PENDING_CLARIFICATION_EXPIRE,
+    MESSAGING_PENDING_CLARIFICATION_RESOLVE,
     PORTFOLIO_CASE_CREATE,
     PORTFOLIO_CASE_GET,
     PORTFOLIO_CASE_LIST,
@@ -47,8 +50,9 @@ def _actor(*, authorisation_set: frozenset[str]) -> ActorContext:
 
 def test_operator_role_grants_the_phase_2a_permissions() -> None:
     """The operator role grants the five portfolio permissions, the
-    three intake permissions (D127, S44b), and the four messaging
-    permissions (D129, S45) — twelve in total."""
+    three intake permissions (D127, S44b), the four messaging
+    permissions (D129, S45), and the three PendingClarification
+    permissions (D134, S47) — fifteen in total."""
     granted = authorisations_for_roles(frozenset({ROLE_OPERATOR}))
     assert granted == frozenset(
         {
@@ -64,6 +68,9 @@ def test_operator_role_grants_the_phase_2a_permissions() -> None:
             MESSAGING_MESSAGE_RECEIVE,
             MESSAGING_MESSAGE_GET,
             MESSAGING_MESSAGE_LIST,
+            MESSAGING_PENDING_CLARIFICATION_CREATE,
+            MESSAGING_PENDING_CLARIFICATION_RESOLVE,
+            MESSAGING_PENDING_CLARIFICATION_EXPIRE,
         }
     )
 

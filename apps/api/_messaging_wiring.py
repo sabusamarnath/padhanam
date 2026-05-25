@@ -48,19 +48,31 @@ from contexts.inference.adapters.confidence_self_reported import (
     SelfReportedConfidenceAdapter,
 )
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
+from contexts.messaging.application.ports.pending_clarification_reader import (
+    PendingClarificationReader,
+)
 from contexts.messaging.adapters.outbound.postgres.message_repository import (
     PostgresMessageRepository,
+)
+from contexts.messaging.adapters.outbound.postgres.pending_clarification_repository import (  # noqa: E501
+    PostgresPendingClarificationRepository,
 )
 from contexts.messaging.application.record_inbound_message import (
     record_inbound_message as record_inbound_message_use_case,
 )
 from contexts.messaging.domain import Message, MessageChannel
+from contexts.messaging.domain.pending_clarification import (
+    PendingClarification,
+)
 from contexts.messaging.domain.query_filters import (
     MessageListCursor,
     MessageListFilters,
 )
 from contexts.messaging.ports.message_delivery_port import MessageDeliveryPort
 from contexts.messaging.ports.message_repository import MessageListPage
+from contexts.messaging.ports.pending_clarification_repository import (
+    PendingClarificationRepository,
+)
 from contexts.tenancy.adapters.outbound.postgres.registry import (
     PostgresTenantRegistry,
 )
@@ -209,6 +221,97 @@ class MessageWriterAdapter:
         return _message_write_result(message)
 
 
+class PendingClarificationRepositoryAdapter:
+    """Per-request-tenant-resolving wiring for PendingClarificationRepository."""
+
+    def __init__(
+        self, *, session_factory_for_tenant: _SessionFactoryForTenant
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def _build(
+        self, tenant_context: TenantContext
+    ) -> PostgresPendingClarificationRepository:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(_tid: TenantId) -> object:
+            return sessionmaker
+
+        return PostgresPendingClarificationRepository(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+    async def save(
+        self,
+        *,
+        tenant_context: TenantContext,
+        pending: PendingClarification,
+    ) -> None:
+        repo = await self._build(tenant_context)
+        await repo.save(tenant_context=tenant_context, pending=pending)
+
+    async def update_status(
+        self,
+        *,
+        tenant_context: TenantContext,
+        pending: PendingClarification,
+    ) -> None:
+        repo = await self._build(tenant_context)
+        await repo.update_status(
+            tenant_context=tenant_context, pending=pending
+        )
+
+    async def get_by_id(
+        self,
+        *,
+        tenant_context: TenantContext,
+        pending_id: UUID,
+    ) -> PendingClarification | None:
+        repo = await self._build(tenant_context)
+        return await repo.get_by_id(
+            tenant_context=tenant_context, pending_id=pending_id
+        )
+
+    async def get_active_for_user(
+        self,
+        *,
+        tenant_context: TenantContext,
+        user_id: str,
+    ) -> PendingClarification | None:
+        repo = await self._build(tenant_context)
+        return await repo.get_active_for_user(
+            tenant_context=tenant_context, user_id=user_id
+        )
+
+
+class PendingClarificationReaderAdapter:
+    """Cell-facing read adapter wrapping the repository at composition root."""
+
+    def __init__(
+        self,
+        *,
+        repository: PendingClarificationRepository,
+        webhook_tenant_id: str,
+        webhook_jurisdiction: str,
+    ) -> None:
+        self._repository = repository
+        self._tenant_id = webhook_tenant_id
+        self._jurisdiction = webhook_jurisdiction
+
+    async def get_active(
+        self, *, tenant_id: UUID, user_id: str
+    ) -> PendingClarification | None:
+        tenant_context = TenantContext(
+            tenant_id=str(tenant_id),
+            jurisdiction=self._jurisdiction,
+            cost_attribution_id=str(tenant_id),
+        )
+        return await self._repository.get_active_for_user(
+            tenant_context=tenant_context, user_id=user_id
+        )
+
+
 @dataclass(frozen=True)
 class MessagingComposition:
     """The messaging composition seam exposed on ``app.state.messaging``.
@@ -227,6 +330,8 @@ class MessagingComposition:
     structured_output_port: StructuredOutputPort
     confidence_calculator: ConfidenceCalculator
     cell_dispatch: CellDispatch
+    pending_clarification_repository: PendingClarificationRepository
+    pending_clarification_reader: PendingClarificationReader
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -301,6 +406,9 @@ def build_messaging_composition(
         operator_principal=operator_principal,
         security_events=security_events,
     )
+    pending_clarification_repository = PendingClarificationRepositoryAdapter(
+        session_factory_for_tenant=session_factory_for_tenant,
+    )
     return MessagingComposition(
         repository=MessageRepositoryAdapter(
             session_factory_for_tenant=session_factory_for_tenant,
@@ -320,6 +428,12 @@ def build_messaging_composition(
         structured_output_port=structured_output_port,
         confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=InProcessCellDispatchAdapter(),
+        pending_clarification_repository=pending_clarification_repository,
+        pending_clarification_reader=PendingClarificationReaderAdapter(
+            repository=pending_clarification_repository,
+            webhook_tenant_id=settings.webhook_tenant_id,
+            webhook_jurisdiction=settings.webhook_jurisdiction,
+        ),
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,
@@ -332,5 +446,7 @@ __all__ = [
     "MessageRepositoryAdapter",
     "MessageWriterAdapter",
     "MessagingComposition",
+    "PendingClarificationReaderAdapter",
+    "PendingClarificationRepositoryAdapter",
     "build_messaging_composition",
 ]

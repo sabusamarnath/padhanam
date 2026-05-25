@@ -1,4 +1,4 @@
-"""Draft-audit-event helper for the messaging context (D129).
+"""Draft-audit-event helper for the messaging context (D129, D134).
 
 Per D110 commitment 7 every messaging write emits an audit event;
 the audit context's existing chain integrity transitively
@@ -12,6 +12,10 @@ placeholders here are draft values the adapter overwrites.
 Resource type ``message``; the action verb is derived from the
 Message direction — ``messaging.message.send`` for an outbound
 Message, ``messaging.message.receive`` for an inbound one.
+
+D134 (S47) adds the PendingClarification lifecycle audit events —
+``messaging.pending_clarification.create / resolve / expire`` —
+sharing the same draft-then-recompute pattern.
 """
 
 from __future__ import annotations
@@ -25,11 +29,25 @@ from contexts.audit.domain.events import (
 )
 
 from contexts.messaging.domain import Message, MessageDirection
+from contexts.messaging.domain.pending_clarification import (
+    PendingClarification,
+)
 from shared_kernel import ActorReference, TenantContext
 
 RESOURCE_TYPE_MESSAGE: str = "message"
 ACTION_MESSAGE_SEND: str = "messaging.message.send"
 ACTION_MESSAGE_RECEIVE: str = "messaging.message.receive"
+
+RESOURCE_TYPE_PENDING_CLARIFICATION: str = "pending_clarification"
+ACTION_PENDING_CLARIFICATION_CREATE: str = (
+    "messaging.pending_clarification.create"
+)
+ACTION_PENDING_CLARIFICATION_RESOLVE: str = (
+    "messaging.pending_clarification.resolve"
+)
+ACTION_PENDING_CLARIFICATION_EXPIRE: str = (
+    "messaging.pending_clarification.expire"
+)
 
 
 def draft_message_event(
@@ -89,9 +107,146 @@ def draft_message_event(
     )
 
 
+def _draft_pending_clarification_event(
+    *,
+    tenant_context: TenantContext,
+    pending: PendingClarification,
+    actor: ActorReference,
+    action_verb: str,
+    before_state: dict[str, object],
+    after_state: dict[str, object],
+    correlation_id: str = "",
+) -> AuditEvent:
+    """Shared draft helper for the three PendingClarification lifecycle events."""
+    timestamp = datetime.now(timezone.utc).isoformat()
+    draft_hash = compute_event_hash(
+        actor=actor.user_id,
+        tenant_id=tenant_context.tenant_id,
+        jurisdiction=tenant_context.jurisdiction,
+        timestamp=timestamp,
+        action_verb=action_verb,
+        resource_type=RESOURCE_TYPE_PENDING_CLARIFICATION,
+        resource_id=str(pending.id),
+        before_state=before_state,
+        after_state=after_state,
+        correlation_id=correlation_id,
+        previous_event_hash=GENESIS_HASH,
+    )
+    return AuditEvent(
+        actor=actor.user_id,
+        tenant_id=tenant_context.tenant_id,
+        jurisdiction=tenant_context.jurisdiction,
+        timestamp=timestamp,
+        action_verb=action_verb,
+        resource_type=RESOURCE_TYPE_PENDING_CLARIFICATION,
+        resource_id=str(pending.id),
+        before_state=before_state,
+        after_state=after_state,
+        correlation_id=correlation_id,
+        previous_event_hash=GENESIS_HASH,
+        this_event_hash=draft_hash,
+    )
+
+
+def draft_pending_clarification_created_event(
+    *,
+    tenant_context: TenantContext,
+    pending: PendingClarification,
+    actor: ActorReference,
+    correlation_id: str = "",
+) -> AuditEvent:
+    """Audit event for PendingClarification create (status PENDING)."""
+    after_state = {
+        "status": pending.status.value,
+        "user_id": pending.user_id,
+        "originating_channel": pending.originating_channel,
+        "originating_intake_id": str(pending.originating_intake_id),
+        "proposed_action_summary": pending.proposed_action_summary,
+        "expires_at": pending.expires_at.isoformat(),
+    }
+    return _draft_pending_clarification_event(
+        tenant_context=tenant_context,
+        pending=pending,
+        actor=actor,
+        action_verb=ACTION_PENDING_CLARIFICATION_CREATE,
+        before_state={},
+        after_state=after_state,
+        correlation_id=correlation_id,
+    )
+
+
+def draft_pending_clarification_resolved_event(
+    *,
+    tenant_context: TenantContext,
+    pending: PendingClarification,
+    actor: ActorReference,
+    resolution: str,
+    correlation_id: str = "",
+) -> AuditEvent:
+    """Audit event for PendingClarification resolve (PENDING → RESOLVED).
+
+    ``resolution`` is a short tag (e.g. ``"confirmed"``, ``"cancelled"``)
+    so the audit record distinguishes the two operator paths.
+    """
+    after_state = {
+        "status": pending.status.value,
+        "user_id": pending.user_id,
+        "resolved_at": (
+            pending.resolved_at.isoformat()
+            if pending.resolved_at is not None
+            else None
+        ),
+        "resolution": resolution,
+    }
+    return _draft_pending_clarification_event(
+        tenant_context=tenant_context,
+        pending=pending,
+        actor=actor,
+        action_verb=ACTION_PENDING_CLARIFICATION_RESOLVE,
+        before_state={"status": "PENDING"},
+        after_state=after_state,
+        correlation_id=correlation_id,
+    )
+
+
+def draft_pending_clarification_expired_event(
+    *,
+    tenant_context: TenantContext,
+    pending: PendingClarification,
+    actor: ActorReference,
+    correlation_id: str = "",
+) -> AuditEvent:
+    """Audit event for PendingClarification expire (PENDING → EXPIRED)."""
+    after_state = {
+        "status": pending.status.value,
+        "user_id": pending.user_id,
+        "resolved_at": (
+            pending.resolved_at.isoformat()
+            if pending.resolved_at is not None
+            else None
+        ),
+    }
+    return _draft_pending_clarification_event(
+        tenant_context=tenant_context,
+        pending=pending,
+        actor=actor,
+        action_verb=ACTION_PENDING_CLARIFICATION_EXPIRE,
+        before_state={"status": "PENDING"},
+        after_state=after_state,
+        correlation_id=correlation_id,
+    )
+
+
 __all__ = [
     "ACTION_MESSAGE_RECEIVE",
     "ACTION_MESSAGE_SEND",
+    "ACTION_PENDING_CLARIFICATION_CREATE",
+    "ACTION_PENDING_CLARIFICATION_EXPIRE",
+    "ACTION_PENDING_CLARIFICATION_RESOLVE",
     "RESOURCE_TYPE_MESSAGE",
+    "RESOURCE_TYPE_PENDING_CLARIFICATION",
     "draft_message_event",
+    "draft_pending_clarification_created_event",
+    "draft_pending_clarification_expired_event",
+    "draft_pending_clarification_resolved_event",
 ]

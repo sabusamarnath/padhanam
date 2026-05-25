@@ -25,6 +25,10 @@ from contexts.messaging.domain.message import (
     MessageDirection,
     MessageStatus,
 )
+from contexts.messaging.domain.pending_clarification import (
+    PendingClarification,
+    PendingClarificationStatus,
+)
 
 __all__ = [
     "INTENT_EXTRACTION_SCHEMA",
@@ -36,6 +40,8 @@ __all__ = [
     "MessageChannel",
     "MessageDirection",
     "MessageStatus",
+    "PendingClarification",
+    "PendingClarificationStatus",
     "ReviseDataPointIntent",
     "UnclearIntent",
     "parse_intent",
