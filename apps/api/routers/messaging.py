@@ -246,26 +246,29 @@ async def inbound_webhook_route(
         external_id=params.get("MessageSid") or None,
     )
 
-    # S46: the manual entry cell processes the inbound message and
-    # replies with a cited confirmation. It runs *after* — not instead
-    # of — record_intake_and_record_inbound_message: the inbound
-    # Message and its WHATSAPP_INBOUND IntakeRecord are the canonical
-    # record that the message arrived; the cell's downstream
-    # orchestration records its own MANUAL_ENTRY IntakeRecord for the
-    # portfolio mutation. The cell run is wrapped so a cell or delivery
-    # failure cannot turn the webhook non-2xx — that would make Twilio
-    # retry and duplicate the inbound record, which is already safely
-    # persisted above.
-    try:
-        await _run_manual_entry_cell(
+    # S47 (D133): the cell run dispatches to a background task via the
+    # CellDispatch port — the webhook returns 2xx promptly while the
+    # cell completes asynchronously. The dispatch port's contract
+    # captures and logs any exception raised by the cell, closing the
+    # bare-``except`` gap from the prior synchronous shape (S46 smoke
+    # finding). The inbound Message and its IntakeRecord are already
+    # persisted above as the canonical record-of-arrival; cell failure
+    # never erases that.
+    reply_to = strip_channel_prefix(params.get("From", ""))
+    await messaging.cell_dispatch.dispatch(
+        lambda: _run_manual_entry_cell(
             messaging=messaging,
             audit_port=audit_port,
             actor=actor,
             inbound_body=inbound_body,
-            reply_to=strip_channel_prefix(params.get("From", "")),
-        )
-    except Exception:  # noqa: BLE001 — webhook must stay 2xx; see above
-        pass
+            reply_to=reply_to,
+        ),
+        context={
+            "intake_id": str(result.intake_id),
+            "tenant_id": str(actor.tenant_context.tenant_id),
+            "external_id": params.get("MessageSid") or None,
+        },
+    )
 
     return webhook_ack(result)
 

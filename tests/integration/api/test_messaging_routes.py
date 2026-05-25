@@ -88,6 +88,36 @@ class _NoopSecurityEvents:
         pass
 
 
+class _SyncCellDispatch:
+    """Test fake: synchronously await the cell so assertions see effects.
+
+    The production InProcessCellDispatchAdapter wraps the cell in
+    ``asyncio.create_task`` so the webhook returns 2xx promptly; the
+    cell completes later on the event loop. That asynchrony makes
+    side-effect assertions flaky in TestClient (the response can
+    arrive before the task completes). This test fake honours the same
+    dispatch port contract — including exception-captures-don't-raise
+    — but awaits the cell inline so tests can assert on the cell's
+    persisted side effects deterministically.
+    """
+
+    def __init__(self) -> None:
+        self.dispatched: int = 0
+        self.failed_contexts: list[dict[str, Any]] = []
+
+    async def dispatch(
+        self,
+        cell_run: Any,
+        *,
+        context: dict[str, Any],
+    ) -> None:
+        self.dispatched += 1
+        try:
+            await cell_run()
+        except Exception:
+            self.failed_contexts.append(dict(context))
+
+
 class _RecordingMessageWriter:
     """A MessageWriter port double that runs the real inbound use case."""
 
@@ -207,6 +237,7 @@ def _build(
     audit = FakeAuditPort()
     intake_repo = FakeIntakeRepository()
     portfolio_gateway = gateway or _FakePortfolioGateway()
+    cell_dispatch = _SyncCellDispatch()
     composition = MessagingComposition(
         repository=message_repo,
         delivery_port=delivery,
@@ -215,6 +246,7 @@ def _build(
         structured_output_port=_FakeStructuredOutput(
             extraction or _UNCLEAR, fail=structured_output_fails
         ),
+        cell_dispatch=cell_dispatch,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,
         webhook_jurisdiction="eu-west",

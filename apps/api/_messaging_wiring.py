@@ -32,6 +32,9 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
+from apps.api.adapters.cell_dispatch_inprocess import (
+    InProcessCellDispatchAdapter,
+)
 from apps.api._portfolio_gateway_wiring import (
     PortfolioGatewayAdapter,
     build_portfolio_gateway,
@@ -41,6 +44,7 @@ from contexts.audit.domain.ports import AuditPort
 from contexts.intake.application.ports.message_writer import (
     MessageWriteResult,
 )
+from contexts.messaging.application.ports.cell_dispatch import CellDispatch
 from contexts.messaging.adapters.outbound.postgres.message_repository import (
     PostgresMessageRepository,
 )
@@ -217,6 +221,7 @@ class MessagingComposition:
     message_writer: MessageWriterAdapter
     portfolio_gateway: PortfolioGatewayAdapter
     structured_output_port: StructuredOutputPort
+    cell_dispatch: CellDispatch
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -308,6 +313,7 @@ def build_messaging_composition(
             audit_port=audit_port,
         ),
         structured_output_port=structured_output_port,
+        cell_dispatch=InProcessCellDispatchAdapter(),
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,
