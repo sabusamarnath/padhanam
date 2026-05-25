@@ -238,6 +238,9 @@ def _build(
     intake_repo = FakeIntakeRepository()
     portfolio_gateway = gateway or _FakePortfolioGateway()
     cell_dispatch = _SyncCellDispatch()
+    from contexts.inference.adapters.confidence_self_reported import (
+        SelfReportedConfidenceAdapter,
+    )
     composition = MessagingComposition(
         repository=message_repo,
         delivery_port=delivery,
@@ -246,6 +249,7 @@ def _build(
         structured_output_port=_FakeStructuredOutput(
             extraction or _UNCLEAR, fail=structured_output_fails
         ),
+        confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=cell_dispatch,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,

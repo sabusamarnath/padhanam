@@ -69,6 +69,7 @@ from contexts.inference.adapters.outbound.litellm.model_ontology import (
 )
 from shared_kernel import LatencyTier, TenantContext
 from shared_kernel.structured_output import (
+    StructuredOutputParseFailure,
     StructuredOutputRequest,
     StructuredOutputResponse,
 )
@@ -537,14 +538,22 @@ class LiteLLMAdapter:
             try:
                 parsed = json.loads(content)
             except (ValueError, TypeError) as e:
+                # D134 extension: model produced output that does not
+                # parse against the schema; surface as the typed
+                # exception the cell routes to Case 3 (generic
+                # clarification) distinct from low-confidence-parsed.
                 span.set_status(Status(StatusCode.ERROR, str(e)))
-                raise InferenceError(
-                    f"structured output was not valid JSON: {e}"
+                raise StructuredOutputParseFailure(
+                    f"structured output was not valid JSON: {e}",
+                    raw_content=content,
                 ) from e
             if not isinstance(parsed, dict):
-                raise InferenceError(
+                # Same D134 surface: parsed value does not conform to
+                # the schema's top-level object shape.
+                raise StructuredOutputParseFailure(
                     "structured output must be a JSON object; got "
-                    f"{type(parsed).__name__}"
+                    f"{type(parsed).__name__}",
+                    raw_content=content,
                 )
 
             response_model = (

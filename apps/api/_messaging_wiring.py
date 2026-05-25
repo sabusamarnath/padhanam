@@ -44,6 +44,9 @@ from contexts.audit.domain.ports import AuditPort
 from contexts.intake.application.ports.message_writer import (
     MessageWriteResult,
 )
+from contexts.inference.adapters.confidence_self_reported import (
+    SelfReportedConfidenceAdapter,
+)
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
 from contexts.messaging.adapters.outbound.postgres.message_repository import (
     PostgresMessageRepository,
@@ -69,6 +72,7 @@ from padhanam.observability.security_events import SecurityEventLogger
 from padhanam.security import Principal
 from shared_kernel import (
     ActorContext,
+    ConfidenceCalculator,
     StructuredOutputPort,
     TenantContext,
     TenantId,
@@ -221,6 +225,7 @@ class MessagingComposition:
     message_writer: MessageWriterAdapter
     portfolio_gateway: PortfolioGatewayAdapter
     structured_output_port: StructuredOutputPort
+    confidence_calculator: ConfidenceCalculator
     cell_dispatch: CellDispatch
     from_address: str
     webhook_tenant_id: str
@@ -313,6 +318,7 @@ def build_messaging_composition(
             audit_port=audit_port,
         ),
         structured_output_port=structured_output_port,
+        confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=InProcessCellDispatchAdapter(),
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,

@@ -78,6 +78,32 @@ class StructuredOutputResponse(Generic[T]):
     provider_metadata: dict[str, Any]
 
 
+class StructuredOutputParseFailure(Exception):
+    """The model produced output that does not parse against the schema (D134, S47).
+
+    Raised by ``StructuredOutputPort`` implementations when the model's
+    response cannot be parsed as the requested JSON Schema. The
+    extension separates "model produced unparseable output" from
+    "model produced parseable output with low confidence" — two cases
+    confidence-aware composition at D134 routes differently. Before
+    D134's extension the LiteLLM adapter raised a generic
+    ``InferenceError`` on parse failure (surfacing as UnclearIntent at
+    the cell altitude); now parse failure surfaces as its own typed
+    exception the cell routes to Case 3 (generic clarification)
+    distinct from low-confidence-but-parsed Case 2.
+
+    Per D16 shared_kernel cannot import Pydantic; this is a plain
+    Python exception carrying the parse error's message plus optional
+    raw content for structured trouble-logging.
+    """
+
+    def __init__(
+        self, message: str, *, raw_content: str | None = None
+    ) -> None:
+        super().__init__(message)
+        self.raw_content = raw_content
+
+
 @runtime_checkable
 class StructuredOutputPort(Protocol):
     """The structured-output abstraction at the LLM-call boundary.
@@ -86,16 +112,26 @@ class StructuredOutputPort(Protocol):
     inference LiteLLM adapter implements it additively at S45. The
     ``@runtime_checkable`` decorator allows ``isinstance`` conformance
     checks, which the contract harness exercises.
+
+    Per D134's S47 extension: implementations raise
+    ``StructuredOutputParseFailure`` when the model's response cannot
+    be parsed against the requested schema, rather than coercing the
+    response to a default value or raising a generic inference error.
     """
 
     async def generate_structured(
         self, request: StructuredOutputRequest
     ) -> StructuredOutputResponse[dict[str, Any]]:
-        """Return a schema-conforming structured response."""
+        """Return a schema-conforming structured response.
+
+        Raises ``StructuredOutputParseFailure`` when the model's output
+        does not parse as the requested schema (D134).
+        """
         ...
 
 
 __all__ = [
+    "StructuredOutputParseFailure",
     "StructuredOutputPort",
     "StructuredOutputRequest",
     "StructuredOutputResponse",

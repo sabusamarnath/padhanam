@@ -23,6 +23,7 @@ from contexts.inference.domain.errors import (
 )
 from padhanam.config import InferenceSettings
 from shared_kernel.structured_output import (
+    StructuredOutputParseFailure,
     StructuredOutputPort,
     StructuredOutputRequest,
 )
@@ -146,25 +147,33 @@ def test_generate_structured_resolves_model_hint() -> None:
 
 
 def test_generate_structured_rejects_non_json_content() -> None:
+    """D134 (S47): parse failure surfaces as StructuredOutputParseFailure."""
     adapter = LiteLLMAdapter(settings=_settings())
 
     async def fake(**kwargs: object) -> SimpleNamespace:
         return _response("not json at all")
 
     with patch(_ACOMPLETION, new=fake):
-        with pytest.raises(InferenceError, match="not valid JSON"):
+        with pytest.raises(
+            StructuredOutputParseFailure, match="not valid JSON"
+        ) as exc_info:
             _generate(adapter, _request())
+    assert exc_info.value.raw_content == "not json at all"
 
 
 def test_generate_structured_rejects_non_object_json() -> None:
+    """D134 (S47): non-object JSON also surfaces as StructuredOutputParseFailure."""
     adapter = LiteLLMAdapter(settings=_settings())
 
     async def fake(**kwargs: object) -> SimpleNamespace:
         return _response('["a", "list", "not", "an", "object"]')
 
     with patch(_ACOMPLETION, new=fake):
-        with pytest.raises(InferenceError, match="must be a JSON object"):
+        with pytest.raises(
+            StructuredOutputParseFailure, match="must be a JSON object"
+        ) as exc_info:
             _generate(adapter, _request())
+    assert exc_info.value.raw_content == '["a", "list", "not", "an", "object"]'
 
 
 def test_generate_structured_maps_bad_request_to_configuration_error() -> None:

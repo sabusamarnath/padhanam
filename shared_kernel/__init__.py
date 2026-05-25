@@ -1,5 +1,6 @@
 from shared_kernel.actor_context import ActorContext
 from shared_kernel.actor_reference import ActorReference
+from shared_kernel.confidence_calculator import ConfidenceCalculator
 from shared_kernel.conversation_flow import (
     ConversationClosure,
     ConversationFlow,
@@ -17,6 +18,7 @@ from shared_kernel.inference import (
 )
 from shared_kernel.revisable import AssertionChange, Revisable
 from shared_kernel.structured_output import (
+    StructuredOutputParseFailure,
     StructuredOutputPort,
     StructuredOutputRequest,
     StructuredOutputResponse,
@@ -28,6 +30,7 @@ __all__ = [
     "ActorContext",
     "ActorReference",
     "AssertionChange",
+    "ConfidenceCalculator",
     "ConversationClosure",
     "ConversationFlow",
     "ConversationInput",
@@ -41,6 +44,7 @@ __all__ = [
     "ModelIdentifier",
     "Provider",
     "Revisable",
+    "StructuredOutputParseFailure",
     "StructuredOutputPort",
     "StructuredOutputRequest",
     "StructuredOutputResponse",
