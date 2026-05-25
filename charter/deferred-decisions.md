@@ -644,8 +644,26 @@ The LLM-call structured-output discipline at D130 (`shared_kernel/structured_out
 
 ### Multi-channel UX architectural readiness
 
+**Status (S47 update).** Architectural commitments landed at D136 covering all four sub-surfaces. Implementation deferred to existing activation triggers below. The entry stays here for the implementation triggers; the architectural disposition is settled at D136.
+
 S45 lands the messaging substrate for a single channel (WhatsApp via Twilio per D119/D129). When users interact across multiple messaging channels — WhatsApp, Slack at P15, SMS, future Copilot, future voice — Padhanam needs four surfaces the single-channel substrate does not yet build: identity reconciliation across per-channel identities (one user, many channel-addresses); channel preference resolution for platform-initiated outbound (which channel to reach the user on); cross-channel session continuity (a conversation that spans channels); and channel-aware affordances at the routing layer (a channel's capabilities shape what the response can contain). The S45 substrate is structurally channel-agnostic where it matters — the Message entity carries a `channel` enum, ActorContext is channel-free, the ConversationFlow Protocol is transport-neutral, and the IntakeSource enum admits per-channel inbound variants — so the four surfaces are additive rather than a refactor.
 
-**Activation trigger.** Multi-channel work begins when any of: (a) the Phase 2-A operator starts using more than one channel; (b) Padhanam initiates outbound conversations at P14+ where channel selection matters; (c) Phase 2-B+ introduces multiple users with multiple channels.
+**Activation triggers (still in force for implementation).** Multi-channel work begins when any of: (a) the Phase 2-A operator starts using more than one channel; (b) Padhanam initiates outbound conversations at P14+ where channel selection matters; (c) Phase 2-B+ introduces multiple users with multiple channels.
 
-**The specific D-entry lands at the activating session.** References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol). The forward UX convergence strategic block (captured at `log/captures.md`, sitting between S46 close and P14 framing) is the natural surface to design these four surfaces coherently alongside provenance-aware and confidence-aware response composition.
+**Architectural disposition.** D136 commits the four primitives. The forward UX convergence strategic block (captured at `log/captures.md` 2026-05-22 [S45]) closed at S47. References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol), D136 (multi-channel UX architectural primitives).
+
+### Shared-kernel CitedResponse base type or Protocol
+
+D131's first instance at S46 (the manual entry cell's CellResponse value object carries citation fields directly per the convention altitude). D135 at S47 commits the convention discipline at Phase 2-A and defers the structural-enforcement question (a shared-kernel CitedResponse base type or Protocol that future ConversationFlow implementers conform to structurally) to the P14 second-instance trigger.
+
+**Activation trigger.** P14 ConversationFlow implementers at audit-conversation (5.1) and mirror-conversation (4.1). When both implementers land within one framing or one session, the shared-kernel base type emerges at that framing. If they land sequentially across two sessions, the trigger fires at the second one.
+
+**The specific shape lands at the activating session.** References D131 (provenance-aware response composition), D115 (ConversationFlow Protocol), D135 (rendering pattern; structural enforcement question deferred here).
+
+### Cost-aware routing policies at the LiteLLM gateway
+
+D133 commits the gateway-as-resolution-point shape and the model registry's cost-per-call audit capture. Routing policies that consume cost as a dimension (failover, cost-aware routing within tenant-tier contracts, rate-limit awareness, tenant-tier-driven model selection) defer to Phase 3+ activation.
+
+**Activation trigger.** Padhanam-provides-LLM business-model activation at Phase 3+ when multi-ICP customer deployments make Padhanam directly responsible for inference cost. Tenant-tier contracts and cost budgets become real configuration surfaces.
+
+**The specific policy shapes land at the activating session(s).** References D133, D14 (customer-deployment model; tenant-tier contracts), principles.md lines 10-11 (vendor flexibility and architectural-commitments-evolve).
