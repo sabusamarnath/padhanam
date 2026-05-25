@@ -298,6 +298,8 @@ def _build(
         cell_dispatch=cell_dispatch,
         pending_clarification_repository=pending_repo,
         pending_clarification_reader=pending_reader,
+        confidence_high_cutoff=0.8,
+        confidence_medium_cutoff=0.5,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,
         webhook_jurisdiction="eu-west",

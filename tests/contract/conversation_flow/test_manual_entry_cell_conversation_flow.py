@@ -18,7 +18,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from contexts.audit.domain.events import AuditEvent
 from contexts.messaging.application.manual_entry_cell import ManualEntryCell
+from contexts.messaging.domain.pending_clarification import (
+    PendingClarification,
+    PendingClarificationStatus,
+)
 from shared_kernel import (
     ActorContext,
     ConversationClosure,
@@ -86,11 +91,55 @@ def _harness_actor() -> ActorContext:
     )
 
 
+class _StubConfidenceCalculator:
+    """The harness's UnclearIntent path returns confidence None → default."""
+
+    def compute(self, *, request: Any, response: Any) -> float:
+        return 0.0
+
+
+class _StubPendingRepo:
+    """No-op pending repository — the UnclearIntent path never persists."""
+
+    def __init__(self) -> None:
+        self.pendings: dict[Any, PendingClarification] = {}
+
+    async def save(self, *, tenant_context: Any, pending: Any) -> None:
+        raise AssertionError("harness path must not persist a pending")
+
+    async def update_status(self, *, tenant_context: Any, pending: Any) -> None:
+        raise AssertionError("harness path must not transition a pending")
+
+    async def get_by_id(self, *, tenant_context: Any, pending_id: Any) -> Any:
+        return None
+
+    async def get_active_for_user(
+        self, *, tenant_context: Any, user_id: str
+    ) -> Any:
+        return None
+
+
+class _StubPendingReader:
+    """Returns no active pending — keeps the harness on the fresh-turn path."""
+
+    async def get_active(self, *, tenant_id: Any, user_id: str) -> Any:
+        return None
+
+
+class _StubAuditPort:
+    async def emit(self, event: AuditEvent) -> AuditEvent:
+        return event
+
+
 def _make_manual_entry_cell() -> ManualEntryCell:
     return ManualEntryCell(
         structured_output_port=_StubStructuredOutput(),
         portfolio_gateway=_StubGateway(),
         actor=_harness_actor(),
+        confidence_calculator=_StubConfidenceCalculator(),
+        pending_clarification_reader=_StubPendingReader(),
+        pending_clarification_repository=_StubPendingRepo(),
+        audit_port=_StubAuditPort(),
     )
 
 

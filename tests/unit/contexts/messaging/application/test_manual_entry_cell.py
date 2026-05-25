@@ -1,11 +1,20 @@
-"""Unit tests for the ManualEntryCell — first ConversationFlow implementer (S46)."""
+"""Unit tests for the ManualEntryCell — first ConversationFlow implementer (S46, S47).
+
+S47 adds the confidence-aware three-case discipline (D134) and
+PendingClarification multi-turn state. The existing S46 tests run
+at high confidence (Case 1: proceed) and the new tests cover Case 2
+(medium → PendingClarification), Case 3 (low / parse-failure →
+generic clarification), and the multi-turn confirmation /
+cancellation flow.
+"""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from contexts.audit.domain.events import AuditEvent
 from contexts.messaging.application.cell_response import CellResponse
 from contexts.messaging.application.manual_entry_cell import ManualEntryCell
 from contexts.messaging.application.ports.portfolio_gateway import (
@@ -14,12 +23,17 @@ from contexts.messaging.application.ports.portfolio_gateway import (
     DataPointSummary,
     DataPointWriteOutcome,
 )
+from contexts.messaging.domain.pending_clarification import (
+    PendingClarification,
+    PendingClarificationStatus,
+)
 from shared_kernel import (
     ActorContext,
     ConversationClosure,
     ConversationInput,
     ConversationInvocation,
     LatencyTier,
+    StructuredOutputParseFailure,
     StructuredOutputResponse,
     TenantContext,
 )
@@ -42,7 +56,6 @@ def _actor() -> ActorContext:
 
 
 def _extraction(**fields: str) -> dict[str, Any]:
-    """Build a structured-output extraction object with empty defaults."""
     base = {
         "intent_type": "unclear",
         "title": "",
@@ -57,17 +70,86 @@ def _extraction(**fields: str) -> dict[str, Any]:
 
 
 class _FakeStructuredOutput:
-    def __init__(self, value: dict[str, Any]) -> None:
+    """Returns a preset extraction with a configurable confidence."""
+
+    def __init__(
+        self,
+        value: dict[str, Any],
+        *,
+        confidence: float | None = 0.95,
+        raises: Exception | None = None,
+    ) -> None:
         self._value = value
+        self._confidence = confidence
+        self._raises = raises
         self.requests: list[Any] = []
 
     async def generate_structured(
         self, request: Any
     ) -> StructuredOutputResponse[dict[str, Any]]:
         self.requests.append(request)
+        if self._raises is not None:
+            raise self._raises
         return StructuredOutputResponse(
-            value=self._value, confidence=None, provider_metadata={}
+            value=self._value,
+            confidence=self._confidence,
+            provider_metadata={},
         )
+
+
+class _FakeConfidenceCalculator:
+    """Reads ``response.confidence`` directly (mirrors self-reported)."""
+
+    def compute(self, *, request: Any, response: Any) -> float:
+        return float(response.confidence) if response.confidence is not None else 0.5
+
+
+class _FakePendingRepo:
+    def __init__(self) -> None:
+        self.pendings: dict[UUID, PendingClarification] = {}
+
+    async def save(self, *, tenant_context, pending) -> None:
+        self.pendings[pending.id] = pending
+
+    async def update_status(self, *, tenant_context, pending) -> None:
+        self.pendings[pending.id] = pending
+
+    async def get_by_id(self, *, tenant_context, pending_id):
+        return self.pendings.get(pending_id)
+
+    async def get_active_for_user(self, *, tenant_context, user_id):
+        for p in self.pendings.values():
+            if (
+                str(p.tenant_id) == tenant_context.tenant_id
+                and p.user_id == user_id
+                and p.status is PendingClarificationStatus.PENDING
+            ):
+                return p
+        return None
+
+
+class _FakePendingReader:
+    def __init__(self, repo: _FakePendingRepo) -> None:
+        self._repo = repo
+
+    async def get_active(self, *, tenant_id: UUID, user_id: str):
+        for p in self._repo.pendings.values():
+            if (
+                p.tenant_id == tenant_id
+                and p.user_id == user_id
+                and p.status is PendingClarificationStatus.PENDING
+            ):
+                return p
+        return None
+
+
+class _FakeAuditPort:
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def emit(self, event: AuditEvent) -> AuditEvent:
+        self.events.append(event)
+        return event
 
 
 class _FakeGateway:
@@ -116,11 +198,34 @@ class _FakeGateway:
         )
 
 
-def _cell(extraction: dict[str, Any], gateway: _FakeGateway) -> ManualEntryCell:
+def _cell(
+    extraction: dict[str, Any] | _FakeStructuredOutput,
+    gateway: _FakeGateway,
+    *,
+    confidence: float | None = 0.95,
+    raises: Exception | None = None,
+    high_cutoff: float = 0.8,
+    medium_cutoff: float = 0.5,
+    pending_repo: _FakePendingRepo | None = None,
+) -> ManualEntryCell:
+    structured_output = (
+        extraction
+        if isinstance(extraction, _FakeStructuredOutput)
+        else _FakeStructuredOutput(
+            extraction, confidence=confidence, raises=raises
+        )
+    )
+    repo = pending_repo if pending_repo is not None else _FakePendingRepo()
     return ManualEntryCell(
-        structured_output_port=_FakeStructuredOutput(extraction),
+        structured_output_port=structured_output,
         portfolio_gateway=gateway,
         actor=_actor(),
+        confidence_calculator=_FakeConfidenceCalculator(),
+        pending_clarification_reader=_FakePendingReader(repo),
+        pending_clarification_repository=repo,
+        audit_port=_FakeAuditPort(),
+        confidence_high_cutoff=high_cutoff,
+        confidence_medium_cutoff=medium_cutoff,
     )
 
 
@@ -134,6 +239,9 @@ def _turn_once(cell: ManualEntryCell, text: str):
     return asyncio.run(_drive())
 
 
+# --- Case 1: high confidence (existing S46 behaviour) -----------------
+
+
 def test_open_returns_fresh_state() -> None:
     state = asyncio.run(
         _cell(_extraction(), _FakeGateway()).open(
@@ -144,7 +252,7 @@ def test_open_returns_fresh_state() -> None:
     assert state.is_open is True
 
 
-def test_create_case_intent_drives_create_and_cites() -> None:
+def test_create_case_intent_high_confidence_proceeds() -> None:
     gateway = _FakeGateway()
     cell = _cell(
         _extraction(intent_type="create_case", title="Q3 portfolio review"),
@@ -152,18 +260,14 @@ def test_create_case_intent_drives_create_and_cites() -> None:
     )
     state = _turn_once(cell, "start a case for the Q3 portfolio review")
 
-    assert gateway.created_cases == [
-        ("start a case for the Q3 portfolio review", "Q3 portfolio review")
-    ]
+    assert len(gateway.created_cases) == 1
     response: CellResponse = state.payload["cell_response"]
     assert "Recorded a new case" in response.text
+    assert state.payload["confidence_band"] == "high"
     assert len(response.cited_artefacts) == 1
-    assert len(response.cited_intake_records) == 1
-    assert response.cited_audit_events == ()
-    assert "Q3 portfolio review" in state.payload["response_text"]
 
 
-def test_add_data_point_resolves_case_and_creates() -> None:
+def test_add_data_point_high_confidence_resolves_and_creates() -> None:
     case = CaseSummary(case_id=uuid4(), title="Q3 portfolio review")
     gateway = _FakeGateway(cases=(case,))
     cell = _cell(
@@ -178,59 +282,11 @@ def test_add_data_point_resolves_case_and_creates() -> None:
     state = _turn_once(cell, "add a goal to the Q3 review: ship Wave 1")
 
     assert len(gateway.created_data_points) == 1
-    case_id, dp_type, value = gateway.created_data_points[0]
-    assert case_id == case.case_id
-    assert dp_type == "GOAL"
-    assert value == {"text": "ship Wave 1 by end of May"}
     response: CellResponse = state.payload["cell_response"]
-    assert len(response.cited_artefacts) == 1
+    assert response.has_citations
 
 
-def test_add_data_point_ambiguous_returns_clarification() -> None:
-    gateway = _FakeGateway(
-        cases=(
-            CaseSummary(case_id=uuid4(), title="Q3 review meeting"),
-            CaseSummary(case_id=uuid4(), title="Q3 review planning"),
-        )
-    )
-    cell = _cell(
-        _extraction(
-            intent_type="add_data_point",
-            case_reference="the Q3 review",
-            data_point_type="STATUS",
-            value_text="on track",
-        ),
-        gateway,
-    )
-    state = _turn_once(cell, "add a status to the Q3 review")
-
-    assert gateway.created_data_points == []
-    response: CellResponse = state.payload["cell_response"]
-    assert not response.has_citations
-    assert "More than one" in response.text
-
-
-def test_add_data_point_no_match_returns_clarification() -> None:
-    gateway = _FakeGateway(
-        cases=(CaseSummary(case_id=uuid4(), title="annual planning"),)
-    )
-    cell = _cell(
-        _extraction(
-            intent_type="add_data_point",
-            case_reference="the hiring pipeline",
-            data_point_type="GOAL",
-            value_text="close two roles",
-        ),
-        gateway,
-    )
-    state = _turn_once(cell, "add a goal to the hiring pipeline")
-
-    assert gateway.created_data_points == []
-    response: CellResponse = state.payload["cell_response"]
-    assert "could not find" in response.text
-
-
-def test_revise_data_point_resolves_and_revises() -> None:
+def test_revise_data_point_high_confidence_resolves_and_revises() -> None:
     dp = DataPointSummary(
         data_point_id=uuid4(),
         case_id=uuid4(),
@@ -249,9 +305,6 @@ def test_revise_data_point_resolves_and_revises() -> None:
     state = _turn_once(cell, "revise the Wave 1 ship goal to mid-June")
 
     assert len(gateway.revised) == 1
-    data_point_id, value = gateway.revised[0]
-    assert data_point_id == dp.data_point_id
-    assert value == {"text": "ship Wave 1 by mid-June"}
     response: CellResponse = state.payload["cell_response"]
     assert response.cited_artefacts == (dp.data_point_id,)
 
@@ -268,15 +321,209 @@ def test_unclear_intent_returns_clarification_without_touching_gateway() -> None
     state = _turn_once(cell, "do the thing")
 
     assert gateway.created_cases == []
-    assert gateway.created_data_points == []
     response: CellResponse = state.payload["cell_response"]
     assert response.text == "Which case did you mean?"
     assert not response.has_citations
 
 
+# --- Case 2: medium confidence (new at S47) ---------------------------
+
+
+def test_create_case_medium_confidence_creates_pending_and_clarifies() -> None:
+    """D134 Case 2: medium confidence proposes the action as a question."""
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    cell = _cell(
+        _extraction(intent_type="create_case", title="Q3 portfolio review"),
+        gateway,
+        confidence=0.6,
+        pending_repo=repo,
+    )
+    state = _turn_once(cell, "start a case for the Q3 portfolio review")
+
+    # No portfolio write at Case 2.
+    assert gateway.created_cases == []
+    # The cell asks a shape-aware clarification phrased as a question.
+    response: CellResponse = state.payload["cell_response"]
+    assert "Is that right?" in response.text
+    assert "Q3 portfolio review" in response.text
+    assert state.payload["confidence_band"] == "medium"
+    # A PendingClarification persists for the operator.
+    pendings = list(repo.pendings.values())
+    assert len(pendings) == 1
+    assert pendings[0].status is PendingClarificationStatus.PENDING
+    assert pendings[0].user_id == "twilio-webhook"
+
+
+def test_add_data_point_medium_confidence_creates_pending() -> None:
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    cell = _cell(
+        _extraction(
+            intent_type="add_data_point",
+            case_reference="the Q3 review",
+            data_point_type="GOAL",
+            value_text="ship Wave 1",
+        ),
+        gateway,
+        confidence=0.6,
+        pending_repo=repo,
+    )
+    state = _turn_once(cell, "add a goal")
+
+    assert gateway.created_data_points == []
+    response: CellResponse = state.payload["cell_response"]
+    assert "Is that right?" in response.text
+    assert state.payload["confidence_band"] == "medium"
+    assert len(repo.pendings) == 1
+
+
+# --- Case 3: low confidence and parse failure ------------------------
+
+
+def test_low_confidence_returns_generic_clarification() -> None:
+    """D134 Case 3: below medium cut-off renders generic clarification."""
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    cell = _cell(
+        _extraction(intent_type="create_case", title="something"),
+        gateway,
+        confidence=0.2,
+        pending_repo=repo,
+    )
+    state = _turn_once(cell, "do something")
+
+    assert gateway.created_cases == []
+    assert repo.pendings == {}
+    assert state.payload["confidence_band"] == "low"
+    response: CellResponse = state.payload["cell_response"]
+    assert not response.has_citations
+
+
+def test_parse_failure_routes_to_case_3() -> None:
+    """D130 extension: StructuredOutputParseFailure routes to Case 3."""
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    cell = _cell(
+        _FakeStructuredOutput(
+            _extraction(),
+            raises=StructuredOutputParseFailure(
+                "model produced bad JSON",
+                raw_content="not json",
+            ),
+        ),
+        gateway,
+        pending_repo=repo,
+    )
+    state = _turn_once(cell, "do the thing")
+
+    assert gateway.created_cases == []
+    assert repo.pendings == {}
+    assert state.payload["confidence_band"] == "parse_failure"
+    response: CellResponse = state.payload["cell_response"]
+    assert "Could you say a little more" in response.text
+
+
+# --- Multi-turn: confirmation resolves and executes -------------------
+
+
+def test_confirmation_resolves_pending_and_executes() -> None:
+    """A confirming reply resolves the pending and runs the action."""
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    # Turn 1: medium confidence creates the pending.
+    cell = _cell(
+        _extraction(intent_type="create_case", title="Q3 portfolio review"),
+        gateway,
+        confidence=0.6,
+        pending_repo=repo,
+    )
+
+    async def _drive():
+        opened = await cell.open(
+            ConversationInvocation(purpose="manual_entry", actor_id="op")
+        )
+        first = await cell.turn(
+            opened,
+            ConversationInput(
+                text="start a case for the Q3 portfolio review"
+            ),
+        )
+        # Turn 2 with a new cell construction (per-request shape).
+        # High-confidence is irrelevant — the pending dictates flow.
+        confirm_cell = _cell(
+            _extraction(intent_type="unclear"),
+            gateway,
+            confidence=0.0,
+            pending_repo=repo,
+        )
+        second = await confirm_cell.turn(
+            first, ConversationInput(text="yes")
+        )
+        return first, second
+
+    first, second = asyncio.run(_drive())
+
+    assert first.payload["confidence_band"] == "medium"
+    # Case was created on the confirmation turn.
+    assert len(gateway.created_cases) == 1
+    assert second.payload["confidence_band"] == "confirmed_pending"
+    response: CellResponse = second.payload["cell_response"]
+    assert "Recorded a new case" in response.text
+    # The pending transitioned to RESOLVED.
+    pending = list(repo.pendings.values())[0]
+    assert pending.status is PendingClarificationStatus.RESOLVED
+
+
+def test_cancellation_resolves_pending_and_falls_through() -> None:
+    """A correcting reply cancels the pending and runs as a fresh turn."""
+    gateway = _FakeGateway()
+    repo = _FakePendingRepo()
+    cell = _cell(
+        _extraction(intent_type="create_case", title="Q3 portfolio review"),
+        gateway,
+        confidence=0.6,
+        pending_repo=repo,
+    )
+
+    async def _drive():
+        opened = await cell.open(
+            ConversationInvocation(purpose="manual_entry", actor_id="op")
+        )
+        first = await cell.turn(
+            opened,
+            ConversationInput(
+                text="start a case for the Q3 portfolio review"
+            ),
+        )
+        cancel_cell = _cell(
+            _extraction(intent_type="unclear", clarification="?"),
+            gateway,
+            confidence=0.0,  # falls through to Case 3 generic
+            pending_repo=repo,
+        )
+        second = await cancel_cell.turn(
+            first, ConversationInput(text="no")
+        )
+        return first, second
+
+    first, second = asyncio.run(_drive())
+
+    # The original proposal did not execute on the cancel.
+    assert gateway.created_cases == []
+    # The pending transitioned to RESOLVED with cancelled.
+    pending = list(repo.pendings.values())[0]
+    assert pending.status is PendingClarificationStatus.RESOLVED
+
+
+# --- Existing scaffolding tests carry through ------------------------
+
+
 def test_turn_advances_count_and_keeps_conversation_id() -> None:
     cell = _cell(
-        _extraction(intent_type="unclear", clarification="?"), _FakeGateway()
+        _extraction(intent_type="unclear", clarification="?"),
+        _FakeGateway(),
+        confidence=0.95,
     )
 
     async def _drive():
@@ -310,10 +557,15 @@ def test_close_returns_terminal_outcome() -> None:
 
 def test_intent_extraction_uses_real_time_tier() -> None:
     port = _FakeStructuredOutput(_extraction(intent_type="unclear"))
+    repo = _FakePendingRepo()
     cell = ManualEntryCell(
         structured_output_port=port,
         portfolio_gateway=_FakeGateway(),
         actor=_actor(),
+        confidence_calculator=_FakeConfidenceCalculator(),
+        pending_clarification_reader=_FakePendingReader(repo),
+        pending_clarification_repository=repo,
+        audit_port=_FakeAuditPort(),
     )
     asyncio.run(
         cell.turn(

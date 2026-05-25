@@ -55,6 +55,26 @@ class MessagingSettings(PadhanamSettings):
     webhook_tenant_id: str = ""
     webhook_jurisdiction: str = "eu-west"
     webhook_url: str = ""
+    # D134 confidence-aware composition cut-offs. Case 1 (proceed)
+    # fires at confidence >= ``confidence_high_cutoff``; Case 2
+    # (shape-aware clarification with PendingClarification) fires at
+    # confidence in ``[confidence_medium_cutoff, confidence_high_cutoff)``;
+    # Case 3 (generic clarification) fires below. Phase 2-A operates
+    # one operation class (intake-canonical portfolio writes per D128)
+    # with one cut-off pair; the per-operation-class configuration
+    # surface activates at Phase 2-B+ when higher-stakes operations
+    # land. Tunable as dogfooding calibration data accumulates.
+    confidence_high_cutoff: float = 0.8
+    confidence_medium_cutoff: float = 0.5
+
+    @model_validator(mode="after")
+    def require_confidence_cutoffs_ordered(self) -> "MessagingSettings":
+        if not 0.0 <= self.confidence_medium_cutoff <= self.confidence_high_cutoff <= 1.0:
+            raise ValueError(
+                "confidence cut-offs must satisfy "
+                "0.0 <= medium <= high <= 1.0"
+            )
+        return self
 
     @model_validator(mode="after")
     def require_twilio_credentials(self) -> "MessagingSettings":

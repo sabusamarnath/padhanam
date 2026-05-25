@@ -332,6 +332,8 @@ class MessagingComposition:
     cell_dispatch: CellDispatch
     pending_clarification_repository: PendingClarificationRepository
     pending_clarification_reader: PendingClarificationReader
+    confidence_high_cutoff: float
+    confidence_medium_cutoff: float
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -434,6 +436,8 @@ def build_messaging_composition(
             webhook_tenant_id=settings.webhook_tenant_id,
             webhook_jurisdiction=settings.webhook_jurisdiction,
         ),
+        confidence_high_cutoff=settings.confidence_high_cutoff,
+        confidence_medium_cutoff=settings.confidence_medium_cutoff,
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,
