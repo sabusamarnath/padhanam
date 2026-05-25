@@ -7,11 +7,32 @@ from shared_kernel.inference import LatencyTier
 
 
 def test_unconfigured_tiers_resolve_to_the_default_model() -> None:
+    """S47 / D133: when the per-tier model fields are explicitly None,
+    each tier resolves to ``default_model``. The shipped default
+    ``InferenceSettings.real_time_required_model`` is now ``qwen2.5:14b``
+    (S47 bump per D133/D134); pass ``None`` here to assert the fallback
+    behaviour intact."""
+    settings = InferenceSettings(
+        litellm_master_key="test-key",
+        default_model="qwen2.5:7b",
+        real_time_required_model=None,
+        async_tolerant_model=None,
+    )
+    config = settings.latency_tier_config
+    assert config[LatencyTier.REAL_TIME_REQUIRED].model == "qwen2.5:7b"
+    assert config[LatencyTier.ASYNC_TOLERANT].model == "qwen2.5:7b"
+
+
+def test_real_time_required_default_pins_to_qwen2_5_14b() -> None:
+    """S47 / D133: REAL_TIME_REQUIRED ships pinned to qwen2.5:14b per
+    the convergence's Response A — addresses the S46 smoke's intent-
+    extraction reliability finding. Operator override via
+    ``INFERENCE_REAL_TIME_REQUIRED_MODEL`` env var remains available."""
     settings = InferenceSettings(
         litellm_master_key="test-key", default_model="qwen2.5:7b"
     )
     config = settings.latency_tier_config
-    assert config[LatencyTier.REAL_TIME_REQUIRED].model == "qwen2.5:7b"
+    assert config[LatencyTier.REAL_TIME_REQUIRED].model == "qwen2.5:14b"
     assert config[LatencyTier.ASYNC_TOLERANT].model == "qwen2.5:7b"
 
 

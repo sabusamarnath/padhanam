@@ -53,17 +53,21 @@ class InferenceSettings(PadhanamSettings):
     default_embedding_model: str = "nomic-embed-text:v1.5"
     tls_mode: TLSMode = TLSMode.PLAINTEXT
 
-    # D122 latency-tier routing (S46). Per-tier model identifiers and
-    # timeout budgets. The model fields are None by default so each
-    # tier resolves to ``default_model`` until an environment variable
-    # (INFERENCE_REAL_TIME_REQUIRED_MODEL, INFERENCE_ASYNC_TOLERANT_MODEL)
-    # overrides — honouring D122's "Phase 1 call sites preserve current
-    # behaviour" commitment. The timeout budgets differ from the start:
-    # a real-time call should fail fast, an async-tolerant call may run
-    # long. The model split becomes meaningful once cloud providers are
-    # configured (a fast small model for real-time, a strong model for
-    # async); local Ollama dev runs one model at two timeout budgets.
-    real_time_required_model: str | None = None
+    # D122 latency-tier routing (S46) plus S47 REAL_TIME_REQUIRED model
+    # bump per D133/D134. ``async_tolerant_model`` stays None by default
+    # so the tier resolves to ``default_model``; ``real_time_required_model``
+    # pins to ``qwen2.5:14b`` so the intent-classification cell at the
+    # operator-WhatsApp surface picks a stronger discriminative model
+    # than the S46 default's ``qwen2.5:7b`` (which classified AddDataPoint
+    # to UnclearIntent across four phrasings at the S46 smoke). Operator
+    # override via ``INFERENCE_REAL_TIME_REQUIRED_MODEL`` env var stays
+    # available; selecting a hosted model (e.g. ``gpt-4o-mini``,
+    # ``claude-haiku-4-5``) is a configuration change, not code. The
+    # async-tolerant timeout budget remains long because that tier's
+    # surfaces (substrate ingestion analysis, surfacing-decision logic)
+    # tolerate seconds-to-minutes; the real-time budget at 30s carries
+    # the warm-LLM-plus-dispatch headroom per D133's webhook contract.
+    real_time_required_model: str | None = "qwen2.5:14b"
     async_tolerant_model: str | None = None
     real_time_required_timeout_seconds: float = 30.0
     async_tolerant_timeout_seconds: float = 180.0
@@ -149,6 +153,13 @@ class UnknownModelError(KeyError):
 # monthly review surfaces drift.
 PRICING_TABLE: dict[str, ModelPricing] = {
     "qwen2.5:7b": ModelPricing(
+        input_usd_per_1m_tokens=Decimal("0"),
+        output_usd_per_1m_tokens=Decimal("0"),
+    ),
+    # S47 / D133: qwen2.5:14b lands as the REAL_TIME_REQUIRED default
+    # to address the intent-classification reliability finding from the
+    # S46 smoke. Local Ollama hosting carries no per-call vendor cost.
+    "qwen2.5:14b": ModelPricing(
         input_usd_per_1m_tokens=Decimal("0"),
         output_usd_per_1m_tokens=Decimal("0"),
     ),

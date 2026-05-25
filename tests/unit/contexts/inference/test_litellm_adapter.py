@@ -110,7 +110,14 @@ def test_adapter_resolves_default_model_when_none() -> None:
     # The adapter prefixes with "openai/" so the LiteLLM SDK treats the
     # gateway endpoint as an OpenAI-compatible proxy (the gateway's
     # config.yaml maps the un-prefixed name to the real backend).
-    assert captured["model"] == f"openai/{_settings().default_model}"
+    # S47 / D133: ``complete`` (no explicit latency_tier) routes through
+    # the REAL_TIME_REQUIRED tier — pinned to ``qwen2.5:14b`` per the
+    # convergence's Response A.
+    from shared_kernel.inference import LatencyTier
+    expected_model = _settings().latency_tier_config[
+        LatencyTier.REAL_TIME_REQUIRED
+    ].model
+    assert captured["model"] == f"openai/{expected_model}"
 
 
 def test_adapter_passes_endpoint_and_master_key() -> None:
