@@ -378,6 +378,77 @@ Status: descriptive, active observation; no fix proposed. Sub-shape B carries fo
 
 *Forward-relevance.* Phase 2 substrate work inherits the rhythm: candidates accumulate at session-log methodology lines through Phase 2 packages, the per-package retrospectives at `log/packages.md` provide an intermediate consolidation surface, and Phase 2 close audit resolves the cumulative set. The pre-P12 hygiene precedent of "consolidate the candidates into a structured input file with observation + evidence + decision-shape format" carries forward as the consolidation template; the audit-output convention of "four disposition shapes per candidate plus audit-surfaced entries" carries forward as the resolution template.
 
+### 2026-05-26 — Interface-versus-implementation discipline at strategic-mode altitude (S49 promotion)
+
+*What recurs.* At strategic-mode architectural-altitude drafting, framing tends to commit specific implementations when the architectural commitment should be the interface (the shape future implementations conform to). The implementation may be the right Phase 2-A choice, but the architectural commitment binds the interface, not the specific implementation that may need to change. The framing-time check is the interface-versus-implementation question: am I committing the shape future implementations conform to, or am I committing one specific implementation that should sit behind a port?
+
+*Recurrence count.* Seven instances across three surfaces over the post-S46 architectural arc.
+
+Convergence-conversation surface (four instances):
+1. Path A in-process versus Path B out-of-process dispatch named as two implementations in sequence without the CellDispatch port abstraction at D133; operator question pulled the framing back to the port with Path A and Path B as adapters behind it.
+2. "Routing resolves at the adapter" framing for the gateway was vague about what routing covered; operator question forced specificity to the runtime model-choice question (a related but distinct shape of the same drift class).
+3. Runtime-model-resolution architecture for the gateway committed as substrate-depth without business-context justification; operator question pulled the framing back to static-configuration-at-Phase-2-A with the gateway-as-resolution-point shape preserved for Phase 3+ business-model activation.
+4. "Self-reported confidence as the Phase 2-A signal" committed as the architectural primitive at concern 3's initial disposition; operator question pulled the framing back to the ConfidenceCalculator port at D134 with self-reported confidence as the placeholder adapter behind the port.
+
+Strategic-mode framing surface (two instances):
+5. S47 brief's `apps/inference/adapters/` path for the SelfReportedConfidenceAdapter did not exist; actual path is `contexts/inference/adapters/`; surfaced at framing-time pre-write reconciliation; corrected at commit-draft time. Adjacent to but distinct from the path-naming discipline already promoted from S43b; here the path-drift manifested through an implementation-versus-interface confusion about where adapters live structurally.
+6. S47 brief's sync/async dispatch shape ambiguity at the parenthetical "or FastAPI's `BackgroundTasks` if reconciliation confirms" left a resolution the brief should have committed; surfaced at framing-time pre-write reconciliation.
+
+Prompt-draft-time anticipation surface (one instance):
+7. S48a brief explicitly anticipated the chore-to-feat upgrade at pre-write reconciliation surface 3 ("if more is needed at the configuration surface, the swap is not a pure chore and the commit shape upgrades to `feat(p13/s48a)`"). The anticipation fired exactly as framed; the swap touched three configuration surfaces plus tests plus documentation, upgrading the commit shape per the brief's own guidance. First operational evidence that the discipline binds at prompt-draft time when explicitly named as a reconciliation surface.
+
+*Pattern-density observation and resolution.* The convergence-plus-prompt-drafting arc surfaced four instances in one conversation followed by two at framing-time followed by one anticipated at draft-time. The S47 captures entry posed the open question of whether strategic-mode altitude inherently produces the drift or whether the convergence's particular shape produced it. The seven-instance evidence across three surfaces answers the question: the strategic-mode altitude predictably produces the drift, and the discipline binds at every drafting surface (conversation, brief framing, prompt drafting) when explicitly named as a reconciliation surface. The S48a prompt-draft-time anticipation is the operational evidence that explicit naming closes the recurrence loop.
+
+*Mechanism.* The framing-time and draft-time check is mechanical: before committing prose that names a specific implementation as "the Phase 2-A choice" or "the default" or "the shape we ship," verify whether the prose is describing the interface (the shape future implementations conform to) or the implementation (the specific choice behind the interface). If the prose conflates the two, separate them: the interface is the architectural commitment; the implementation is the Phase 2-A or current-package choice behind the interface. Future Phase swaps of the implementation become adapter changes, not interface changes.
+
+*Forward-relevance.* The discipline binds at every strategic-mode drafting surface from S49 forward. Pre-write reconciliation surfaces at session prompts include an explicit interface-versus-implementation check (surface 9 introduced at S47 framing; promoted to standing surface at S48a brief draft; standing surface from S49 forward). The discipline composes with the existing path-naming discipline (from S43b) and the build-at-second-instance discipline (from D127 alternative (d)) as the three pre-write reconciliation disciplines that catch the most common strategic-mode drafting drift classes.
+
+### 2026-05-26 — Component-quality verification distinct from integration-smoke verification (S49 promotion)
+
+*What recurs.* Integration smokes verify integration (does the full multi-turn cascade hold; does the audit chain integrity hold; does the channel rendering work end-to-end). Component-quality questions (does model X classify reliably; does retrieval strategy Y outperform Z; does prompt P produce schema-conforming output reliably across the operation surface) are structurally distinct and need dedicated evaluation surfaces that exercise the component in isolation. The architecture's port-and-adapter shape exists specifically to make component testing possible in isolation; asking integration smokes to answer component-quality questions produces slow, expensive, confounded evidence.
+
+*Recurrence count.* Two-instance evidence plus one structural implementation.
+
+Instance 1 (S46 smoke). The intent-extraction reliability question at `qwen2.5:7b` surfaced through the manual entry cell integration smoke against tenant_a. The smoke ran multiple minutes per cascade and exercised the full webhook-to-portfolio-write surface to answer what was structurally a component-quality question about the model's classification behaviour on AddDataPointIntent phrasings. The smoke evidence was negative (0/2 successful classifications at template phrasing) and the negative evidence was confounded with substrate-quality concerns (latency, audit chain, channel rendering all simultaneously exercised).
+
+Instance 2 (S47 smoke). The model-latency viability question at `qwen2.5:14b` surfaced through the same integration smoke pattern. The smoke revealed progressive 28s-to-361s slowdown that killed the dogfooding loop. The component-quality question (does this model run within the operational latency budget on this hardware) was answered by integration smoke evidence; the architecture's gateway-as-resolution-point shape (D133) made the model swap a configuration change, but the question itself was answered the expensive way.
+
+Structural implementation (D137). The S48b intent-classification evaluation substrate at `contexts/intent_classification_evaluation/` is the methodology pattern made concrete in code. The substrate authors operator-shaped gold sets of (input phrasing, expected intent class) pairs; the runner exercises the structured-output port at D130 with each input against a model-registry-selected model; the metric calculator computes classification accuracy per class. The substrate answers the component-quality question (`gpt-4o-mini` at 97.5% on 40 entries in 75 seconds at under $0.001 spend) in minutes against a fixed reference set, distinct from the multi-minute integration smokes. The substrate's existence is the methodology line's binding mechanism, not just its evidence.
+
+*Mechanism.* Component-quality questions land at dedicated evaluation substrates that exercise the component in isolation through its port. Integration smokes verify integration. The architecture's port-and-adapter discipline at the hexagonal layer order supports component isolation; the substrate work to land each component-quality evaluation surface is forward methodology work at the activation trigger, not architectural rework.
+
+*Forward-relevance.* Future component-quality questions follow the same shape with their own substrates landing at their own activation triggers:
+- Prompt-revision evaluation activates when prompt variants need systematic measurement against gold sets.
+- Structured-output reliability per class activates when structured-output parse failures or schema-conformance questions surface across multiple consuming contexts.
+- Retrieval-strategy quality at new corpus sources composes with the existing P11 retrieval-evaluation substrate (D110).
+- Confidence-calibration evaluation activates when self-reported versus actual outcome accumulation produces statistically meaningful calibration evidence.
+
+Each future substrate inherits the D137 shape: a bounded context or substrate-altitude consuming the relevant ports, authoring its gold set in the appropriate format, computing the appropriate metrics, integrating with the tenant audit chain per D110, and exposing a CLI for operator invocation.
+
+### 2026-05-26 — Structural-test binding for discipline commitments at the commitment's commit (S49 promotion)
+
+*What recurs.* Architectural commitments whose semantics admit structural tests should land those tests in the commit that lands the commitment. Without the structural test the discipline lives in convention; with it the discipline holds against future drift at the substrate altitude. The structural test is the discipline made enforceable in CI rather than relying on review attention.
+
+*Recurrence count.* Two-instance evidence over the S47 addendum and S48b sessions.
+
+Instance 1 (S47 addendum commit 4f74509). The ThresholdResolver port at `shared_kernel/confidence_thresholds.py` committed the discipline that cell source carries no numeric threshold literals. The commit that landed the port also landed a structural test verifying the cell source contains no numeric literals matching the threshold-value pattern. Without the test the discipline lives in the D134 prose; with the test the discipline holds against future drift where a future cell-modification commit might inline a numeric threshold for expedience.
+
+Instance 2 (S48b commit 91511dd). The shared_kernel intent-classification primitive extracted the cell's intent-classification prompt and schema to `shared_kernel/intent_classification.py` so the evaluation substrate's runner consumes the same canonical source as the messaging cell. The commit landed a symbol-identity test asserting the cell and the runner resolve to the same shared_kernel module for the prompt-and-schema symbols. Without the test the discipline that the substrate measures what production runs lives in convention; with the test the discipline holds against future drift where a refactor might give the runner its own prompt definition.
+
+*Mechanism.* When drafting a D-entry or methodology commitment whose semantics admit a structural verification, identify the structural test at draft time and land it at the commit that lands the commitment. The structural test makes the commitment enforceable against future drift. The test surface varies:
+- AST-pattern detection for no-numeric-literal disciplines
+- Symbol-identity assertions for single-source-of-truth disciplines
+- Import-linter contracts for cross-context-dependency disciplines (already standard at the codebase)
+- File-topology budget assertions for file-size disciplines
+- Path-naming verification for adapter-and-test placement disciplines
+
+*Forward-relevance.* Future architectural commitments whose semantics admit structural tests follow the same binding:
+- D136's multi-channel UX primitives (User as first-class concept; ChannelIdentity mapping; channel preference resolution surface; ChannelCapabilities descriptor) admit structural tests at their activation triggers, particularly tests asserting channel adapters do not import domain logic and domain implementations do not import channel-specific code.
+- Future ConversationFlow implementer commitments at P14+ (audit-conversation, mirror-conversation) admit structural tests asserting each implementer carries the citation fields per D131 and consumes confidence through the ConfidenceCalculator port per D134.
+- Future gold-set authoring disciplines (per the S48b reflection prompt 2 connection between gold-set ambiguity and confidence-aware composition) admit structural tests asserting gold-set entries with explicit ambiguity markers route to the appropriate classification target rather than a forced binary class.
+
+Each future commitment evaluates the structural-test-binding question at draft time: does the semantics admit a structural test, and if so, what surface (AST, symbol-identity, import-linter, file-topology, path-naming) carries the test?
+
 ## Failure modes observed
 
 Drift events caught and corrected during sessions. Each entry captures what drifted, when it was caught, how it was corrected, and what was added to the discipline (principles update, AST test, D-entry, or methodology refinement) to prevent recurrence. Failure modes are the most valuable part of the methodology because they are where naive AI-assisted development goes wrong; surfacing them publicly is what makes the case study credible to product leaders who suspect this kind of work is fragile.
