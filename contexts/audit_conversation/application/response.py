@@ -33,6 +33,7 @@ Application code is framework-free here — stdlib only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import UUID
 
 from shared_kernel.conversation_flow import ArtefactCitation
@@ -62,4 +63,44 @@ class AuditConversationResponse:
         )
 
 
-__all__ = ["AuditConversationResponse"]
+def _short_hex(identifier: UUID) -> str:
+    """Short-hex prefix of a UUID for a compact citation (D131 Shape 1)."""
+    return identifier.hex[:8]
+
+
+def render_for_whatsapp(
+    response: AuditConversationResponse, *, composed_at: datetime
+) -> str:
+    """Render AuditConversationResponse to the WhatsApp surface text (D135).
+
+    Mirrors the manual entry cell's ``render_for_whatsapp`` shape at
+    ``contexts/messaging/application/cell_response.py``: when the response
+    cites artefacts, the text is followed by a compact Shape-1 citation
+    line (a short-hex prefix per cited audit event, intake record, and
+    artefact) plus the composition timestamp. A no-citation response
+    (clarification, no-results, or resolution-ambiguity prelude with no
+    candidates) renders as its text alone.
+
+    Per D135 domain-decides-content channel-decides-format pattern, the
+    domain layer produces the channel-agnostic content (text + citation
+    tuples); this renderer is the WhatsApp-specific affordance.
+    """
+    if not response.has_citations:
+        return response.text
+
+    parts: list[str] = []
+    parts += [
+        f"audit {_short_hex(e)}" for e in response.cited_audit_events
+    ]
+    parts += [
+        f"ref {_short_hex(a.artefact_id)}" for a in response.cited_artefacts
+    ]
+    parts += [
+        f"intake {_short_hex(i)}" for i in response.cited_intake_records
+    ]
+    citation_line = " · ".join(parts)
+    stamp = composed_at.strftime("%H:%M UTC")
+    return f"{response.text}\n\n— {citation_line} · {stamp}"
+
+
+__all__ = ["AuditConversationResponse", "render_for_whatsapp"]
