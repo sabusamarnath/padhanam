@@ -79,7 +79,6 @@ from contexts.messaging.application.resolve_target import (
     resolve_target,
 )
 from contexts.messaging.domain.intent import (
-    INTENT_EXTRACTION_SCHEMA,
     AddDataPointIntent,
     CreateCaseIntent,
     Intent,
@@ -108,25 +107,10 @@ from shared_kernel import (
     StructuredOutputRequest,
     ThresholdResolver,
 )
-
-_EXTRACTION_PREAMBLE = (
-    "You extract a structured intent from a portfolio-management "
-    "message a busy professional sent their assistant. Classify the "
-    "message as create_case (start tracking a new case or item), "
-    "add_data_point (record a goal, status, or methodology "
-    "application against an existing case), revise_data_point (update "
-    "an existing data point), or unclear (the message does not map "
-    "cleanly to one of those). Fill only the fields relevant to the "
-    "chosen intent; leave every other field as an empty string. For "
-    "add_data_point, data_point_type is one of GOAL, STATUS, or "
-    "METHODOLOGY_APPLICATION. Populate the confidence field with your "
-    "self-reported confidence in the classification (0.0-1.0)."
+from shared_kernel.intent_classification import (
+    INTENT_EXTRACTION_SCHEMA,
+    build_extraction_prompt,
 )
-
-
-def _extraction_prompt(message: str) -> str:
-    """Build the structured-output prompt for intent extraction."""
-    return f'{_EXTRACTION_PREAMBLE}\n\nThe operator sent: "{message}"'
 
 
 def _data_point_phrase(data_point_type: str) -> str:
@@ -397,7 +381,7 @@ class ManualEntryCell:
     ) -> tuple[Intent, float]:
         """Extract a typed intent plus a confidence value."""
         request = StructuredOutputRequest(
-            prompt=_extraction_prompt(message),
+            prompt=build_extraction_prompt(message),
             schema=INTENT_EXTRACTION_SCHEMA,
             latency_tier=LatencyTier.REAL_TIME_REQUIRED,
             temperature=0.0,

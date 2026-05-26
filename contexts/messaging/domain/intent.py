@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from shared_kernel.intent_classification import INTENT_EXTRACTION_SCHEMA
+
 # The portfolio DataPointType values an AddDataPointIntent may name.
 # Kept as a plain tuple rather than importing the portfolio enum —
 # the messaging domain layer is independent of the portfolio domain.
@@ -145,73 +147,6 @@ _DEFAULT_CLARIFICATION = (
     "create a case, add a goal or status to a case, or revise an "
     "existing data point."
 )
-
-# JSON Schema (strict-mode) the structured-output intent-extraction
-# call conforms to. A flat object: every field is required and
-# non-applicable fields come back as empty strings, which strict mode
-# tolerates cleanly. ``parse_intent`` reads ``intent_type`` and pulls
-# the fields relevant to that variant.
-INTENT_EXTRACTION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "intent_type": {
-            "type": "string",
-            "enum": [t.value for t in IntentType],
-            "description": "the kind of action the message asks for",
-        },
-        "title": {
-            "type": "string",
-            "description": (
-                "the case title — for create_case; empty string otherwise"
-            ),
-        },
-        "case_reference": {
-            "type": "string",
-            "description": (
-                "a natural-language reference to an existing case — for "
-                "add_data_point; empty string otherwise"
-            ),
-        },
-        "data_point_type": {
-            "type": "string",
-            "description": (
-                "GOAL, STATUS, or METHODOLOGY_APPLICATION — for "
-                "add_data_point; empty string otherwise"
-            ),
-        },
-        "data_point_reference": {
-            "type": "string",
-            "description": (
-                "a natural-language reference to an existing data point — "
-                "for revise_data_point; empty string otherwise"
-            ),
-        },
-        "value_text": {
-            "type": "string",
-            "description": (
-                "the data point content — for add_data_point and "
-                "revise_data_point; empty string otherwise"
-            ),
-        },
-        "clarification": {
-            "type": "string",
-            "description": (
-                "a question to ask the operator — for unclear; empty "
-                "string otherwise"
-            ),
-        },
-    },
-    "required": [
-        "intent_type",
-        "title",
-        "case_reference",
-        "data_point_type",
-        "data_point_reference",
-        "value_text",
-        "clarification",
-    ],
-    "additionalProperties": False,
-}
 
 
 def parse_intent(raw: dict[str, Any]) -> Intent:
