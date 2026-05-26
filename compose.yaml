@@ -377,7 +377,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: padhanam-api:dev@sha256:523e94199bc863e16a4786abce14e2ec7fa8f376430804cec57d17de2f861855
+    image: padhanam-api:dev@sha256:be1e2c09bfdb6817825a3122a8b5b5a3a841256d67c2eaa2838204d4fe8b3d17
     depends_on:
       litellm:
         condition: service_healthy
@@ -434,6 +434,12 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+      # S47 smoke override: qwen2.5:14b's warm latency on the cell's
+      # intent-extraction prompt (system + JSON schema + user message)
+      # exceeds the 30s REAL_TIME_REQUIRED default. Surfaced live at
+      # smoke time. Captured for follow-up: the tier-budget config
+      # may need a Phase 2-A bump or a per-model override surface.
+      REAL_TIME_REQUIRED_TIMEOUT_SECONDS: ${REAL_TIME_REQUIRED_TIMEOUT_SECONDS:-30}
       # Inbound webhook (P13/S45, D129). The Twilio WhatsApp webhook
       # receiver synthesises an operator ActorContext for the
       # configured tenant; WEBHOOK_URL is the public URL Twilio signs

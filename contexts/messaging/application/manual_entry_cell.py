@@ -217,6 +217,7 @@ class ManualEntryCell:
         pending_clarification_repository: PendingClarificationRepository,
         audit_port: AuditPort,
         originating_channel: str = "WHATSAPP",
+        originating_intake_id: UUID | None = None,
     ) -> None:
         self._structured_output = structured_output_port
         self._gateway = portfolio_gateway
@@ -227,6 +228,12 @@ class ManualEntryCell:
         self._pending_repo = pending_clarification_repository
         self._audit_port = audit_port
         self._originating_channel = originating_channel
+        # S47 smoke fix: the cell uses the webhook's actual inbound
+        # intake_id for any PendingClarification it creates, so the
+        # `fk_pending_clar_intake_id` FK to intakes(id) is satisfied.
+        # Optional for backward compatibility with tests that don't
+        # need the multi-turn path; the Case 2 dispatch path requires it.
+        self._originating_intake_id = originating_intake_id
 
     async def open(
         self, invocation: ConversationInvocation
@@ -421,18 +428,14 @@ class ManualEntryCell:
     ) -> CellResponse:
         """Case 2: medium confidence — clarification plus PendingClarification.
 
-        The cell needs an ``originating_intake_id`` for the
-        PendingClarification. The webhook layer recorded the inbound
-        IntakeRecord before the cell ran (per D128 intake-canonical),
-        but the cell does not currently hold that id. Phase 2-A
-        compromise: mint a fresh UUID as the pending's
-        ``originating_intake_id`` slot when no upstream intake id has
-        been threaded through. The transitive-anchoring discipline at
-        D135 (cited_intake_records anchors the audit chain) holds at
-        the cell's confirmation reply; the pending's
-        ``originating_intake_id`` is the *cell-level* intake reference,
-        not the webhook-level one. P14 framing reconciles the two as
-        the second-implementer trigger.
+        The cell uses the webhook-recorded inbound IntakeRecord's id as
+        the pending's ``originating_intake_id`` (threaded via
+        ``__init__``). This satisfies the migration's FK constraint
+        ``fk_pending_clar_intake_id`` on intakes(id) and gives the
+        pending a structurally-honest anchor back to the message that
+        triggered the clarification. S47 smoke surfaced the FK
+        violation that the original "mint a fresh UUID" comment
+        anticipated but didn't resolve.
         """
         if isinstance(intent, CreateCaseIntent):
             summary = f"start a case for {intent.title!r}"
@@ -450,10 +453,14 @@ class ManualEntryCell:
         else:
             return _clarification(intent.clarification)
 
-        # Phase 2-A: synthesise an originating intake id at the cell
-        # altitude. Recorded as an honest limitation; P14 second-
-        # instance trigger threads the webhook intake id through.
-        originating_intake_id = uuid4()
+        # Use the webhook-recorded inbound IntakeRecord's id; fall back
+        # to a freshly-minted UUID only when no upstream id was threaded
+        # (the test path that constructs the cell without one).
+        originating_intake_id = (
+            self._originating_intake_id
+            if self._originating_intake_id is not None
+            else uuid4()
+        )
 
         pending = await create_pending_clarification(
             repository=self._pending_repo,

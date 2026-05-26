@@ -132,13 +132,18 @@ async def _run_manual_entry_cell(
     actor: ActorContext,
     inbound_body: str,
     reply_to: str,
+    inbound_intake_id: UUID,
 ) -> None:
     """Run the manual entry cell over an inbound message and reply (S46).
 
     The cell extracts intent, drives the intake-canonical portfolio
     orchestration, and composes a cited response per D131; the
     rendered reply goes back to the operator as an outbound WhatsApp
-    message.
+    message. ``inbound_intake_id`` is the IntakeRecord that the
+    webhook's ``record_intake_and_record_inbound_message`` already
+    persisted — the cell uses it as the ``originating_intake_id`` of
+    any PendingClarification it creates at Case 2, satisfying the
+    `fk_pending_clar_intake_id` FK constraint on intakes(id).
     """
     cell = ManualEntryCell(
         structured_output_port=messaging.structured_output_port,
@@ -151,6 +156,7 @@ async def _run_manual_entry_cell(
             messaging.pending_clarification_repository
         ),
         audit_port=audit_port,
+        originating_intake_id=inbound_intake_id,
     )
     state = await cell.open(
         ConversationInvocation(
@@ -269,6 +275,7 @@ async def inbound_webhook_route(
             actor=actor,
             inbound_body=inbound_body,
             reply_to=reply_to,
+            inbound_intake_id=result.intake_id,
         ),
         context={
             "intake_id": str(result.intake_id),
