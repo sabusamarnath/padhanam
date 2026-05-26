@@ -726,3 +726,40 @@ The behaviour matches the user's natural pattern "actually, I meant something el
 
   - triaged: 2026-05-26 — note
   - resolution: positive substrate observation; no action required. Recorded for the smoke document and as a structural property of the cell worth surfacing at the P14 ConversationFlow implementer framing — future implementers should preserve this three-branch handling.
+
+## 2026-05-26 — [S48b] Component-quality evaluation distinct from integration smoke (methodology candidate, promotion-ready, two-instance evidence)
+
+Two integration-smoke arcs (S46 and S47) surfaced component-quality findings (intent-classification reliability at qwen2.5:7b; operational latency viability at qwen2.5:14b) from a methodology not built to answer them. Integration smokes verify integration (does the full multi-turn cascade hold; does the audit chain integrity hold; does the channel rendering work end-to-end); component-quality questions (does model X classify reliably; does retrieval strategy Y outperform Z; does prompt P produce schema-conforming output reliably) need dedicated evaluation surfaces that exercise the component in isolation.
+
+The architecture's port-and-adapter shape exists specifically to make component testing possible in isolation. The structured-output port at D130 plus the model registry at D133 plus the four-layer model ontology at D132 together support a dedicated intent-classification evaluation substrate. Building it (D137 at S48b) closes the methodology gap by providing the right surface for the component-quality question; the integration smokes stop carrying load they were not built for.
+
+Two-instance evidence:
+- S46 smoke surfaced qwen2.5:7b's intent-classification blind-spot for AddDataPointIntent across four phrasings (0/2 of the template phrasing classified correctly). The reliability question was answered by integration smoke evidence, which is slow, expensive, and confounded with substrate quality.
+- S47 smoke surfaced qwen2.5:14b's operational unviability via 28s→361s latency progression on commodity hardware. The model-choice question was answered by integration smoke evidence; the model swap to gpt-4o-mini at S48a is configuration but the model-comparison question persists across future swaps.
+
+Methodology line, roughly: "Component-quality questions (model choice, retrieval strategy, structured-output reliability per class, prompt revision) land at dedicated evaluation substrates; integration smokes verify integration. The architecture's port-and-adapter shape supports component-isolated evaluation; the substrate work to land each component-quality evaluation surface is forward methodology work, not architectural rework."
+
+  - triaged: 2026-05-26 — promotion-ready with two-instance evidence
+  - resolution: forward to `charter/methodology.md` for the component-quality-versus-integration-smoke discipline addition at the post-S48 hygiene session. The discipline addition names the surfaces (model choice via intent-classification evaluation substrate per D137; retrieval strategy via the P11 retrieval-evaluation substrate per D110; future structured-output reliability per-class via D130-derived evaluation surfaces; future prompt revision via prompt-evaluation substrates as they arise). The first concrete instance at the post-S48 hygiene captures entry is D137 at S48b. Recurrence test at the next component-quality question that arises: does the question land at a dedicated substrate or does it leak back into integration smokes?
+
+## 2026-05-26 — [S48b framing] Scope-discipline drift at brief authoring (first instance; methodology candidate)
+
+The S48b brief committed the full P11-mirror as the default scope. Surface 1 reconciliation treated the mirror as precedent rather than testing whether each piece served a current need; the scope question surfaced only when the full file count emerged at the brief-versus-codebase reading.
+
+The pattern is adjacent to but distinct from the interface-versus-implementation discipline already captured. Both default to maximal commitment when the YAGNI test would reject the excess. Interface-versus-implementation is about whether the abstraction commits at the right altitude (interface or implementation); scope-discipline-at-brief-authoring is about whether each piece of work in a brief earns its place against current need.
+
+The reconciliation moment that surfaced the drift: after path conventions and existing context structure were verified, the file count of a full P11-mirror exceeded ~30 files versus a load-bearing-minimum of ~20-25 files. Option B (slim load-bearing version) ships D137 with revision-lifecycle and compare-run-ids explicitly deferred at named activation triggers.
+
+  - triaged: 2026-05-26 — note (first instance; not yet promotion-threshold)
+  - resolution: captured for the post-S48 hygiene methodology review. Recurrence test continues at future brief-authoring sessions. Promotion threshold: two further instances per the existing methodology-promotion convention. Pattern family: strategic-mode-drafting drift toward complexity, alongside interface-versus-implementation.
+
+## 2026-05-26 — [S48b] Structural-test single-source-of-truth binding (methodology candidate, second instance)
+
+At the substrate construction commit for `shared_kernel/intent_classification.py`, a structural test binds the single-source-of-truth claim — assert that the cell's import of `INTENT_EXTRACTION_SCHEMA` and the evaluation runner's import of `INTENT_EXTRACTION_SCHEMA` resolve to the same object (Python identity `is`).
+
+The pattern's first instance was the no-numeric-threshold-literals AST test at S47 addendum commit 4f74509 (the ThresholdResolver port substrate); the second instance is the symbol-identity test for the shared-prompt-and-schema primitive at S48b. Both bind a load-bearing architectural claim in CI rather than relying on convention or reviewer attention.
+
+Pattern shape: when a refactor moves a primitive to a shared location to satisfy a substrate-under-test discipline, a structural test asserting all consumers resolve to the shared primitive lands in the same commit. The test's failure mode is exactly the drift the refactor prevented.
+
+  - triaged: 2026-05-26 — note (second instance; promotion candidate at post-S48 hygiene)
+  - resolution: forward to `charter/methodology.md` for the structural-test-binding pattern at the post-S48 hygiene session. The pattern's two instances (no-numeric-thresholds at S47 addendum; symbol-identity at S48b) demonstrate the pattern operating at distinct surfaces (AST literal check; runtime import identity). Recurrence at a third instance promotes to methodology document discipline.
