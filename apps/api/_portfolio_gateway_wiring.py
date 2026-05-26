@@ -124,10 +124,36 @@ class PortfolioGatewayAdapter:
         page = await list_cases(
             reader=reader, actor=actor, page_size=_RESOLUTION_PAGE_SIZE
         )
-        return tuple(
-            CaseSummary(case_id=case.id, title=case.title)
-            for case in page.cases
-        )
+        # S50: enrich each summary with discriminators (last-activity,
+        # data-point count) by loading per-case details. Eager
+        # computation is acceptable at Phase 2-A dogfooding scale
+        # (single-digit cases per tenant); the per-message cost adds
+        # ~50-200 ms across the call to load N case details, well
+        # under the LLM call's 1.5-3 s baseline. Phase 2-B+ may swap to
+        # lazy enrichment (compute only on AMBIGUOUS) when N grows.
+        summaries: list[CaseSummary] = []
+        for case in page.cases:
+            detail = await get_case_detail(
+                reader=reader, actor=actor, case_id=case.id
+            )
+            if detail is None or not detail.data_points:
+                data_point_count = 0
+                last_activity_at = case.created_at
+            else:
+                data_point_count = len(detail.data_points)
+                last_activity_at = max(
+                    dp.created_at for dp in detail.data_points
+                )
+            summaries.append(
+                CaseSummary(
+                    case_id=case.id,
+                    title=case.title,
+                    created_at=case.created_at,
+                    last_activity_at=last_activity_at,
+                    data_point_count=data_point_count,
+                )
+            )
+        return tuple(summaries)
 
     async def find_data_points(
         self, *, actor: ActorContext

@@ -33,10 +33,39 @@ def test_tied_overlap_is_ambiguous() -> None:
     outcome = resolve_target("the Q3 review", [first, second])
     assert outcome.status is ResolutionStatus.AMBIGUOUS
     assert outcome.matched_id is None
-    assert set(outcome.candidate_labels) == {
+    assert {c.label for c in outcome.candidates} == {
         "Q3 review meeting",
         "Q3 review planning",
     }
+    assert {c.id for c in outcome.candidates} == {first.id, second.id}
+
+
+def test_ambiguous_carries_candidate_discriminators_through() -> None:
+    """S50: AMBIGUOUS preserves each candidate's discriminators tuple."""
+    first = TargetCandidate(
+        id=uuid4(),
+        label="Q3 portfolio review",
+        discriminators=("created 4 days ago", "0 data points"),
+    )
+    second = TargetCandidate(
+        id=uuid4(),
+        label="Q3 portfolio review",
+        discriminators=("created 1 day ago", "2 data points"),
+    )
+    outcome = resolve_target("Q3 portfolio review", [first, second])
+    assert outcome.status is ResolutionStatus.AMBIGUOUS
+    assert len(outcome.candidates) == 2
+    discs = {tuple(c.discriminators) for c in outcome.candidates}
+    assert discs == {
+        ("created 4 days ago", "0 data points"),
+        ("created 1 day ago", "2 data points"),
+    }
+
+
+def test_target_candidate_discriminators_default_empty() -> None:
+    """Existing call sites that omit discriminators get an empty tuple."""
+    candidate = TargetCandidate(id=uuid4(), label="Q3 review")
+    assert candidate.discriminators == ()
 
 
 def test_exact_match_beats_a_token_tie() -> None:

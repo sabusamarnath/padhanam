@@ -31,6 +31,7 @@ Ports layer is pure per D16 — stdlib plus shared_kernel only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -42,11 +43,23 @@ class CaseSummary:
     """A Case as the cell sees it for target resolution.
 
     ``title`` is the human label ``resolve_target`` scores a
-    natural-language case reference against.
+    natural-language case reference against. ``created_at``,
+    ``last_activity_at``, and ``data_point_count`` are the
+    disambiguating signals the cell surfaces when ``resolve_target``
+    returns AMBIGUOUS — the operator picks among same-titled cases by
+    *when* and *how active* rather than by opaque ids (S50). The
+    DTO carries raw structural data; the cell formats it for the
+    operator-facing rendering (S50 channel-decides-format per D135).
+
+    ``last_activity_at`` is ``MAX(data_point.created_at)`` across the
+    case's data points, or ``created_at`` when the case has none yet.
     """
 
     case_id: UUID
     title: str
+    created_at: datetime
+    last_activity_at: datetime
+    data_point_count: int
 
 
 @dataclass(frozen=True)

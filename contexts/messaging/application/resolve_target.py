@@ -58,24 +58,35 @@ class TargetCandidate:
     ``label`` is the human-readable string the match scores against
     (a Case title, or a DataPoint's type plus value summary). The
     cell builds these from what the ``PortfolioGateway`` returns.
+
+    ``discriminators`` are pre-formatted short strings the cell
+    surfaces under each option when ``resolve_target`` returns
+    ``AMBIGUOUS`` — they let the operator pick among same-labelled
+    candidates by structural signals (creation time, last activity,
+    count of attached items). Empty by default so existing call sites
+    that do not need disambiguation rendering (DataPoint resolution
+    at S50; future surfaces) compose without ceremony (S50).
     """
 
     id: UUID
     label: str
+    discriminators: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
 class ResolutionOutcome:
     """The result of resolving a natural-language reference.
 
-    ``matched_id`` is set only on ``MATCHED_SINGLE``;
-    ``candidate_labels`` carries the tied human labels only on
-    ``AMBIGUOUS`` so the cell can compose a clarification naming them.
+    ``matched_id`` is set only on ``MATCHED_SINGLE``; ``candidates``
+    carries the full tied candidates (id + label + discriminators)
+    only on ``AMBIGUOUS`` so the cell can compose a numbered
+    disambiguation clarification preserving the structural data the
+    operator needs to choose between them (S50).
     """
 
     status: ResolutionStatus
     matched_id: UUID | None = None
-    candidate_labels: tuple[str, ...] = field(default_factory=tuple)
+    candidates: tuple[TargetCandidate, ...] = field(default_factory=tuple)
 
 
 def _significant_tokens(text: str) -> frozenset[str]:
@@ -126,7 +137,7 @@ def resolve_target(
         )
     return ResolutionOutcome(
         status=ResolutionStatus.AMBIGUOUS,
-        candidate_labels=tuple(c.label for c in winners),
+        candidates=tuple(winners),
     )
 
 

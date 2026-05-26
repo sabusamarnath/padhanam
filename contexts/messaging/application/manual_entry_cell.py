@@ -67,6 +67,7 @@ from contexts.messaging.application.ports.pending_clarification_reader import (
     PendingClarificationReader,
 )
 from contexts.messaging.application.ports.portfolio_gateway import (
+    CaseSummary,
     PortfolioGateway,
 )
 from contexts.messaging.application.resolve_pending_clarification import (
@@ -176,6 +177,92 @@ def _classify_reply(text: str) -> str:
     return "fresh"
 
 
+# S50: the proposed_intent key the cell embeds resolution-ambiguity
+# candidates under when persisting a resolution-pending. Keyed off the
+# standard intent shape so ``parse_intent`` ignores the sidecar.
+_RESOLUTION_CANDIDATES_KEY = "resolution_candidates"
+
+
+def _parse_positional_selection(text: str) -> int | None:
+    """Parse a bare positional-selection reply ("1", "2", "3").
+
+    Returns the 1-based index the operator named, or ``None`` when the
+    reply is not a bare positive integer. The narrow surface
+    (whole-message integer only) is the Phase 2-A positional-only
+    scope; descriptive forms ("the older one") defer per the S50
+    framing-time scope decision.
+    """
+    normalised = _normalise(text)
+    if not normalised:
+        return None
+    try:
+        value = int(normalised)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _format_relative_time(when: datetime, *, now: datetime) -> str:
+    """Format ``when`` relative to ``now`` for operator-facing rendering.
+
+    Returns short phrasing tuned for the Phase 2-A dogfooding window:
+    "just now" (<1 minute), "Nm ago" (<1 hour), "Nh ago" (<24 hours),
+    "N days ago" (<30 days), or the absolute date "YYYY-MM-DD"
+    thereafter. The cell uses these strings as ``CaseSummary``
+    discriminators so the operator can pick among same-titled cases
+    by *when*.
+    """
+    delta = now - when
+    seconds = delta.total_seconds()
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}h ago"
+    days = int(seconds // 86400)
+    if days < 30:
+        return f"{days} day{'s' if days != 1 else ''} ago"
+    return when.strftime("%Y-%m-%d")
+
+
+def _case_discriminators(
+    case: CaseSummary, *, now: datetime
+) -> tuple[str, ...]:
+    """Compose the disambiguating signals the operator picks against.
+
+    Three signals at Phase 2-A: creation time (relative or absolute),
+    last activity (relative or absolute), data-point count. Picked at
+    framing because they answer the operator's "which one is this?"
+    question without surfacing UUIDs or other opaque identifiers.
+    """
+    created = _format_relative_time(case.created_at, now=now)
+    last_activity = _format_relative_time(case.last_activity_at, now=now)
+    count = case.data_point_count
+    points = f"{count} data point{'s' if count != 1 else ''}"
+    return (f"created {created}", points, f"last activity {last_activity}")
+
+
+def _render_numbered_candidates(
+    candidates: tuple[TargetCandidate, ...],
+) -> str:
+    """Render the AMBIGUOUS-case candidates as a numbered list.
+
+    Each line carries the candidate's label and a comma-joined
+    discriminator string the operator scans visually before replying
+    with the positional index. The rendering is channel-agnostic per
+    D135; the WhatsApp channel surfaces this string as-is.
+    """
+    lines: list[str] = []
+    for index, candidate in enumerate(candidates, start=1):
+        if candidate.discriminators:
+            suffix = " — " + ", ".join(candidate.discriminators)
+        else:
+            suffix = ""
+        lines.append(f"{index}. {candidate.label}{suffix}")
+    return "\n".join(lines)
+
+
 class ManualEntryCell:
     """The first ConversationFlow implementer (D115) — manual entry.
 
@@ -270,6 +357,22 @@ class ManualEntryCell:
                     pending=active,
                 )
             else:
+                # S50: a resolution-ambiguity pending carries the
+                # numbered candidates the operator picks against. A
+                # bare-integer reply ("1", "2", ...) is interpreted as
+                # the positional selection. Other reply shapes
+                # (confirm/cancel/fresh) continue to the standard
+                # classification path below — operator can still cancel
+                # a resolution-ambiguity pending with "no".
+                if _RESOLUTION_CANDIDATES_KEY in active.proposed_intent:
+                    selection = _parse_positional_selection(message)
+                    if selection is not None:
+                        return await self._handle_resolution_selection(
+                            state,
+                            active,
+                            selection=selection,
+                            raw_text=message,
+                        )
                 resolution = _classify_reply(message)
                 if resolution == "confirm":
                     return await self._handle_confirmed_pending(
@@ -488,6 +591,236 @@ class ManualEntryCell:
             confidence_band="confirmed_pending",
         )
 
+    async def _dispatch_resolution_clarify_with_pending(
+        self,
+        *,
+        intent: Intent,
+        candidates: tuple[TargetCandidate, ...],
+        reference: str,
+        noun: str,
+    ) -> CellResponse:
+        """Persist a resolution-ambiguity pending and render the question.
+
+        S50: high-confidence intent + multi-match resolution lands as a
+        sub-case of D134 Case 2's shape-aware clarification surface.
+        The pending's ``proposed_intent`` embeds the original intent
+        fields (so ``parse_intent`` resolves the variant on selection)
+        plus a sidecar ``resolution_candidates`` list mapping each
+        positional index to a Case id. The operator's bare-integer
+        reply at the next turn resolves the pending and dispatches the
+        original action against the selected id.
+        """
+        serialised = _serialise_intent(intent)
+        serialised[_RESOLUTION_CANDIDATES_KEY] = [
+            {
+                "id": str(c.id),
+                "label": c.label,
+                "discriminators": list(c.discriminators),
+            }
+            for c in candidates
+        ]
+        summary = (
+            f"choose among {len(candidates)} {noun}s matching "
+            f"“{reference}”"
+        )
+
+        originating_intake_id = (
+            self._originating_intake_id
+            if self._originating_intake_id is not None
+            else uuid4()
+        )
+
+        await create_pending_clarification(
+            repository=self._pending_repo,
+            audit_port=self._audit_port,
+            actor=self._actor,
+            user_id=self._actor.actor_id,
+            originating_channel=self._originating_channel,
+            originating_user_address=self._originating_channel,
+            originating_intake_id=originating_intake_id,
+            proposed_intent=serialised,
+            proposed_action_summary=summary,
+        )
+
+        numbered = _render_numbered_candidates(candidates)
+        question = (
+            f"More than one {noun} matches “{reference}”. "
+            f"Which did you mean?\n{numbered}\n"
+            f"(reply with the number)"
+        )
+        return _clarification(question)
+
+    async def _handle_resolution_selection(
+        self,
+        state: ConversationState,
+        active: PendingClarification,
+        *,
+        selection: int,
+        raw_text: str,
+    ) -> ConversationState:
+        """Resolve a resolution-ambiguity pending by positional selection.
+
+        S50: the operator replied with a bare integer to a pending the
+        cell created at multi-match dispatch. When the integer indexes
+        a valid candidate the cell resolves the pending as confirmed,
+        rewrites the original intent's natural-language reference to
+        the selected candidate's label (so the second pass through
+        ``resolve_target`` matches exactly), and dispatches the action.
+
+        Out-of-range selections re-render the numbered clarification
+        without touching the pending — the operator gets another chance
+        without losing the choice surface. Cancel (``no``) continues to
+        be handled at the standard ``_classify_reply`` branch above.
+        """
+        candidate_data = active.proposed_intent.get(
+            _RESOLUTION_CANDIDATES_KEY, []
+        )
+        if not (1 <= selection <= len(candidate_data)):
+            # Out-of-range positional reply — re-render the question
+            # with the original numbering. The pending stays PENDING
+            # so the operator can try again.
+            candidates = _candidates_from_serialised(candidate_data)
+            numbered = _render_numbered_candidates(candidates)
+            question = (
+                f"I only have {len(candidate_data)} option"
+                f"{'s' if len(candidate_data) != 1 else ''} — "
+                f"please reply with a number between 1 and "
+                f"{len(candidate_data)}.\n{numbered}"
+            )
+            return self._emit(
+                state,
+                response=_clarification(question),
+                intent_type=_intent_type_of(parse_intent(active.proposed_intent)),
+                confidence_band="resolution_out_of_range",
+            )
+
+        chosen = candidate_data[selection - 1]
+        # Resolve the pending as confirmed — the positional reply is
+        # the operator's authorisation to proceed with the action
+        # against the chosen candidate.
+        await resolve_pending_clarification(
+            repository=self._pending_repo,
+            audit_port=self._audit_port,
+            actor=self._actor,
+            pending=active,
+            resolution="confirmed",
+        )
+
+        # Strip the sidecar before re-parsing the intent (so the cell
+        # dispatches against a clean intent shape) and inject the
+        # chosen candidate's label as the natural-language reference
+        # that the second pass through ``resolve_target`` matches
+        # uniquely. The chosen UUID is the load-bearing selection; the
+        # label-rewrite is the bridge through the existing dispatch
+        # surface without adding a "pre-resolved id" code path.
+        clean_intent_dict = {
+            k: v
+            for k, v in active.proposed_intent.items()
+            if k != _RESOLUTION_CANDIDATES_KEY
+        }
+        if clean_intent_dict.get("intent_type") == IntentType.ADD_DATA_POINT:
+            clean_intent_dict["case_reference"] = chosen["label"]
+        elif (
+            clean_intent_dict.get("intent_type") == IntentType.REVISE_DATA_POINT
+        ):
+            clean_intent_dict["data_point_reference"] = chosen["label"]
+        # The cell re-fetches portfolio state through the gateway on
+        # the dispatch path; resolution against the rewritten
+        # reference picks the chosen candidate (its label is now
+        # exact). When multiple cases share the *same* label the
+        # rewrite is insufficient on its own; the dispatch path falls
+        # back to AMBIGUOUS-via-id-match (the chosen UUID matches),
+        # but the multi-match guard in this path means the operator
+        # already disambiguated. The dispatch's resolve_target will
+        # match against the exact label set; the cell records the
+        # chosen candidate's id explicitly for the dispatch through
+        # the resolved-by-selection short-circuit below.
+
+        intent = parse_intent(clean_intent_dict)
+        chosen_id_str = chosen.get("id", "")
+        response = await self._dispatch_proceed_against_resolved(
+            intent, raw_text=raw_text, resolved_id_hint=chosen_id_str
+        )
+        return self._emit(
+            state,
+            response=response,
+            intent_type=_intent_type_of(intent),
+            confidence_band="resolved_by_selection",
+        )
+
+    async def _dispatch_proceed_against_resolved(
+        self,
+        intent: Intent,
+        *,
+        raw_text: str,
+        resolved_id_hint: str,
+    ) -> CellResponse:
+        """Proceed with the action using a pre-resolved id from selection.
+
+        S50: when a resolution-ambiguity pending resolves by positional
+        selection, the chosen candidate's UUID is already known.
+        Bypassing the gateway re-fetch + resolve_target round-trip is
+        cheap and avoids the small risk that portfolio state changed
+        between the disambiguation turn and the selection turn (a
+        candidate could have been added or relabeled). The id-hint
+        path drives the orchestration directly; CreateCase intents
+        cannot reach this dispatcher (resolution-ambiguity is only
+        possible for Add/Revise intents) so they fall back to the
+        standard path defensively.
+        """
+        try:
+            resolved_uuid = UUID(resolved_id_hint)
+        except (TypeError, ValueError):
+            # Defensive fallback if the sidecar id was malformed —
+            # the standard dispatch will surface the error path.
+            return await self._dispatch_proceed(intent, raw_text=raw_text)
+
+        if isinstance(intent, AddDataPointIntent):
+            # Fetch case title for the cited confirmation — a small
+            # find_cases pass is cheap; the case must still exist in
+            # the operator's tenant for the orchestration to succeed.
+            cases = await self._gateway.find_cases(actor=self._actor)
+            chosen_case = next(
+                (c for c in cases if c.case_id == resolved_uuid), None
+            )
+            if chosen_case is None:
+                return _clarification(
+                    f"I could not find that case any more — "
+                    f"it may have been removed. Please try again."
+                )
+            outcome = await self._gateway.create_data_point(
+                actor=self._actor,
+                raw_text=raw_text,
+                case_id=resolved_uuid,
+                data_point_type=intent.data_point_type,
+                value={"text": intent.value_text},
+            )
+            phrase = _data_point_phrase(intent.data_point_type)
+            return CellResponse(
+                text=(
+                    f"Added a {phrase} to {chosen_case.title}: "
+                    f"{intent.value_text}."
+                ),
+                cited_intake_records=(outcome.intake_id,),
+                cited_artefacts=(outcome.data_point_id,),
+            )
+        if isinstance(intent, ReviseDataPointIntent):
+            outcome = await self._gateway.revise_data_point(
+                actor=self._actor,
+                raw_text=raw_text,
+                data_point_id=resolved_uuid,
+                value={"text": intent.value_text},
+            )
+            return CellResponse(
+                text=f"Revised the data point: {intent.value_text}.",
+                cited_intake_records=(outcome.intake_id,),
+                cited_artefacts=(outcome.data_point_id,),
+            )
+        # CreateCase and Unclear paths cannot reach here — the
+        # multi-match guard only activates on Add/Revise. Fall back
+        # defensively to the standard dispatch.
+        return await self._dispatch_proceed(intent, raw_text=raw_text)
+
     async def _handle_create_case(
         self, intent: CreateCaseIntent, *, raw_text: str
     ) -> CellResponse:
@@ -506,13 +839,37 @@ class ManualEntryCell:
     ) -> CellResponse:
         """Resolve the case reference, then add a DataPoint to it."""
         cases = await self._gateway.find_cases(actor=self._actor)
-        resolution = resolve_target(
-            intent.case_reference,
-            [TargetCandidate(id=c.case_id, label=c.title) for c in cases],
-        )
-        if resolution.status is not ResolutionStatus.MATCHED_SINGLE:
-            return _resolution_clarification(
-                resolution, intent.case_reference, noun="case"
+        # S50: build candidates carrying discriminators so an AMBIGUOUS
+        # resolution can surface meaningful signals (creation time,
+        # last activity, data-point count) for the operator to pick
+        # against. The cell formats raw datetime/int fields from
+        # ``CaseSummary`` into short strings per the channel-decides-
+        # format pattern at D135.
+        now = datetime.now(timezone.utc)
+        candidates = [
+            TargetCandidate(
+                id=c.case_id,
+                label=c.title,
+                discriminators=_case_discriminators(c, now=now),
+            )
+            for c in cases
+        ]
+        resolution = resolve_target(intent.case_reference, candidates)
+        if resolution.status is ResolutionStatus.AMBIGUOUS:
+            # S50: high-confidence intent + multi-match resolution is a
+            # sub-case of D134 Case 2 — render the shape-aware
+            # clarification numbering the candidates and persist a
+            # resolution-pending the operator's positional reply
+            # resolves.
+            return await self._dispatch_resolution_clarify_with_pending(
+                intent=intent,
+                candidates=resolution.candidates,
+                reference=intent.case_reference,
+                noun="case",
+            )
+        if resolution.status is ResolutionStatus.NO_MATCH:
+            return _clarification(
+                f"I could not find a case matching “{intent.case_reference}”."
             )
         assert resolution.matched_id is not None
         case_title = next(
@@ -632,9 +989,17 @@ _UNCLEAR_FALLBACK_TEXT = (
 def _resolution_clarification(
     resolution: ResolutionOutcome, reference: str, *, noun: str
 ) -> CellResponse:
-    """Compose a clarification for an ambiguous or unresolved target."""
+    """Compose a clarification for an ambiguous or unresolved target.
+
+    Used by the DataPoint resolution path at S50; Case resolution
+    routes AMBIGUOUS to ``_dispatch_resolution_clarify_with_pending``
+    directly so the operator gets the numbered-with-discriminators
+    surface. The DataPoint path stays at the simpler text join until
+    operator-dogfooding signal surfaces a second instance per the
+    build-at-second-instance discipline.
+    """
     if resolution.status is ResolutionStatus.AMBIGUOUS:
-        options = ", ".join(resolution.candidate_labels)
+        options = ", ".join(c.label for c in resolution.candidates)
         return _clarification(
             f"More than one {noun} matches “{reference}” — "
             f"did you mean one of: {options}?"
@@ -642,6 +1007,36 @@ def _resolution_clarification(
     return _clarification(
         f"I could not find a {noun} matching “{reference}”."
     )
+
+
+def _candidates_from_serialised(
+    serialised: list[dict[str, Any]],
+) -> tuple[TargetCandidate, ...]:
+    """Rebuild ``TargetCandidate`` instances from a pending's sidecar.
+
+    The ``_RESOLUTION_CANDIDATES_KEY`` value in ``proposed_intent`` is
+    a list of ``{"id": str, "label": str, "discriminators": list[str]}``
+    dicts; this helper restores the typed tuple the rendering helper
+    consumes. Used at re-render time for an out-of-range positional
+    selection (the pending stays PENDING so the rebuild matters).
+    """
+    out: list[TargetCandidate] = []
+    for entry in serialised:
+        try:
+            candidate_id = UUID(entry.get("id", ""))
+        except (TypeError, ValueError):
+            continue
+        label = str(entry.get("label", ""))
+        raw_discs = entry.get("discriminators") or []
+        discriminators = tuple(str(d) for d in raw_discs)
+        out.append(
+            TargetCandidate(
+                id=candidate_id,
+                label=label,
+                discriminators=discriminators,
+            )
+        )
+    return tuple(out)
 
 
 __all__ = ["ManualEntryCell"]

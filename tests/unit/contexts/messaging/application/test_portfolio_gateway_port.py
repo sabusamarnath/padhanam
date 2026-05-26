@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -36,7 +37,16 @@ class _MinimalGateway:
     """A minimal structural PortfolioGateway used to lock the port shape."""
 
     async def find_cases(self, *, actor: ActorContext) -> tuple[CaseSummary, ...]:
-        return (CaseSummary(case_id=uuid4(), title="Q3 review"),)
+        now = datetime.now(timezone.utc)
+        return (
+            CaseSummary(
+                case_id=uuid4(),
+                title="Q3 review",
+                created_at=now,
+                last_activity_at=now,
+                data_point_count=0,
+            ),
+        )
 
     async def find_data_points(
         self, *, actor: ActorContext
