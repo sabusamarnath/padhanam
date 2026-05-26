@@ -1,19 +1,32 @@
-"""CellResponse and citation rendering for the manual entry cell (D131, S46).
+"""CellResponse and citation rendering for the manual entry cell (D131, S46; D138, S51).
 
 D131 commits provenance-aware response composition: a response to a
 user carries explicit citation links to the source artefacts that
 contributed. The manual entry cell is D131's first implementer.
 
-``CellResponse`` is the cell's composed reply — the operator-facing
-``text`` plus three citation-id tuples. ``render_for_whatsapp``
-renders it to the WhatsApp surface in D131 Shape 1: compact textual
-citations (a short-hex prefix per cited artefact and intake record,
-plus the composition timestamp).
+D138 commits the cross-cutting structural enforcement at S51: a
+runtime-checkable ``CitedResponse`` Protocol at ``shared_kernel/
+conversation_flow.py`` carrying three citation tuple fields, with
+``cited_artefacts`` as ``tuple[ArtefactCitation, ...]`` (the typed
+value object with an artefact-type discriminator). CellResponse
+refactored at S51 commit 2 to satisfy the Protocol structurally —
+the ``cited_artefacts`` field type changes from ``tuple[UUID, ...]``
+to ``tuple[ArtefactCitation, ...]``; five cite sites at
+``manual_entry_cell.py`` wrap UUIDs as ``ArtefactCitation``; the
+render layer here calls ``_short_hex(a.artefact_id)``.
 
-``cited_audit_events`` stays empty at S46 — the intake-owned
-write-result DTOs do not surface audit-event ids (recorded at
-`charter/captures.md`). The field exists on the value object so the
-shape is stable for the P14+ implementer that fills it.
+``CellResponse`` is the cell's composed reply — the operator-facing
+``text`` plus three citation tuples. ``render_for_whatsapp`` renders
+it to the WhatsApp surface in D131 Shape 1: compact textual citations
+(a short-hex prefix per cited artefact and intake record, plus the
+composition timestamp).
+
+``cited_audit_events`` stays empty at S46/S51 for CellResponse — the
+intake-owned write-result DTOs do not surface audit-event ids
+(recorded at ``charter/captures.md``; closed-at-read-side per the
+P14 framing captures entry; audit-conversation populates the field
+at S51 from its query result). The field exists on the value object
+so the Protocol shape is satisfied.
 
 Application code is framework-free here — stdlib only.
 """
@@ -24,10 +37,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
+from shared_kernel.conversation_flow import ArtefactCitation
+
 
 @dataclass(frozen=True)
 class CellResponse:
-    """The cell's composed reply with D131 citation fields.
+    """The cell's composed reply satisfying the CitedResponse Protocol.
 
     A confirmation response (a successful write) carries citations; a
     clarification response (UnclearIntent, an ambiguous or unresolved
@@ -37,7 +52,7 @@ class CellResponse:
     text: str
     cited_intake_records: tuple[UUID, ...] = field(default_factory=tuple)
     cited_audit_events: tuple[UUID, ...] = field(default_factory=tuple)
-    cited_artefacts: tuple[UUID, ...] = field(default_factory=tuple)
+    cited_artefacts: tuple[ArtefactCitation, ...] = field(default_factory=tuple)
 
     @property
     def has_citations(self) -> bool:
@@ -68,7 +83,7 @@ def render_for_whatsapp(
     if not response.has_citations:
         return response.text
     parts: list[str] = [
-        f"ref {_short_hex(a)}" for a in response.cited_artefacts
+        f"ref {_short_hex(a.artefact_id)}" for a in response.cited_artefacts
     ]
     parts += [
         f"intake {_short_hex(i)}" for i in response.cited_intake_records

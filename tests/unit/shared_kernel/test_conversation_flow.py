@@ -1,12 +1,15 @@
-"""Unit tests for the ConversationFlow Protocol and value objects (D115, S45)."""
+"""Unit tests for the ConversationFlow Protocol and value objects (D115, S45; D138, S51)."""
 
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from uuid import uuid4
 
 import pytest
 
 from shared_kernel.conversation_flow import (
+    ArtefactCitation,
+    CitedResponse,
     ConversationClosure,
     ConversationFlow,
     ConversationInput,
@@ -94,3 +97,41 @@ def test_conversation_flow_is_runtime_checkable() -> None:
 
 def test_non_conforming_class_fails_isinstance() -> None:
     assert not isinstance(_MissingClose(), ConversationFlow)
+
+
+def test_artefact_citation_constructs_and_freezes() -> None:
+    citation = ArtefactCitation(artefact_id=uuid4(), artefact_type="case")
+    assert citation.artefact_type == "case"
+    with pytest.raises(FrozenInstanceError):
+        citation.artefact_type = "data_point"  # type: ignore[misc]
+
+
+def test_artefact_citation_rejects_empty_discriminator() -> None:
+    with pytest.raises(ValueError, match="artefact_type"):
+        ArtefactCitation(artefact_id=uuid4(), artefact_type="")
+
+
+def test_cited_response_is_runtime_checkable_against_conforming_object() -> None:
+    from dataclasses import dataclass, field
+    from uuid import UUID as _UUID
+
+    @dataclass(frozen=True)
+    class _Conforming:
+        cited_intake_records: tuple[_UUID, ...] = field(default_factory=tuple)
+        cited_audit_events: tuple[_UUID, ...] = field(default_factory=tuple)
+        cited_artefacts: tuple[ArtefactCitation, ...] = field(default_factory=tuple)
+
+    assert isinstance(_Conforming(), CitedResponse)
+
+
+def test_cited_response_fails_isinstance_on_missing_field() -> None:
+    from dataclasses import dataclass, field
+    from uuid import UUID as _UUID
+
+    @dataclass(frozen=True)
+    class _MissingArtefacts:
+        cited_intake_records: tuple[_UUID, ...] = field(default_factory=tuple)
+        cited_audit_events: tuple[_UUID, ...] = field(default_factory=tuple)
+        # cited_artefacts absent
+
+    assert not isinstance(_MissingArtefacts(), CitedResponse)

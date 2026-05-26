@@ -61,6 +61,7 @@ from shared_kernel import (
     TenantContext,
 )
 from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
+from shared_kernel.conversation_flow import ArtefactCitation
 
 
 def _actor() -> ActorContext:
@@ -352,7 +353,9 @@ def test_revise_data_point_high_confidence_resolves_and_revises() -> None:
 
     assert len(gateway.revised) == 1
     response: CellResponse = state.payload["cell_response"]
-    assert response.cited_artefacts == (dp.data_point_id,)
+    assert response.cited_artefacts == (
+        ArtefactCitation(artefact_id=dp.data_point_id, artefact_type="data_point"),
+    )
 
 
 def test_unclear_intent_returns_clarification_without_touching_gateway() -> None:

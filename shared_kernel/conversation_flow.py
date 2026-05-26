@@ -17,6 +17,15 @@ from a ``ConversationInvocation`` and returns the initial
 the terminal ``ConversationOutcome``. The methods are async because
 a conversation turn typically involves an LLM call.
 
+``CitedResponse`` Protocol (D138, S51) is the cross-cutting structural
+enforcement of D131 provenance-aware response composition. Every
+ConversationFlow implementer's response value object satisfies
+``CitedResponse`` structurally by carrying three citation tuple fields.
+``ArtefactCitation`` is the typed value object that populates
+``cited_artefacts``: artefact id plus artefact-type discriminator. The
+Phase 2-A discriminator union is ``"case"`` and ``"data_point"``;
+future artefact types extend the union.
+
 No implementer registers at S45 — audit-conversation (5.1) and
 portfolio mirror-conversation (4.1) implementers land at P14+. The
 contract harness at ``tests/contract/conversation_flow/`` is ready
@@ -33,6 +42,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
+from uuid import UUID
 
 
 @dataclass(frozen=True)
@@ -124,7 +134,68 @@ class ConversationFlow(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class ArtefactCitation:
+    """Typed citation for a domain artefact (D138 primitive, S51 shape).
+
+    Authored fresh at S51 (the P14 framing brief's "currently at the
+    manual entry cell module" claim was structurally false — pre-write
+    reconciliation Finding 4 surfaced the absence). The discriminator
+    surfaces artefact type at the citation surface because artefacts are
+    heterogeneous in ``cited_artefacts`` at P14: audit-conversation and
+    mirror-conversation both cite Case and DataPoint references through
+    one tuple field. Future artefact types extend the ``artefact_type``
+    discriminator union; Phase 2-A union: ``"case"``, ``"data_point"``.
+    """
+
+    artefact_id: UUID
+    artefact_type: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.artefact_type, str) or not self.artefact_type:
+            raise ValueError(
+                "ArtefactCitation.artefact_type must be a non-empty string; "
+                f"got {self.artefact_type!r}"
+            )
+
+
+@runtime_checkable
+class CitedResponse(Protocol):
+    """Provenance-aware response composition contract (D138, S51).
+
+    The cross-cutting structural enforcement of D131. Every
+    ConversationFlow implementer's response value object satisfies
+    ``CitedResponse`` structurally by carrying three citation tuple
+    fields. The ``@runtime_checkable`` decorator allows ``isinstance``
+    conformance checks the contract harness exercises at
+    ``tests/contract/conversation_flow/test_cited_response_conformance.py``.
+
+    The three fields cite different artefact categories:
+
+    - ``cited_intake_records``: IntakeRecord ids per D127/D128 intake-
+      canonical commitment.
+    - ``cited_audit_events``: audit event ids per D102/D103 audit-chain
+      substrate.
+    - ``cited_artefacts``: heterogeneous artefact citations (typed via
+      ``ArtefactCitation`` with the artefact-type discriminator) — Case,
+      DataPoint, and future artefact types.
+
+    A response satisfying the Protocol may leave any tuple empty when
+    the implementer's natural composition does not populate it (S46's
+    CellResponse leaves ``cited_audit_events`` empty per D131 first-
+    instance disposition; mirror-conversation leaves ``cited_audit_events``
+    empty per audit-chain transitivity through cited IntakeRecord
+    anchoring per D128).
+    """
+
+    cited_intake_records: tuple[UUID, ...]
+    cited_audit_events: tuple[UUID, ...]
+    cited_artefacts: tuple[ArtefactCitation, ...]
+
+
 __all__ = [
+    "ArtefactCitation",
+    "CitedResponse",
     "ConversationClosure",
     "ConversationFlow",
     "ConversationInput",

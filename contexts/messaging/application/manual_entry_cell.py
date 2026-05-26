@@ -53,6 +53,8 @@ from uuid import UUID, uuid4
 
 from contexts.audit.domain.ports import AuditPort
 
+from shared_kernel.conversation_flow import ArtefactCitation
+
 from contexts.messaging.application.cell_response import (
     CellResponse,
     render_for_whatsapp,
@@ -802,7 +804,12 @@ class ManualEntryCell:
                     f"{intent.value_text}."
                 ),
                 cited_intake_records=(outcome.intake_id,),
-                cited_artefacts=(outcome.data_point_id,),
+                cited_artefacts=(
+                    ArtefactCitation(
+                        artefact_id=outcome.data_point_id,
+                        artefact_type="data_point",
+                    ),
+                ),
             )
         if isinstance(intent, ReviseDataPointIntent):
             outcome = await self._gateway.revise_data_point(
@@ -814,7 +821,12 @@ class ManualEntryCell:
             return CellResponse(
                 text=f"Revised the data point: {intent.value_text}.",
                 cited_intake_records=(outcome.intake_id,),
-                cited_artefacts=(outcome.data_point_id,),
+                cited_artefacts=(
+                    ArtefactCitation(
+                        artefact_id=outcome.data_point_id,
+                        artefact_type="data_point",
+                    ),
+                ),
             )
         # CreateCase and Unclear paths cannot reach here — the
         # multi-match guard only activates on Add/Revise. Fall back
@@ -831,7 +843,12 @@ class ManualEntryCell:
         return CellResponse(
             text=f"Recorded a new case: {outcome.title}.",
             cited_intake_records=(outcome.intake_id,),
-            cited_artefacts=(outcome.case_id,),
+            cited_artefacts=(
+                ArtefactCitation(
+                    artefact_id=outcome.case_id,
+                    artefact_type="case",
+                ),
+            ),
         )
 
     async def _handle_add_data_point(
@@ -888,7 +905,12 @@ class ManualEntryCell:
                 f"Added a {phrase} to {case_title}: {intent.value_text}."
             ),
             cited_intake_records=(outcome.intake_id,),
-            cited_artefacts=(outcome.data_point_id,),
+            cited_artefacts=(
+                ArtefactCitation(
+                    artefact_id=outcome.data_point_id,
+                    artefact_type="data_point",
+                ),
+            ),
         )
 
     async def _handle_revise_data_point(
@@ -917,7 +939,12 @@ class ManualEntryCell:
         return CellResponse(
             text=f"Revised the data point: {intent.value_text}.",
             cited_intake_records=(outcome.intake_id,),
-            cited_artefacts=(outcome.data_point_id,),
+            cited_artefacts=(
+                ArtefactCitation(
+                    artefact_id=outcome.data_point_id,
+                    artefact_type="data_point",
+                ),
+            ),
         )
 
 
