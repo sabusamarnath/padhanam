@@ -53,21 +53,25 @@ class InferenceSettings(PadhanamSettings):
     default_embedding_model: str = "nomic-embed-text:v1.5"
     tls_mode: TLSMode = TLSMode.PLAINTEXT
 
-    # D122 latency-tier routing (S46) plus S47 REAL_TIME_REQUIRED model
-    # bump per D133/D134. ``async_tolerant_model`` stays None by default
-    # so the tier resolves to ``default_model``; ``real_time_required_model``
-    # pins to ``qwen2.5:14b`` so the intent-classification cell at the
-    # operator-WhatsApp surface picks a stronger discriminative model
-    # than the S46 default's ``qwen2.5:7b`` (which classified AddDataPoint
-    # to UnclearIntent across four phrasings at the S46 smoke). Operator
-    # override via ``INFERENCE_REAL_TIME_REQUIRED_MODEL`` env var stays
-    # available; selecting a hosted model (e.g. ``gpt-4o-mini``,
-    # ``claude-haiku-4-5``) is a configuration change, not code. The
-    # async-tolerant timeout budget remains long because that tier's
+    # D122 latency-tier routing (S46) plus S48a REAL_TIME_REQUIRED model
+    # pin per D133's gateway-as-resolution-point shape.
+    # ``async_tolerant_model`` stays None by default so the tier resolves
+    # to ``default_model``; ``real_time_required_model`` pins to
+    # ``gpt-4o-mini`` after the S47 smoke surfaced that the S47-baseline
+    # bump to ``qwen2.5:14b`` was not viable on the operator's hardware
+    # (progressive 28s→361s slowdown; 6-minute latencies kill the
+    # dogfooding loop — captures entry 2026-05-26 [S47 smoke] qwen2.5:14b
+    # operator-dogfooding viability on commodity hardware). ``qwen2.5:14b``
+    # remains in the model registry as the local-development fallback
+    # when hosted-model credentials are unavailable. Operator override
+    # via ``INFERENCE_REAL_TIME_REQUIRED_MODEL`` env var stays available;
+    # selecting an alternative hosted model (e.g. ``claude-haiku-4-5``)
+    # or returning to a local model is a configuration change, not code.
+    # The async-tolerant timeout budget remains long because that tier's
     # surfaces (substrate ingestion analysis, surfacing-decision logic)
     # tolerate seconds-to-minutes; the real-time budget at 30s carries
     # the warm-LLM-plus-dispatch headroom per D133's webhook contract.
-    real_time_required_model: str | None = "qwen2.5:14b"
+    real_time_required_model: str | None = "gpt-4o-mini"
     async_tolerant_model: str | None = None
     real_time_required_timeout_seconds: float = 30.0
     async_tolerant_timeout_seconds: float = 180.0

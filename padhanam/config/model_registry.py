@@ -16,9 +16,11 @@ can read; it does not gate which model fires.
 Phase 2-A entries:
 - ``qwen2.5:7b`` — the pre-S47 default (kept for backward compatibility
   with the existing ``default_model``)
-- ``qwen2.5:14b`` — the S47 REAL_TIME_REQUIRED bump per D133/D134
-- ``gpt-4o-mini`` — the hosted alternative the operator can select via
-  ``INFERENCE_REAL_TIME_REQUIRED_MODEL`` without code change
+- ``qwen2.5:14b`` — retained as the local-development fallback when
+  hosted-model credentials are unavailable (the S47 bump that the
+  S47 smoke surfaced as non-viable on commodity hardware)
+- ``gpt-4o-mini`` — the S48a REAL_TIME_REQUIRED pin per D133 after
+  the S47 smoke's qwen2.5:14b viability finding
 
 New entries land at this catalogue when a new model joins the LiteLLM
 routing surface; the monthly pricing-review cadence (D41) keeps the

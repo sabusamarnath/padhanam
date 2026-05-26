@@ -129,8 +129,8 @@ def test_generate_structured_maps_schema_to_response_format() -> None:
         response_format["json_schema"]["schema"] is _SCHEMA  # type: ignore[index]
     )
     assert captured["temperature"] == 0.0
-    # S47 / D133: REAL_TIME_REQUIRED resolves to ``real_time_required_model``
-    # (qwen2.5:14b) rather than ``default_model``.
+    # S48a / D133: REAL_TIME_REQUIRED resolves to ``real_time_required_model``
+    # (gpt-4o-mini) rather than ``default_model``.
     expected_model = _settings().latency_tier_config[
         __import__(
             "shared_kernel.inference", fromlist=["LatencyTier"]

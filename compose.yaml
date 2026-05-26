@@ -319,6 +319,12 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LITELLM_LOG: WARNING
+      # S48a: OpenAI credentials passthrough so the gateway can route the
+      # gpt-4o-mini REAL_TIME_REQUIRED-tier pin. Empty when the operator
+      # has not set OPENAI_API_KEY; the gateway rejects gpt-4o-mini calls
+      # in that state with a clear AuthenticationError surfaced through
+      # the inference adapter's InferenceConfigurationError translation.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OTEL_EXPORTER: otlp_http
       OTEL_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
       OTEL_HEADERS: ${LITELLM_OTEL_HEADERS}

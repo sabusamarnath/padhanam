@@ -18,14 +18,22 @@ model_list:
     litellm_params:
       model: ollama_chat/qwen2.5:7b
       api_base: http://ollama:11434
-  # S47 / D133: qwen2.5:14b is the REAL_TIME_REQUIRED-tier default
-  # per padhanam/config/inference.py and the model registry at
-  # padhanam/config/model_registry.py. The gateway must route to it
-  # for the manual entry cell's intent-extraction calls to land.
+  # S47 / D133: qwen2.5:14b retained as the local-development fallback
+  # when hosted-model credentials are unavailable. Not the
+  # REAL_TIME_REQUIRED-tier default after S48a per the qwen2.5:14b
+  # hardware-viability finding (captures entry 2026-05-26 [S47 smoke]).
   - model_name: qwen2.5:14b
     litellm_params:
       model: ollama_chat/qwen2.5:14b
       api_base: http://ollama:11434
+  # S48a / D133: gpt-4o-mini is the REAL_TIME_REQUIRED-tier pin per
+  # padhanam/config/inference.py and the model registry at
+  # padhanam/config/model_registry.py. The OPENAI_API_KEY secret is
+  # passed through the litellm service environment at compose.yaml.
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
   # S20 / D62: nomic-embed-text:v1.5 embedding model served via
   # Ollama. The model_info.mode flag tells the proxy this entry
   # routes to the embeddings API rather than the chat API; client
