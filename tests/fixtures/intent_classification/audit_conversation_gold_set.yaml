@@ -1,0 +1,77 @@
+# Audit-conversation gold-set fixture (D137, D138, P14, S51).
+#
+# Operator-shaped inputs paired with expected audit-intent classifications.
+# Coverage: each of the six AuditIntentType values (find_by_case,
+# find_by_date_range, find_by_actor, find_by_event_type,
+# find_by_combination, unclear_audit). 24 entries balanced roughly
+# 4-5 per concrete intent class plus 4 unclear, exercising the
+# audit-conversation intent surface end-to-end at the D137 substrate.
+#
+# Per pre-write reconciliation Finding 3 disposition (S51 framing), the
+# fixture lives at this path alongside the existing manual-entry gold
+# set; the YamlGoldSetReader carries one reader per fixture. The
+# intent_surface field selects the audit-conversation prompt+schema
+# the runner uses (S51 parameterisation).
+
+name: audit_conversation_p14_s51
+intent_surface: audit_conversation
+entries:
+  # ----- find_by_case (4) -----
+  - input_phrasing: "Show me the audit history for the Q3 portfolio review"
+    expected_intent_class: find_by_case
+  - input_phrasing: "What's the audit trail for the marketing deck case?"
+    expected_intent_class: find_by_case
+  - input_phrasing: "audit log for the Acme deal"
+    expected_intent_class: find_by_case
+  - input_phrasing: "What happened with the partnership project case?"
+    expected_intent_class: find_by_case
+
+  # ----- find_by_date_range (4) -----
+  - input_phrasing: "What audit events happened today?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "Show me yesterday's audit history"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "audit events from this week"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "What did the platform do last month?"
+    expected_intent_class: find_by_date_range
+
+  # ----- find_by_actor (4) -----
+  - input_phrasing: "What has alice done in the system?"
+    expected_intent_class: find_by_actor
+  - input_phrasing: "Show audit events authored by operator"
+    expected_intent_class: find_by_actor
+  - input_phrasing: "All actions by bob"
+    expected_intent_class: find_by_actor
+  - input_phrasing: "What did the system actor do?"
+    expected_intent_class: find_by_actor
+
+  # ----- find_by_event_type (4) -----
+  - input_phrasing: "Show all case creations"
+    expected_intent_class: find_by_event_type
+  - input_phrasing: "audit events of type portfolio.case.create"
+    expected_intent_class: find_by_event_type
+  - input_phrasing: "List all data point revisions"
+    expected_intent_class: find_by_event_type
+  - input_phrasing: "Show me only the messaging audit events"
+    expected_intent_class: find_by_event_type
+
+  # ----- find_by_combination (4) -----
+  - input_phrasing: "Show alice's audit events for the Q3 review case this week"
+    expected_intent_class: find_by_combination
+  - input_phrasing: "What case creates happened today by operator?"
+    expected_intent_class: find_by_combination
+  - input_phrasing: "Audit history for the marketing case from last month"
+    expected_intent_class: find_by_combination
+  - input_phrasing: "All data point creations by bob this week"
+    expected_intent_class: find_by_combination
+
+  # ----- unclear_audit (4) -----
+  - input_phrasing: "How are you?"
+    expected_intent_class: unclear_audit
+  - input_phrasing: "What's the weather?"
+    expected_intent_class: unclear_audit
+  - input_phrasing: "Tell me a joke about the audit log"
+    expected_intent_class: unclear_audit
+  - input_phrasing: "audit"
+    expected_intent_class: unclear_audit

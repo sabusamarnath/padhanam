@@ -67,7 +67,17 @@ class YamlGoldSetReader:
             )
             for e in entries_raw
         )
-        return IntentClassificationGoldSet(name=name, entries=entries)
+        # Per S51 Finding 3 disposition: extending INTENT_CLASSES tuple is
+        # the cheapest adaptation for the second intent surface; the
+        # gold-set's intent_surface field selects which prompt+schema the
+        # runner uses. Defaults to manual_entry for backward compatibility
+        # with S48b fixtures that pre-date the field.
+        intent_surface_raw = raw.get("intent_surface")
+        if intent_surface_raw is None:
+            return IntentClassificationGoldSet(name=name, entries=entries)
+        return IntentClassificationGoldSet(
+            name=name, entries=entries, intent_surface=str(intent_surface_raw)
+        )
 
 
 __all__ = ["YamlGoldSetReader"]

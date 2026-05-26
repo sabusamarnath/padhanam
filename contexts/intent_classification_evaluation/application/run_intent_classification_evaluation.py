@@ -65,6 +65,30 @@ from shared_kernel.intent_classification import (
     INTENT_EXTRACTION_SCHEMA,
     build_extraction_prompt,
 )
+from shared_kernel.intent_classification_audit import (
+    AUDIT_INTENT_EXTRACTION_SCHEMA,
+    build_audit_extraction_prompt,
+)
+
+
+# Per-surface (prompt_builder, schema, result_key) lookup. S51 adds the
+# audit_conversation surface alongside manual_entry. Result keys differ:
+# the manual_entry schema produces ``intent_type``; the audit_conversation
+# schema produces ``intent_class``. Extending to a third surface adds an
+# entry; full parameterisation refactor activates at the deferred-
+# decisions trigger.
+_SURFACE_PRIMITIVES: dict[str, tuple[Any, dict, str]] = {
+    "manual_entry": (
+        build_extraction_prompt,
+        INTENT_EXTRACTION_SCHEMA,
+        "intent_type",
+    ),
+    "audit_conversation": (
+        build_audit_extraction_prompt,
+        AUDIT_INTENT_EXTRACTION_SCHEMA,
+        "intent_class",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -117,6 +141,18 @@ async def run_intent_classification_evaluation(
     """Execute an evaluation run end-to-end."""
     gold_set = gold_set_reader.get_gold_set(command.gold_set_name)
 
+    # Look up the (prompt_builder, schema, result_key) primitive for the
+    # gold-set's intent_surface (S51 parameterisation).
+    if gold_set.intent_surface not in _SURFACE_PRIMITIVES:
+        raise ValueError(
+            f"gold-set {gold_set.name!r} declares intent_surface "
+            f"{gold_set.intent_surface!r} which is not in "
+            f"{list(_SURFACE_PRIMITIVES)}; add a surface primitive entry."
+        )
+    prompt_builder, schema, result_key = _SURFACE_PRIMITIVES[
+        gold_set.intent_surface
+    ]
+
     model_identifier = ModelIdentifier(
         provider=_infer_provider(command.model),
         account=DEFAULT_ACCOUNT,
@@ -125,7 +161,7 @@ async def run_intent_classification_evaluation(
             latency_tier=command.latency_tier,
             temperature=0.0,
             max_tokens=None,
-            structured_output_schema=INTENT_EXTRACTION_SCHEMA,
+            structured_output_schema=schema,
         ),
     )
 
@@ -157,6 +193,9 @@ async def run_intent_classification_evaluation(
                 model=command.model,
                 latency_tier=command.latency_tier,
                 structured_output_port=structured_output_port,
+                prompt_builder=prompt_builder,
+                schema=schema,
+                result_key=result_key,
             )
             await repository.append_result(result, tenant=tenant)
             results.append(result)
@@ -213,16 +252,24 @@ async def _classify_one_entry(
     model: str,
     latency_tier: LatencyTier,
     structured_output_port: StructuredOutputPort,
+    prompt_builder: Any = build_extraction_prompt,
+    schema: dict = INTENT_EXTRACTION_SCHEMA,
+    result_key: str = "intent_type",
 ) -> EvaluationResult:
     """Classify a single gold-set entry and return the result.
 
     Per-entry parse failures (per D134's StructuredOutputParseFailure)
     are recorded as ``parse_failure=True`` with empty
     classified_intent_class; they do not fail the run.
+
+    ``prompt_builder``, ``schema``, and ``result_key`` are parametric
+    over the gold-set's intent_surface (S51 parameterisation). Defaults
+    preserve manual_entry behaviour for backward compatibility with
+    callers that pre-date the parameterisation.
     """
     request = StructuredOutputRequest(
-        prompt=build_extraction_prompt(entry.input_phrasing),
-        schema=INTENT_EXTRACTION_SCHEMA,
+        prompt=prompt_builder(entry.input_phrasing),
+        schema=schema,
         latency_tier=latency_tier,
         temperature=0.0,
         model_hint=model,
@@ -247,7 +294,7 @@ async def _classify_one_entry(
     latency_ms = int((time.monotonic() - start) * 1000)
 
     classified_intent_class = str(
-        response.value.get("intent_type", "")
+        response.value.get(result_key, "")
     ).strip()
     is_correct = compute_is_correct(
         expected_intent_class=entry.expected_intent_class,

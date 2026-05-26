@@ -17,7 +17,9 @@ from contexts.intent_classification_evaluation.domain.evaluation_run import (
     utcnow,
 )
 from contexts.intent_classification_evaluation.domain.gold_set import (
+    DEFAULT_INTENT_SURFACE,
     INTENT_CLASSES,
+    INTENT_SURFACES,
     IntentClassificationGoldSet,
     IntentClassificationGoldSetEntry,
 )
@@ -239,3 +241,68 @@ class TestComputeAggregates:
         # We classified 1 entry as add_data_point but its expected was
         # create_case — so precision for add_data_point is 0.0
         assert adp.precision == pytest.approx(0.0)
+
+
+# ----------------------------------------------------------------- S51
+
+
+def test_intent_surface_defaults_to_manual_entry() -> None:
+    """Backward compatibility: gold sets without intent_surface default to manual_entry."""
+    gs = IntentClassificationGoldSet(
+        name="legacy",
+        entries=(
+            IntentClassificationGoldSetEntry(
+                input_phrasing="x",
+                expected_intent_class="create_case",
+            ),
+        ),
+    )
+    assert gs.intent_surface == DEFAULT_INTENT_SURFACE == "manual_entry"
+
+
+def test_intent_surface_accepts_audit_conversation() -> None:
+    gs = IntentClassificationGoldSet(
+        name="audit",
+        entries=(
+            IntentClassificationGoldSetEntry(
+                input_phrasing="show audit for today",
+                expected_intent_class="find_by_date_range",
+            ),
+        ),
+        intent_surface="audit_conversation",
+    )
+    assert gs.intent_surface == "audit_conversation"
+
+
+def test_intent_surface_rejects_unknown_surface() -> None:
+    with pytest.raises(ValueError, match="intent_surface"):
+        IntentClassificationGoldSet(
+            name="x",
+            entries=(
+                IntentClassificationGoldSetEntry(
+                    input_phrasing="y", expected_intent_class="unclear"
+                ),
+            ),
+            intent_surface="mirror_conversation",  # not yet a registered surface
+        )
+
+
+def test_intent_classes_carries_both_surfaces_after_s51() -> None:
+    """The INTENT_CLASSES tuple extension at S51 admits both surfaces' classes."""
+    assert "create_case" in INTENT_CLASSES
+    assert "find_by_case" in INTENT_CLASSES
+    assert "find_by_combination" in INTENT_CLASSES
+
+
+def test_intent_surfaces_carries_known_surfaces() -> None:
+    assert "manual_entry" in INTENT_SURFACES
+    assert "audit_conversation" in INTENT_SURFACES
+
+
+def test_gold_set_entry_audit_intent_class_accepted() -> None:
+    """Audit-conversation intent classes are valid entry expected_intent_class values."""
+    entry = IntentClassificationGoldSetEntry(
+        input_phrasing="show audit for today",
+        expected_intent_class="find_by_date_range",
+    )
+    assert entry.expected_intent_class == "find_by_date_range"

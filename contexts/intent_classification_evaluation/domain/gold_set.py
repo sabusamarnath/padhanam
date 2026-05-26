@@ -19,14 +19,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# The four intent classes the substrate evaluates. Mirrors the
-# IntentType StrEnum at contexts/messaging/domain/intent.py; a unit
-# test asserts the alignment so the duplication does not drift.
+# The intent classes the substrate evaluates. Two intent surfaces at
+# S51: the manual entry cell (four classes mirroring IntentType at
+# contexts/messaging/domain/intent.py) and the audit-conversation cell
+# (six classes mirroring AuditIntentType at
+# contexts/audit_conversation/domain/intent.py). Both surfaces' classes
+# coexist in this tuple per the D137 substrate parameterisation
+# activation trigger (deferred-decisions entry, S51 framing): tuple
+# extension is the cheapest possible adaptation; the parameterisation
+# refactor triggers at the third-or-later surface.
 INTENT_CLASSES: tuple[str, ...] = (
+    # Manual entry cell surface (S46, four classes).
     "create_case",
     "add_data_point",
     "revise_data_point",
     "unclear",
+    # Audit-conversation surface (S51, six classes).
+    "find_by_case",
+    "find_by_date_range",
+    "find_by_actor",
+    "find_by_event_type",
+    "find_by_combination",
+    "unclear_audit",
 )
 
 
@@ -65,6 +79,19 @@ class IntentClassificationGoldSetEntry:
             )
 
 
+# Intent surfaces the substrate evaluates. S46 introduced the
+# manual_entry surface; S51 added the audit_conversation surface. The
+# tuple is extended at the next ConversationFlow implementer; full
+# parameterisation refactor activates at the third-or-later surface per
+# the D137 substrate parameterisation deferred-decisions entry (S51
+# framing).
+INTENT_SURFACES: tuple[str, ...] = (
+    "manual_entry",
+    "audit_conversation",
+)
+DEFAULT_INTENT_SURFACE: str = "manual_entry"
+
+
 @dataclass(frozen=True)
 class IntentClassificationGoldSet:
     """The in-memory shape of a gold set.
@@ -72,10 +99,14 @@ class IntentClassificationGoldSet:
     ``name`` is the gold-set's identifier (e.g. ``phase_2_a_default``);
     references in ``EvaluationRun.gold_set_name`` carry this value.
     ``entries`` is the ordered tuple of entries the runner iterates.
+    ``intent_surface`` selects which prompt+schema+result-key the
+    runner uses for this gold set; defaults to ``manual_entry`` for
+    backward compatibility with the S48b fixture.
     """
 
     name: str
     entries: tuple[IntentClassificationGoldSetEntry, ...]
+    intent_surface: str = DEFAULT_INTENT_SURFACE
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -84,10 +115,17 @@ class IntentClassificationGoldSet:
             raise ValueError(
                 "IntentClassificationGoldSet.entries must be non-empty"
             )
+        if self.intent_surface not in INTENT_SURFACES:
+            raise ValueError(
+                "IntentClassificationGoldSet.intent_surface must be one of "
+                f"{INTENT_SURFACES}; got {self.intent_surface!r}"
+            )
 
 
 __all__ = [
+    "DEFAULT_INTENT_SURFACE",
     "INTENT_CLASSES",
+    "INTENT_SURFACES",
     "IntentClassificationGoldSet",
     "IntentClassificationGoldSetEntry",
 ]
