@@ -50,6 +50,9 @@ from apps.cli._ingest import (
     run_ingest_worker,
 )
 from apps.cli._agent import agent_app
+from apps.cli._intent_classification_eval import (
+    intent_classification_eval_app,
+)
 from apps.cli._methodology import methodology_app
 from apps.cli._optimization import optimization_app, optimization_run_app
 from apps.cli._portfolio import portfolio_app
@@ -135,6 +138,9 @@ app.add_typer(optimization_run_app, name="optimization-run")
 
 # S43 portfolio context — Case / DataPoint / Assertion (D124).
 app.add_typer(portfolio_app, name="portfolio")
+
+# S48b intent-classification evaluation substrate (D137).
+app.add_typer(intent_classification_eval_app, name="intent-classification-eval")
 
 
 _OUTPUT_FORMAT_TEXT = "text"

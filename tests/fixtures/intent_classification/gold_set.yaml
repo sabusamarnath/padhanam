@@ -1,0 +1,113 @@
+# Intent-classification gold set for Phase 2-A operator dogfooding (D137, S48b).
+#
+# The substrate-under-test is the manual entry cell's intent extraction
+# at `shared_kernel/intent_classification.py`. Both the production cell
+# and the evaluation runner consume the same prompt and schema; the
+# gold set here is the reference truth for what the cell's classification
+# *should* return.
+#
+# Authored entries span the four intent classes (create_case,
+# add_data_point, revise_data_point, unclear). The four S46 blind-spot
+# phrasings that qwen2.5:7b classified as UnclearIntent (when they
+# should have been AddDataPointIntent) appear explicitly so the
+# evaluation surface measures their regression at each model swap.
+#
+# Each entry: input_phrasing is the operator-shaped natural-language
+# input; expected_intent_class is the correct classification; optional
+# expected_confidence_minimum gates correctness on confidence at or
+# above the threshold (omit when classification correctness alone is
+# what we measure).
+
+name: phase_2_a_default
+entries:
+
+  # --- CreateCaseIntent (12 entries) ---
+  - input_phrasing: "Create a case for the Q3 portfolio review"
+    expected_intent_class: create_case
+  - input_phrasing: "Start a case for the Q3 portfolio review"
+    expected_intent_class: create_case
+  - input_phrasing: "Open a new case for the Acme Corp deal"
+    expected_intent_class: create_case
+  - input_phrasing: "Begin tracking the Series B fundraise"
+    expected_intent_class: create_case
+  - input_phrasing: "Create a case: Q4 product launch"
+    expected_intent_class: create_case
+  - input_phrasing: "New case for the leadership offsite"
+    expected_intent_class: create_case
+  - input_phrasing: "I want to start tracking the Bigco partnership"
+    expected_intent_class: create_case
+  - input_phrasing: "Open a case for the board prep work"
+    expected_intent_class: create_case
+  - input_phrasing: "Track the hiring search for VP Engineering"
+    expected_intent_class: create_case
+  - input_phrasing: "Add a case for the compliance audit"
+    expected_intent_class: create_case
+  - input_phrasing: "Create a new case called marketing strategy review"
+    expected_intent_class: create_case
+  - input_phrasing: "Let's start a case for the Q3 budget reconciliation"
+    expected_intent_class: create_case
+
+  # --- AddDataPointIntent (12 entries — includes 4 S46 blind-spot phrasings) ---
+  # The first four entries are the S46 blind-spot phrasings (each in
+  # one of the four structural variants surfaced at the S46 smoke).
+  - input_phrasing: "Add a goal to the Q3 review: ship Wave 1 by end of May"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Add this goal to the Q3 portfolio review: ship Wave 1 by end of May."
+    expected_intent_class: add_data_point
+  - input_phrasing: "For the Q3 portfolio review case, add a goal: ship Wave 1 by end of May."
+    expected_intent_class: add_data_point
+  - input_phrasing: "Ship Wave 1 by end of May — goal for the Q3 portfolio review."
+    expected_intent_class: add_data_point
+  # Additional shape variants across all three data-point types
+  - input_phrasing: "Add a status to the Acme deal: passed first round"
+    expected_intent_class: add_data_point
+  - input_phrasing: "For the Acme case, record this status: pricing call scheduled for Friday"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Goal for board prep: finalize KPI dashboard by next Wednesday"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Add an application of LVT to the Series B case: focus on revenue diversification"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Note on the leadership offsite case: keynote slot moved to morning"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Track this goal on the hiring search: extend offer by end of week"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Status update for the compliance audit: external auditor confirmed dates"
+    expected_intent_class: add_data_point
+  - input_phrasing: "Record under marketing strategy review: campaign brief signed off"
+    expected_intent_class: add_data_point
+
+  # --- ReviseDataPointIntent (8 entries) ---
+  - input_phrasing: "Update the Q3 goal: ship Wave 1 by mid-June not end of May"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Revise the status on the Acme deal — passed second round, not first"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Change the board prep KPI goal to next Friday instead of Wednesday"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Correct the leadership offsite note: keynote moved to afternoon, not morning"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Edit the Q3 review goal — ship Wave 2 by end of June"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "The hiring search status changed: offer extended yesterday"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Update the compliance audit goal: target attestation date moved out by 2 weeks"
+    expected_intent_class: revise_data_point
+  - input_phrasing: "Revise the marketing campaign brief status — now in legal review"
+    expected_intent_class: revise_data_point
+
+  # --- UnclearIntent (8 entries — messages that should clarify) ---
+  - input_phrasing: "hello"
+    expected_intent_class: unclear
+  - input_phrasing: "thanks"
+    expected_intent_class: unclear
+  - input_phrasing: "What can you do?"
+    expected_intent_class: unclear
+  - input_phrasing: "Quick question"
+    expected_intent_class: unclear
+  - input_phrasing: "Just checking in"
+    expected_intent_class: unclear
+  - input_phrasing: "ok cool"
+    expected_intent_class: unclear
+  - input_phrasing: "Are you there?"
+    expected_intent_class: unclear
+  - input_phrasing: "Tell me about my portfolio"
+    expected_intent_class: unclear
