@@ -666,7 +666,8 @@ The convergence's three responses (A raise tier model; B constrain classificatio
 3. **Constrain Response B (classification surface).** The intent-extraction schema includes four variants (CreateCase, AddDataPoint, ReviseDataPoint, UnclearIntent). Reducing to a binary (CreateCase vs other) plus a follow-up clarification turn for non-CreateCase classes simplifies the model's discriminative task. Larger structural change; defers unless Response A's hosted-inference path doesn't close the reliability gap either.
 
   - triaged: 2026-05-26 — defer
-  - resolution: captured for the next strategic-mode session covering inference-model selection or the post-S47 hygiene session. The two structural fixes the smoke surfaced (model-registry-vs-LiteLLM-gateway-routing drift; the FK-integrity threading on the cell's originating_intake_id) landed at commit d63f8a5 at the smoke close. The hardware-viability finding stays as forward observation; no charter change at the S47 smoke close, only this captures entry. The S46 smoke's intent-extraction reliability captures entry (2026-05-22 [S46 smoke]) names Response A/B/C; this captures entry forwards the Response-A-on-this-hardware viability question without superseding the original entry.
+  - resolution (initial): captured for the next strategic-mode session covering inference-model selection or the post-S47 hygiene session. The two structural fixes the smoke surfaced (model-registry-vs-LiteLLM-gateway-routing drift; the FK-integrity threading on the cell's originating_intake_id) landed at commit d63f8a5 at the smoke close. The hardware-viability finding stays as forward observation; no charter change at the S47 smoke close, only this captures entry. The S46 smoke's intent-extraction reliability captures entry (2026-05-22 [S46 smoke]) names Response A/B/C; this captures entry forwards the Response-A-on-this-hardware viability question without superseding the original entry.
+  - resolution (S48a close, 2026-05-26): **resolved via swap to `gpt-4o-mini`** per D133's gateway-as-resolution-point shape at S48a commit 1 (`feat(p13/s48a): swap REAL_TIME_REQUIRED tier pin to gpt-4o-mini`, d620692). The S48a live smoke against tenant_a verified `gpt-4o-mini` classifies AddDataPointIntent correctly 4/4 across all four phrasing variants at 1.5-3 s warm latency — comfortably dogfooding-viable. `qwen2.5:14b` is retained in the model registry and gateway model_list as the local-development fallback when hosted-model credentials are unavailable; operators without an OpenAI key can return to the prior pin via `INFERENCE_REAL_TIME_REQUIRED_MODEL=qwen2.5:14b`. Smoke evidence at `docs/smoke/p13_s47_multi_turn_cell_end_to_end.md` under the "S48a re-execution at `gpt-4o-mini`" section. Convergence concern 5 (intent-extraction reliability) closes operationally.
 
 ## 2026-05-26 — [S47 smoke] model-registry-vs-LiteLLM-gateway-routing drift class (methodology candidate)
 
@@ -682,3 +683,46 @@ A model must appear in both for the audit substrate and the routing surface to w
 
   - triaged: 2026-05-26 — defer
   - resolution: forwarded to the post-S47 hygiene session for the structural-test addition. The fix at d63f8a5 closes the operational symptom; the structural test closes the drift class. Recorded at the S47 smoke session-log entry. Future model additions to either surface should land in both at the same commit; the test makes that discipline mechanical rather than convention.
+
+## 2026-05-26 — [S48a smoke] resolver disambiguation rendering on duplicate-title case collision
+
+The S48a smoke surfaced a substrate gap at the `resolve_target` step inside the `add_data_point` orchestration. When the cell classifies an AddDataPointIntent with `case_reference="Q3 portfolio review"` and the resolver finds multiple cases with that title, the rendering uses only the `title` field as the discriminator, producing identical strings in the disambiguation prompt:
+
+> More than one case matches "Q3 portfolio review" — did you mean one of: Q3 portfolio review, Q3 portfolio review, Q3 portfolio review?
+
+Three cases titled `Q3 portfolio review` exist in tenant_a (one each from S46, S47, S48a smoke runs); a user cannot choose between them given the rendering.
+
+**Design direction (operator-aligned, not yet committed).** The disambiguation prompt should:
+- Use conversational discriminators (created_at relative date when recent, absolute date when older, last-activity, count of associated data-point/assertions), not UUIDs.
+- Include an explicit `Or start a new one?` option because that is the user's de-facto choice when the existing matches don't match the user's mental case.
+- Bind the user's choice (number, relative date phrase) at a follow-up turn that resolves to the actual case UUID.
+
+**Related design thread — detect-at-creation discipline (out of scope at S48a; P14 candidate).** When the cell classifies a `create_case` intent and the resolver finds an existing case with the same title, the cell should ask before minting a new one: `You already have a case 'Q3 portfolio review' from May 22 — start a new one or add to that?`. Same shape as the disambiguation prompt above; this is what would have prevented S46/S47/S48a from each minting a duplicate. The downstream merge/archive thread (the "what to do with the existing duplicates" question) needs user-driven action only — platform invariant 4 (no auto-modification of user-authored content) forbids platform-initiated merges or archival.
+
+  - triaged: 2026-05-26 — defer
+  - resolution: forwarded to P14 epic framing or a pre-P14 substrate-hygiene session. The disambiguation rendering is small (cell-side rendering change) and could land as a pre-P14 hygiene workitem. The detect-at-creation discipline is larger (cross-context cell logic plus orchestration ordering plus audit-event shape) and naturally belongs in P14's ConversationFlow implementer expansion. The user-driven merge/archive thread defers further until operator-dogfooding signal makes the missing affordance bite.
+
+## 2026-05-26 — [S48a smoke] cancel-then-fresh-turn double-cost behaviour
+
+When the cell receives a `no`/`cancel` reply to an active PendingClarification, the deterministic cancel-keyword detection fires and resolves the pending in ~10-20 ms with no LLM call. The cell then falls through to fresh-turn handling on the same `no` inbound, which runs the bare token through `gpt-4o-mini` fresh-turn classification (UnclearIntent / low-confidence) and renders a Case 3 generic clarification (`Could you please clarify what you mean by 'no'?` or similar). The fall-through always pays the cost of a second LLM call (~$0.0001, ~3.8 s of latency).
+
+The behaviour is structurally correct per the S47 reflection prompt 5 description (the cell falls through to fresh-turn handling on the correcting inbound) and is friendlier than silent cancellation. But at scale (operator dogfooding for years) the wasted classification cost accumulates.
+
+**Three design alternatives.**
+- (a) Accept as-is. Friendlier than silent; LLM cost negligible at dogfooding volume.
+- (b) Deterministic cancel acknowledgment. Render `Cancelled. What did you want instead?` without an LLM call. Saves cost and latency but loses any nuance.
+- (c) Silent cancel. Render nothing; user sends a fresh turn at their leisure. Saves cost; may feel unresponsive.
+
+  - triaged: 2026-05-26 — note
+  - resolution: captured for forward consideration. Not load-bearing at S48a; the operator-dogfooding latency budget tolerates the extra 3.8 s comfortably. Revisit if dogfooding signal indicates the cancel-acknowledgment shape feels off.
+
+## 2026-05-26 — [S48a smoke] auto-expire-prior-pending-on-substantive-new-content (positive substrate observation)
+
+The cell's `next-inbound` handling against an active PendingClarification has three branches: yes/confirm → resolve as confirmed and orchestrate; no/cancel → resolve as cancelled and fresh-turn classify the no; anything else substantive → **expire the prior pending and fresh-turn classify the new content** (potentially creating a new pending if medium confidence).
+
+Surfaced live when the operator sent phrasing 4 with phrasing-3's pending still active. The cell expired `912a7235-…` (phrasing 3) at 10:17:23.925 UTC and created a fresh `74d4210b-…` (phrasing 4) at 10:17:23.928 UTC, all in one cascade. Three audit events emitted: `messaging.pending_clarification.expire`, then `messaging.pending_clarification.create` for the new pending, then the outbound clarification message.
+
+The behaviour matches the user's natural pattern "actually, I meant something else" without requiring the user to explicitly cancel first. The substrate's three-branch handling means the user is never trapped by an in-flight pending; sending any substantive content moves the conversation forward. The audit chain captures the expire+create transition clearly for procurement-grade audit.
+
+  - triaged: 2026-05-26 — note
+  - resolution: positive substrate observation; no action required. Recorded for the smoke document and as a structural property of the cell worth surfacing at the P14 ConversationFlow implementer framing — future implementers should preserve this three-branch handling.

@@ -291,3 +291,248 @@ hosted inference or different hardware.
 the FK-integrity originating_intake_id threading; the
 model-registry-vs-LiteLLM-gateway-routing drift fix; the
 tier-timeout env passthrough on the api compose block.
+
+## S48a re-execution at `gpt-4o-mini`
+
+Re-executed against tenant_a on 2026-05-26 after S48a commit 1
+(`feat(p13/s48a): swap REAL_TIME_REQUIRED tier pin to gpt-4o-mini`,
+d620692) swapped the REAL_TIME_REQUIRED tier model pin from
+`qwen2.5:14b` to the hosted `gpt-4o-mini` per D133's
+gateway-as-resolution-point shape. Re-built `padhanam-api` image
+to digest `sha256:11957175c799c10f3327217e6b55ee84d4cb8290f761d1c2d1b91842601e1663`;
+recreated `padhanam-api` plus `litellm` containers to pick up the
+new image, the `OPENAI_API_KEY` env passthrough on the litellm
+service, and the `gpt-4o-mini` model_list entry at
+`ops/litellm/config.yaml`.
+
+### Stage 1 — environment
+
+- ngrok and Twilio Sandbox webhook configured (operator-confirmed).
+- OpenAI API key present in `.env`; operator rotated the key
+  before the smoke (the operator first pasted the key inline; the
+  rotation closed the exposure).
+- Pre-flight verification:
+  - `docker compose ps litellm padhanam-api` both healthy after
+    `docker compose up -d --force-recreate`.
+  - Gateway `/v1/models` lists all four routable models:
+    `qwen2.5:7b`, `qwen2.5:14b`, `gpt-4o-mini`,
+    `nomic-embed-text:v1.5`.
+  - End-to-end probe through gateway → OpenAI completed in 2.15 s
+    cold for a 24-token round trip; the OpenAI credential reaches
+    OpenAI via the gateway end-to-end.
+
+### Stage 2 — CreateCaseIntent
+
+Sent `Create a case for the Q3 portfolio review`.
+
+- 10:03:51.869 UTC — intake recorded (Twilio webhook).
+- 10:03:51.874 UTC — inbound message persisted.
+- 10:03:54.063 UTC — PendingClarification created
+  (`14bd1a6c-baab-4360-8425-d80057d22a2c`, originating_intake_id
+  `15ae36de-…`, FK satisfied).
+- 10:03:54.455 UTC — outbound clarification sent:
+  `I think you want to start a case for 'Q3 portfolio review'.
+  Is that right? (yes / no)`.
+- **Cell call latency: 2.19 s** (inbound persist → pending create).
+- **End-to-end inbound → outbound: 2.59 s.**
+- **Classification:** `intent_type=create_case`,
+  `title="Q3 portfolio review"`, confidence in medium band
+  (0.5 ≤ c < 0.8 since Case 2 fired). The cell's prompt-and-schema
+  design calibrates `gpt-4o-mini` into the same medium band the
+  S47 smoke saw at `qwen2.5:14b` — neither model self-reports high
+  confidence on the bare CreateCase phrasing; D134's three-case
+  discipline operates correctly regardless.
+
+### Stage 4 (first instance) — confirmation resolution
+
+Operator replied `yes` to the Stage 2 pending.
+
+- 10:06:54.062 UTC — `yes` intake recorded.
+- 10:06:54.070 UTC — inbound persisted.
+- 10:06:54.078 UTC — pending RESOLVED (deterministic confirm-path
+  match; no LLM call).
+- 10:06:54.081 UTC — new intake created for the create_case
+  orchestration (`ea1563fc-2586-427c-95ec-9b7bc7201dcc`).
+- 10:06:54.084 UTC — case created
+  (`acb449a0-88ec-4345-a243-9404071dbcd1`, title `Q3 portfolio
+  review`).
+- 10:06:54.356 UTC — outbound cited confirmation:
+  `Recorded a new case: Q3 portfolio review. — ref acb449a0 ·
+  intake ea1563fc · 10:06 UTC`.
+- **End-to-end latency: 294 ms** (no LLM call on the confirm
+  path; pure DB orchestration + audit chain + WhatsApp deliver).
+- **Audit chain extended** with 6 events covering inbound persist,
+  pending resolve, new intake, case create, outbound send.
+  Procurement-grade boundary "user confirmed → platform acted"
+  reads cleanly from the chain.
+
+### Stage 3 — AddDataPointIntent across four phrasings
+
+The smoke's load-bearing question: does `gpt-4o-mini` close the
+S46 reliability gap (qwen2.5:7b classified 0/2 of the template
+phrasing as `add_data_point`)?
+
+| # | Phrasing | LLM latency | Classification |
+|---|---|---|---|
+| 1 | `Add a goal to the Q3 review: ship Wave 1 by end of May` | 2.92 s | `add_data_point` / `GOAL` / `Q3 review` ✓ |
+| 2 | `Add this goal to the Q3 portfolio review: ship Wave 1 by end of May.` | 1.50 s | `add_data_point` / `GOAL` / `Q3 portfolio review` ✓ |
+| 3 | `For the Q3 portfolio review case, add a goal: ship Wave 1 by end of May.` | 1.77 s | `add_data_point` / `GOAL` / `Q3 portfolio review case` ✓ |
+| 4 | `Ship Wave 1 by end of May — goal for the Q3 portfolio review.` | 2.30 s (warm) | `add_data_point` / `GOAL` / `Q3 portfolio review` ✓ |
+
+**4/4 phrasings classified correctly.** Every variant including
+the structurally-hardest no-verb-noun-phrase form (#4) carried
+all four intent slots correctly. Convergence concern 5
+(intent-extraction reliability) closes operationally at
+`gpt-4o-mini` for these phrasing classes.
+
+Each cascade rendered Case 2 shape-aware clarification per
+pattern 2 (suggestion-as-question), e.g. for phrasing 2:
+`I think you want to add a goal to 'Q3 portfolio review': ship
+Wave 1 by end of May. Is that right? (yes / no)`. The medium-
+confidence band landing is a calibration property of the cell's
+prompt-and-schema design rather than the model — both
+`qwen2.5:14b` (S47) and `gpt-4o-mini` (S48a) self-report into the
+0.5-0.8 band on the same task shape.
+
+### Stage 4 (second instance) — confirmation resolution with
+duplicate-title resolver finding
+
+Operator replied `yes` to the phrasing 2 pending
+(`1ffee1aa-1950-4595-95a3-e9d9b4faae62`). The pending resolved
+deterministically (10:12:14.301 UTC); the orchestration then
+ran the case-reference resolver to bind
+`"Q3 portfolio review"` → an actual case ID, found **three
+matches** (one from S46, one from S47, one from this S48a
+Stage 4 first instance), and bailed with an ambiguity-rendering
+reply:
+
+> More than one case matches "Q3 portfolio review" — did you
+> mean one of: Q3 portfolio review, Q3 portfolio review,
+> Q3 portfolio review?
+
+Three substrate findings surfaced here, all forwarded to
+`log/captures.md`:
+
+1. **Resolver disambiguation rendering shows identical
+   strings** when multiple cases share a title — the user cannot
+   choose between them. The discriminator should include
+   created_at (relative date when recent), last-activity, or
+   associated data-point count rather than only `title`.
+2. **No data_point was written** at S48a because the resolver
+   bailed; this is why `tenant_a.data_points` delta is 0 despite
+   the four AddDataPoint cascades.
+3. **Smoke-iteration title accumulation** — S46, S47, S48a have
+   each minted a "Q3 portfolio review" case. Either smoke
+   briefs should use uniquified titles or there is a cleanup-
+   discipline gap to capture.
+
+### Stage 5 — correcting reply (first instance, cancellation)
+
+Operator replied `no` to the phrasing 1 pending
+(`acbdbb0b-869a-4b9a-b7a3-eefa27af2b56`).
+
+- 10:09:37.008 UTC — `no` intake recorded.
+- 10:09:37.017 UTC — inbound persisted.
+- 10:09:37.031 UTC — pending RESOLVED (deterministic cancel-
+  keyword detection fired; 14 ms after inbound persist).
+- 10:09:40.797 UTC — outbound reply: `Could you please clarify
+  what you mean by 'no'? Are you responding to a previous
+  question or request?`
+- **Pending cancellation latency: 14 ms** (deterministic).
+- **Subsequent fresh-turn LLM call: 3.77 s.** The cell falls
+  through to fresh-turn classification on the bare `no` after
+  resolving the pending; `gpt-4o-mini` classifies the bare `no`
+  as low-confidence / UnclearIntent and renders a Case 3 generic
+  clarification.
+
+Behaviour matches the S47 reflection prompt 5 description
+exactly. The cell's design: cancel registers cleanly, then the
+cell asks what the user wanted instead. Captures observation —
+the cancel-then-fresh-turn path always pays the cost of a second
+LLM call (~$0.0001, ~3.8 s) on a bare `no`; three design
+alternatives (accept as-is; deterministic cancel acknowledgment;
+silent cancel) are listed in the captures entry.
+
+### Auto-expire of prior pending on substantive new content
+
+Unplanned positive substrate observation surfaced when the
+operator sent phrasing 4 while phrasing-3's pending
+(`912a7235-…`) was still active. The cell:
+
+- Expired the phrasing-3 pending (`912a7235` → EXPIRED at
+  10:17:23.925 UTC).
+- Classified phrasing 4 as `add_data_point` at medium confidence.
+- Created a new pending (`74d4210b-…` → PENDING at
+  10:17:23.928 UTC).
+
+That's the "implicit cancel via substantive new content" pattern
+operating cleanly. The cell's behaviour for the next inbound has
+three branches: yes/confirm → resolve as confirmed + orchestrate;
+no/cancel → resolve as cancelled + fresh-turn the no; anything
+else substantive → expire prior + fresh-turn classify (+ possibly
+new pending if medium confidence). Worth capturing as a positive
+substrate observation.
+
+### Stage 5 (second instance) — correcting reply, clean close
+
+Operator replied `no` to the third instance of phrasing 4's
+pending (`deeeae13-bca1-476a-bc52-6ed23a0b5479`) to close the
+smoke cleanly. Pending RESOLVED at 10:20:48.162 UTC.
+
+### Audit chain integrity at smoke close
+
+```
+total_events    | distinct_hashes | genesis_events
+----------------+-----------------+----------------
+239             | 239             | 1 (orphan-by-naive-query;
+                                     actual genesis from 2026-05-12
+                                     with `0000...` predecessor)
+```
+
+Chain integrity holds. 239 events with 239 distinct hashes
+(no duplicates); the single chain anchor is the 2026-05-12
+genesis row whose `previous_event_hash` is the
+`GENESIS_HASH = '0000...'` sentinel.
+
+### Smoke close — tenant_a state delta
+
+| Table | Pre-S48a | Post-S48a | Delta |
+|---|---|---|---|
+| intakes | 29 | 40 | +11 |
+| cases | 7 | 8 | +1 (`acb449a0`) |
+| data_points | 3 | 3 | 0 (resolver-ambiguity finding blocked the write at Stage 4 second instance) |
+| messages | 36 | 56 | +20 |
+| pending_clarifications | 2 | 7 | +5 |
+| tenant_audit | 196 | 239 | +43 |
+
+### S48a verdict
+
+**Operational dogfooding loop unblocked at `gpt-4o-mini`.** Three
+load-bearing claims hold:
+
+1. **Classification reliability.** `gpt-4o-mini` classified
+   `add_data_point` correctly on 4/4 phrasing variants — including
+   the structurally-hardest no-verb-noun-phrase form. S46's
+   `qwen2.5:7b` was 0/2 on the same template phrasing class.
+2. **Latency budget.** Warm classification call lands at
+   1.5-2.3 s. Cold lands at 2.2-3.0 s. The S46 cold for
+   `qwen2.5:7b` was 22.95 s; the S47 cold for `qwen2.5:14b` was
+   28-361 s. `gpt-4o-mini` is comfortably in the dogfooding-
+   viable band.
+3. **Cost.** The full smoke session (~10 LLM cascades) consumed
+   under $0.01 against the OpenAI account at the published
+   gpt-4o-mini rates. Operator-dogfooding volume (estimated
+   ~50-200 cascades/day) projects to well under $1/day.
+
+**Substrate findings forwarded to captures for next-strategic-
+block disposition** (not S48a scope): (a) resolver disambiguation
+rendering must add unique discriminators when titles collide;
+(b) detect-at-creation discipline for `create_case` to avoid
+duplicate-title accumulation; (c) cancel-then-fresh-turn cost
+tunability.
+
+**S48a closes the convergence's concern 5 operationally.** The
+S47 substrate's load-bearing claims continue to hold; the
+inference-model question that S47 smoke surfaced is resolved by
+configuration alone (one Phase 2-A pin change), exactly the
+D133-gateway-as-resolution-point shape working as intended.
