@@ -646,3 +646,39 @@ Promotion-threshold material at the convergence close; recurrence test at the ne
 
   - triaged: 2026-05-25 — promotion-ready with five-instance evidence
   - resolution: forward to `charter/methodology.md` for the interface-versus-implementation discipline addition at the post-S47 hygiene session. The discipline addition is an explicit pre-write reconciliation surface at framing time and at prompt-drafting time: any new architectural commitment language is checked against the question "am I committing the interface or the implementation?" before the D-entry prose drafts; any session prompt's commit-shape descriptions are checked against the same question before the prompt commits. The convergence's pre-write reconciliation surface 9 at S47 framing is the first instance of the discipline in action at framing time; the post-prompt-draft fifth-instance catch is the discipline's first instance of activation at the prompt-draft surface. The pattern-density observation forwards to the next strategic-mode session for the recurrence test. The earlier captures entries from the convergence at "[S45] Forward strategic block — UX convergence session" and the related captures from 2026-05-22 close at this promotion.
+
+## 2026-05-26 — [S47 smoke] qwen2.5:14b operator-dogfooding viability on commodity hardware
+
+S47 commit 6 bumped the REAL_TIME_REQUIRED tier model pin to qwen2.5:14b per D133/D134 Response A (addressing the S46 smoke's intent-extraction reliability finding at qwen2.5:7b). The S47 live-stack smoke against tenant_a executed the bump and surfaced a hardware-viability gap: 14b's warm-call latency on the cell's intent-extraction prompt (system prompt + JSON schema + user message) showed progressive slowdown across calls: **28s → 48s → 67s → 361s**. The 361s call eventually got captured by the dispatch-port's failure-logging at LiteLLM's tier timeout (bumped to 120s for the smoke); ollama kept processing for the full 6 minutes before unloading the model.
+
+The progressive slowdown signature (each call slower than the last) suggests memory pressure / cache thrashing at the 9.7 GB resident model on this machine (16 GB RAM total). The cold-load disk→memory cost alone is ~107 seconds. Phase 2-A operator dogfooding requires response latencies in the 10-30 second range to feel responsive at the WhatsApp surface; 6-minute latencies make the cell non-viable.
+
+**The S47 substrate is unaffected by the finding.** The dispatch port, ThresholdResolver, PendingClarification lifecycle with FK integrity, multi-turn cascade, D131 rendering, and pattern-2 binding all validated end-to-end against tenant_a (smoke doc at `docs/smoke/p13_s47_multi_turn_cell_end_to_end.md`). What does not validate is the **D133 Response A disposition**: static-configuration-at-Phase-2-A bumping to qwen2.5:14b does not close the S46 smoke's reliability finding when the larger model can't run in operator latency budgets.
+
+The convergence's three responses (A raise tier model; B constrain classification surface or expand the prompt; C render uncertainty more honestly) are not exclusive. Response C (the confidence-aware composition primitive at D134) is fully landed at S47 and operating correctly — even at the 14b pin, the cell at *medium-confidence* classification renders shape-aware clarification rather than acting confidently on an uncertain guess. The S46 binary-gate failure mode is closed structurally by D134 regardless of which model the gateway routes to.
+
+**Architectural implication for the next strategic-mode session.** Three forward paths to consider, none in scope at S47 smoke close:
+
+1. **Hosted REAL_TIME_REQUIRED model.** The InferenceSettings env override (`REAL_TIME_REQUIRED_MODEL=gpt-4o-mini` or `claude-haiku-4-5`) is already a supported override; the LiteLLM gateway needs the corresponding `model_list` entry. This is configuration plus secret management, not code. Operator dogfooding cost shifts from "lots of local memory" to "per-call cents" — typically <$0.001 per intent classification.
+
+2. **Tier-timeout per-model overrides.** The compose-level env passthrough lets the operator tune the tier budget; the InferenceSettings field stays a single tier-wide value. A per-model override surface (e.g. `MODEL_TIMEOUT_QWEN2_5_14B=240`) defers to the next session if needed.
+
+3. **Constrain Response B (classification surface).** The intent-extraction schema includes four variants (CreateCase, AddDataPoint, ReviseDataPoint, UnclearIntent). Reducing to a binary (CreateCase vs other) plus a follow-up clarification turn for non-CreateCase classes simplifies the model's discriminative task. Larger structural change; defers unless Response A's hosted-inference path doesn't close the reliability gap either.
+
+  - triaged: 2026-05-26 — defer
+  - resolution: captured for the next strategic-mode session covering inference-model selection or the post-S47 hygiene session. The two structural fixes the smoke surfaced (model-registry-vs-LiteLLM-gateway-routing drift; the FK-integrity threading on the cell's originating_intake_id) landed at commit d63f8a5 at the smoke close. The hardware-viability finding stays as forward observation; no charter change at the S47 smoke close, only this captures entry. The S46 smoke's intent-extraction reliability captures entry (2026-05-22 [S46 smoke]) names Response A/B/C; this captures entry forwards the Response-A-on-this-hardware viability question without superseding the original entry.
+
+## 2026-05-26 — [S47 smoke] model-registry-vs-LiteLLM-gateway-routing drift class (methodology candidate)
+
+S47 commit 6 seeded qwen2.5:14b in `padhanam/config/model_registry.py` (D133's audit-and-future-policy substrate) but did not update `ops/litellm/config.yaml`'s `model_list` in parallel. The smoke surfaced the gap on the first cell invocation: `litellm.BadRequestError: OpenAIException - /chat/completions: Invalid model name passed in model=qwen2.5:14b`. The model-registry seed is structurally separate from the gateway routing surface; they need to stay in sync but no test enforces the invariant.
+
+The two surfaces have different semantic roles:
+- `padhanam/config/model_registry.py` — the audit-and-future-policy catalogue per D133 (provider, account, version, supported operations, latency category, cost-per-call). Phase 2-A consumes this for audit-trail dimension capture per D132; Phase 3+ cost-aware routing policies consume it for routing decisions.
+- `ops/litellm/config.yaml` `model_list` — the LiteLLM gateway's accepted model names and their backend bindings. The gateway rejects calls to any model not listed.
+
+A model must appear in both for the audit substrate and the routing surface to work together. The fix at commit d63f8a5 added the qwen2.5:14b entry to the gateway config; the underlying drift class remains structurally unprotected.
+
+**Forward fix candidate.** A structural test that loads `MODEL_REGISTRY` from `padhanam/config/model_registry.py` and asserts each entry's `model` value appears in the parsed `ops/litellm/config.yaml` `model_list`. Modest test: a single pytest function that parses both files and computes set intersection. Lives at `tests/contract/inference/test_model_registry_gateway_sync.py` or similar.
+
+  - triaged: 2026-05-26 — defer
+  - resolution: forwarded to the post-S47 hygiene session for the structural-test addition. The fix at d63f8a5 closes the operational symptom; the structural test closes the drift class. Recorded at the S47 smoke session-log entry. Future model additions to either surface should land in both at the same commit; the test makes that discipline mechanical rather than convention.
