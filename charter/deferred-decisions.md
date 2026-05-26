@@ -650,7 +650,7 @@ S45 lands the messaging substrate for a single channel (WhatsApp via Twilio per 
 
 **Activation triggers (still in force for implementation).** Multi-channel work begins when any of: (a) the Phase 2-A operator starts using more than one channel; (b) Padhanam initiates outbound conversations at P14+ where channel selection matters; (c) Phase 2-B+ introduces multiple users with multiple channels.
 
-**Architectural disposition.** D136 commits the four primitives. The forward UX convergence strategic block (captured at `log/captures.md` 2026-05-22 [S45]) closed at S47. References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol), D136 (multi-channel UX architectural primitives).
+**Architectural disposition.** D136 commits the four primitives. The forward UX convergence strategic block (captured at `log/captures.md` 2026-05-22 [S45]) closed at S47. P14 framing (2026-05-26) confirms no D136 primitive activates at P14: Primitives 1 (User as first-class concept), 2 (channel preference for outbound), and 4 (ChannelCapabilities descriptor) stay deferred at their existing activation triggers; Primitive 3 (PendingClarification user-scoped) stays active from S47 unchanged. References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol), D136 (multi-channel UX architectural primitives).
 
 ### Shared-kernel CitedResponse base type or Protocol
 
@@ -658,7 +658,9 @@ D131's first instance at S46 (the manual entry cell's CellResponse value object 
 
 **Activation trigger.** P14 ConversationFlow implementers at audit-conversation (5.1) and mirror-conversation (4.1). When both implementers land within one framing or one session, the shared-kernel base type emerges at that framing. If they land sequentially across two sessions, the trigger fires at the second one.
 
-**The specific shape lands at the activating session.** References D131 (provenance-aware response composition), D115 (ConversationFlow Protocol), D135 (rendering pattern; structural enforcement question deferred here).
+**Status: closed by D138, 2026-05-26 (P14, S51 framing).** Runtime-checkable Protocol with three citation tuple fields at `shared_kernel/conversation_flow.py` (single-file alongside the existing ConversationFlow Protocol per pre-write reconciliation Finding 2). The shape committed at D138 plus ArtefactCitation typed value object (`artefact_id: UUID` plus `artefact_type: str` discriminator) authored fresh at S51 (the framing-time framing of ArtefactCitation as "currently at the manual entry cell module" was structurally false per pre-write reconciliation Finding 4). Heterogeneous-citations shape adopted per operator architectural disposition on Finding 4. Empty-field-at-first-instance gap closes on the read-side at audit-conversation; no write-result DTO extension required at P14.
+
+**The specific shape lands at the activating session.** References D131 (provenance-aware response composition), D115 (ConversationFlow Protocol), D135 (rendering pattern; structural enforcement question deferred here), D138 (closure D-entry).
 
 ### Cost-aware routing policies at the LiteLLM gateway
 
@@ -667,3 +669,31 @@ D133 commits the gateway-as-resolution-point shape and the model registry's cost
 **Activation trigger.** Padhanam-provides-LLM business-model activation at Phase 3+ when multi-ICP customer deployments make Padhanam directly responsible for inference cost. Tenant-tier contracts and cost budgets become real configuration surfaces.
 
 **The specific policy shapes land at the activating session(s).** References D133, D14 (customer-deployment model; tenant-tier contracts), principles.md lines 10-11 (vendor flexibility and architectural-commitments-evolve).
+
+## P14 framing deferrals
+
+Architectural decisions deferred at P14 framing (2026-05-26). Each names an activation trigger.
+
+### Calendar-read and email-read cells at P14 versus P15+
+
+The original `charter/packages.md` P14 line scoped 1.1 calendar-read cells (Google, MS365) plus 1.1 email-read cells (Gmail, Outlook) as Wave 2 substrate alongside other work-streams. P14 framing 2026-05-26 narrowed the P14 scope to the two ConversationFlow implementers (audit-conversation, mirror-conversation) and deferred the calendar-read and email-read cells.
+
+**Activation trigger.** P15 framing. Same disposition for email-read cells (Gmail, Outlook). The intake-canonical commitment at D128 inherits transparently: calendar-read and email-read cells at P15 will land as intake-canonical orchestrations per the D127 precedent.
+
+**Status: deferred at P14 framing (2026-05-26).** References D127 (intake-canonical orchestration substrate), D128 (intake-canonical commitment), the original `charter/packages.md` P14 line that surfaces this deferral.
+
+### Mirror-conversation drill-down persisted state entity
+
+Mirror-conversation drill-down navigation at P14 is stateless re-classification per turn against conversation history per D138 extension and architecture.md mirror-conversation drill-down stateless-per-turn sub-section. The design resists a second user-scoped state machine alongside PendingClarification at Phase 2-A.
+
+**Activation triggers.** A persisted state entity becomes the right shape if any of: (a) operator dogfooding surfaces drill-down misclassification rate exceeding the gold-set threshold established at S52's gold-set authoring; (b) conversation-history-as-classifier-context fails at recurring sub-cases such as long pauses, context-window saturation, or cross-channel navigation when a second channel arrives; (c) a future ConversationFlow implementer at P15+ surfaces a parallel navigation-state requirement that would benefit from a shared state entity.
+
+**Architectural disposition.** S52 commits the stateless-per-turn pattern; the entity defers at the activation triggers above. References D134 (PendingClarification entity; the precedent state machine the drill-down resists duplicating), D138 (CitedResponse Protocol; mirror-conversation response value object), D129 (messaging substrate; conversation history persistence).
+
+### D137 substrate parameterisation over multiple intent surfaces
+
+D137 commits the intent-classification evaluation substrate at `contexts/intent_classification_evaluation/` with `INTENT_CLASSES` at the domain shape hard-coded to the manual entry cell's intent surface (`create_case`, `add_data_point`, `revise_data_point`, `unclear`). S51 framing (P14 audit-conversation) added the audit-conversation intent surface to `INTENT_CLASSES` as a tuple extension; the gold-set domain shape and YAML fixture loader now serve two intent surfaces (manual entry plus audit) by string-membership against the extended tuple.
+
+**Activation trigger.** A third ConversationFlow implementer's gold-set authoring (P14 S52 mirror-conversation adds the third intent surface; P15+ surfaces add fourth and beyond). When the tuple-extension pattern becomes operationally cumbersome (substring collision; per-surface metric calculation; per-surface latency budget; per-surface model-tier selection), promote the domain shape to a parameterised intent surface (an `IntentSurface` value object carrying the intent class set plus per-surface metadata, with `IntentClassificationGoldSet` holding a reference to one surface).
+
+**Architectural disposition.** S51 extends `INTENT_CLASSES` as a minimal tuple extension (the cheapest possible adaptation). S52 may extend again the same way; the parameterisation triggers at the third-or-later instance where the tuple-extension stops carrying the cumulative weight. References D137 (substrate D-entry), D127 alternative (d) (build-at-second-instance discipline; this entry inverts the discipline by deferring parameterisation past two instances to surface the third-instance concrete evidence).

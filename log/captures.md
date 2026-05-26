@@ -820,3 +820,62 @@ DataPoint resolution-ambiguity stays at the simpler text-join clarification (no 
 
   - triaged: 2026-05-26 — first-instance observation; recurrence test named at P14 ConversationFlow implementers
   - resolution: cell-layer extension at S50 implements the disposition (PortfolioGateway.CaseSummary discriminator-field extension; TargetCandidate.discriminators and ResolutionOutcome.candidates shape; `_dispatch_resolution_clarify_with_pending` plus positional-reply branch in turn(); `_handle_resolution_selection` with `_dispatch_proceed_against_resolved` short-circuit; 11 new unit tests). Architecture.md prose addition deferred to second instance at P14 framing per the build-at-second-instance discipline. Recorded at the S50 session-log methodology line.
+
+## 2026-05-26 — [P14 framing] S49 scope-discipline three-modes refinement
+
+The S49 scope-discipline-at-brief-authoring captures entry treats scope discipline as binary (load-bearing-minimum-committed; maximal-by-precedent-rejected). S50 framing surfaced a third mode: deferred-to-framing (a decision that defers from brief altitude to a subsequent strategic-mode framing session rather than committing or rejecting at the brief).
+
+P14 framing exercised all three modes operationally: committed (narrow scope at audit + mirror); deferred-to-framing (mirror drill-down state question landed at framing rather than at S52's brief); rejected-by-precedent (calendar-read and email-read pushed to P15+ despite phase-2-design-7step's original P14 line).
+
+Three modes acknowledged: load-bearing-minimum-committed; maximal-by-precedent (rejected at the brief unless framing-altitude reconciliation surfaces it as load-bearing); deferred-to-framing (a third mode where the brief cannot settle the question without strategic-mode framing inheritance).
+
+  - triaged: 2026-05-26
+  - resolution: light revision to the S49 captures entry forthcoming at the next captures-entry revision cycle; the three modes carry forward as the discipline's operational shape. P14 framing is the second-instance evidence beyond S49/S50. Recorded at P14 framing strategic-mode close.
+
+## 2026-05-26 — [P14 framing] Interface-vs-implementation operational evidence carryforward
+
+The S49 methodology promotion entry for interface-versus-implementation discipline carries convergence-conversation provenance plus the S50 operational evidence (CaseSummary DTO discriminator-field extension; PendingClarification dict shape, both caught at draft time).
+
+P14 framing exercised the discipline at every architectural commitment shape (CitedResponse Protocol shape; AuditQueryPort shape; intent value object set; response value object shape; conformance scenario shape) and surfaced the discipline's standing-surface binding as operationally enforceable beyond the convergence-conversation provenance.
+
+Forward-relevance update for the methodology entry: surface S50's operational evidence and the P14 framing's exercise as carrying-forward beyond convergence-conversation provenance. The discipline binds at every strategic-mode block and at every brief-authoring step.
+
+  - triaged: 2026-05-26
+  - resolution: light revision to the methodology entry forthcoming at the next methodology-entry revision cycle; the forward-relevance prose surfaces S50 plus P14 framing as operational evidence. Recorded at P14 framing strategic-mode close.
+
+## 2026-05-26 — [P14 framing] Mirror-conversation drill-down state-entity activation trigger
+
+Mirror-conversation drill-down navigation at P14 is stateless re-classification per turn against conversation history per D138 extension and architecture.md. The design resists introducing a second user-scoped state machine alongside PendingClarification.
+
+Activation triggers for the state-entity to become the right shape: (a) operator dogfooding surfaces drill-down misclassification rate exceeding the gold-set threshold from S52; (b) conversation-history-as-classifier-context fails at recurring sub-cases (long pauses; context-window saturation; cross-channel navigation when a second channel arrives); (c) a future ConversationFlow implementer at P15+ surfaces a parallel navigation-state requirement that would benefit from a shared state entity.
+
+  - triaged: defer on 2026-05-26
+  - resolution: forwarded to charter/deferred-decisions.md as the activation-trigger entry. The captures entry indexes the architectural disposition; the deferred-decisions entry is the activation-trigger surface. Recorded at P14 framing strategic-mode close.
+
+## 2026-05-26 — [P14 framing] S46 cited_audit_events empty-field gap closure
+
+S46's manual entry cell first-instance exercise of D131 carried cited_audit_events empty because intake write-result DTOs (CaseWriteResult, DataPointWriteResult) do not surface audit_event_ids. The S46 captures entry forwarded the gap to either a write-result DTO extension at P14+ or acceptance of cited_audit_events as aspirational where cited_intake_records plus cited_artefacts cover the audit surface transitively.
+
+P14 framing settles: no write-result DTO extension at P14. The gap closes on the read-side at audit-conversation's natural composition (the audit chain query result's audit_event_ids populate cited_audit_events directly; audit_events are the response's primary content, so the citation tuple is non-empty by construction). Mirror-conversation continues to leave cited_audit_events empty (audit chain reachable transitively through cited IntakeRecord audit anchoring per D128). Manual entry cell's CellResponse continues to leave cited_audit_events empty (S46's original disposition holds).
+
+  - triaged: 2026-05-26
+  - resolution: closed at D138 (CitedResponse Protocol expected-exercise) and architecture.md (audit-conversation context note). The empty-field gap closes structurally without intake write-result DTO extension at P14. Future write-result DTO extension defers to a later trigger if a downstream consumer demands direct audit_event_id pointers from write results. Recorded at P14 framing strategic-mode close.
+
+## 2026-05-26 — [S51 framing] Substrate-inheritance survey at framing close (methodology candidate, three-instance evidence)
+
+P14 framing committed the S51 brief on substrate-inheritance assumptions that pre-write reconciliation found false at three independent altitudes:
+
+1. **AuditQueryPort framed as new** when the existing AuditEventReader port from S36 covered the seven filter dimensions plus cursor pagination plus chain-integrity verification. The brief committed an Alembic migration and a new Postgres adapter; both dropped at Finding 1 disposition.
+2. **shared_kernel/conversation_flow framed as a directory** when the codebase convention is single-file per shared_kernel primitive (intent_classification.py, structured_output.py, inference.py, confidence_thresholds.py, actor_context.py, authorisation.py, revisable.py). The brief committed `shared_kernel/conversation_flow/cited_response.py` and `shared_kernel/conversation_flow/citations.py`; both collapsed to a single-file extension at Finding 2 disposition.
+3. **ArtefactCitation framed as "currently at the manual entry cell module"** when ArtefactCitation does not exist anywhere in the codebase. The "move from manual entry cell" framing was structurally false; ArtefactCitation is authored fresh at S51, and CellResponse refactors at S51 commit 2 (the brief's "no shape change to CellResponse" framing was the load-bearing falsity Finding 4 surfaced). Operator selected the symmetric-with-mirror architectural shape after the pick became visible.
+
+The pattern: P14 framing's brief altitude assumed substrate that codebase reality doesn't carry. Each instance was caught at pre-write reconciliation surfaces 1, 2, and 4 respectively (surface 3 — gold-set fixture location — landed as Finding 3 at a different shape: existing convention diverges from brief without a substrate-inheritance miss; the brief framed a new path rather than mis-naming an existing one).
+
+The substrate-inheritance survey discipline: at framing close, before brief preservation, run a survey of each substantive substrate commitment in the brief against current codebase state. For each "X exists at Y" or "X moves from Y to Z" claim in the brief, verify by grep that X actually exists at Y. Each false claim is a structural-honesty finding to surface before code drafting begins.
+
+The three-instance evidence base (one P14 framing, three independent surface misses) carries the discipline to promotion-ready altitude. The S49 promotion of interface-versus-implementation discipline at seven-instance evidence is the precedent; substrate-inheritance survey at three-instance evidence at one framing event is a denser pattern (three brief-altitude misses in one framing session is itself signal).
+
+Forward-relevance: the discipline binds at framing close (strategic-mode), at the first action of pre-write reconciliation (build-mode), and at brief-vs-codebase comparison generally. Adjacent to interface-versus-implementation (S49) and scope-discipline-at-brief-authoring (S48b/S49/S50/P14 framing), but distinct: substrate-inheritance is "the brief claims X exists; X does not exist"; interface-versus-implementation is "the brief commits an implementation when the architecture should commit the interface"; scope-discipline is "the brief commits the full implementation when only the load-bearing minimum is needed."
+
+  - triaged: 2026-05-26 — three-instance evidence at single P14 framing event; promotion-ready
+  - resolution: forward to `charter/methodology.md` promotion candidacy. The recurrence test is at the next strategic-mode brief-authoring moment: does the brief carry framing-altitude claims about codebase substrate that pre-write reconciliation will need to verify? The pattern-family observation alongside interface-versus-implementation and scope-discipline-at-brief-authoring anchors the connection for the second-instance-of-the-pattern-family promotion conversation. Recorded at the S51 session-log methodology line.
