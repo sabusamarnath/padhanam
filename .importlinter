@@ -159,6 +159,15 @@ layers =
     contexts.messaging.ports
     contexts.messaging.domain
 
+[importlinter:contract:layers-intent-class-eval]
+name = Intent-classification evaluation layers (hexagonal)
+type = layers
+layers =
+    contexts.intent_classification_evaluation.adapters
+    contexts.intent_classification_evaluation.application
+    contexts.intent_classification_evaluation.ports
+    contexts.intent_classification_evaluation.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -191,6 +200,7 @@ modules =
     contexts.portfolio.domain
     contexts.intake.domain
     contexts.messaging.domain
+    contexts.intent_classification_evaluation.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -216,6 +226,7 @@ modules =
     contexts.portfolio.application
     contexts.intake.application
     contexts.messaging.application
+    contexts.intent_classification_evaluation.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -240,6 +251,7 @@ modules =
     contexts.portfolio.adapters
     contexts.intake.adapters
     contexts.messaging.adapters
+    contexts.intent_classification_evaluation.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -279,6 +291,7 @@ source_modules =
     contexts.portfolio.domain
     contexts.intake.domain
     contexts.messaging.domain
+    contexts.intent_classification_evaluation.domain
 forbidden_modules =
     pydantic
     pydantic_settings
