@@ -168,6 +168,13 @@ layers =
     contexts.intent_classification_evaluation.ports
     contexts.intent_classification_evaluation.domain
 
+[importlinter:contract:layers-audit-conversation]
+name = Audit-conversation layers (hexagonal)
+type = layers
+layers =
+    contexts.audit_conversation.application
+    contexts.audit_conversation.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -201,11 +208,13 @@ modules =
     contexts.intake.domain
     contexts.messaging.domain
     contexts.intent_classification_evaluation.domain
+    contexts.audit_conversation.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
     contexts.tenancy.api -> contexts.tenancy.domain.**
     contexts.tools.api -> contexts.tools.domain.**
+    contexts.messaging.api -> contexts.messaging.domain.**
 
 [importlinter:contract:contexts-independent-application]
 name = Cross-context: application layers are independent
@@ -227,10 +236,12 @@ modules =
     contexts.intake.application
     contexts.messaging.application
     contexts.intent_classification_evaluation.application
+    contexts.audit_conversation.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
     contexts.tenancy.api -> contexts.tenancy.application.**
+    contexts.messaging.api -> contexts.messaging.application.**
 
 [importlinter:contract:contexts-independent-adapters]
 name = Cross-context: adapter trees are independent
