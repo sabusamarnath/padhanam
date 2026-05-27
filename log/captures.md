@@ -946,3 +946,64 @@ This is a substrate-inheritance survey miss at the *charter audit-trail surface*
 
   - triaged: 2026-05-27
   - resolution: absorbed at S52 commit 1 (this commit). The substrate-inheritance survey methodology candidate's "what to survey" surface gains "charter/schema.md section completeness against the migration directory" as another concrete check alongside the Alembic-numbering refinement. The hygiene-session promotion to methodology.md should include the schema.md-completeness sub-surface. Recorded at S52 framing close.
+
+## 2026-05-27 — [P15 framing] Substrate-inheritance survey three-instance evidence at framing altitude
+
+S52 framing first-application evidence (five surveys ran at framing altitude; brief-altitude reconciliation surface dropped from S51's five findings to S52's one finding). P15 framing applied the discipline at every surface walk and surfaced three corrections at framing altitude:
+
+- Surface 3 (channel preference state): initial lean toward User entity extension corrected when survey revealed D136 Primitive 1 (User aggregate root) defers to second-channel activation trigger. Static-configuration adapter became the right call.
+- Surface 5 (external-integration architectural shape): initial framing assumed in-process OAuth at messaging context corrected when survey revealed D14 commits separate-service pattern for calendar/email tools. Consumer-side adapter pattern became the right call.
+- Surface 2 (outbound abstraction shape): synthetic-inbound alternative rejected when reasoning surfaced semantic honesty principle. BroadcastFlow Protocol committed.
+
+Three framing-altitude corrections at P15 framing extends the methodology candidate's promotion-readiness. The discipline operates as standing surface at framing-altitude AND at brief-altitude (substrate-inheritance survey runs at every surface walk; brief-altitude reconciliation surface should continue to shrink at S53 onwards).
+
+  - triaged: 2026-05-27
+  - resolution: continued recurrence evidence at framing altitude. Methodology candidate promotion-ready for methodology.md at next hygiene session. Recorded at P15 framing close.
+
+## 2026-05-27 — [P15 framing] Operator chose Nango self-hosted for tool service substrate
+
+Strategic disposition at P15 framing. The operator chose Path B (source tool services externally) with self-hosted Nango under Elastic License rather than Path A (build Padhanam-owned tool services) or Composio cloud (third-party SOC2-certified hosting).
+
+Reasoning: Composio's "shallow moat" critique (acknowledged by external observers; the platform's defensibility erodes with provider API changes) concerns vendor-dependency risk; self-hosted Nango keeps OAuth substrate inside operator-controlled infrastructure at $0 ongoing cost with migration-free path to Path A at Phase 2-B+ if needed.
+
+Operator runs Nango container alongside padhanam-api as parallel infrastructure work outside Padhanam's package boundary. The architectural Protocol-based adapter pattern (D14, D144's port-based abstraction) supports any future migration without domain code changes.
+
+Path A migration trigger conditions: vendor pricing inversion at Phase 2-B+ scale; privacy compliance escalation; feature divergence. Recorded at charter/deferred-decisions.md as the Path A migration entry plus the calendar/email activation closures.
+
+  - triaged: 2026-05-27
+  - resolution: forwarded to charter/deferred-decisions.md as the Path A activation trigger entry. Operational disposition for parallel infrastructure work outside Padhanam's package boundary. Recorded at P15 framing close.
+
+## 2026-05-27 — [P15 framing] P15 medium scope at five sessions as package-shape evidence
+
+P15 framing settled medium scope (outbound initiation plus calendar-read plus email-read) with wide scope (Slack, methodology library, surfacing mechanics) deferred to P16. The framing surfaced that medium scope at one package is materially larger than P14: three substantial substrates (outbound, calendar, email) each with intake-side AND ConversationFlow-implementer surfaces, estimated five sessions to close.
+
+P14 ran two sessions plus framing (S51 plus S52). P13 ran ten sessions (S43 to S50). P15 at five sessions sits in between but skewed toward P13 size territory.
+
+Methodology observation candidate: package-shape sizing at framing altitude. Three modes observable across packages: small (P4 at two sessions; some P12 work), medium (P14 at two sessions plus framing), large (P13 at ten sessions; projected P15 at five sessions). Operator's preference at framing time (one large package versus split into narrow plus follow-on) is real strategic input that benefits from explicit naming at framing.
+
+Not yet a load-bearing methodology candidate (one observation does not establish a pattern). Forward observation: if P16 framing also surfaces a sizing decision, the candidate evidence grows.
+
+  - triaged: 2026-05-27 — first-instance package-shape sizing observation at framing-altitude
+  - resolution: forward-relevance prose carries to P16 framing; methodology candidate evidence accumulates if P16 framing surfaces a sizing decision. Recorded at P15 framing close.
+
+## 2026-05-27 — [P15 framing] BroadcastFlow as second-instance of shared_kernel cross-cutting Protocol pattern
+
+D115 first instance: ConversationFlow Protocol at shared_kernel for cross-context interaction abstraction. D138 second instance: CitedResponse Protocol at shared_kernel for citation-shape conformance. D142 third instance: BroadcastFlow Protocol at shared_kernel for platform-initiated outbound abstraction.
+
+Pattern observation: shared_kernel as the home for cross-context structural Protocols that multiple bounded contexts implement. Each Protocol is runtime-checkable; each is parallel rather than inherited; each enforces structural typing without inheritance coupling.
+
+Observation candidate: shared_kernel Protocol pattern is becoming a recurring architectural shape. Third instance at P15 establishes the pattern; future cross-context structural commitments likely follow the same shape.
+
+  - triaged: 2026-05-27 — third-instance Protocol pattern observation
+  - resolution: pattern indexed. No promotion-candidacy yet (the pattern is implicit-but-coherent); future architectural decisions naming new Protocols can reference this pattern. Recorded at P15 framing close.
+
+## 2026-05-27 — [P15 framing] ArtefactCitation discriminator additive extension pattern verified
+
+D138's ArtefactCitation typed value object at shared_kernel carries an artefact_type discriminator (Case, DataPoint at Phase 2-A first instance). P15 framing Surface 6 commits the extension to four types (Case, DataPoint, Meeting, Email). The Protocol stays unchanged; only the discriminator enum widens.
+
+Pattern verified: discriminator extension is additive. New ConversationFlow implementers consuming new artefact types extend the discriminator without forcing Protocol revision. The extension is forward-compatible by construction.
+
+This validates the D138 framing's expectation that the discriminator pattern generalizes. The captures entry indexes the second-instance verification (first instance was D138's own commit; second instance is P15 framing's extension commitment).
+
+  - triaged: 2026-05-27
+  - resolution: pattern verified second-instance. The additive-extension shape is now established at two instances; future Phase 2-A or Phase 2-B+ implementers extending the discriminator follow the same shape. Recorded at P15 framing close.

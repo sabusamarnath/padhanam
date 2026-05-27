@@ -456,6 +456,8 @@ Activates when public Padhanam needs a calendar integration for any package work
 
 **The specific D-entry lands when implementation begins**, capturing protocol choice (HTTP versus MCP), authentication shape, and integration scope. Premature commitment to a specific calendar provider, protocol, or authentication mechanism ahead of integration is paper architecture.
 
+**Status: activated at P15 framing (2026-05-27).** Operator chose self-hosted Nango under Elastic License for the tool service substrate, kept inside operator-controlled infrastructure (Path B). Path A (Padhanam-owned tool services) activation triggers named at the new "Path A migration from Nango self-hosted" entry below: vendor pricing inversion at Phase 2-B+; privacy compliance escalation; feature divergence. The specific D-entry covering the protocol/auth/scope choice lands at S55 (calendar substrate session) with the live integration verification.
+
 ### Email tool service as platform capability
 
 Activates when public Padhanam needs an email integration for any package work (potentially P9 source ingestion, P10 active testing, or P11 recommendation surfaces) or when the operator's personal-use deployment Phase C activates (post-P8 close per D78), whichever comes first.
@@ -463,6 +465,8 @@ Activates when public Padhanam needs an email integration for any package work (
 **Email tool is a generic capability with broad applicability.** Same architectural shape as the calendar tool entry: separate-service implementation per D14, tool-registry configuration points to it, protocol-and-auth choice deferred to the implementation moment.
 
 **The specific D-entry lands when implementation begins**, capturing protocol choice, authentication shape, and integration scope. Premature commitment ahead of integration is paper architecture.
+
+**Status: activated at P15 framing (2026-05-27).** Operator chose self-hosted Nango under Elastic License symmetric to the calendar tool entry above (Path B). The specific D-entry covering the protocol/auth/scope choice lands at S56 (email substrate session) with the live integration verification. Path A migration triggers apply identically to the calendar tool service entry.
 
 ### Per-invocation human-in-the-loop confirmation pathway for high-classification tools
 
@@ -654,6 +658,8 @@ S45 lands the messaging substrate for a single channel (WhatsApp via Twilio per 
 
 **P14 close confirmation (2026-05-27).** S52 close confirms no D136 primitive activates during P14 beyond the additive `target_cell` extension at D140 (Primitive 3's user-scoping discipline holds unchanged; the target_cell extension identifies *which cell* owns a pending without changing the user-scope). Primitives 1, 2, and 4 stay deferred at their existing activation triggers.
 
+**P15 S53 activation (2026-05-27).** Primitive 2 (channel preference for outbound) activates at D144: ChannelResolver Protocol with static-configuration adapter at Phase 2-A. The user-scoped channel preference state defers to the second-channel activation trigger per Primitive 1's User aggregate root dependency. The Phase 2-A degenerate-static shape honors D136 Primitive 2's commitment exactly. Primitives 1 (User aggregate) and 4 (ChannelCapabilities descriptor) stay deferred at their existing activation triggers; Primitive 3 (PendingClarification user-scoped + target_cell extension) stays active unchanged.
+
 ### Shared-kernel CitedResponse base type or Protocol
 
 D131's first instance at S46 (the manual entry cell's CellResponse value object carries citation fields directly per the convention altitude). D135 at S47 commits the convention discipline at Phase 2-A and defers the structural-enforcement question (a shared-kernel CitedResponse base type or Protocol that future ConversationFlow implementers conform to structurally) to the P14 second-instance trigger.
@@ -715,3 +721,31 @@ D141 commits per-implementer `cell_payload` JSONB on the messages table with imp
 **Activation trigger.** Third or fourth ConversationFlow implementer with substantial cell_payload shape, where coordination across implementers becomes valuable. Indicators: (a) two or more implementers want to read each other's cell_payload (cross-cell focus continuity); (b) a future implementer's cell_payload shape would benefit from versioning (e.g., schema-evolution sub-cases that the implementer's own validation would need to track explicitly); (c) tooling or analytics surfaces that consume cell_payload across all implementers need a registry to discover the per-implementer shapes.
 
 **Architectural disposition.** At P14 close the implementer-side validation discipline carries the load (one implementer with one payload shape). The registry shape (a cross-context registration surface mapping cell-identifier to payload-schema, with the dispatch_inbound use case or a sibling surface enforcing the registration) defers to the activation trigger. References D141 (cell_payload persistence D-entry), D115 (ConversationFlow Protocol), D140 (meta-classifier dispatch routing; the CellIdentifier enum would carry the registry's keys).
+
+## P15 framing deferrals
+
+Architectural decisions deferred at P15 framing (2026-05-27). Each names an activation trigger.
+
+### Background sync for calendar and email at messaging context
+
+P15 framing Surface 5 Sub-question 5.6 committed pull-on-demand sync mechanics at Phase 2-A: the calendar-conversation (S55) and email-conversation (S56) ConversationFlow implementers fetch external state at WhatsApp turn boundaries through the Nango-fronted HTTP adapters per D14. Background sync (periodic poll-and-store; webhook-driven push-and-store) is not committed at Phase 2-A.
+
+**Activation triggers.** Background sync activates if (a) the ThresholdEvaluator (S57) extends to external-data threshold detection (calendar-event-arrived; email-matching-pattern-received) and pull-on-demand latency makes the evaluation surface fail (the periodic threshold-evaluation latency window cannot accommodate a synchronous external fetch per evaluation iteration); (b) operator dogfooding evidence surfaces query-latency complaints from pull-on-demand at WhatsApp turn boundaries (the operator types a calendar query and the response delay exceeds a tolerable threshold for the conversational shape).
+
+**Architectural disposition.** Phase 2-A commits pull-on-demand only. The specific persistence shape (per-tenant calendar_events and email_messages tables vs. event-store-shaped tables vs. domain-driven aggregates per calendar/email contexts) commits at the activating session with the latency-evidence the activation produced. References D14 (separate-service for tool capabilities), D110 (audit-event-level tamper-evidence — background sync would emit per-fetch audit events).
+
+### MCP transport swap for calendar and email tool services
+
+P15 framing Surface 5 Sub-question 5.1 committed HTTP transport for tool service consumption at Phase 2-A: the calendar (`contexts/calendar/`) and email (`contexts/email/`) contexts consume Nango self-hosted via HTTP adapter per D14 separate-service pattern.
+
+**Activation triggers.** The MCP transport swap activates if (a) the tool service ecosystem standardizes on MCP and Nango (or its successor) ships MCP as the preferred transport for the consumed services; (b) Padhanam itself adopts MCP for other tool integrations (the existing agent-runtime tool registry per D89 is the candidate first MCP integration site within the codebase; if it adopts MCP, the calendar/email contexts inherit the same transport pattern for consistency).
+
+**Architectural disposition.** Protocol-based adapter pattern at calendar and email contexts supports the swap; the consumer-defined port (CalendarReader, EmailReader) stays unchanged; only the HTTP adapter swaps to an MCP adapter at composition root. ChannelResolver Protocol-equivalent abstraction stays unchanged. References D14 (tools-as-configuration; protocol-agnostic adapter pattern), D89 (tool registry; candidate first MCP integration site), principles.md "Integration protocol choice is scenario-driven and vendor-readiness-modulated" (per-integration disposition).
+
+### Path A migration from Nango self-hosted
+
+P15 framing committed Path B (source tool services externally) with self-hosted Nango under Elastic License as the operator's tool-service substrate, sitting alongside padhanam-api as parallel infrastructure work outside Padhanam's package boundary. Path A (Padhanam-owned tool services) defers.
+
+**Activation triggers.** Migration to Path A activates if any of: (a) vendor pricing inversion at Phase 2-B+ scale — monthly Nango spend exceeds the loaded cost of Padhanam-owned OAuth substrate plus the relevant per-service integrations; (b) privacy compliance escalation — Padhanam-owned ICP requires attestations vendor pass-through cannot satisfy (the operator-controlled self-hosted Nango at Phase 2-A keeps data inside operator infrastructure, but a regulated-customer deployment may need Padhanam-owned cryptographic custody of tokens at a finer granularity than self-hosted Nango exposes); (c) feature divergence — the bet's substrate evolution requires OAuth handling or tool-service capability that Nango does not provide and that maintaining a fork against Nango would cost more than building Padhanam-native.
+
+**Architectural disposition.** D14's separate-service pattern plus D144's port-based ChannelResolver abstraction plus consumer-defined CalendarReader / EmailReader ports at calendar/email contexts support the migration without domain code changes — only adapter swaps at composition root. The specific Path A scope (which providers; OAuth flow shape; token persistence) commits at the activating session per the migration trigger evidence. References D14 (tools-as-configuration), D144 (ChannelResolver Protocol; port-based-abstraction precedent), the operator-tool-service-sourcing strategic decision recorded at `log/captures.md` 2026-05-27.

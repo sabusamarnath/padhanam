@@ -401,6 +401,42 @@ Mirror-conversation drill-down navigation reads the prior mirror-conversation ou
 
 The mechanism is consistent with the stateless-per-turn discipline at the prior sub-section: the cell does not maintain in-memory state between turns; each turn reads conversation history plus the prior outbound's `cell_payload` (additive metadata, not a parallel state machine). Risk-shape disposition unchanged from P14 framing: if operator dogfooding surfaces brittleness, a persisted state entity becomes the right shape per the activation trigger at `charter/deferred-decisions.md`.
 
+### BroadcastFlow Protocol (D142)
+
+D115 commits ConversationFlow as the abstraction for bi-directional user-platform interaction. D142 commits BroadcastFlow as the parallel abstraction for platform-initiated outbound messaging. The two Protocols differ at the entry point — ConversationFlow's `turn` consumes an inbound message; BroadcastFlow's `fire` consumes a TriggerContext — and share the downstream substrate (CitedResponse Protocol from D138; D135 rendering pattern; Message persistence; audit chain integration).
+
+TriggerContext carries a `trigger_type` discriminator plus structured per-type metadata via discriminated union. Phase 2-A trigger types: `DAILY_SCHEDULED`, `THRESHOLD_CROSSED`, `CALENDAR_EVENT`, `EMAIL_RECEIVED`, `MANUAL`. Future trigger types extend the discriminator additively without restructuring.
+
+BroadcastResponse satisfies CitedResponse Protocol from D138. Citation fields populate per BroadcastFlow implementer per the implementer's semantic (daily-briefing cites `cited_intake_records` covering the day's IntakeRecords; threshold-briefing cites the `THRESHOLD_CROSSED` audit event plus the state-change event that fired the evaluation).
+
+The BroadcastFlow registry mechanism mirrors S45's ConversationFlow registry pattern. Each BroadcastFlow implementer registers with a `trigger_type` pattern at composition root; the BroadcastDispatch substrate consults the registry to route triggers deterministically. The contract harness at `tests/contract/broadcast_flow/` globs `test_*_broadcast_flow.py` for registration modules — the conformance scenarios run against every registered implementer's class.
+
+### BroadcastDispatch substrate (D143)
+
+A new port at `contexts/messaging/application/ports/broadcast_dispatch.py` with an in-process adapter at `contexts/messaging/adapters/dispatch/`. Symmetric to S47's CellDispatch port for inbound-triggered cells; the structural difference is deterministic routing on `trigger_type` rather than classifier-driven routing.
+
+Two trigger sources at P15. (1) Scheduled triggers fire via the HTTP trigger endpoint per D145; external scheduler (cron, systemd timer, Kubernetes CronJob per deployment topology) hits the endpoint on schedule. (2) Event-driven triggers fire from the ThresholdEvaluator per Surface 4 of P15 framing; the ThresholdEvaluator is itself a BroadcastFlow implementer that fires `THRESHOLD_CROSSED` triggers via the same HTTP endpoint when state changes match configured rules.
+
+BroadcastDispatch emits a `BROADCAST_INITIATED` audit event before invoking the registered BroadcastFlow implementer. The audit chain entry carries `trigger_id`, `trigger_type`, `tenant_id`, `user_id`, `triggered_at`. The implementer's response cites the `BROADCAST_INITIATED` event for end-to-end chain traversability.
+
+### ChannelResolver Protocol (D144)
+
+D136 Primitive 2's structural activation at Phase 2-A. The Protocol at `contexts/messaging/application/ports/channel_resolver.py` carries a single `resolve_channel` method taking `tenant_id`, `user_id`, and `MessageIntent`; returns `ChannelDestination`. The Phase 2-A adapter is `StaticConfigChannelResolverAdapter` at `contexts/messaging/adapters/channel_resolver/`; it reads MessagingSettings and returns the configured operator default channel (WhatsApp at Phase 2-A).
+
+Two consumers at P15. BroadcastDispatch consults ChannelResolver before invoking the BroadcastFlow implementer; the resolved ChannelDestination informs the channel adapter at send time. Reactive outbound (existing `send_message` use case from S45) refactors to consult ChannelResolver before send.
+
+At second-channel activation, a new `UserScopedChannelResolverAdapter` swaps in at composition root. The User aggregate's `channel_preference` field becomes the data source. ChannelResolver Protocol stays unchanged; only the adapter swaps. Forward-compatible by construction.
+
+The MessageIntent enum at Phase 2-A carries three values: `BROADCAST_DAILY_BRIEFING`, `BROADCAST_THRESHOLD_BRIEFING`, `REACTIVE_RESPONSE`. Future channel-resolution logic may use MessageIntent for routing different message types to different channels.
+
+### HTTP trigger endpoint (D145; architecture committed at S53, code lands at S54)
+
+A new HTTP route at `apps/api/routers/triggers.py` (`POST /api/v1/internal/triggers/fire`) authenticated via internal-only mechanism. The endpoint receives trigger-fire requests from external scheduler (cron, systemd timer, Kubernetes CronJob per deployment topology) and from the ThresholdEvaluator at S57. The endpoint's use case validates `trigger_type`, emits the `BROADCAST_INITIATED` audit event, and invokes BroadcastDispatch.
+
+The endpoint sits at `/api/v1/internal/` prefix with internal-secret middleware. The deployment's external scheduler holds the secret; the operator's WhatsApp surface never reaches the endpoint.
+
+Per local-first standing rule: production swap is deployment configuration (external scheduler choice; secret rotation); the application code is identical across local development and production.
+
 ### Phase 2 domain vocabulary
 
 Phase 2 commits a domain vocabulary that aligns with the karma prior-art specification. Items here are domain entities or domain concepts that recur across the substrate and need consistent naming.
