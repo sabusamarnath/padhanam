@@ -44,6 +44,12 @@ from contexts.audit_conversation.application.cell import AuditConversationCell
 from contexts.audit_conversation.application.response import (
     render_for_whatsapp as render_audit_for_whatsapp,
 )
+from contexts.mirror_conversation.application.cell import (
+    MirrorConversationCell,
+)
+from contexts.mirror_conversation.application.response import (
+    extract_focus_from_cell_payload,
+)
 from contexts.intake.application.record_intake_and_record_inbound_message import (  # noqa: E501
     record_intake_and_record_inbound_message,
 )
@@ -194,6 +200,38 @@ async def _run_manual_entry_cell(
     )
 
 
+async def _load_prior_mirror_focus(
+    *,
+    messaging: MessagingComposition,
+    actor: ActorContext,
+) -> Any:
+    """Find the most recent mirror-conversation outbound and extract its focus.
+
+    Per D141: each mirror-conversation outbound persists
+    ``current_focus_artefact`` into its ``cell_payload`` column. The
+    next turn looks at the most recent mirror-conversation outbound
+    Message in the tenant's history; if its ``cell_payload`` matches
+    the expected mirror shape, the focus extracts via
+    ``extract_focus_from_cell_payload``; otherwise None.
+
+    Phase 2-A is single-user single-tenant so a small page-scan covers
+    the lookup; Phase 2-B+ may add a dedicated read surface.
+    """
+    page = await messaging.repository.list_for_tenant(
+        tenant_context=actor.tenant_context,
+        filters=None,
+        cursor=None,
+        page_size=_CONVERSATION_HISTORY_WINDOW,
+    )
+    for message in page.messages:
+        if message.direction is not MessageDirection.OUTBOUND:
+            continue
+        focus = extract_focus_from_cell_payload(message.cell_payload)
+        if focus is not None:
+            return focus
+    return None
+
+
 async def _run_audit_conversation_cell(
     *,
     messaging: MessagingComposition,
@@ -252,6 +290,72 @@ async def _run_audit_conversation_cell(
     )
 
 
+async def _run_mirror_conversation_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    inbound_body: str,
+    reply_to: str,
+    inbound_intake_id: UUID,
+) -> None:
+    """Run the mirror-conversation cell over an inbound message and reply (S52).
+
+    Loads the prior focus from the most recent mirror-conversation
+    outbound's cell_payload per D141 before constructing the cell, so
+    relative intents resolve against the correct anchor. Persists the
+    composed response and (per D141) the cell_payload onto the
+    outbound Message.
+    """
+    prior_focus = await _load_prior_mirror_focus(
+        messaging=messaging, actor=actor
+    )
+    cell = MirrorConversationCell(
+        structured_output_port=messaging.structured_output_port,
+        mirror_portfolio_reader=messaging.mirror_portfolio_reader,
+        actor=actor,
+        confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
+        pending_clarification_reader=messaging.pending_clarification_reader,
+        pending_clarification_repository=(
+            messaging.pending_clarification_repository
+        ),
+        audit_port=audit_port,
+        prior_focus=prior_focus,
+        originating_intake_id=inbound_intake_id,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose="mirror_query", actor_id=actor.actor_id
+        )
+    )
+    state = await cell.turn(state, ConversationInput(text=inbound_body))
+    await cell.close(
+        state, ConversationClosure(reason="mirror_query handled")
+    )
+
+    from contexts.mirror_conversation.application.response import (
+        MirrorConversationResponse,
+    )
+    response: MirrorConversationResponse = state.payload["mirror_response"]
+    # S52 commit 10 swaps this to the WhatsApp-formatting render
+    # (text + Shape-1 citation line + breadcrumb context); commit 8
+    # uses ``response.text`` directly so the dispatch substrate is
+    # operational end-to-end at the cell-runner boundary.
+    rendered = response.text
+    cell_payload = state.payload.get("cell_payload")
+    await send_message(
+        repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        audit_port=audit_port,
+        actor=actor,
+        from_address=messaging.from_address,
+        to_address=reply_to,
+        body=rendered,
+        cell_payload=cell_payload,
+    )
+
+
 async def _load_conversation_history(
     *,
     messaging: MessagingComposition,
@@ -292,14 +396,7 @@ def _build_cell_runners(
     actor: ActorContext,
     reply_to: str,
 ) -> dict:
-    """Build the per-cell runners the dispatch_inbound use case selects from.
-
-    Mirror-conversation lands at S52 commit 8 and is registered here
-    at that commit (its absence at commit 6 means a meta-classifier
-    high-confidence ``mirror_conversation`` result raises a wiring
-    error rather than running silently — the dispatcher refuses to
-    route to an unregistered cell per its own contract).
-    """
+    """Build the per-cell runners the dispatch_inbound use case selects from."""
 
     async def _manual_entry_runner(context: DispatchContext) -> None:
         await _run_manual_entry_cell(
@@ -321,11 +418,20 @@ def _build_cell_runners(
             inbound_intake_id=context.inbound_intake_id,
         )
 
+    async def _mirror_runner(context: DispatchContext) -> None:
+        await _run_mirror_conversation_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=context.inbound_text,
+            reply_to=reply_to,
+            inbound_intake_id=context.inbound_intake_id,
+        )
+
     return {
         CellIdentifier.MANUAL_ENTRY: _manual_entry_runner,
         CellIdentifier.AUDIT_CONVERSATION: _audit_runner,
-        # Mirror-conversation runner registers at S52 commit 8 alongside
-        # the cell's first build.
+        CellIdentifier.MIRROR_CONVERSATION: _mirror_runner,
     }
 
 

@@ -88,6 +88,27 @@ class _NoopSecurityEvents:
         pass
 
 
+class _FakeMirrorPortfolioReader:
+    """Stub MirrorPortfolioReader for integration tests (S52).
+
+    The route-level tests rarely route through mirror-conversation;
+    the stub returns empty results so the cell composes a clean
+    "no cases" response if mirror routing fires unexpectedly.
+    """
+
+    async def list_cases(self, *, actor, limit: int = 50):
+        return ()
+
+    async def get_case_detail(self, *, actor, case_id):
+        return None
+
+    async def get_data_point(self, *, actor, data_point_id):
+        return None
+
+    async def find_cases(self, *, actor):
+        return ()
+
+
 class _FakeAuditEventReader:
     """Stub AuditEventReader for integration tests (S52).
 
@@ -362,6 +383,7 @@ def _build(
         portfolio_case_lookup=PortfolioCaseLookupAdapter(
             portfolio_gateway=portfolio_gateway,
         ),
+        mirror_portfolio_reader=_FakeMirrorPortfolioReader(),
         high_confidence_threshold=0.8,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,

@@ -35,6 +35,10 @@ from uuid import UUID
 from apps.api.adapters.cell_dispatch_inprocess import (
     InProcessCellDispatchAdapter,
 )
+from apps.api._mirror_portfolio_wiring import (
+    MirrorPortfolioReaderAdapter,
+    build_mirror_portfolio_reader,
+)
 from apps.api._portfolio_gateway_wiring import (
     PortfolioGatewayAdapter,
     build_portfolio_gateway,
@@ -384,6 +388,7 @@ class MessagingComposition:
     meta_classifier: MetaClassifier
     audit_event_reader: AuditEventReader
     portfolio_case_lookup: PortfolioCaseLookup
+    mirror_portfolio_reader: MirrorPortfolioReaderAdapter
     high_confidence_threshold: float
     from_address: str
     webhook_tenant_id: str
@@ -504,6 +509,12 @@ def build_messaging_composition(
         audit_event_reader=audit_event_reader,
         portfolio_case_lookup=PortfolioCaseLookupAdapter(
             portfolio_gateway=portfolio_gateway,
+        ),
+        mirror_portfolio_reader=build_mirror_portfolio_reader(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
         ),
         # D140 + S47-addendum: meta-classifier dispatch uses the same
         # high cut-off as confidence-aware composition at Phase 2-A
