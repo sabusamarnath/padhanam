@@ -23,6 +23,10 @@ _META_CLASSIFIER_FIXTURE = (
     Path(__file__).resolve().parents[3]
     / "fixtures/intent_classification/meta_classifier_gold_set.yaml"
 )
+_MIRROR_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/mirror_conversation_gold_set.yaml"
+)
 
 
 def test_yaml_reader_loads_audit_conversation_fixture() -> None:
@@ -64,6 +68,30 @@ def test_yaml_reader_loads_meta_classifier_fixture() -> None:
     assert "manual_entry" in classes
     assert "audit_conversation" in classes
     assert "mirror_conversation" in classes
+
+
+def test_yaml_reader_loads_mirror_conversation_fixture() -> None:
+    """S52 commit 9: fourth instance of the parameterised D137 substrate.
+
+    Entries with paired-turn ``prior_turns`` metadata load cleanly
+    because the reader takes only ``input_phrasing`` plus
+    ``expected_intent_class`` (and optional
+    ``expected_confidence_minimum``); extra YAML keys are ignored.
+    """
+    reader = YamlGoldSetReader(path=_MIRROR_FIXTURE)
+    gold_set = reader.get_gold_set("mirror_conversation_p14_s52")
+    assert gold_set.name == "mirror_conversation_p14_s52"
+    assert gold_set.intent_surface == "mirror_conversation"
+    assert len(gold_set.entries) >= 25
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    # Every mirror-conversation intent class has at least one entry.
+    assert "show_case" in classes
+    assert "list_cases" in classes
+    assert "show_data_point" in classes
+    assert "drill_down_to_child" in classes
+    assert "show_parent" in classes
+    assert "show_siblings" in classes
+    assert "unclear_mirror" in classes
 
 
 def test_yaml_reader_loads_manual_entry_fixture_with_default_surface() -> None:

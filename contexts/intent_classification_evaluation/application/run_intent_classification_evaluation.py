@@ -69,6 +69,10 @@ from shared_kernel.intent_classification_audit import (
     AUDIT_INTENT_EXTRACTION_SCHEMA,
     build_audit_extraction_prompt,
 )
+from shared_kernel.intent_classification_mirror import (
+    MIRROR_INTENT_EXTRACTION_SCHEMA,
+    build_mirror_extraction_prompt,
+)
 from shared_kernel.meta_classification import (
     META_CLASSIFIER_SCHEMA,
     build_meta_classifier_prompt,
@@ -114,10 +118,11 @@ _SURFACE_PRIMITIVES: dict[str, tuple[Any, dict, str]] = {
         META_CLASSIFIER_SCHEMA,
         "cell_identifier",
     ),
-    # The mirror_conversation surface's primitives register at S52
-    # commit 9 alongside the mirror gold-set landing; the entry is
-    # added at that commit to avoid a forward import from a module
-    # that does not yet exist.
+    "mirror_conversation": (
+        build_mirror_extraction_prompt,
+        MIRROR_INTENT_EXTRACTION_SCHEMA,
+        "intent_class",
+    ),
 }
 
 

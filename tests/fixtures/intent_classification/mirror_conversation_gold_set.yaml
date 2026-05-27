@@ -1,0 +1,150 @@
+# Mirror-conversation gold-set fixture (D137, D138, D141, P14, S52).
+#
+# Fourth instance of the parameterised D137 substrate (manual_entry
+# from S48b; audit_conversation from S51 commit 6; meta-classifier
+# from S52 commit 5; this from S52 commit 9). Operator-shaped inputs
+# paired with expected mirror-conversation intent classifications.
+#
+# Coverage rationale:
+# - 4-6 per absolute intent class (show_case, list_cases, show_data_point).
+# - 5-7 drill_down_to_child entries (the relative-intent with paired-
+#   turn context; see prior_turns field on each entry).
+# - 3-5 per show_parent + show_siblings (relative; paired-turn context).
+# - 4-6 deliberately ambiguous entries annotated as architectural
+#   opportunity per the S48b reflection-2 recurrence test (the gold
+#   set's expected outcome on ambiguity is the D139 / D134 routing
+#   commitment, not a specific cell classification).
+#
+# Relative-intent entries carry a ``prior_turns`` field representing
+# the conversation context the classifier reads (per D141 the cell
+# also extracts current_focus_artefact from the prior outbound's
+# cell_payload, but the gold-set substrate measures the classifier's
+# behaviour against the textual context the classifier sees, not the
+# focus extraction itself).
+
+name: mirror_conversation_p14_s52
+intent_surface: mirror_conversation
+entries:
+  # ----- show_case absolute (5) -----
+  - input_phrasing: "Show me the Q3 portfolio review"
+    expected_intent_class: show_case
+  - input_phrasing: "Tell me about the Acme partnership case"
+    expected_intent_class: show_case
+  - input_phrasing: "what's in the marketing deck case?"
+    expected_intent_class: show_case
+  - input_phrasing: "Open the Q4 planning case"
+    expected_intent_class: show_case
+  - input_phrasing: "I want to see the partnership project"
+    expected_intent_class: show_case
+
+  # ----- list_cases absolute (4) -----
+  - input_phrasing: "List my cases"
+    expected_intent_class: list_cases
+  - input_phrasing: "What cases do I have?"
+    expected_intent_class: list_cases
+  - input_phrasing: "Show me everything I'm tracking"
+    expected_intent_class: list_cases
+  - input_phrasing: "all the cases please"
+    expected_intent_class: list_cases
+
+  # ----- show_data_point absolute (5) -----
+  - input_phrasing: "Show me the revenue data point on Q3 review"
+    expected_intent_class: show_data_point
+  - input_phrasing: "what's the value of the latency goal in the Acme case?"
+    expected_intent_class: show_data_point
+  - input_phrasing: "show me the budget item on Q4 planning"
+    expected_intent_class: show_data_point
+  - input_phrasing: "the churn data point in the partnership case"
+    expected_intent_class: show_data_point
+  - input_phrasing: "Show the methodology application on the marketing case"
+    expected_intent_class: show_data_point
+
+  # ----- drill_down_to_child relative (6, paired-turn) -----
+  - input_phrasing: "tell me about revenue"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: user
+        text: "show me Q3 review"
+      - role: assistant
+        text: "Q3 portfolio review (OPEN). 3 data points: revenue, latency, churn."
+  - input_phrasing: "drill down to latency"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: user
+        text: "show me the Acme deal"
+      - role: assistant
+        text: "Acme partnership case (OPEN). 2 data points: revenue forecast, latency commitment."
+  - input_phrasing: "what about churn?"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: user
+        text: "open Q3 review"
+      - role: assistant
+        text: "Q3 portfolio review (OPEN). 4 data points: revenue, latency, churn, NPS."
+  - input_phrasing: "show me the second one"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: assistant
+        text: "Q3 review has 2 data points: revenue, latency."
+  - input_phrasing: "open the goal"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: assistant
+        text: "Acme case (OPEN). 1 goal, 1 status."
+  - input_phrasing: "tell me more about NPS"
+    expected_intent_class: drill_down_to_child
+    prior_turns:
+      - role: user
+        text: "show partnership case"
+      - role: assistant
+        text: "Partnership case. Data points: ACV, NPS."
+
+  # ----- show_parent relative (3, paired-turn) -----
+  - input_phrasing: "show the parent"
+    expected_intent_class: show_parent
+    prior_turns:
+      - role: user
+        text: "show me revenue"
+      - role: assistant
+        text: "Data point (GOAL): 5M ARR. 2 revisions."
+  - input_phrasing: "what case does this belong to?"
+    expected_intent_class: show_parent
+    prior_turns:
+      - role: assistant
+        text: "Data point (STATUS): on track. 1 revision."
+  - input_phrasing: "show me the case this is in"
+    expected_intent_class: show_parent
+    prior_turns:
+      - role: assistant
+        text: "Data point (METHODOLOGY_APPLICATION): LVT applied. 1 revision."
+
+  # ----- show_siblings relative (3, paired-turn) -----
+  - input_phrasing: "what else is in this case?"
+    expected_intent_class: show_siblings
+    prior_turns:
+      - role: assistant
+        text: "Data point (GOAL): 5M ARR. 2 revisions."
+  - input_phrasing: "show me the siblings"
+    expected_intent_class: show_siblings
+    prior_turns:
+      - role: assistant
+        text: "Data point (STATUS): on track."
+  - input_phrasing: "what other data points are here?"
+    expected_intent_class: show_siblings
+    prior_turns:
+      - role: assistant
+        text: "Data point (GOAL): churn under 2%."
+
+  # ----- unclear_mirror / ambiguous (5) — architectural opportunity per S48b -----
+  # Each is expected to surface as low confidence on a real intent
+  # OR fall to unclear_mirror; the D134 / D139 routing handles both.
+  - input_phrasing: "Q3"
+    expected_intent_class: unclear_mirror
+  - input_phrasing: "huh?"
+    expected_intent_class: unclear_mirror
+  - input_phrasing: "the thing"
+    expected_intent_class: unclear_mirror
+  - input_phrasing: "more"
+    expected_intent_class: unclear_mirror
+  - input_phrasing: "yeah ok"
+    expected_intent_class: unclear_mirror
