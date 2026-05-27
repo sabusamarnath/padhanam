@@ -56,6 +56,20 @@ from tests.contract.conversation_flow.test_audit_conversation_conversation_flow 
     _StubStructuredOutput as _AuditConvStructuredOutput,
     _StubCaseLookup as _AuditConvCaseLookup,
 )
+from tests.contract.conversation_flow.test_mirror_conversation_conversation_flow import (  # noqa: E501
+    _StubAuditPort as _MirrorAuditPort,
+    _StubConfidenceCalculator as _MirrorConfidenceCalculator,
+    _StubMirrorReader as _MirrorReader,
+    _StubPendingReader as _MirrorPendingReader,
+    _StubPendingRepo as _MirrorPendingRepo,
+    _StubStructuredOutput as _MirrorStructuredOutput,
+)
+from contexts.mirror_conversation.application.cell import (
+    MirrorConversationCell,
+)
+from contexts.mirror_conversation.application.ports.mirror_portfolio_reader import (  # noqa: E501
+    MirrorCaseSummary,
+)
 
 
 # --------------------------------------------------------- manual_entry_cell
@@ -239,6 +253,72 @@ def _build_audit_conversation_with_ambiguous_resolution() -> tuple[
     return cell, repo
 
 
+# ----------------------------------------------- mirror_conversation_cell
+
+
+def _mc_harness_actor() -> ActorContext:
+    tenant = TenantContext(
+        tenant_id="00000000-0000-4000-8000-00000000a003",
+        jurisdiction="eu-west",
+        cost_attribution_id="00000000-0000-4000-8000-00000000a003",
+    )
+    roles = frozenset({ROLE_OPERATOR})
+    return ActorContext(
+        tenant_context=tenant,
+        actor_id="resolution-ambiguity-harness",
+        role_list=roles,
+        authorisation_set=authorisations_for_roles(roles),
+    )
+
+
+def _build_mirror_conversation_with_ambiguous_resolution() -> tuple[
+    MirrorConversationCell, _MirrorPendingRepo
+]:
+    from datetime import datetime, timezone
+    now = datetime(2026, 5, 27, 14, 30, tzinfo=timezone.utc)
+    case_a = MirrorCaseSummary(
+        case_id=uuid4(),
+        title="Q3 portfolio review",
+        case_status="OPEN",
+        created_at=now,
+        last_activity_at=now,
+        data_point_count=2,
+    )
+    case_b = MirrorCaseSummary(
+        case_id=uuid4(),
+        title="Q3 portfolio review",
+        case_status="OPEN",
+        created_at=now,
+        last_activity_at=now,
+        data_point_count=1,
+    )
+    repo = _MirrorPendingRepo()
+    cell = MirrorConversationCell(
+        structured_output_port=_MirrorStructuredOutput(
+            value={
+                "intent_class": "show_case",
+                "case_reference": "Q3 portfolio review",
+                "data_point_reference": "",
+                "child_reference": "",
+                "confidence": 0.95,
+                "clarification": "",
+            }
+        ),
+        mirror_portfolio_reader=_MirrorReader(cases=(case_a, case_b)),
+        actor=_mc_harness_actor(),
+        confidence_calculator=_MirrorConfidenceCalculator(),
+        threshold_resolver=SinglePairThresholdResolverAdapter(
+            thresholds=ConfidenceThresholds(high=0.8, medium=0.5),
+        ),
+        pending_clarification_reader=_MirrorPendingReader(),
+        pending_clarification_repository=repo,
+        audit_port=_MirrorAuditPort(),
+        originating_intake_id=uuid4(),
+        clock=lambda: now,
+    )
+    return cell, repo
+
+
 # -------------------------------------------------------------- scenarios
 
 
@@ -260,6 +340,13 @@ _AMBIGUOUS_RESOLUTION_FACTORIES = {
             purpose="audit_query", actor_id="resolution-ambiguity-harness"
         ),
         ConversationInput(text="show audit events for the Q3 portfolio review"),
+    ),
+    "mirror_conversation_cell": (
+        _build_mirror_conversation_with_ambiguous_resolution,
+        ConversationInvocation(
+            purpose="mirror_query", actor_id="resolution-ambiguity-harness"
+        ),
+        ConversationInput(text="show me the Q3 portfolio review"),
     ),
 }
 
