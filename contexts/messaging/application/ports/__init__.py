@@ -17,6 +17,9 @@ from contexts.messaging.application.ports.broadcast_dispatch import (
 from contexts.messaging.application.ports.broadcast_flow_registry import (
     BroadcastFlowRegistry,
 )
+from contexts.messaging.application.ports.channel_resolver import (
+    ChannelResolver,
+)
 from contexts.messaging.application.ports.portfolio_gateway import (
     CaseSummary,
     CaseWriteOutcome,
@@ -30,6 +33,7 @@ __all__ = [
     "BroadcastFlowRegistry",
     "CaseSummary",
     "CaseWriteOutcome",
+    "ChannelResolver",
     "DataPointSummary",
     "DataPointWriteOutcome",
     "NoRegisteredBroadcastImplementerError",

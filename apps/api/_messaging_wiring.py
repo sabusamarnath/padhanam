@@ -35,6 +35,9 @@ from uuid import UUID
 from apps.api.adapters.cell_dispatch_inprocess import (
     InProcessCellDispatchAdapter,
 )
+from contexts.messaging.adapters.channel_resolver.static_config_channel_resolver_adapter import (
+    StaticConfigChannelResolverAdapter,
+)
 from contexts.messaging.adapters.dispatch.in_process_broadcast_dispatch_adapter import (
     InProcessBroadcastDispatchAdapter,
 )
@@ -72,6 +75,9 @@ from contexts.messaging.application.ports.broadcast_flow_registry import (
     BroadcastFlowRegistry,
 )
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
+from contexts.messaging.application.ports.channel_resolver import (
+    ChannelResolver,
+)
 from contexts.messaging.application.ports.meta_classifier import (
     MetaClassifier,
 )
@@ -401,6 +407,11 @@ class MessagingComposition:
     # briefing, ThresholdEvaluator) on ``broadcast_flow_registry``.
     broadcast_dispatch: BroadcastDispatch
     broadcast_flow_registry: BroadcastFlowRegistry
+    # D144 (S53): ChannelResolver Protocol activated as D136 Primitive 2
+    # at Phase 2-A. Static-config adapter returns the operator-default
+    # channel regardless of input; second-channel activation swaps for
+    # UserScopedChannelResolverAdapter.
+    channel_resolver: ChannelResolver
     pending_clarification_repository: PendingClarificationRepository
     pending_clarification_reader: PendingClarificationReader
     threshold_resolver: ThresholdResolver
@@ -518,6 +529,10 @@ def build_messaging_composition(
         cell_dispatch=InProcessCellDispatchAdapter(),
         broadcast_dispatch=broadcast_dispatch_composite,
         broadcast_flow_registry=broadcast_dispatch_composite,
+        channel_resolver=StaticConfigChannelResolverAdapter(
+            operator_default_channel=settings.operator_default_channel,
+            operator_default_address=settings.operator_default_address,
+        ),
         pending_clarification_repository=pending_clarification_repository,
         pending_clarification_reader=PendingClarificationReaderAdapter(
             repository=pending_clarification_repository,

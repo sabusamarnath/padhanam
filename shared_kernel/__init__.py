@@ -26,6 +26,7 @@ from shared_kernel.inference import (
     ModelIdentifier,
     Provider,
 )
+from shared_kernel.message_intent import MessageIntent
 from shared_kernel.revisable import AssertionChange, Revisable
 from shared_kernel.structured_output import (
     StructuredOutputParseFailure,
@@ -54,6 +55,7 @@ __all__ = [
     "DEFAULT_ACCOUNT",
     "Jurisdiction",
     "LatencyTier",
+    "MessageIntent",
     "ModelConfiguration",
     "ModelIdentifier",
     "Provider",

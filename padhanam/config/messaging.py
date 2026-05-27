@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import model_validator
 
+from shared_kernel.channel_type import ChannelType
+
 from padhanam.config.base import PadhanamSettings
 
 
@@ -66,6 +68,24 @@ class MessagingSettings(PadhanamSettings):
     # land. Tunable as dogfooding calibration data accumulates.
     confidence_high_cutoff: float = 0.8
     confidence_medium_cutoff: float = 0.5
+    # D144 (S53): Phase 2-A static-config ChannelResolver inputs.
+    # ``operator_default_channel`` discriminates the outbound channel;
+    # WHATSAPP is the only Phase 2-A value (D136 Primitive 2). The
+    # ``operator_default_address`` is the per-channel destination
+    # identifier (the operator's WhatsApp E.164 phone number at Phase
+    # 2-A); empty default keeps local development without a configured
+    # operator-address-able to construct MessagingSettings without
+    # error. The two fields were authored fresh at S53 — pre-write
+    # reconciliation Finding 1 surfaced that the brief's "reuse the
+    # existing operator phone number" framing was structurally false
+    # (``twilio_whatsapp_from`` is the platform's sender, not the
+    # operator's destination). Second-channel activation introduces a
+    # ``UserScopedChannelResolverAdapter`` that no longer consults
+    # MessagingSettings for resolution; these fields stay as the
+    # composition-root operator-default but cease to be load-bearing
+    # at multi-channel activation.
+    operator_default_channel: ChannelType = ChannelType.WHATSAPP
+    operator_default_address: str = ""
 
     @model_validator(mode="after")
     def require_confidence_cutoffs_ordered(self) -> "MessagingSettings":
