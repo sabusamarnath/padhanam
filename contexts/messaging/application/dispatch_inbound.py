@@ -48,6 +48,9 @@ from contexts.messaging.application.expire_pending_clarification import (
     expire_pending_clarification,
 )
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
+from contexts.messaging.application.ports.channel_resolver import (
+    ChannelResolver,
+)
 from contexts.messaging.application.ports.meta_classifier import (
     ConversationTurn,
     MetaClassifier,
@@ -139,6 +142,7 @@ async def execute(
     cell_runners: dict[CellIdentifier, CellRunner],
     message_repository: MessageRepository,
     delivery_port: MessageDeliveryPort,
+    channel_resolver: ChannelResolver,
     from_address: str,
 ) -> CellIdentifier:
     """Execute the D140 dispatch flow over one inbound; return the routed cell.
@@ -171,6 +175,7 @@ async def execute(
                 cell_runners=cell_runners,
                 message_repository=message_repository,
                 delivery_port=delivery_port,
+                channel_resolver=channel_resolver,
                 from_address=from_address,
             )
 
@@ -201,6 +206,7 @@ async def execute(
             audit_port=audit_port,
             message_repository=message_repository,
             delivery_port=delivery_port,
+            channel_resolver=channel_resolver,
             from_address=from_address,
         )
         return CellIdentifier.DISPATCH_CLARIFICATION
@@ -223,6 +229,7 @@ async def execute(
         audit_port=audit_port,
         message_repository=message_repository,
         delivery_port=delivery_port,
+        channel_resolver=channel_resolver,
         from_address=from_address,
     )
     return CellIdentifier.DISPATCH_CLARIFICATION
@@ -269,6 +276,7 @@ async def _create_and_send_dispatch_clarification(
     audit_port: AuditPort,
     message_repository: MessageRepository,
     delivery_port: MessageDeliveryPort,
+    channel_resolver: ChannelResolver,
     from_address: str,
 ) -> None:
     """Step 5 of the dispatch flow: persist the pending and send the prompt."""
@@ -293,6 +301,7 @@ async def _create_and_send_dispatch_clarification(
         repository=message_repository,
         delivery_port=delivery_port,
         audit_port=audit_port,
+        channel_resolver=channel_resolver,
         actor=actor,
         from_address=from_address,
         to_address=context.reply_to,
@@ -311,6 +320,7 @@ async def _resolve_dispatch_clarification(
     cell_runners: dict[CellIdentifier, CellRunner],
     message_repository: MessageRepository,
     delivery_port: MessageDeliveryPort,
+    channel_resolver: ChannelResolver,
     from_address: str,
 ) -> CellIdentifier:
     """Resolve an active dispatch_clarification pending against the user's reply.
@@ -343,6 +353,7 @@ async def _resolve_dispatch_clarification(
             audit_port=audit_port,
             message_repository=message_repository,
             delivery_port=delivery_port,
+            channel_resolver=channel_resolver,
             from_address=from_address,
         )
         return CellIdentifier.DISPATCH_CLARIFICATION

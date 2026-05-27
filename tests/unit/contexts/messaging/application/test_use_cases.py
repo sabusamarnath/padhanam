@@ -32,6 +32,7 @@ from shared_kernel.authorisation import (
 
 from tests.unit.contexts.messaging.application._fakes import (
     FakeAuditPort,
+    FakeChannelResolver,
     FakeMessageDeliveryPort,
     FakeMessageRepository,
 )
@@ -67,11 +68,13 @@ def test_send_message_delivers_persists_and_audits() -> None:
     audit = FakeAuditPort()
     actor = _actor()
 
+    resolver = FakeChannelResolver()
     message = asyncio.run(
         send_message(
             repository=repo,
             delivery_port=delivery,
             audit_port=audit,
+            channel_resolver=resolver,
             actor=actor,
             from_address="+14155238886",
             to_address="+447700900123",
@@ -79,6 +82,8 @@ def test_send_message_delivers_persists_and_audits() -> None:
         )
     )
 
+    # D144 consultation: send_message consults ChannelResolver once before delivery.
+    assert len(resolver.resolve_calls) == 1
     assert message.direction is MessageDirection.OUTBOUND
     assert message.channel is MessageChannel.WHATSAPP
     assert message.status is MessageStatus.SENT
@@ -102,6 +107,7 @@ def test_send_message_persists_failed_delivery_honestly() -> None:
             repository=repo,
             delivery_port=delivery,
             audit_port=FakeAuditPort(),
+            channel_resolver=FakeChannelResolver(),
             actor=_actor(),
             from_address="+14155238886",
             to_address="+447700900123",
@@ -120,6 +126,7 @@ def test_send_message_denied_without_permission() -> None:
                 repository=FakeMessageRepository(),
                 delivery_port=FakeMessageDeliveryPort(),
                 audit_port=FakeAuditPort(),
+                channel_resolver=FakeChannelResolver(),
                 actor=_actor(authorisation_set=frozenset()),
                 from_address="+1",
                 to_address="+2",
@@ -187,6 +194,7 @@ def test_get_message_returns_persisted_message() -> None:
             repository=repo,
             delivery_port=FakeMessageDeliveryPort(),
             audit_port=audit,
+            channel_resolver=FakeChannelResolver(),
             actor=actor,
             from_address="+1",
             to_address="+2",
@@ -234,6 +242,7 @@ def test_list_messages_returns_page_with_filter() -> None:
             repository=repo,
             delivery_port=FakeMessageDeliveryPort(),
             audit_port=audit,
+            channel_resolver=FakeChannelResolver(),
             actor=actor,
             from_address="+1",
             to_address="+2",

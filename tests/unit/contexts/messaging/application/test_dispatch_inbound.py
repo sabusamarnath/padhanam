@@ -190,6 +190,21 @@ class _RecordingCellRunner:
         self.invocations.append(context)
 
 
+class _StubChannelResolver:
+    """ChannelResolver stub returning a fixed WhatsApp destination (S53, D144)."""
+
+    async def resolve_channel(self, *, tenant_id, user_id, message_intent):
+        from contexts.messaging.domain.channel_destination import (
+            ChannelDestination,
+        )
+        from contexts.messaging.domain.channel_type import ChannelType
+
+        return ChannelDestination(
+            channel_type=ChannelType.WHATSAPP,
+            channel_address=_REPLY_TO,
+        )
+
+
 def _pending_for_cell(
     target_cell: str,
     *,
@@ -252,6 +267,7 @@ def test_step2_routes_active_pending_to_named_cell() -> None:
             cell_runners=runners,
             message_repository=_RecordingMessageRepo(),
             delivery_port=_StubDeliveryPort(),
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )
@@ -286,6 +302,7 @@ def test_step4_high_confidence_routes_to_classified_cell() -> None:
             cell_runners=runners,
             message_repository=_RecordingMessageRepo(),
             delivery_port=_StubDeliveryPort(),
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )
@@ -321,6 +338,7 @@ def test_step5_low_confidence_creates_dispatch_clarification_and_replies() -> No
             cell_runners=_make_runners(),
             message_repository=message_repo,
             delivery_port=delivery,
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )
@@ -361,6 +379,7 @@ def test_step5_parse_failure_creates_dispatch_clarification() -> None:
             cell_runners=_make_runners(),
             message_repository=_RecordingMessageRepo(),
             delivery_port=_StubDeliveryPort(),
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )
@@ -403,6 +422,7 @@ def test_dispatch_clarification_resolution_routes_to_chosen_cell() -> None:
             cell_runners=runners,
             message_repository=_RecordingMessageRepo(),
             delivery_port=_StubDeliveryPort(),
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )
@@ -451,6 +471,7 @@ def test_dispatch_clarification_resolution_reprompts_on_unrecognised_reply() -> 
             cell_runners=runners,
             message_repository=_RecordingMessageRepo(),
             delivery_port=delivery,
+            channel_resolver=_StubChannelResolver(),
             from_address=_FROM_ADDRESS,
         )
     )

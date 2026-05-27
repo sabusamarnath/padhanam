@@ -1,4 +1,4 @@
-"""In-memory fakes for messaging application-layer unit tests (S45)."""
+"""In-memory fakes for messaging application-layer unit tests (S45, S53)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from uuid import UUID
 from contexts.audit.domain.events import AuditEvent
 
 from contexts.messaging.domain import Message, MessageChannel, MessageStatus
+from contexts.messaging.domain.channel_destination import ChannelDestination
+from contexts.messaging.domain.channel_type import ChannelType
 from contexts.messaging.domain.query_filters import (
     MessageListCursor,
     MessageListFilters,
@@ -14,6 +16,7 @@ from contexts.messaging.domain.query_filters import (
 from contexts.messaging.ports.message_delivery_port import DeliveryResult
 from contexts.messaging.ports.message_repository import MessageListPage
 from shared_kernel import TenantContext
+from shared_kernel.message_intent import MessageIntent
 
 
 class FakeAuditPort:
@@ -93,3 +96,40 @@ class FakeMessageDeliveryPort:
         return DeliveryResult(
             external_id=self._external_id, status=self._status
         )
+
+
+class FakeChannelResolver:
+    """Returns the configured destination; records resolution requests.
+
+    Phase 2-A ChannelResolver Protocol fake for messaging application-
+    layer unit tests (S53). Tests can inspect ``resolve_calls`` to
+    verify the use case consults the resolver before delivery.
+    """
+
+    def __init__(
+        self,
+        *,
+        channel_type: ChannelType = ChannelType.WHATSAPP,
+        channel_address: str = "+15551234567",
+    ) -> None:
+        self._destination = ChannelDestination(
+            channel_type=channel_type,
+            channel_address=channel_address,
+        )
+        self.resolve_calls: list[dict[str, object]] = []
+
+    async def resolve_channel(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: str,
+        message_intent: MessageIntent,
+    ) -> ChannelDestination:
+        self.resolve_calls.append(
+            {
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "message_intent": message_intent,
+            }
+        )
+        return self._destination

@@ -363,6 +363,19 @@ def _build(
     )
     from apps.api._messaging_wiring import PortfolioCaseLookupAdapter
 
+    # D143 + D144 (S53): one composite InProcessBroadcastDispatchAdapter
+    # serves both BroadcastDispatch and BroadcastFlowRegistry surfaces;
+    # the StaticConfigChannelResolverAdapter serves the ChannelResolver
+    # consultation at the reactive outbound refactor.
+    from contexts.messaging.adapters.channel_resolver.static_config_channel_resolver_adapter import (
+        StaticConfigChannelResolverAdapter,
+    )
+    from contexts.messaging.adapters.dispatch.in_process_broadcast_dispatch_adapter import (
+        InProcessBroadcastDispatchAdapter,
+    )
+    from contexts.messaging.domain.channel_type import ChannelType
+
+    broadcast_dispatch_composite = InProcessBroadcastDispatchAdapter()
     composition = MessagingComposition(
         repository=message_repo,
         delivery_port=delivery,
@@ -373,6 +386,12 @@ def _build(
         ),
         confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=cell_dispatch,
+        broadcast_dispatch=broadcast_dispatch_composite,
+        broadcast_flow_registry=broadcast_dispatch_composite,
+        channel_resolver=StaticConfigChannelResolverAdapter(
+            operator_default_channel=ChannelType.WHATSAPP,
+            operator_default_address="+14155238886",
+        ),
         pending_clarification_repository=pending_repo,
         pending_clarification_reader=pending_reader,
         threshold_resolver=SinglePairThresholdResolverAdapter(
