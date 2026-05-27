@@ -175,6 +175,13 @@ layers =
     contexts.audit_conversation.application
     contexts.audit_conversation.domain
 
+[importlinter:contract:layers-mirror-conversation]
+name = Mirror-conversation layers (hexagonal)
+type = layers
+layers =
+    contexts.mirror_conversation.application
+    contexts.mirror_conversation.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -209,6 +216,7 @@ modules =
     contexts.messaging.domain
     contexts.intent_classification_evaluation.domain
     contexts.audit_conversation.domain
+    contexts.mirror_conversation.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -237,6 +245,7 @@ modules =
     contexts.messaging.application
     contexts.intent_classification_evaluation.application
     contexts.audit_conversation.application
+    contexts.mirror_conversation.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
