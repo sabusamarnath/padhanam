@@ -1243,6 +1243,7 @@ the `messages` table on every per-tenant database.
 | `intake_id`    | `uuid`        | nullable; FK → `intakes.id` ON DELETE RESTRICT; populated on inbound per D128 |
 | `actor_id`     | `text`        | not null; CHECK `<> ''`; the acting actor's identity                         |
 | `created_at`   | `timestamptz` | not null; default `now()`                                                    |
+| `cell_payload` | `jsonb`       | nullable; default null; outbound implementer-specific shape per D141         |
 
 The aggregate root. `channel` carries the single Phase 2-A value
 `WHATSAPP`; the CHECK widens as SMS, voice, and email channels
@@ -1278,12 +1279,101 @@ direction, channel)` support the list surface.
 | `intake_id`    | `UUID \| None`     | nullable; the IntakeRecord an inbound message traces to      |
 | `actor_id`     | `str`              | not null; non-empty                                          |
 | `created_at`   | `datetime`         | not null; timezone-aware                                     |
+| `cell_payload` | `dict \| None`     | nullable; per-implementer payload per D141; INBOUND must be null |
 
 A frozen dataclass; `__post_init__` enforces the non-empty and
 not-null invariants plus the pairing rule that an INBOUND message
-may carry an `intake_id` while an OUTBOUND message must not.
-`MessageDirection`, `MessageChannel`, and `MessageStatus` are
-string enums. Domain code is framework-free per D16.
+may carry an `intake_id` while an OUTBOUND message must not, plus
+the pairing rule per D141 that an INBOUND message must not carry a
+`cell_payload`. `MessageDirection`, `MessageChannel`, and
+`MessageStatus` are string enums. Domain code is framework-free per
+D16.
+
+The `cell_payload` field carries per-implementer state for
+cross-turn extraction per D141. Each ConversationFlow implementer
+is responsible for validating the shape on read; mismatched or
+absent payload routes through D139 to D134 clarification per the
+implementer's cell-flow commitment. Mirror-conversation at S52 is
+the first user: it persists `current_focus_artefact` (as
+`{"current_focus_artefact": {"artefact_id": str(uuid),
+"artefact_type": "case"|"data_point"}}`) for drill-down anchor
+extraction on the next turn. Audit-conversation and manual_entry
+do not populate the column; CellResponse / AuditConversationResponse
+do not carry implementer-specific extension fields.
+
+### `pending_clarifications`
+
+| Column                       | Type           | Constraints                                                                                                          |
+|------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------|
+| `id`                         | `uuid`         | primary key                                                                                                          |
+| `tenant_id`                  | `uuid`         | not null; jurisdiction-bearing per D12                                                                               |
+| `jurisdiction`               | `text`         | not null; CHECK `jurisdiction <> ''`                                                                                 |
+| `user_id`                    | `text`         | not null; CHECK `user_id <> ''`                                                                                      |
+| `originating_channel`        | `text`         | not null; CHECK `originating_channel <> ''`                                                                          |
+| `originating_user_address`   | `text`         | not null; CHECK `originating_user_address <> ''`                                                                     |
+| `originating_intake_id`      | `uuid`         | not null; FK → `intakes.id` ON DELETE RESTRICT                                                                       |
+| `proposed_intent`            | `jsonb`        | not null; the cell's structured best-guess intent                                                                    |
+| `proposed_action_summary`    | `text`         | not null; CHECK `proposed_action_summary <> ''`                                                                      |
+| `status`                     | `text`         | not null; CHECK ∈ {`PENDING`, `RESOLVED`, `EXPIRED`}                                                                 |
+| `target_cell`                | `text`         | not null after Alembic 0023 backfill; CHECK ∈ {`manual_entry`, `audit_conversation`, `mirror_conversation`, `dispatch_clarification`} |
+| `created_at`                 | `timestamptz`  | not null                                                                                                             |
+| `expires_at`                 | `timestamptz`  | not null; CHECK `expires_at > created_at`                                                                            |
+| `resolved_at`                | `timestamptz`  | nullable; CHECK `(status = 'PENDING' AND resolved_at IS NULL) OR (status <> 'PENDING' AND resolved_at IS NOT NULL)`  |
+
+D134's multi-turn conversation state — at medium-confidence
+classification the cell renders a shape-aware clarification and
+persists the proposed action; the operator's confirming reply
+resolves the pending and executes the proposed action; a correcting
+reply resolves as cancelled; silence times out at 24 hours per
+D119's WhatsApp Sandbox conversation window. The D134 invariant
+("at most one PENDING per `(tenant_id, user_id)`") is enforced
+structurally by a partial unique index
+`ux_pending_clar_one_pending_per_user` on `(tenant_id, user_id)
+WHERE status = 'PENDING'`; the create use case respects it
+operationally by expiring any prior PENDING before inserting the
+new one. Index `ix_pending_clar_tenant_user` on `(tenant_id,
+user_id)` supports active-pending lookup. `proposed_intent` rides
+as JSONB; a resolution-ambiguity sub-case carries a
+`resolution_candidates` sidecar that the cell's intent re-parser
+ignores per D139.
+
+Migrations `0021_pending_clarification` (S47) created the table;
+`0023_pending_clar_target_cell` (S52, D140) adds the `target_cell`
+column. The `target_cell` field identifies which ConversationFlow
+implementer owns the pending. The `dispatch_inbound` use case
+consults this field on active-pending routing per D140's dispatch
+flow Step 2. The meta-classification PendingClarification created
+at low-confidence dispatch carries `target_cell='dispatch_clarification'`
+for implementer-side handling at the dispatch layer.
+
+### PendingClarification (messaging multi-turn state)
+
+| Field                       | Type                            | Constraints                                                                |
+|-----------------------------|---------------------------------|----------------------------------------------------------------------------|
+| `id`                        | `UUID`                          | not null                                                                   |
+| `tenant_id`                 | `UUID`                          | not null; jurisdiction-bearing per D12                                     |
+| `jurisdiction`              | `str`                           | not null; non-empty                                                        |
+| `user_id`                   | `str`                           | not null; non-empty                                                        |
+| `originating_channel`       | `str`                           | not null; non-empty                                                        |
+| `originating_user_address`  | `str`                           | not null; non-empty                                                        |
+| `originating_intake_id`     | `UUID`                          | not null                                                                   |
+| `proposed_intent`           | `dict[str, Any]`                | not null; cell's structured best-guess intent                              |
+| `proposed_action_summary`   | `str`                           | not null; non-empty                                                        |
+| `status`                    | `PendingClarificationStatus`    | not null; PENDING / RESOLVED / EXPIRED                                     |
+| `target_cell`               | `str`                           | not null; identifies the owning ConversationFlow implementer per D140      |
+| `created_at`                | `datetime`                      | not null; timezone-aware                                                   |
+| `expires_at`                | `datetime`                      | not null; strictly after `created_at`                                      |
+| `resolved_at`               | `datetime \| None`              | nullable; non-null iff `status` is terminal                                |
+
+A frozen dataclass; `__post_init__` enforces non-empty text fields,
+the `expires_at > created_at` ordering, and the status / resolved_at
+pairing invariant. `resolve(at)` and `expire(at)` return new
+instances with updated status and `resolved_at` per the "Originals
+never erased" principle. `target_cell` lands at S52 (D140) carrying
+one of the four known identifiers (`manual_entry`, `audit_conversation`,
+`mirror_conversation`, `dispatch_clarification`); future
+ConversationFlow implementers at P15+ extend the accepted set as
+they register.
 
 ## Cross-cutting binding shapes
 

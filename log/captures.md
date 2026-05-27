@@ -881,3 +881,68 @@ Forward-relevance: the discipline binds at framing close (strategic-mode), at th
 
   - triaged: 2026-05-26 — three-instance evidence at single P14 framing event; promotion-ready
   - resolution: forward to `charter/methodology.md` promotion candidacy. The recurrence test is at the next strategic-mode brief-authoring moment: does the brief carry framing-altitude claims about codebase substrate that pre-write reconciliation will need to verify? The pattern-family observation alongside interface-versus-implementation and scope-discipline-at-brief-authoring anchors the connection for the second-instance-of-the-pattern-family promotion conversation. Recorded at the S51 session-log methodology line.
+
+## 2026-05-27 — [P14 close framing] S49 scope-discipline three-modes recurrence at S52 framing
+
+S49 scope-discipline-at-brief-authoring discipline. Three modes: load-bearing-minimum-committed; maximal-by-precedent-rejected; deferred-to-framing.
+
+P14 framing exercised all three modes; S52 framing (the framing-altitude block producing this brief) exercised all three again:
+- Load-bearing-minimum-committed: framing committed only meta-classifier dispatch shape, PendingClarification target_cell extension, ConversationFlow cell-payload persistence pattern, and mirror-conversation context shape.
+- Maximal-by-precedent-rejected: P14 framing rejected calendar-read, email-read, daily-briefing, threshold-briefing as P15+ scope per the narrow-scope decision; S52 framing rejected unified-intent-classifier-at-dispatch and synchronous-meta-classification as architectural shapes (D140 alternatives b and c).
+- Deferred-to-framing: N value for conversation history; exact intent VO schemas; cell-payload persistence shape settled framing-altitude with implementation-shape deferred to brief.
+
+Third-and-fourth-instance evidence beyond the S49 first and S50 second instances. Methodology candidate continues at promotion-ready evidence count.
+
+  - triaged: 2026-05-27
+  - resolution: continued recurrence evidence; promotion-readiness for methodology.md hygiene-session promotion holds. Recorded at P14 close framing.
+
+## 2026-05-27 — [P14 close framing] Interface-vs-implementation discipline operational evidence at S52 framing
+
+The S49 promotion's standing-surface binding has now exercised at:
+- S50 (CaseSummary DTO discriminator-field extension; PendingClarification dict shape; convergence-conversation provenance)
+- S51 framing (5 architectural decisions framed; Findings 1-5 surfaced at brief reconciliation)
+- S52 framing (this session; MetaClassifier port shape, MirrorPortfolioReader vs reuse decision, intent VO union shape, response value object extension, cell_payload pattern at architectural altitude rather than implementation altitude)
+
+The discipline binds at every architectural commitment shape. Forward-relevance prose for the methodology entry: at every strategic-mode block and at every brief-authoring step, run the interface-vs-implementation check at every architectural commitment.
+
+  - triaged: 2026-05-27
+  - resolution: forward-relevance updates continuing; the discipline is now operationally enforced as standing pre-write reconciliation. Methodology entry's forward-relevance prose may update at the next hygiene session. Recorded at P14 close framing.
+
+## 2026-05-27 — [P14 close framing] Cross-context facade pattern second-and-third-instance application
+
+D16/D17/D28 commit the cross-context discipline: reads through `.api` facades, writes through consumer-defined ports.
+
+Pattern applications across P14:
+- First instance (S51 commit 3): messaging.api facade for audit-conversation's reach into messaging context (PendingClarification consumer port access).
+- Second instance (S52 commit 6): same messaging.api facade for the dispatch_inbound use case's reach into PendingClarification machinery (the use case lives at messaging.application so it consumes directly without facade; the pattern repeats at the symmetric mirror-conversation reach).
+- Third instance (S52 commit 8): same messaging.api facade for mirror-conversation's reach into messaging context (PendingClarification for resolution-ambiguity routing).
+- Fourth instance (S52 commit 7): MirrorPortfolioReader consumer port at mirror_conversation context for cross-context write to portfolio context's use cases (the consumer-port-plus-wiring-adapter pattern).
+
+The pattern is established and operational. No architecture.md elevation needed; the pattern's repeated application across two implementers in P14 confirms generalisability. Future ConversationFlow implementers at P15+ inherit structurally.
+
+  - triaged: 2026-05-27
+  - resolution: indexed as application-pattern evidence. No promotion-candidacy at methodology.md (the pattern is already committed at D16/D17/D28); the captures entry serves as cross-reference for future audits. Recorded at P14 close framing.
+
+## 2026-05-27 — [S52 framing] Substrate-inheritance survey first-application evidence + Alembic-numbering refinement
+
+S51 framing surfaced five framing-vs-codebase-reality findings at brief-altitude reconciliation. The substrate-inheritance survey methodology candidate was indexed at S51 close as promotion-ready (entry above, 2026-05-26).
+
+S52 framing operationally exercised the survey discipline at framing-altitude before drafting the brief. Five substrate-inheritance surveys ran (MetaClassifier port location; MirrorPortfolioReader wiring adapter target; messaging.api facade; D137 substrate parameterisation; ConversationFlow contract harness registry-discovery). All five returned existing substrate; the brief was drafted against codebase reality.
+
+S52 brief-altitude pre-write reconciliation surfaced **one** finding rather than S51's five: the Alembic-numbering collision (the brief committed migrations 0022 and 0023, but S48b's intent_class_eval_substrate already holds 0022 — pre-write reconciliation Finding 1 at S52, renumbered to 0023 and 0024). This is first-application evidence that the framing-altitude survey discipline reduces brief-altitude reconciliation surface (one finding versus five). The discipline accumulates evidence for methodology.md promotion at the next hygiene session.
+
+**Refinement.** The framing-altitude survey at S52 did not include the Alembic migration-number sequence as a survey surface (the framing survey covered architectural substrate — port locations, use case existence, facade modules, registry-discovery mechanisms — but not configuration sequencing like the next available Alembic number). For future framings that commit new Alembic migrations, the survey should include a one-line "What is the next available Alembic migration number?" check at framing-altitude. The refinement folds into the methodology candidate at the next hygiene session promotion.
+
+  - triaged: 2026-05-27
+  - resolution: first-application evidence strengthens the candidate from three-instance (S51 framing) to three-instance-plus-first-application (S51 + S52). The Alembic-numbering refinement is the first specific extension to the survey discipline beyond architectural substrate. The hygiene session promoting to methodology.md should incorporate both the discipline as standing framing-altitude reconciliation and the migration-number sub-surface as a concrete check. Recorded at S52 framing close.
+
+## 2026-05-27 — [S52 framing] PendingClarification schema.md hygiene gap absorbed at S52 commit 1
+
+Pre-write reconciliation at S52 commit 1 surfaced that `charter/schema.md` carries no PendingClarification table section despite the entity landing at S47 with Alembic 0021. The S47 hygiene gap (charter/schema.md should have gained the section per the discipline "schema changes update charter/schema.md in the same commit") went uncaught at S47, S47 addendum, S48a, S48b, S49, S50, and S51.
+
+Disposition: absorb the PendingClarification section at S52 commit 1 alongside the target_cell column addition (D140). The honest fix lands the missing S47 section plus the S52 column addition in one commit. The schema gap closes structurally; no audit-trail loss (the migration history at `alembic/tenant/versions/2026_05_25_0021_pending_clarification.py` carries the canonical record).
+
+This is a substrate-inheritance survey miss at the *charter audit-trail surface* rather than at the codebase substrate surface. The framing-altitude survey at S52 did not include "does charter/schema.md carry sections for every existing per-tenant table?" as a survey question. Adjacent to the Alembic-numbering refinement above.
+
+  - triaged: 2026-05-27
+  - resolution: absorbed at S52 commit 1 (this commit). The substrate-inheritance survey methodology candidate's "what to survey" surface gains "charter/schema.md section completeness against the migration directory" as another concrete check alongside the Alembic-numbering refinement. The hygiene-session promotion to methodology.md should include the schema.md-completeness sub-surface. Recorded at S52 framing close.

@@ -652,6 +652,8 @@ S45 lands the messaging substrate for a single channel (WhatsApp via Twilio per 
 
 **Architectural disposition.** D136 commits the four primitives. The forward UX convergence strategic block (captured at `log/captures.md` 2026-05-22 [S45]) closed at S47. P14 framing (2026-05-26) confirms no D136 primitive activates at P14: Primitives 1 (User as first-class concept), 2 (channel preference for outbound), and 4 (ChannelCapabilities descriptor) stay deferred at their existing activation triggers; Primitive 3 (PendingClarification user-scoped) stays active from S47 unchanged. References D119 (WhatsApp channel commitment), D129 (messaging substrate), D115 (ConversationFlow Protocol), D136 (multi-channel UX architectural primitives).
 
+**P14 close confirmation (2026-05-27).** S52 close confirms no D136 primitive activates during P14 beyond the additive `target_cell` extension at D140 (Primitive 3's user-scoping discipline holds unchanged; the target_cell extension identifies *which cell* owns a pending without changing the user-scope). Primitives 1, 2, and 4 stay deferred at their existing activation triggers.
+
 ### Shared-kernel CitedResponse base type or Protocol
 
 D131's first instance at S46 (the manual entry cell's CellResponse value object carries citation fields directly per the convention altitude). D135 at S47 commits the convention discipline at Phase 2-A and defers the structural-enforcement question (a shared-kernel CitedResponse base type or Protocol that future ConversationFlow implementers conform to structurally) to the P14 second-instance trigger.
@@ -688,7 +690,9 @@ Mirror-conversation drill-down navigation at P14 is stateless re-classification 
 
 **Activation triggers.** A persisted state entity becomes the right shape if any of: (a) operator dogfooding surfaces drill-down misclassification rate exceeding the gold-set threshold established at S52's gold-set authoring; (b) conversation-history-as-classifier-context fails at recurring sub-cases such as long pauses, context-window saturation, or cross-channel navigation when a second channel arrives; (c) a future ConversationFlow implementer at P15+ surfaces a parallel navigation-state requirement that would benefit from a shared state entity.
 
-**Architectural disposition.** S52 commits the stateless-per-turn pattern; the entity defers at the activation triggers above. References D134 (PendingClarification entity; the precedent state machine the drill-down resists duplicating), D138 (CitedResponse Protocol; mirror-conversation response value object), D129 (messaging substrate; conversation history persistence).
+**Architectural disposition.** S52 commits the stateless-per-turn pattern; the entity defers at the activation triggers above. References D134 (PendingClarification entity; the precedent state machine the drill-down resists duplicating), D138 (CitedResponse Protocol; mirror-conversation response value object), D141 (cell_payload persistence; the additive-metadata mechanism the stateless-per-turn pattern uses for cross-turn focus extraction), D129 (messaging substrate; conversation history persistence).
+
+**S52 build evidence (2026-05-27).** Stateless-per-turn drill-down with cell_payload extraction operational at mirror-conversation context per D141. Activation triggers from P14 framing remain in force; risk-shape disposition holds. First dogfooding evidence at the post-S52 procedural smoke; the activation trigger fires if operator dogfooding evidence surfaces brittleness.
 
 ### D137 substrate parameterisation over multiple intent surfaces
 
@@ -697,3 +701,17 @@ D137 commits the intent-classification evaluation substrate at `contexts/intent_
 **Activation trigger.** A third ConversationFlow implementer's gold-set authoring (P14 S52 mirror-conversation adds the third intent surface; P15+ surfaces add fourth and beyond). When the tuple-extension pattern becomes operationally cumbersome (substring collision; per-surface metric calculation; per-surface latency budget; per-surface model-tier selection), promote the domain shape to a parameterised intent surface (an `IntentSurface` value object carrying the intent class set plus per-surface metadata, with `IntentClassificationGoldSet` holding a reference to one surface).
 
 **Architectural disposition.** S51 extends `INTENT_CLASSES` as a minimal tuple extension (the cheapest possible adaptation). S52 may extend again the same way; the parameterisation triggers at the third-or-later instance where the tuple-extension stops carrying the cumulative weight. References D137 (substrate D-entry), D127 alternative (d) (build-at-second-instance discipline; this entry inverts the discipline by deferring parameterisation past two instances to surface the third-instance concrete evidence).
+
+**S52 exercise (2026-05-27).** S52 adds two intent surfaces (`dispatch_classifier` from D140 plus `mirror_conversation` from the mirror-conversation cell), bringing the substrate to four registered surfaces (manual_entry, audit_conversation, dispatch_classifier, mirror_conversation). The tuple-extension pattern still carries the load operationally at four surfaces; per-surface metric calculation, per-surface latency budget, and per-surface model-tier selection have not surfaced as drivers. The activation trigger holds for a future P15+ surface that materially diverges in any of those dimensions.
+
+## P14 close deferrals
+
+Architectural decisions deferred at P14 close (2026-05-27). Each names an activation trigger.
+
+### Cell-payload schema registry at messaging context
+
+D141 commits per-implementer `cell_payload` JSONB on the messages table with implementer-side validation on read: each ConversationFlow implementer defines and validates its own payload shape. At P14 close mirror-conversation is the only implementer with a non-null payload shape (`{"current_focus_artefact": {"artefact_id": str, "artefact_type": str}}`); audit-conversation and manual_entry do not populate the column.
+
+**Activation trigger.** Third or fourth ConversationFlow implementer with substantial cell_payload shape, where coordination across implementers becomes valuable. Indicators: (a) two or more implementers want to read each other's cell_payload (cross-cell focus continuity); (b) a future implementer's cell_payload shape would benefit from versioning (e.g., schema-evolution sub-cases that the implementer's own validation would need to track explicitly); (c) tooling or analytics surfaces that consume cell_payload across all implementers need a registry to discover the per-implementer shapes.
+
+**Architectural disposition.** At P14 close the implementer-side validation discipline carries the load (one implementer with one payload shape). The registry shape (a cross-context registration surface mapping cell-identifier to payload-schema, with the dispatch_inbound use case or a sibling surface enforcing the registration) defers to the activation trigger. References D141 (cell_payload persistence D-entry), D115 (ConversationFlow Protocol), D140 (meta-classifier dispatch routing; the CellIdentifier enum would carry the registry's keys).

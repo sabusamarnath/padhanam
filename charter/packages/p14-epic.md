@@ -64,9 +64,29 @@ Committed at framing:
 
 At P14 close (S52 close):
 
-1. CitedResponse Protocol committed at shared_kernel; three implementers satisfy structurally (CellResponse refactored at S51 commit 2; AuditConversationResponse from S51; MirrorConversationResponse from S52).
+1. CitedResponse Protocol structurally enforced; three implementers satisfy (CellResponse refactored at S51 commit 2; AuditConversationResponse from S51; MirrorConversationResponse from S52).
 2. ConversationFlow contract harness verifies CitedResponse conformance and resolution-ambiguity routing for all three implementers.
-3. Audit-conversation gold set and mirror-conversation gold set live at D137 evaluation substrate (at `tests/fixtures/intent_classification/` per Finding 3 disposition; `INTENT_CLASSES` extended per the same finding).
-4. Procedural smokes for audit-conversation (S51) and mirror-conversation (S52) green against tenant_a.
-5. Charter touch-points updated: D138, D139, architecture.md prose, packages.md revision, deferred-decisions.md updates, p14-epic.md, captures.md entries from framing.
-6. Phase 2-A close criterion progress: read-loop substrate complete; operator dogfooding loop extends to read-side queries (audit and mirror).
+3. Meta-classifier dispatch substrate operational (D140); three-way classification (plus dispatch_clarification) with confidence-aware composition routing.
+4. PendingClarification target_cell field operational (D140); active-pending routing consults the field.
+5. Message cell_payload field operational (D141); mirror-conversation persists current_focus_artefact for drill-down extraction.
+6. Audit-conversation gold set, mirror-conversation gold set, and meta-classifier gold set all operational at D137 evaluation substrate (at `tests/fixtures/intent_classification/`; `INTENT_CLASSES` and `INTENT_SURFACES` extended per S52 commits 5 and 9).
+7. Procedural smokes for audit-conversation (S51) and three-cell dispatch with mirror-conversation (S52) executable against tenant_a.
+8. Charter touch-points updated across S51 and S52: D138, D139, D140, D141, architecture.md prose, packages.md revision, deferred-decisions.md updates, p14-epic.md, schema.md PendingClarification section plus target_cell plus cell_payload rows, captures.md entries.
+9. Phase 2-A close criterion progress: read-loop substrate complete; operator dogfooding loop extends to read-side queries (audit and mirror) plus dispatch routing across three cells.
+
+## S52 commit shape
+
+Twelve commit-shaped units (Alembic numbering bumped to 0023 / 0024 at pre-write reconciliation Finding 1 because S48b's intent_class_eval_substrate already holds 0022):
+
+1. Charter commit: D140 (meta-classifier dispatch routing with PendingClarification target_cell extension) + D141 (ConversationFlow cell-payload persistence) + architecture.md additions (meta-classifier dispatch + target_cell + cell_payload + mirror-conversation context + mirror-conversation drill-down extraction sub-sections) + schema.md additions (PendingClarification full section since the S47 hygiene gap; target_cell column; cell_payload column on messages; cell_payload field on Message dataclass) + packages.md P14 line revision (CLOSED marker) + deferred-decisions.md updates (drill-down state-entity S52 build evidence; multi-channel UX P14 close confirmation; D137 substrate parameterisation S52 exercise; new cell-payload schema registry entry) + p14-epic.md (this update) + captures.md entries (five new) + current-package.md in-flight marker + brief preserved at `briefs/p14/s52.md`.
+2. Alembic 0023: PendingClarification target_cell extension.
+3. Alembic 0024: Message cell_payload extension.
+4. MetaClassifier port + LiteLLM adapter + deterministic rule-based adapter at messaging context.
+5. Meta-classifier gold set at parameterised D137 substrate (third instance).
+6. dispatch_inbound use case + webhook handler refactor.
+7. MirrorPortfolioReader consumer port + cross-context wiring adapter.
+8. Mirror-conversation cell + intent VOs + response value object + drill-down resolution + cell_payload persistence.
+9. Mirror-conversation gold set at parameterised D137 substrate (fourth instance).
+10. WhatsApp render extension for MirrorConversationResponse.
+11. ConversationFlow contract harness extensions (mirror-conversation registration).
+12. Procedural smoke + session log + current-package transition + P14 close marker.

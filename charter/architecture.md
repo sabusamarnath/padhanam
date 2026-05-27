@@ -365,6 +365,42 @@ The substrate is already in place. The messaging substrate at D129 persists conv
 
 Risk-shape disposition: if operator dogfooding surfaces brittleness (drill-down misclassification rate exceeding the gold-set threshold; conversation-history-as-classifier-context failing at recurring sub-cases such as long pauses or context-window saturation), then a state entity becomes the right shape. The activation trigger is recorded at `charter/deferred-decisions.md` for forward tracking.
 
+### Meta-classifier dispatch routing
+
+Per D140. The S47 CellDispatch port runs one cell; the webhook hard-codes dispatch to `manual_entry_cell`. With three ConversationFlow implementers at P14 close (manual_entry, audit_conversation, mirror_conversation), inbound-to-cell routing becomes a first-class concern. D140 commits the meta-classifier dispatch substrate: a `MetaClassifier` port at `contexts/messaging/application/ports/meta_classifier.py` plus a `dispatch_inbound` use case at `contexts/messaging/application/dispatch_inbound.py` orchestrating active-pending check, meta-classification, confidence-aware composition routing per D134, and CellDispatch invocation.
+
+The dispatch flow runs five steps. The webhook handler retains signature verification and intake recording. The `dispatch_inbound` use case then executes: active PendingClarification check by `(tenant_id, user_id)` via the existing reader port; if active pending exists, route via CellDispatch to the cell named in the pending's `target_cell` field; if no active pending, call MetaClassifier with the inbound text plus recent conversation history; if confidence is at or above the configured threshold, dispatch to the identified cell; if confidence is below threshold or `StructuredOutputParseFailure` fires, create a meta-classification PendingClarification with `target_cell='dispatch_clarification'` surfacing the candidate cells to the user.
+
+The substrate composes existing primitives. StructuredOutputPort (D130) for the LLM-derived classification call; ConfidenceCalculator and ThresholdResolver ports (D134) for confidence-aware composition; PendingClarification entity and consumer port (D134) for low-confidence routing; CellDispatch port (D133) for background invocation of the identified cell. The MetaClassifier adapter swap at composition root supports test fakes (the deterministic rule-based adapter) without production runtime impact.
+
+### PendingClarification target_cell field
+
+Per D140. The PendingClarification entity gains a `target_cell` field (text column, populated at create-time by the cell creating the pending). The field identifies which ConversationFlow implementer owns the pending. The `dispatch_inbound` use case consults the field at Step 2 of the dispatch flow to route the user's confirming or correcting reply to the correct cell. The field is also populated by the meta-classification PendingClarification created at Step 5 of the dispatch flow (`target_cell='dispatch_clarification'` for the meta-classification routing case, with implementer-side handling at the dispatch layer rather than at a cell).
+
+Alembic migration 0023 (`alembic/tenant/versions/2026_05_27_0023_pending_clarification_target_cell.py`) adds the column. Existing pending_clarifications rows backfill to `manual_entry` (every prior PendingClarification was created by the manual entry cell at S47/S50). The CHECK constraint accepts the four known identifiers: `manual_entry`, `audit_conversation`, `mirror_conversation`, `dispatch_clarification`.
+
+### Message cell_payload field
+
+Per D141. The Message entity gains a `cell_payload` field (jsonb column, nullable, default null). ConversationFlow implementers persist per-implementer payload alongside outbound messages. The payload's shape is implementer-specific; each implementer validates the shape on read. Inbound messages do not populate `cell_payload`. The column supports cross-turn state extraction without parallel state-machine substrate per D141's commitment.
+
+Alembic migration 0024 (`alembic/tenant/versions/2026_05_27_0024_message_cell_payload.py`) adds the column. Existing messages rows have `cell_payload` null; the column's nullability handles the backfill cleanly without explicit data migration. Mirror-conversation is the first user (carrying `current_focus_artefact` for drill-down anchor persistence); audit-conversation and manual_entry do not populate the column.
+
+### Mirror-conversation context
+
+The mirror-conversation ConversationFlow implementer lives at `contexts/mirror_conversation/` (S52 build). It composes the portfolio read-side substrate (via a `MirrorPortfolioReader` consumer port and a cross-context wiring adapter to portfolio context's existing `list_cases` and `get_case_detail` use cases) with the intent-classification primitive at D137 and the response composition pattern at D131/D135/D138.
+
+Inbound user messages classify into six mirror intent value objects split into three absolute variants and three relative variants. Absolute intents (`ShowCase`, `ListCases`, `ShowDataPoint`) resolve their references directly against portfolio state via MirrorPortfolioReader. Relative intents (`DrillDownToChild`, `ShowParent`, `ShowSiblings`) resolve against the conversation's current focus first, then against portfolio state. `UnclearMirrorIntent` is the fallback for classification failures.
+
+The cell runs five steps per turn: read conversation history (the same N turns the meta-classifier reads); classify the inbound intent with conversation history as classifier context; resolve references (absolute against portfolio state; relative against conversation focus then portfolio state); query portfolio state via MirrorPortfolioReader; compose `MirrorConversationResponse` satisfying CitedResponse Protocol with the `current_focus_artefact` extension field.
+
+The response value object's `cited_artefacts` carries heterogeneous Case and DataPoint citations via the ArtefactCitation typed value object's discriminator (committed at D138). The `cited_intake_records` carries the IntakeRecord ID of the inbound message. The `cited_audit_events` stays empty (mirror reads current state; audit chain reachable transitively through cited IntakeRecord per D128). The `current_focus_artefact` extension field anchors the conversation's drill-down navigation for the next turn's relative-intent resolution; it serializes into the outbound message's `cell_payload` per D141 so the next turn extracts it.
+
+### Mirror-conversation drill-down extraction
+
+Mirror-conversation drill-down navigation reads the prior mirror-conversation outbound's `cell_payload.current_focus_artefact` (D141) to anchor relative-intent resolution. When no prior mirror-conversation outbound exists (first mirror turn or first turn after a cross-cell exchange), the cell routes through D139 to D134 clarification with a phrasing indicating no recent context. The same handling applies when the most recent platform response is from a different cell (audit-conversation outbound does not populate `cell_payload` with mirror-shape) or when N-turn conversation history truncates past the prior mirror outbound.
+
+The mechanism is consistent with the stateless-per-turn discipline at the prior sub-section: the cell does not maintain in-memory state between turns; each turn reads conversation history plus the prior outbound's `cell_payload` (additive metadata, not a parallel state machine). Risk-shape disposition unchanged from P14 framing: if operator dogfooding surfaces brittleness, a persisted state entity becomes the right shape per the activation trigger at `charter/deferred-decisions.md`.
+
 ### Phase 2 domain vocabulary
 
 Phase 2 commits a domain vocabulary that aligns with the karma prior-art specification. Items here are domain entities or domain concepts that recur across the substrate and need consistent naming.
