@@ -38,6 +38,7 @@ Application code is framework-free here — stdlib only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import UUID
 
 from shared_kernel.conversation_flow import ArtefactCitation
@@ -66,6 +67,62 @@ class MirrorConversationResponse:
     def has_focus(self) -> bool:
         """True when the response carries a drill-down focus for the next turn."""
         return self.current_focus_artefact is not None
+
+
+def _short_hex(identifier: UUID) -> str:
+    """Short-hex prefix of a UUID for a compact citation (D131 Shape 1)."""
+    return identifier.hex[:8]
+
+
+def render_for_whatsapp(
+    response: MirrorConversationResponse,
+    *,
+    composed_at: datetime,
+) -> str:
+    """Render MirrorConversationResponse to the WhatsApp surface text (D135).
+
+    Mirrors the audit-conversation render shape at
+    ``contexts/audit_conversation/application/response.py`` with one
+    mirror-conversation-specific addition: when the response carries a
+    ``current_focus_artefact`` (the navigation anchor for the next
+    turn's relative-intent resolution per D141), the rendered text
+    surfaces a breadcrumb line at the bottom so the operator sees
+    the active drill-down context.
+
+    Per D135 domain-decides-content channel-decides-format pattern,
+    the domain layer produces the channel-agnostic content (text +
+    citation tuples + focus artefact); this renderer is the WhatsApp-
+    specific affordance.
+    """
+    parts: list[str] = [response.text.rstrip()]
+
+    if response.has_citations:
+        citation_segments: list[str] = []
+        citation_segments += [
+            f"ref {_short_hex(a.artefact_id)}"
+            for a in response.cited_artefacts
+        ]
+        citation_segments += [
+            f"intake {_short_hex(i)}"
+            for i in response.cited_intake_records
+        ]
+        citation_segments += [
+            f"audit {_short_hex(e)}"
+            for e in response.cited_audit_events
+        ]
+        stamp = composed_at.strftime("%H:%M UTC")
+        parts.append(f"— {' · '.join(citation_segments)} · {stamp}")
+
+    if response.has_focus and response.current_focus_artefact is not None:
+        focus = response.current_focus_artefact
+        kind_label = (
+            "case" if focus.artefact_type == "case" else "data point"
+        )
+        parts.append(
+            f"↳ context: {kind_label} {_short_hex(focus.artefact_id)}"
+        )
+
+    return "\n\n".join(parts)
 
 
 def serialise_focus_to_cell_payload(
@@ -125,5 +182,6 @@ def extract_focus_from_cell_payload(
 __all__ = [
     "MirrorConversationResponse",
     "extract_focus_from_cell_payload",
+    "render_for_whatsapp",
     "serialise_focus_to_cell_payload",
 ]

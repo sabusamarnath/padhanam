@@ -49,6 +49,7 @@ from contexts.mirror_conversation.application.cell import (
 )
 from contexts.mirror_conversation.application.response import (
     extract_focus_from_cell_payload,
+    render_for_whatsapp as render_mirror_for_whatsapp,
 )
 from contexts.intake.application.record_intake_and_record_inbound_message import (  # noqa: E501
     record_intake_and_record_inbound_message,
@@ -334,15 +335,15 @@ async def _run_mirror_conversation_cell(
         state, ConversationClosure(reason="mirror_query handled")
     )
 
+    from datetime import datetime, timezone
+
     from contexts.mirror_conversation.application.response import (
         MirrorConversationResponse,
     )
     response: MirrorConversationResponse = state.payload["mirror_response"]
-    # S52 commit 10 swaps this to the WhatsApp-formatting render
-    # (text + Shape-1 citation line + breadcrumb context); commit 8
-    # uses ``response.text`` directly so the dispatch substrate is
-    # operational end-to-end at the cell-runner boundary.
-    rendered = response.text
+    rendered = render_mirror_for_whatsapp(
+        response, composed_at=datetime.now(timezone.utc)
+    )
     cell_payload = state.payload.get("cell_payload")
     await send_message(
         repository=messaging.repository,
