@@ -35,6 +35,9 @@ from uuid import UUID
 from apps.api.adapters.cell_dispatch_inprocess import (
     InProcessCellDispatchAdapter,
 )
+from contexts.messaging.adapters.dispatch.in_process_broadcast_dispatch_adapter import (
+    InProcessBroadcastDispatchAdapter,
+)
 from apps.api._mirror_portfolio_wiring import (
     MirrorPortfolioReaderAdapter,
     build_mirror_portfolio_reader,
@@ -61,6 +64,12 @@ from contexts.messaging.adapters.llm_meta_classifier import (
 )
 from contexts.messaging.adapters.threshold_single_pair import (
     SinglePairThresholdResolverAdapter,
+)
+from contexts.messaging.application.ports.broadcast_dispatch import (
+    BroadcastDispatch,
+)
+from contexts.messaging.application.ports.broadcast_flow_registry import (
+    BroadcastFlowRegistry,
 )
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
 from contexts.messaging.application.ports.meta_classifier import (
@@ -382,6 +391,16 @@ class MessagingComposition:
     structured_output_port: StructuredOutputPort
     confidence_calculator: ConfidenceCalculator
     cell_dispatch: CellDispatch
+    # D143 (S53): BroadcastDispatch substrate symmetric to CellDispatch.
+    # The composite ``InProcessBroadcastDispatchAdapter`` satisfies both
+    # the BroadcastDispatch port (dispatch surface) and the
+    # BroadcastFlowRegistry port (composition-root registration
+    # surface); the two fields hold the same object so call sites can
+    # type against either Protocol independently. P15 S54 onwards
+    # registers BroadcastFlow implementers (daily-briefing, threshold-
+    # briefing, ThresholdEvaluator) on ``broadcast_flow_registry``.
+    broadcast_dispatch: BroadcastDispatch
+    broadcast_flow_registry: BroadcastFlowRegistry
     pending_clarification_repository: PendingClarificationRepository
     pending_clarification_reader: PendingClarificationReader
     threshold_resolver: ThresholdResolver
@@ -478,6 +497,12 @@ def build_messaging_composition(
         security_events=security_events,
         audit_port=audit_port,
     )
+    # D143 (S53): one composite InProcessBroadcastDispatchAdapter
+    # serves both BroadcastDispatch and BroadcastFlowRegistry. The two
+    # composition fields hold the same object so registration (S54+
+    # BroadcastFlow implementers) and dispatch (HTTP trigger endpoint
+    # at S54 and ThresholdEvaluator at S57) share the same registry.
+    broadcast_dispatch_composite = InProcessBroadcastDispatchAdapter()
     return MessagingComposition(
         repository=MessageRepositoryAdapter(
             session_factory_for_tenant=session_factory_for_tenant,
@@ -491,6 +516,8 @@ def build_messaging_composition(
         structured_output_port=structured_output_port,
         confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=InProcessCellDispatchAdapter(),
+        broadcast_dispatch=broadcast_dispatch_composite,
+        broadcast_flow_registry=broadcast_dispatch_composite,
         pending_clarification_repository=pending_clarification_repository,
         pending_clarification_reader=PendingClarificationReaderAdapter(
             repository=pending_clarification_repository,
