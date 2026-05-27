@@ -22,6 +22,7 @@ def _pending(
     status: PendingClarificationStatus = PendingClarificationStatus.PENDING,
     resolved_at: datetime | None = None,
     expires_in: timedelta = timedelta(hours=24),
+    target_cell: str = "manual_entry",
 ) -> PendingClarification:
     created = _now()
     return PendingClarification(
@@ -35,6 +36,7 @@ def _pending(
         proposed_intent={"intent_type": "add_data_point"},
         proposed_action_summary="add a goal to the Q3 portfolio review",
         status=status,
+        target_cell=target_cell,
         created_at=created,
         expires_at=created + expires_in,
         resolved_at=resolved_at,
@@ -45,6 +47,7 @@ def test_construction_happy_path() -> None:
     pending = _pending()
     assert pending.status is PendingClarificationStatus.PENDING
     assert pending.resolved_at is None
+    assert pending.target_cell == "manual_entry"
 
 
 def test_construction_rejects_empty_user_id() -> None:
@@ -60,6 +63,7 @@ def test_construction_rejects_empty_user_id() -> None:
             proposed_intent={},
             proposed_action_summary="add a goal",
             status=PendingClarificationStatus.PENDING,
+            target_cell="manual_entry",
             created_at=_now(),
             expires_at=_now() + timedelta(hours=24),
         )
@@ -95,9 +99,38 @@ def test_construction_rejects_expires_at_at_or_before_created() -> None:
             proposed_intent={},
             proposed_action_summary="add a goal",
             status=PendingClarificationStatus.PENDING,
+            target_cell="manual_entry",
             created_at=base,
             expires_at=base,
         )
+
+
+def test_construction_rejects_unknown_target_cell() -> None:
+    with pytest.raises(ValueError, match="target_cell must be one of"):
+        _pending(target_cell="not_a_cell")
+
+
+def test_construction_accepts_every_known_target_cell() -> None:
+    for known in (
+        "manual_entry",
+        "audit_conversation",
+        "mirror_conversation",
+        "dispatch_clarification",
+    ):
+        pending = _pending(target_cell=known)
+        assert pending.target_cell == known
+
+
+def test_resolve_preserves_target_cell() -> None:
+    pending = _pending(target_cell="audit_conversation")
+    resolved = pending.resolve(at=_now())
+    assert resolved.target_cell == "audit_conversation"
+
+
+def test_expire_preserves_target_cell() -> None:
+    pending = _pending(target_cell="mirror_conversation")
+    expired = pending.expire(at=_now())
+    assert expired.target_cell == "mirror_conversation"
 
 
 def test_resolve_transitions_pending_to_resolved() -> None:

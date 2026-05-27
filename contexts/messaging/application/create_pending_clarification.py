@@ -54,9 +54,18 @@ async def create_pending_clarification(
     originating_intake_id: UUID,
     proposed_intent: dict[str, Any],
     proposed_action_summary: str,
+    target_cell: str,
     ttl: timedelta = _DEFAULT_TTL,
 ) -> PendingClarification:
-    """Expire any prior PENDING for (tenant, user); create a new PENDING."""
+    """Expire any prior PENDING for (tenant, user); create a new PENDING.
+
+    ``target_cell`` (D140, S52) identifies which ConversationFlow
+    implementer owns the new pending. Existing callers pass
+    ``"manual_entry"`` (S47/S50) or ``"audit_conversation"`` (S51);
+    S52 mirror-conversation passes ``"mirror_conversation"``; the
+    meta-classification PendingClarification at D140 dispatch flow
+    Step 5 passes ``"dispatch_clarification"``.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
     now = datetime.now(timezone.utc)
@@ -89,6 +98,7 @@ async def create_pending_clarification(
         proposed_intent=proposed_intent,
         proposed_action_summary=proposed_action_summary,
         status=PendingClarificationStatus.PENDING,
+        target_cell=target_cell,
         created_at=now,
         expires_at=now + ttl,
     )

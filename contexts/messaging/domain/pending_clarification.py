@@ -47,9 +47,22 @@ class PendingClarificationStatus(str, Enum):
     EXPIRED = "EXPIRED"
 
 
+# D140: target_cell identifiers the dispatch_inbound use case consults
+# at active-pending routing. Four identifiers at P14 close; future
+# ConversationFlow implementers at P15+ extend the set additively.
+KNOWN_TARGET_CELLS: frozenset[str] = frozenset(
+    {
+        "manual_entry",
+        "audit_conversation",
+        "mirror_conversation",
+        "dispatch_clarification",
+    }
+)
+
+
 @dataclass(frozen=True)
 class PendingClarification:
-    """The multi-turn pending-clarification aggregate (D134).
+    """The multi-turn pending-clarification aggregate (D134, D140).
 
     Frozen — lifecycle transitions return a *new* instance with
     updated ``status`` and ``resolved_at``; mutation never happens
@@ -62,6 +75,15 @@ class PendingClarification:
     callers can re-parse it through ``parse_intent`` when resolving.
     ``proposed_action_summary`` is the short human-readable phrasing
     of the proposed action the audit chain carries verbatim.
+
+    ``target_cell`` (D140, S52) identifies which ConversationFlow
+    implementer owns the pending. The dispatch_inbound use case
+    consults this field on active-pending routing per D140's dispatch
+    flow Step 2. Existing call sites at S47/S50 set this to
+    ``"manual_entry"``; S51 audit-conversation sets ``"audit_conversation"``;
+    S52 mirror-conversation sets ``"mirror_conversation"``; the meta-
+    classification PendingClarification at D140 Step 5 sets
+    ``"dispatch_clarification"``.
     """
 
     id: UUID
@@ -74,6 +96,7 @@ class PendingClarification:
     proposed_intent: dict[str, Any]
     proposed_action_summary: str
     status: PendingClarificationStatus
+    target_cell: str
     created_at: datetime
     expires_at: datetime
     resolved_at: datetime | None = None
@@ -98,6 +121,11 @@ class PendingClarification:
         if not self.proposed_action_summary.strip():
             raise ValueError(
                 "PendingClarification.proposed_action_summary must be non-empty"
+            )
+        if self.target_cell not in KNOWN_TARGET_CELLS:
+            raise ValueError(
+                "PendingClarification.target_cell must be one of "
+                f"{sorted(KNOWN_TARGET_CELLS)}; got {self.target_cell!r}"
             )
         if self.expires_at <= self.created_at:
             raise ValueError(
@@ -135,6 +163,7 @@ class PendingClarification:
             proposed_intent=self.proposed_intent,
             proposed_action_summary=self.proposed_action_summary,
             status=PendingClarificationStatus.RESOLVED,
+            target_cell=self.target_cell,
             created_at=self.created_at,
             expires_at=self.expires_at,
             resolved_at=at,
@@ -157,6 +186,7 @@ class PendingClarification:
             proposed_intent=self.proposed_intent,
             proposed_action_summary=self.proposed_action_summary,
             status=PendingClarificationStatus.EXPIRED,
+            target_cell=self.target_cell,
             created_at=self.created_at,
             expires_at=self.expires_at,
             resolved_at=at,
@@ -164,6 +194,7 @@ class PendingClarification:
 
 
 __all__ = [
+    "KNOWN_TARGET_CELLS",
     "PendingClarification",
     "PendingClarificationStatus",
 ]

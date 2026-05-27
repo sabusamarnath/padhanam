@@ -68,6 +68,7 @@ pending_clarifications = sa.Table(
     sa.Column("proposed_intent", pg.JSONB, nullable=False),
     sa.Column("proposed_action_summary", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
+    sa.Column("target_cell", sa.Text, nullable=False),
     sa.Column(
         "created_at", sa.TIMESTAMP(timezone=True), nullable=False
     ),

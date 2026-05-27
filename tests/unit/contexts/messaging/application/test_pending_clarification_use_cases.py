@@ -109,6 +109,7 @@ def test_create_persists_pending_and_emits_create_event() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={"intent_type": "add_data_point"},
             proposed_action_summary="add a goal to Q3 review",
+            target_cell="manual_entry",
         )
     )
 
@@ -138,6 +139,7 @@ def test_create_expires_any_prior_pending_for_same_user() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={"intent_type": "add_data_point"},
             proposed_action_summary="first proposal",
+            target_cell="manual_entry",
         )
     )
     second = asyncio.run(
@@ -151,6 +153,7 @@ def test_create_expires_any_prior_pending_for_same_user() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={"intent_type": "add_data_point"},
             proposed_action_summary="second proposal",
+            target_cell="manual_entry",
         )
     )
 
@@ -181,6 +184,7 @@ def test_resolve_transitions_to_resolved_and_emits_event() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={"intent_type": "add_data_point"},
             proposed_action_summary="proposal",
+            target_cell="manual_entry",
         )
     )
 
@@ -218,6 +222,7 @@ def test_expire_transitions_to_expired_and_emits_event() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={"intent_type": "add_data_point"},
             proposed_action_summary="proposal",
+            target_cell="manual_entry",
         )
     )
 
@@ -254,6 +259,7 @@ def test_create_denied_without_permission() -> None:
                 originating_intake_id=uuid4(),
                 proposed_intent={},
                 proposed_action_summary="proposal",
+                target_cell="manual_entry",
             )
         )
 
@@ -272,6 +278,7 @@ def test_resolve_denied_without_permission() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={},
             proposed_action_summary="proposal",
+            target_cell="manual_entry",
         )
     )
     with pytest.raises(AuthorisationDenied):
@@ -302,6 +309,7 @@ def test_expire_denied_without_permission() -> None:
             originating_intake_id=uuid4(),
             proposed_intent={},
             proposed_action_summary="proposal",
+            target_cell="manual_entry",
         )
     )
     with pytest.raises(AuthorisationDenied):

@@ -774,6 +774,7 @@ class AuditConversationCell:
             originating_intake_id=originating_intake_id,
             proposed_intent=proposed_intent,
             proposed_action_summary=proposed_action_summary,
+            target_cell="audit_conversation",
         )
 
     # ----------------------------------------------------- render helper

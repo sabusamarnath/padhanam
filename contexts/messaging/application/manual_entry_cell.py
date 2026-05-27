@@ -561,6 +561,7 @@ class ManualEntryCell:
             originating_intake_id=originating_intake_id,
             proposed_intent=_serialise_intent(intent),
             proposed_action_summary=summary,
+            target_cell="manual_entry",
         )
 
         question = (
@@ -642,6 +643,7 @@ class ManualEntryCell:
             originating_intake_id=originating_intake_id,
             proposed_intent=serialised,
             proposed_action_summary=summary,
+            target_cell="manual_entry",
         )
 
         numbered = _render_numbered_candidates(candidates)
