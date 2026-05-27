@@ -85,6 +85,9 @@ class PostgresMessageRepository:
             created_at=row.created_at,
             external_id=row.external_id,
             intake_id=None if row.intake_id is None else UUID(row.intake_id),
+            cell_payload=(
+                None if row.cell_payload is None else dict(row.cell_payload)
+            ),
         )
 
     async def save(
@@ -114,6 +117,7 @@ class PostgresMessageRepository:
                         ),
                         actor_id=message.actor_id,
                         created_at=message.created_at,
+                        cell_payload=message.cell_payload,
                     )
                 )
 

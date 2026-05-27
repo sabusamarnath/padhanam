@@ -19,6 +19,7 @@ S45 (D126/D129): accepts an ActorContext, applies the
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from contexts.audit.domain.ports import AuditPort
@@ -49,8 +50,17 @@ async def send_message(
     to_address: str,
     body: str,
     channel: MessageChannel = MessageChannel.WHATSAPP,
+    cell_payload: dict[str, Any] | None = None,
 ) -> Message:
-    """Deliver an outbound message, persist it, and emit the audit event."""
+    """Deliver an outbound message, persist it, and emit the audit event.
+
+    ``cell_payload`` (D141, S52) is the per-implementer JSONB payload
+    a ConversationFlow implementer attaches to the outbound message
+    for cross-turn state extraction. Defaults to ``None`` so existing
+    call sites (manual entry cell, audit-conversation cell, plain
+    HTTP send) preserve their behaviour. Mirror-conversation at S52
+    is the first user.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
     result = await delivery_port.send(
@@ -73,6 +83,7 @@ async def send_message(
         created_at=datetime.now(timezone.utc),
         external_id=result.external_id,
         intake_id=None,
+        cell_payload=cell_payload,
     )
     await repository.save(tenant_context=tenant_context, message=message)
     await audit_port.emit(

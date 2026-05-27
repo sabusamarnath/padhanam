@@ -27,6 +27,7 @@ def _message(
     actor_id: str = "cli-operator",
     external_id: str | None = None,
     intake_id=None,
+    cell_payload: dict | None = None,
 ) -> Message:
     return Message(
         id=uuid4(),
@@ -42,6 +43,7 @@ def _message(
         created_at=datetime.now(timezone.utc),
         external_id=external_id,
         intake_id=intake_id,
+        cell_payload=cell_payload,
     )
 
 
@@ -104,6 +106,28 @@ def test_message_is_frozen() -> None:
     message = _message()
     with pytest.raises(FrozenInstanceError):
         message.status = MessageStatus.SENT  # type: ignore[misc]
+
+
+def test_outbound_message_carries_cell_payload() -> None:
+    payload = {"current_focus_artefact": {"artefact_id": str(uuid4()), "artefact_type": "case"}}
+    message = _message(
+        direction=MessageDirection.OUTBOUND, cell_payload=payload
+    )
+    assert message.cell_payload == payload
+
+
+def test_inbound_message_rejects_cell_payload() -> None:
+    with pytest.raises(ValueError, match="cell_payload must be None"):
+        _message(
+            direction=MessageDirection.INBOUND,
+            status=MessageStatus.RECEIVED,
+            cell_payload={"any": "value"},
+        )
+
+
+def test_outbound_message_with_null_cell_payload_constructs() -> None:
+    message = _message(direction=MessageDirection.OUTBOUND, cell_payload=None)
+    assert message.cell_payload is None
 
 
 def test_enum_values_are_stable() -> None:

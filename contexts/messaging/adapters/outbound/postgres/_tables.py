@@ -43,6 +43,7 @@ messages = sa.Table(
         nullable=False,
         server_default=sa.text("now()"),
     ),
+    sa.Column("cell_payload", pg.JSONB, nullable=True),
     sa.Index("ix_messages_tenant_created_at", "tenant_id", "created_at"),
     sa.Index(
         "ix_messages_tenant_direction_channel",

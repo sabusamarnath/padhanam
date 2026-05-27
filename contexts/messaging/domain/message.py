@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 
@@ -79,6 +80,7 @@ class Message:
     created_at: datetime
     external_id: str | None = None
     intake_id: UUID | None = None
+    cell_payload: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():
@@ -97,6 +99,15 @@ class Message:
         ):
             raise ValueError(
                 "Message.intake_id must be None on an OUTBOUND message"
+            )
+        # D141 (S52): cell_payload carries per-implementer state on
+        # outbound messages only. Inbound messages must not carry it.
+        if (
+            self.direction is MessageDirection.INBOUND
+            and self.cell_payload is not None
+        ):
+            raise ValueError(
+                "Message.cell_payload must be None on an INBOUND message"
             )
 
 
