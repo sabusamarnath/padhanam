@@ -40,17 +40,28 @@ from apps.api._portfolio_gateway_wiring import (
     build_portfolio_gateway,
 )
 from contexts.audit.domain.ports import AuditPort
+from contexts.audit.ports.reader import AuditEventReader
 
+from contexts.audit_conversation.application.ports.portfolio_case_lookup import (
+    AuditCaseSummary,
+    PortfolioCaseLookup,
+)
 from contexts.intake.application.ports.message_writer import (
     MessageWriteResult,
 )
 from contexts.inference.adapters.confidence_self_reported import (
     SelfReportedConfidenceAdapter,
 )
+from contexts.messaging.adapters.llm_meta_classifier import (
+    LlmMetaClassifierAdapter,
+)
 from contexts.messaging.adapters.threshold_single_pair import (
     SinglePairThresholdResolverAdapter,
 )
 from contexts.messaging.application.ports.cell_dispatch import CellDispatch
+from contexts.messaging.application.ports.meta_classifier import (
+    MetaClassifier,
+)
 from contexts.messaging.application.ports.pending_clarification_reader import (
     PendingClarificationReader,
 )
@@ -317,6 +328,35 @@ class PendingClarificationReaderAdapter:
         )
 
 
+class PortfolioCaseLookupAdapter:
+    """Adapter implementing audit-conversation's PortfolioCaseLookup port (S52).
+
+    The legal cross-context seam (D17): ``apps/`` may import
+    ``contexts.portfolio.application`` directly, so this adapter
+    invokes the portfolio ``list_cases`` use case and translates the
+    page into the audit-conversation-owned ``AuditCaseSummary`` shape.
+    """
+
+    def __init__(
+        self,
+        *,
+        portfolio_gateway: PortfolioGatewayAdapter,
+    ) -> None:
+        self._gateway = portfolio_gateway
+
+    async def find_cases(
+        self, *, actor: ActorContext
+    ) -> tuple[AuditCaseSummary, ...]:
+        # Reuse the messaging PortfolioGateway's case-listing path —
+        # the gateway already loads cases with discriminators; we
+        # discard the discriminator fields and keep only id+title.
+        summaries = await self._gateway.find_cases(actor=actor)
+        return tuple(
+            AuditCaseSummary(case_id=s.case_id, title=s.title)
+            for s in summaries
+        )
+
+
 @dataclass(frozen=True)
 class MessagingComposition:
     """The messaging composition seam exposed on ``app.state.messaging``.
@@ -324,8 +364,11 @@ class MessagingComposition:
     Bundles the repository adapter, the selected delivery adapter, the
     MessageWriter consumer-port adapter, the manual entry cell's
     collaborators (the PortfolioGateway adapter and the
-    StructuredOutputPort, S46), and the configuration the routes need
-    (the platform sender address and the inbound-webhook settings).
+    StructuredOutputPort, S46), the dispatch-routing collaborators (the
+    MetaClassifier and the audit-conversation cell's read-side
+    collaborators added at S52 for D140), and the configuration the
+    routes need (the platform sender address and the inbound-webhook
+    settings).
     """
 
     repository: MessageRepositoryAdapter
@@ -338,6 +381,10 @@ class MessagingComposition:
     pending_clarification_repository: PendingClarificationRepository
     pending_clarification_reader: PendingClarificationReader
     threshold_resolver: ThresholdResolver
+    meta_classifier: MetaClassifier
+    audit_event_reader: AuditEventReader
+    portfolio_case_lookup: PortfolioCaseLookup
+    high_confidence_threshold: float
     from_address: str
     webhook_tenant_id: str
     webhook_jurisdiction: str
@@ -397,13 +444,17 @@ def build_messaging_composition(
     security_events: SecurityEventLogger,
     audit_port: AuditPort,
     structured_output_port: StructuredOutputPort,
+    audit_event_reader: AuditEventReader,
 ) -> MessagingComposition:
-    """Wire the messaging composition for the production app (D129, S46).
+    """Wire the messaging composition for the production app (D129, S46, S52).
 
     ``structured_output_port`` is the inference LiteLLM adapter (which
     implements StructuredOutputPort) — the manual entry cell's
-    intent-extraction collaborator. The PortfolioGateway adapter is
-    wired here from the shared per-tenant connection plumbing.
+    intent-extraction collaborator and the meta-classifier's classification
+    collaborator. ``audit_event_reader`` is the existing S36
+    AuditEventReader the audit-conversation cell consumes; passed in to
+    avoid duplicating its construction at the messaging-composition
+    boundary.
     """
     settings = MessagingSettings()
     session_factory_for_tenant = _session_factory_for_tenant_builder(
@@ -415,6 +466,13 @@ def build_messaging_composition(
     pending_clarification_repository = PendingClarificationRepositoryAdapter(
         session_factory_for_tenant=session_factory_for_tenant,
     )
+    portfolio_gateway = build_portfolio_gateway(
+        tenant_registry=tenant_registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=security_events,
+        audit_port=audit_port,
+    )
     return MessagingComposition(
         repository=MessageRepositoryAdapter(
             session_factory_for_tenant=session_factory_for_tenant,
@@ -424,13 +482,7 @@ def build_messaging_composition(
             session_factory_for_tenant=session_factory_for_tenant,
             audit_port=audit_port,
         ),
-        portfolio_gateway=build_portfolio_gateway(
-            tenant_registry=tenant_registry,
-            session_factory_cache=session_factory_cache,
-            operator_principal=operator_principal,
-            security_events=security_events,
-            audit_port=audit_port,
-        ),
+        portfolio_gateway=portfolio_gateway,
         structured_output_port=structured_output_port,
         confidence_calculator=SelfReportedConfidenceAdapter(),
         cell_dispatch=InProcessCellDispatchAdapter(),
@@ -446,6 +498,19 @@ def build_messaging_composition(
                 medium=settings.confidence_medium_cutoff,
             ),
         ),
+        meta_classifier=LlmMetaClassifierAdapter(
+            structured_output_port=structured_output_port,
+        ),
+        audit_event_reader=audit_event_reader,
+        portfolio_case_lookup=PortfolioCaseLookupAdapter(
+            portfolio_gateway=portfolio_gateway,
+        ),
+        # D140 + S47-addendum: meta-classifier dispatch uses the same
+        # high cut-off as confidence-aware composition at Phase 2-A
+        # (the single-pair adapter ignores operation_class; a Phase
+        # 2-B+ swap can per-operation-class override without touching
+        # the dispatch use case).
+        high_confidence_threshold=settings.confidence_high_cutoff,
         from_address=settings.twilio_whatsapp_from,
         webhook_tenant_id=settings.webhook_tenant_id,
         webhook_jurisdiction=settings.webhook_jurisdiction,
@@ -460,5 +525,6 @@ __all__ = [
     "MessagingComposition",
     "PendingClarificationReaderAdapter",
     "PendingClarificationRepositoryAdapter",
+    "PortfolioCaseLookupAdapter",
     "build_messaging_composition",
 ]

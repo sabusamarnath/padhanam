@@ -88,6 +88,38 @@ class _NoopSecurityEvents:
         pass
 
 
+class _FakeAuditEventReader:
+    """Stub AuditEventReader for integration tests (S52).
+
+    The route-level integration tests usually exercise manual-entry-
+    shaped inbounds; the audit-conversation runner is rarely the
+    routing target. When it is, the stub returns an empty
+    AuditEventListPage so the cell composes a clean no-results
+    response.
+    """
+
+    async def get_audit_event(self, **kwargs):
+        return None
+
+    async def list_audit_events_with_filters(self, **kwargs):
+        from contexts.audit.domain.chain_integrity import (
+            ChainIntegrityVerification,
+        )
+        from contexts.audit.domain.query_filters import AuditEventListPage
+
+        return AuditEventListPage(
+            events=(),
+            next_cursor=None,
+            chain_integrity=ChainIntegrityVerification(status="verified"),
+        )
+
+    async def verify_chain_segment(self, **kwargs):
+        from contexts.audit.domain.chain_integrity import (
+            ChainIntegrityVerification,
+        )
+        return ChainIntegrityVerification(status="verified")
+
+
 class _FakePendingClarificationRepository:
     """An in-memory PendingClarification repository for tests (S47)."""
 
@@ -207,7 +239,15 @@ class _RecordingMessageWriter:
 
 
 class _FakeStructuredOutput:
-    """Returns a preset intent extraction; optionally raises (S46)."""
+    """Returns a preset intent extraction; optionally raises (S46).
+
+    S52: a stub ``confidence`` of 0.95 lets the cell's confidence-aware
+    composition (D134) take the high-confidence proceed path on
+    ``create_case`` / ``add_data_point`` extractions; the UnclearIntent
+    extractions still route as Case 3 because parse_intent of an
+    ``unclear`` intent_type returns UnclearIntent regardless of
+    confidence.
+    """
 
     def __init__(
         self, extraction: dict[str, Any], *, fail: bool = False
@@ -221,7 +261,7 @@ class _FakeStructuredOutput:
         if self._fail:
             raise RuntimeError("structured-output backend unavailable")
         return StructuredOutputResponse(
-            value=self._extraction, confidence=None, provider_metadata={}
+            value=self._extraction, confidence=0.95, provider_metadata={}
         )
 
 
@@ -290,6 +330,18 @@ def _build(
     from shared_kernel import ConfidenceThresholds
     pending_repo = _FakePendingClarificationRepository()
     pending_reader = _FakePendingClarificationReader(pending_repo)
+    # S52 (D140): MessagingComposition gains meta_classifier +
+    # audit_event_reader + portfolio_case_lookup. The integration
+    # tests run the dispatch substrate against the rule-based meta
+    # classifier (deterministic, no LLM call) so existing scenarios
+    # whose inbound matches manual-entry-shaped tokens continue to
+    # route through manual_entry as before. Tests exercising the
+    # dispatch flow directly live at the unit-test suite.
+    from contexts.messaging.adapters.rule_based_meta_classifier import (
+        RuleBasedMetaClassifierAdapter,
+    )
+    from apps.api._messaging_wiring import PortfolioCaseLookupAdapter
+
     composition = MessagingComposition(
         repository=message_repo,
         delivery_port=delivery,
@@ -305,6 +357,12 @@ def _build(
         threshold_resolver=SinglePairThresholdResolverAdapter(
             thresholds=ConfidenceThresholds(high=0.8, medium=0.5),
         ),
+        meta_classifier=RuleBasedMetaClassifierAdapter(),
+        audit_event_reader=_FakeAuditEventReader(),
+        portfolio_case_lookup=PortfolioCaseLookupAdapter(
+            portfolio_gateway=portfolio_gateway,
+        ),
+        high_confidence_threshold=0.8,
         from_address="+14155238886",
         webhook_tenant_id=_TENANT_ID,
         webhook_jurisdiction="eu-west",
@@ -437,8 +495,11 @@ def test_inbound_webhook_create_case_intent_drives_cell_and_replies() -> None:
         },
         gateway=gateway,
     )
+    # S52 (D140): the rule-based meta-classifier routes "create a
+    # case" by token match to manual_entry at high confidence; the
+    # cell then runs and creates the case.
     resp = _post_webhook(
-        client, _inbound_form("start a case for the Q3 portfolio review")
+        client, _inbound_form("create a case for the Q3 portfolio review")
     )
 
     assert resp.status_code == 200
@@ -453,10 +514,18 @@ def test_inbound_webhook_create_case_intent_drives_cell_and_replies() -> None:
 
 
 def test_inbound_webhook_unclear_intent_replies_with_clarification() -> None:
+    """Cell-level UnclearIntent surfaces 'Could you say a little more?'.
+
+    S52 (D140): the meta-classifier routes the inbound on the
+    manual-entry-shaped 'add' token, so the manual_entry cell runs.
+    The cell's stubbed structured-output returns UnclearIntent and
+    the cell renders the cell-altitude clarification (distinct from
+    the dispatch-altitude clarification at D140 Step 5).
+    """
     client, message_repo, _delivery, _audit, _intake, gw = _build(
         extraction=_UNCLEAR
     )
-    resp = _post_webhook(client, _inbound_form("do the thing"))
+    resp = _post_webhook(client, _inbound_form("add a thing"))
 
     assert resp.status_code == 200
     assert gw.created_cases == []
@@ -467,16 +536,51 @@ def test_inbound_webhook_unclear_intent_replies_with_clarification() -> None:
     assert outbound.body == "Could you say a little more?"
 
 
-def test_inbound_webhook_cell_failure_still_returns_200() -> None:
-    """A cell failure must not turn the webhook non-2xx — that would
-    make Twilio retry and duplicate the already-persisted inbound."""
-    client, message_repo, _delivery, _audit, intake_repo, _gw = _build(
-        structured_output_fails=True
-    )
+def test_inbound_webhook_dispatch_ambiguous_surfaces_routing_prompt() -> None:
+    """S52 (D140 Step 5): dispatch-ambiguous inbounds surface the routing prompt.
+
+    The default _inbound_form() body ('status: Acme deal moved to legal
+    review') matches none of the rule-based meta-classifier's token
+    sets and falls through to the low-confidence default. Step 5 of
+    the dispatch flow creates a dispatch_clarification PendingClarification
+    and sends the numbered routing prompt to the operator. The cell
+    does not run.
+    """
+    client, message_repo, _delivery, _audit, _intake, gw = _build()
     resp = _post_webhook(client, _inbound_form())
 
     assert resp.status_code == 200
-    # the inbound was still recorded; only the cell reply was lost.
+    assert gw.created_cases == []
+    outbound = next(
+        m for m in message_repo.messages.values()
+        if m.direction.value == "OUTBOUND"
+    )
+    assert "Record new portfolio state" in outbound.body
+    assert "audit history" in outbound.body
+    assert "current portfolio state" in outbound.body
+
+
+def test_inbound_webhook_cell_failure_still_returns_200() -> None:
+    """A cell failure must not turn the webhook non-2xx — that would
+    make Twilio retry and duplicate the already-persisted inbound.
+
+    S52 (D140): the rule-based meta-classifier does not consume
+    structured_output, so dispatch routes on the inbound's "add"
+    token to manual_entry at high confidence. The manual_entry cell
+    then attempts intent extraction, which fails because the test's
+    StructuredOutput stub is in fail mode. The CellDispatch port's
+    failure-capture catches the exception so the webhook returns 200
+    with the inbound message still persisted as the canonical
+    record-of-arrival; no outbound is sent because the cell never
+    composed a reply.
+    """
+    client, message_repo, _delivery, _audit, intake_repo, _gw = _build(
+        structured_output_fails=True
+    )
+    resp = _post_webhook(client, _inbound_form("add a goal"))
+
+    assert resp.status_code == 200
+    # The inbound was still recorded; only the cell reply was lost.
     assert len(intake_repo.intakes) == 1
     assert len(message_repo.messages) == 1
 

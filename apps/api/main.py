@@ -419,6 +419,7 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         audit_port=audit_adapter,
         structured_output_port=inference_port,
+        audit_event_reader=audit_event_reader,
     )
 
     return AppCompositions(

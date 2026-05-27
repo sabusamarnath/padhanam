@@ -40,16 +40,26 @@ from apps.api.routers._messaging_dto import (
 )
 from apps.api.routers._messaging_query import parse_message_list_query
 from contexts.audit.domain.ports import AuditPort
+from contexts.audit_conversation.application.cell import AuditConversationCell
+from contexts.audit_conversation.application.response import (
+    render_for_whatsapp as render_audit_for_whatsapp,
+)
 from contexts.intake.application.record_intake_and_record_inbound_message import (  # noqa: E501
     record_intake_and_record_inbound_message,
 )
 from contexts.intake.ports.intake_repository import IntakeRepository
+from contexts.messaging.application import dispatch_inbound
+from contexts.messaging.application.dispatch_inbound import DispatchContext
 from contexts.messaging.application.cursor import encode_message_cursor
 from contexts.messaging.application.get_message import get_message
 from contexts.messaging.application.list_messages import list_messages
 from contexts.messaging.application.manual_entry_cell import ManualEntryCell
+from contexts.messaging.application.ports.meta_classifier import (
+    ConversationTurn,
+)
 from contexts.messaging.application.send_message import send_message
-from contexts.messaging.domain import MessageChannel
+from contexts.messaging.domain import MessageChannel, MessageDirection
+from contexts.messaging.domain.cell_identifier import CellIdentifier
 from contexts.messaging.domain.query_filters import (
     MessageListCursor,
     MessageListFilters,
@@ -62,6 +72,12 @@ from shared_kernel import (
     TenantContext,
 )
 from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
+
+
+# Recent-history window the meta-classifier and the mirror-conversation
+# cell consume. Six turns covers the typical drill-down scope at Phase
+# 2-A without bloating the LLM prompt.
+_CONVERSATION_HISTORY_WINDOW = 6
 
 router = APIRouter(prefix="/api/v1/messaging", tags=["messaging"])
 
@@ -178,6 +194,141 @@ async def _run_manual_entry_cell(
     )
 
 
+async def _run_audit_conversation_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    inbound_body: str,
+    reply_to: str,
+    inbound_intake_id: UUID,
+) -> None:
+    """Run the audit-conversation cell over an inbound message and reply (S51).
+
+    Mirrors the manual-entry runner shape but constructs the
+    AuditConversationCell with its read-side collaborators (the
+    existing S36 AuditEventReader and the apps/-layer
+    PortfolioCaseLookup adapter). The audit-conversation
+    AuditConversationResponse renders through its own WhatsApp
+    renderer at ``contexts/audit_conversation/application/response.py``.
+    """
+    cell = AuditConversationCell(
+        structured_output_port=messaging.structured_output_port,
+        audit_event_reader=messaging.audit_event_reader,
+        portfolio_case_lookup=messaging.portfolio_case_lookup,
+        actor=actor,
+        confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
+        pending_clarification_reader=messaging.pending_clarification_reader,
+        pending_clarification_repository=(
+            messaging.pending_clarification_repository
+        ),
+        audit_port=audit_port,
+        originating_intake_id=inbound_intake_id,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose="audit_query", actor_id=actor.actor_id
+        )
+    )
+    state = await cell.turn(state, ConversationInput(text=inbound_body))
+    await cell.close(
+        state, ConversationClosure(reason="audit_query handled")
+    )
+
+    from datetime import datetime, timezone
+    response = state.payload["audit_response"]
+    rendered = render_audit_for_whatsapp(
+        response, composed_at=datetime.now(timezone.utc)
+    )
+    await send_message(
+        repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        audit_port=audit_port,
+        actor=actor,
+        from_address=messaging.from_address,
+        to_address=reply_to,
+        body=rendered,
+    )
+
+
+async def _load_conversation_history(
+    *,
+    messaging: MessagingComposition,
+    actor: ActorContext,
+    limit: int = _CONVERSATION_HISTORY_WINDOW,
+) -> tuple[ConversationTurn, ...]:
+    """Load the recent N messages for the actor's tenant as ConversationTurns.
+
+    Messages are returned newest-first by the repository; the
+    classifier reads them oldest-first, so we reverse the slice. Each
+    inbound message becomes a ``user`` turn; each outbound an
+    ``assistant`` turn.
+    """
+    page = await messaging.repository.list_for_tenant(
+        tenant_context=actor.tenant_context,
+        filters=None,
+        cursor=None,
+        page_size=limit,
+    )
+    chronological = list(reversed(page.messages))
+    turns: list[ConversationTurn] = []
+    for message in chronological:
+        if not message.body or not message.body.strip():
+            continue
+        role = (
+            "user"
+            if message.direction is MessageDirection.INBOUND
+            else "assistant"
+        )
+        turns.append(ConversationTurn(role=role, text=message.body))
+    return tuple(turns)
+
+
+def _build_cell_runners(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    reply_to: str,
+) -> dict:
+    """Build the per-cell runners the dispatch_inbound use case selects from.
+
+    Mirror-conversation lands at S52 commit 8 and is registered here
+    at that commit (its absence at commit 6 means a meta-classifier
+    high-confidence ``mirror_conversation`` result raises a wiring
+    error rather than running silently — the dispatcher refuses to
+    route to an unregistered cell per its own contract).
+    """
+
+    async def _manual_entry_runner(context: DispatchContext) -> None:
+        await _run_manual_entry_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=context.inbound_text,
+            reply_to=reply_to,
+            inbound_intake_id=context.inbound_intake_id,
+        )
+
+    async def _audit_runner(context: DispatchContext) -> None:
+        await _run_audit_conversation_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=context.inbound_text,
+            reply_to=reply_to,
+            inbound_intake_id=context.inbound_intake_id,
+        )
+
+    return {
+        CellIdentifier.MANUAL_ENTRY: _manual_entry_runner,
+        CellIdentifier.AUDIT_CONVERSATION: _audit_runner,
+        # Mirror-conversation runner registers at S52 commit 8 alongside
+        # the cell's first build.
+    }
+
+
 @router.post("/send", response_model=MessageResponse, status_code=201)
 async def send_message_route(
     body: SendMessageRequest,
@@ -259,29 +410,46 @@ async def inbound_webhook_route(
         external_id=params.get("MessageSid") or None,
     )
 
-    # S47 (D133): the cell run dispatches to a background task via the
-    # CellDispatch port — the webhook returns 2xx promptly while the
-    # cell completes asynchronously. The dispatch port's contract
-    # captures and logs any exception raised by the cell, closing the
-    # bare-``except`` gap from the prior synchronous shape (S46 smoke
-    # finding). The inbound Message and its IntakeRecord are already
-    # persisted above as the canonical record-of-arrival; cell failure
-    # never erases that.
+    # S52 (D140): the inbound dispatches through the meta-classifier
+    # routing substrate. The dispatch_inbound use case picks between
+    # active-pending routing (Step 2 of the dispatch flow) and meta-
+    # classification (Steps 3-5). The dispatched cell runs via the
+    # CellDispatch port (D133); the webhook returns 2xx promptly while
+    # the dispatch and the cell run complete asynchronously. The
+    # inbound Message and its IntakeRecord are already persisted above
+    # as the canonical record-of-arrival; dispatch failure never
+    # erases that.
     reply_to = strip_channel_prefix(params.get("From", ""))
-    await messaging.cell_dispatch.dispatch(
-        lambda: _run_manual_entry_cell(
-            messaging=messaging,
-            audit_port=audit_port,
-            actor=actor,
-            inbound_body=inbound_body,
-            reply_to=reply_to,
-            inbound_intake_id=result.intake_id,
-        ),
-        context={
-            "intake_id": str(result.intake_id),
-            "tenant_id": str(actor.tenant_context.tenant_id),
-            "external_id": params.get("MessageSid") or None,
-        },
+    history = await _load_conversation_history(
+        messaging=messaging, actor=actor
+    )
+    cell_runners = _build_cell_runners(
+        messaging=messaging,
+        audit_port=audit_port,
+        actor=actor,
+        reply_to=reply_to,
+    )
+    dispatch_context = DispatchContext(
+        tenant_id=UUID(actor.tenant_context.tenant_id),
+        user_id=actor.actor_id,
+        inbound_text=inbound_body,
+        inbound_intake_id=result.intake_id,
+        reply_to=reply_to,
+        conversation_history=history,
+    )
+    await dispatch_inbound.execute(
+        context=dispatch_context,
+        actor=actor,
+        pending_reader=messaging.pending_clarification_reader,
+        pending_repository=messaging.pending_clarification_repository,
+        meta_classifier=messaging.meta_classifier,
+        high_confidence_threshold=messaging.high_confidence_threshold,
+        cell_dispatch=messaging.cell_dispatch,
+        audit_port=audit_port,
+        cell_runners=cell_runners,
+        message_repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        from_address=messaging.from_address,
     )
 
     return webhook_ack(result)
