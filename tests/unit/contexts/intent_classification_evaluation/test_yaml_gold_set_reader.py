@@ -19,6 +19,10 @@ _MANUAL_FIXTURE = (
     Path(__file__).resolve().parents[3]
     / "fixtures/intent_classification/gold_set.yaml"
 )
+_META_CLASSIFIER_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/meta_classifier_gold_set.yaml"
+)
 
 
 def test_yaml_reader_loads_audit_conversation_fixture() -> None:
@@ -35,6 +39,31 @@ def test_yaml_reader_loads_audit_conversation_fixture() -> None:
     assert "find_by_event_type" in classes
     assert "find_by_combination" in classes
     assert "unclear_audit" in classes
+
+
+def test_yaml_reader_loads_meta_classifier_fixture() -> None:
+    """S52 commit 5: third instance of the parameterised D137 substrate."""
+    reader = YamlGoldSetReader(path=_META_CLASSIFIER_FIXTURE)
+    gold_set = reader.get_gold_set("meta_classifier_p14_s52")
+    assert gold_set.name == "meta_classifier_p14_s52"
+    assert gold_set.intent_surface == "dispatch_classifier"
+    assert len(gold_set.entries) >= 20
+    # Every entry's expected class names a real cell or the
+    # dispatch_clarification sentinel.
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    assert classes.issubset(
+        {
+            "manual_entry",
+            "audit_conversation",
+            "mirror_conversation",
+            "dispatch_clarification",
+        }
+    )
+    # Every real cell has at least one entry; the ambiguous bucket
+    # carries best-guess identifiers per the gold-set's commentary.
+    assert "manual_entry" in classes
+    assert "audit_conversation" in classes
+    assert "mirror_conversation" in classes
 
 
 def test_yaml_reader_loads_manual_entry_fixture_with_default_surface() -> None:

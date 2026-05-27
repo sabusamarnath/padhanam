@@ -19,15 +19,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# The intent classes the substrate evaluates. Two intent surfaces at
-# S51: the manual entry cell (four classes mirroring IntentType at
-# contexts/messaging/domain/intent.py) and the audit-conversation cell
+# The intent classes the substrate evaluates. Four intent surfaces at
+# S52: the manual entry cell (four classes mirroring IntentType at
+# contexts/messaging/domain/intent.py); the audit-conversation cell
 # (six classes mirroring AuditIntentType at
-# contexts/audit_conversation/domain/intent.py). Both surfaces' classes
-# coexist in this tuple per the D137 substrate parameterisation
-# activation trigger (deferred-decisions entry, S51 framing): tuple
-# extension is the cheapest possible adaptation; the parameterisation
-# refactor triggers at the third-or-later surface.
+# contexts/audit_conversation/domain/intent.py); the dispatch
+# classifier (three real cell identifiers from D140 plus the
+# dispatch_clarification sentinel); the mirror-conversation cell
+# (six concrete intents plus the unclear fallback, mirroring
+# MirrorIntentType at contexts/mirror_conversation/domain/intent.py
+# which lands at S52 commit 8). Each surface's classes coexist in
+# this tuple per the D137 substrate parameterisation activation
+# trigger (deferred-decisions entry): tuple extension is the cheapest
+# possible adaptation; the parameterisation refactor triggers when
+# the tuple-extension pattern stops carrying the cumulative weight.
 INTENT_CLASSES: tuple[str, ...] = (
     # Manual entry cell surface (S46, four classes).
     "create_case",
@@ -41,6 +46,19 @@ INTENT_CLASSES: tuple[str, ...] = (
     "find_by_event_type",
     "find_by_combination",
     "unclear_audit",
+    # Dispatch classifier surface (S52 D140, four classes).
+    "manual_entry",
+    "audit_conversation",
+    "mirror_conversation",
+    "dispatch_clarification",
+    # Mirror-conversation surface (S52 commit 8, seven classes).
+    "show_case",
+    "list_cases",
+    "show_data_point",
+    "drill_down_to_child",
+    "show_parent",
+    "show_siblings",
+    "unclear_mirror",
 )
 
 
@@ -80,14 +98,19 @@ class IntentClassificationGoldSetEntry:
 
 
 # Intent surfaces the substrate evaluates. S46 introduced the
-# manual_entry surface; S51 added the audit_conversation surface. The
-# tuple is extended at the next ConversationFlow implementer; full
-# parameterisation refactor activates at the third-or-later surface per
-# the D137 substrate parameterisation deferred-decisions entry (S51
-# framing).
+# manual_entry surface; S51 added the audit_conversation surface; S52
+# adds dispatch_classifier (the meta-classifier from D140) and
+# mirror_conversation (the second P14 implementer). Four surfaces at
+# P14 close. The tuple-extension pattern still carries the load
+# operationally; the parameterisation refactor activates at the
+# deferred-decisions trigger when per-surface metric calculation, per-
+# surface latency budget, or per-surface model-tier selection
+# diverges across surfaces.
 INTENT_SURFACES: tuple[str, ...] = (
     "manual_entry",
     "audit_conversation",
+    "dispatch_classifier",
+    "mirror_conversation",
 )
 DEFAULT_INTENT_SURFACE: str = "manual_entry"
 

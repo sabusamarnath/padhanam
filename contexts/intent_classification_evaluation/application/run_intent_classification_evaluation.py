@@ -69,13 +69,34 @@ from shared_kernel.intent_classification_audit import (
     AUDIT_INTENT_EXTRACTION_SCHEMA,
     build_audit_extraction_prompt,
 )
+from shared_kernel.meta_classification import (
+    META_CLASSIFIER_SCHEMA,
+    build_meta_classifier_prompt,
+)
 
 
-# Per-surface (prompt_builder, schema, result_key) lookup. S51 adds the
-# audit_conversation surface alongside manual_entry. Result keys differ:
-# the manual_entry schema produces ``intent_type``; the audit_conversation
-# schema produces ``intent_class``. Extending to a third surface adds an
-# entry; full parameterisation refactor activates at the deferred-
+def _build_meta_classifier_prompt_unary(message: str) -> str:
+    """Wrap meta-classifier prompt for the runner's single-arg shape.
+
+    The runner calls each surface's prompt builder as
+    ``builder(entry.input_phrasing)``; the meta-classifier's natural
+    signature also accepts conversation history. For the gold-set
+    evaluation runner, every entry is treated as a fresh first-turn
+    inbound with no prior history (the gold set's inputs are
+    self-contained phrasings).
+    """
+    return build_meta_classifier_prompt(inbound_text=message)
+
+
+# Per-surface (prompt_builder, schema, result_key) lookup. S51 added the
+# audit_conversation surface alongside manual_entry; S52 adds the
+# dispatch_classifier surface (the D140 meta-classifier) and the
+# mirror_conversation surface. Result keys differ per schema:
+# manual_entry → ``intent_type``; audit_conversation → ``intent_class``;
+# dispatch_classifier → ``cell_identifier``; mirror_conversation →
+# ``intent_class`` (mirror prompt+schema land at S52 commit 8/9).
+# Future ConversationFlow implementers extend this dict at the same
+# pattern; full parameterisation refactor activates at the deferred-
 # decisions trigger.
 _SURFACE_PRIMITIVES: dict[str, tuple[Any, dict, str]] = {
     "manual_entry": (
@@ -88,6 +109,15 @@ _SURFACE_PRIMITIVES: dict[str, tuple[Any, dict, str]] = {
         AUDIT_INTENT_EXTRACTION_SCHEMA,
         "intent_class",
     ),
+    "dispatch_classifier": (
+        _build_meta_classifier_prompt_unary,
+        META_CLASSIFIER_SCHEMA,
+        "cell_identifier",
+    ),
+    # The mirror_conversation surface's primitives register at S52
+    # commit 9 alongside the mirror gold-set landing; the entry is
+    # added at that commit to avoid a forward import from a module
+    # that does not yet exist.
 }
 
 

@@ -283,7 +283,10 @@ def test_intent_surface_rejects_unknown_surface() -> None:
                     input_phrasing="y", expected_intent_class="unclear"
                 ),
             ),
-            intent_surface="mirror_conversation",  # not yet a registered surface
+            # S52 registered manual_entry, audit_conversation,
+            # dispatch_classifier, and mirror_conversation; calendar_read
+            # is a P15+ surface that does not yet exist.
+            intent_surface="calendar_read",
         )
 
 

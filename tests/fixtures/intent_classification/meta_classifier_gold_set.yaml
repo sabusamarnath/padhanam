@@ -1,0 +1,83 @@
+# Meta-classifier gold-set fixture (D137, D140, P14, S52).
+#
+# Operator-shaped inputs paired with expected dispatch-classification
+# values (the cells the inbound should route to). 24 entries covering
+# the three real cells plus 4 deliberately ambiguous entries annotated
+# as architectural opportunity per the S48b reflection-2 recurrence
+# test (the expected behaviour on ambiguity is the D140 Step 5
+# low-confidence routing to dispatch_clarification, not a confident
+# misclassification).
+#
+# Third instance of the D137 substrate's per-classifier parameterisation
+# (manual_entry from S48b, audit_conversation from S51, this from S52
+# commit 5). INTENT_CLASSES and INTENT_SURFACES extended at
+# contexts/intent_classification_evaluation/domain/gold_set.py;
+# _SURFACE_PRIMITIVES extended at
+# contexts/intent_classification_evaluation/application/run_intent_classification_evaluation.py.
+
+name: meta_classifier_p14_s52
+intent_surface: dispatch_classifier
+entries:
+  # ----- manual_entry (6) -----
+  - input_phrasing: "Add a data point for Q3 revenue: 5M"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Start tracking a new case for the Acme partnership"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Create a goal for the Q3 portfolio review: ship Wave 1 by Friday"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Record that the Acme deal is now at 70% probability"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Update the Q3 revenue figure to 5.2M"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Note that the partnership case moved to the negotiation phase"
+    expected_intent_class: manual_entry
+
+  # ----- audit_conversation (6) -----
+  - input_phrasing: "Show me the audit history for the Q3 portfolio review"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "What happened to the Acme deal yesterday?"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "Audit log for the partnership case this week"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "Who changed the Q3 revenue data point and when?"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "Show me all audit events of type portfolio.case.create"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "Audit events authored by operator in the last 24 hours"
+    expected_intent_class: audit_conversation
+
+  # ----- mirror_conversation (8) -----
+  - input_phrasing: "Show me the Q3 portfolio review"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "List all my cases"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "Show me the revenue data point on Q3 review"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "What does the Acme partnership case look like right now?"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "Tell me about the partnership case"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "Drill down into the marketing deck case"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "Show me the parent of the revenue data point"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "What are the siblings of this data point?"
+    expected_intent_class: mirror_conversation
+
+  # ----- ambiguous (4) — architectural opportunity per S48b reflection 2 -----
+  # These are expected to surface as LOW CONFIDENCE on a real cell
+  # (D140 Step 5 creates a dispatch_clarification PendingClarification
+  # rather than picking deterministically). Marking expected_intent_class
+  # for completeness against the gold-set substrate's shape; the
+  # confidence floor is the load-bearing signal for these entries
+  # under the production substrate. Annotation per the gold-set-plus-
+  # confidence-aware-composition recurrence test (S48b reflection 2):
+  # ambiguity is architectural opportunity, not model failure.
+  - input_phrasing: "Q3 results"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "what about the deal"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "the Acme case"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "anything new on Q3?"
+    expected_intent_class: audit_conversation
