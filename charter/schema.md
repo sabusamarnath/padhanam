@@ -1418,6 +1418,86 @@ read shape is informational (diagnostic reads); the write path is
 through the FiredTriggersRepository's `insert_or_skip` method that
 returns the boolean fresh-vs-conflict outcome per D147.
 
+## Calendar context tables (per-tenant)
+
+Migration `0026_calendar_substrate` (S55a, D148) ships these on every
+per-tenant database. Per-tenant only per D32; the control plane has no
+calendar tables.
+
+### `connections`
+
+| Column                    | Type          | Constraints                                                              |
+|---------------------------|---------------|--------------------------------------------------------------------------|
+| `id`                      | `uuid`        | primary key                                                              |
+| `tenant_id`               | `uuid`        | not null                                                                 |
+| `jurisdiction`            | `text`        | not null                                                                 |
+| `provider`                | `text`        | not null (domain-meaningful provider family, e.g. `google_calendar`)     |
+| `provider_config_key`     | `text`        | not null (opaque Nango integration key, e.g. `google-calendar`)          |
+| `provider_connection_ref` | `text`        | not null (opaque Nango connection id)                                    |
+| `sync_token`              | `text`        | nullable; per-connection incremental-sync state; cleared on 410 resync   |
+| `created_at`              | `timestamptz` | not null; default `now()`                                                |
+| `updated_at`              | `timestamptz` | not null; default `now()`                                                |
+| UNIQUE                    | composite     | UNIQUE on `(tenant_id, provider, provider_config_key)`                   |
+
+The domain `Connection` value object holds the Nango handles as opaque
+references (the domain never imports Nango identifiers); a vendor swap
+re-points `provider_config_key`/`provider_connection_ref` rather than
+touching domain code. The `sync_token` is sync *state* accessed through
+dedicated repository get/set methods, kept off the identity-only
+Connection value object.
+
+### `meetings`
+
+| Column               | Type          | Constraints                                                                 |
+|----------------------|---------------|-----------------------------------------------------------------------------|
+| `id`                 | `uuid`        | primary key                                                                 |
+| `tenant_id`          | `uuid`        | not null                                                                    |
+| `jurisdiction`       | `text`        | not null                                                                    |
+| `google_event_id`    | `text`        | not null (the stable key)                                                   |
+| `status`             | `text`        | not null; CHECK ∈ {`confirmed`, `tentative`, `cancelled`}                   |
+| `start_at`           | `timestamptz` | nullable (best-effort parse of the source start)                            |
+| `end_at`             | `timestamptz` | nullable                                                                    |
+| `start_raw`          | `text`        | nullable (raw RFC3339/date string as returned)                              |
+| `end_raw`            | `text`        | nullable                                                                    |
+| `source_updated_at`  | `timestamptz` | nullable (Google's last-modified)                                           |
+| `recurring_event_id` | `text`        | nullable                                                                    |
+| `html_link`          | `text`        | nullable                                                                    |
+| `content_hash`       | `text`        | nullable (digest of synthesised content text; NULL when tombstoned)         |
+| `enc_wrapped_dek`    | `bytea`       | nullable (P3 envelope encryption, D21; NULL when tombstoned)                |
+| `enc_dek_wrap_nonce` | `bytea`       | nullable                                                                    |
+| `enc_ciphertext`     | `bytea`       | nullable (encrypted JSON: title/description/location/attendees/organizer)   |
+| `enc_nonce`          | `bytea`       | nullable                                                                    |
+| `enc_key_version`    | `integer`     | nullable                                                                    |
+| `embedding`          | `vector(768)` | nullable; HNSW cosine index `meetings_embedding_hnsw_idx`; raw-SQL column   |
+| `created_at`         | `timestamptz` | not null; default `now()`                                                   |
+| `updated_at`         | `timestamptz` | not null; default `now()`                                                   |
+| `cancelled_at`       | `timestamptz` | nullable (set when tombstoned)                                              |
+| UNIQUE               | composite     | UNIQUE on `(tenant_id, google_event_id)`                                    |
+
+The `meetings` table is the event-id-keyed mutable search cache (D148): a
+delta upserts a modified event and tombstones a cancelled one. The
+tombstone path sets `status='cancelled'`, sets `cancelled_at`, and purges
+the content (`content_hash`, the five `enc_*` columns, and `embedding`
+all NULL) so cancelled events leave search while the row is retained so a
+re-appearing event id is recognised. Content (title/description/location/
+attendees/organizer) is field-level encrypted via P3 envelope encryption
+into the `enc_*` columns; structural columns stay plaintext for querying.
+The `embedding` column mirrors ingestion's `chunks.embedding`
+(`vector(768)`, HNSW cosine, raw-SQL declaration) — the embedding
+capability is inherited per the substrate-inheritance survey, the storage
+and similarity search are calendar's own. Index `ix_meetings_tenant_start`
+on `(tenant_id, start_at)` supports time-windowed reads. The immutable
+evidence record for citation is the audit-event payload snapshot, not this
+mutable row.
+
+### Meeting / Connection (calendar domain value objects)
+
+`Meeting` is a frozen dataclass carrying the structured event fields plus
+`content_hash` and the tombstone marker; `to_search_text()` synthesises
+the content for embedding and the hash. `Connection` is a frozen dataclass
+carrying identity and the opaque provider references. Both are
+framework-free per D16.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,
