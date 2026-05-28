@@ -1007,3 +1007,67 @@ This validates the D138 framing's expectation that the discriminator pattern gen
 
   - triaged: 2026-05-27
   - resolution: pattern verified second-instance. The additive-extension shape is now established at two instances; future Phase 2-A or Phase 2-B+ implementers extending the discriminator follow the same shape. Recorded at P15 framing close.
+
+## 2026-05-27 — [S54 framing close] Import-graph topology category folds into substrate-inheritance survey methodology candidate
+
+S53 close surfaced import-graph topology as a third category of substrate-inheritance survey finding (Finding A: ChannelType placement violated platform-to-contexts import-linter contract; lift to shared_kernel required). The category sits alongside substrate-existence and configuration-conventions categories from prior framings.
+
+S54 framing's substrate-inheritance survey at framing altitude exercised all three categories: substrate-existence (DailyBriefingReader port location; AuditEventReader consumed by wiring adapter; portfolio.list_cases use case existence); configuration-conventions (MessagingSettings extension pattern; idempotency_key column shape); import-graph topology (BROADCAST_INITIATED event class location at contexts/audit/domain/ vs the actual per-context audit_events.py pattern; idempotency key resolver function location at contexts/messaging/domain/; cross-context import verification for daily_briefing-application's consumer-DTO discipline).
+
+The substrate-inheritance survey methodology candidate now has three categories of evidence (substrate-existence; configuration-conventions; import-graph topology) plus a four-session reduction trajectory (S51 brief 5 findings → S52 brief 1 finding → S53 brief 1 finding + 1 build-time finding → S54 brief expected near-zero findings if framing-altitude survey holds).
+
+  - triaged: 2026-05-27 — formal capture for next hygiene-session promotion to methodology.md
+  - resolution: promotion-ready evidence accumulates. The three-category substrate-inheritance survey discipline is ready to promote at the next hygiene session. The promotion folds the import-graph topology category into the discipline's prose. Recorded at S54 framing close.
+
+## 2026-05-27 — [S54 framing close] Consumer-port-plus-wiring-adapter pattern reaches three-instance evidence
+
+The cross-context discipline (D16/D17/D28) commits consumer-defined ports for cross-context writes. The pattern has three instances now: PortfolioGateway at contexts/messaging/ from S46 (manual_entry cell's consumer port composing portfolio context use cases); MirrorPortfolioReader at contexts/mirror_conversation/ from S52 (mirror-conversation cell's consumer port for read access to portfolio context); DailyBriefingReader at contexts/daily_briefing/ from S54 (daily-briefing implementer's consumer port composing multiple producer contexts).
+
+The pattern's generalizability is now operationally established at three instances. Each consumer context owns its consumer ports; the wiring adapter at composition root delegates to producer-context use cases; cross-context boundaries respect the discipline. S54 adds a sub-pattern: the consumer port also defines its own DTOs (DailyBriefingCase, DailyBriefingIntakeRecord, DailyBriefingAuditEvent) so the application layer does not import producer-context domain modules — preserving import-graph independence at the application-to-domain cross-context surface. This mirrors mirror-conversation's MirrorCaseSummary discipline.
+
+Future ConversationFlow and BroadcastFlow implementers that need cross-context reads follow the same pattern without architectural commitment work; the pattern is implicit-but-coherent. No methodology candidate promotion-candidacy at architecture.md (the pattern is already committed at D16/D17/D28); the captures entry indexes the operational evidence.
+
+  - triaged: 2026-05-27
+  - resolution: pattern verified at three instances. Future Phase 2-A and Phase 2-B+ implementers extending the pattern continue to validate it. No architecture.md elevation needed beyond the existing D16/D17/D28 commitment. Recorded at S54 framing close.
+
+## 2026-05-27 — [S54 framing] Endpoint-level idempotency over implementer-level emerges as pattern
+
+S54 framing Surface 2 walked four options for daily-briefing idempotency mechanism and three options for the check's location within the dispatch flow (endpoint-level, dispatch-level, implementer-level). The endpoint-level choice settled D147.
+
+The choice has architectural implications for future broadcast implementers. Threshold-briefing at S57 follows the same endpoint-level idempotency pattern (its IdempotencyKeyResolver returns the composite key per matched event per rule). Future BroadcastFlow implementers consume the same fired_triggers substrate; the idempotency_key column's generic shape accommodates per-trigger-type semantics without schema variation.
+
+This is a pattern-formation observation rather than a methodology candidate. The endpoint-level idempotency pattern is now the default for BroadcastFlow implementers requiring idempotency-protected firing. Implementer-level checks remain available if needed (e.g., if an implementer has fire-time conditional logic that the endpoint cannot evaluate); the architectural shape accommodates both.
+
+  - triaged: 2026-05-27
+  - resolution: pattern observed and named. Future BroadcastFlow implementers follow endpoint-level idempotency by default; deviation requires explicit architectural justification. Recorded at S54 framing close.
+
+## 2026-05-28 — [S54 build-mode pre-write reconciliation] Audit event class set does not exist as a discrete artefact
+
+S54 brief framed the BROADCAST_INITIATED audit event class as an addition to "the audit event class set at contexts/audit/domain/". Pre-write reconciliation Finding 1 at S54 build mode surfaced that no such set exists: audit events use `action_verb` plus `resource_type` strings (no enum, no CHECK constraint at the audit chain Postgres adapter); existing per-context audit_events.py modules (e.g., `contexts/messaging/application/audit_events.py`) define the constants.
+
+Disposition: BROADCAST_INITIATED lands as `RESOURCE_TYPE_BROADCAST` plus `ACTION_BROADCAST_INITIATED` constants plus a `draft_broadcast_initiated_event` helper at `contexts/messaging/application/audit_events.py` at commit 3. No CHECK constraint extension or Alembic migration at audit context required.
+
+The finding is a brief-altitude vs reality mismatch caught at build-time pre-write reconciliation (the framing-altitude survey did not include "does the audit event class set exist as a discrete artefact?" as a check). The substrate-inheritance survey methodology candidate gains another concrete check: "for every framing reference to an existing artefact, verify the artefact actually exists at the claimed location with the claimed shape." Adjacent to S52's schema.md-completeness sub-surface and S53's import-linter-contract preservation sub-surface.
+
+  - triaged: 2026-05-28
+  - resolution: absorbed at S54 commit 3 (the broadcast audit event constants and draft helper land at the messaging context's existing audit_events.py module, not at a new audit-context event-class set). The hygiene-session promoting the substrate-inheritance survey to methodology.md should incorporate the "verify artefact existence at claimed shape" sub-surface alongside the Alembic-numbering / schema.md-completeness / import-linter-contract-preservation sub-surfaces. Recorded at S54 commit 1.
+
+## 2026-05-28 — [S54 build-mode pre-write reconciliation] IntakeRecord time-window filtering uses pagination, not dedicated filter
+
+S54 brief framed DailyBriefingReader.read_intake_records as reading "recent IntakeRecords from the window" without specifying the filtering mechanism. Pre-write reconciliation Finding 2 at S54 build mode surfaced that `IntakeListFilters` carries only an `intake_sources` multi-value filter; no time-window filter exists. The `IntakeRepository.list_for_tenant` paginates on `(created_at DESC, id DESC)`.
+
+Disposition: the wiring adapter at `apps/api/_daily_briefing_wiring.py` reads pages from the IntakeRepository and trims in-memory at the window boundary. At Phase 2-A dogfooding scale (low-digit IntakeRecords per day) the trim is trivially small; at Phase 2-B+ scale a dedicated `created_at_after` filter on IntakeListFilters would be the right addition. The trigger for the filter addition fires when the IntakeRecord volume in a typical window exceeds the page size and the in-memory trim becomes inefficient.
+
+  - triaged: 2026-05-28
+  - resolution: absorbed at S54 commit 5 (the wiring adapter implements in-memory time-window trim). The activation trigger for the dedicated filter is captured here; no deferred-decisions entry needed at S54 (the architectural mechanism already accommodates the swap). Recorded at S54 commit 1.
+
+## 2026-05-28 — [S54 build-mode pre-write reconciliation] TriggerContext.metadata stays as dict[str, Any] for backward compatibility
+
+S54 brief framed the TriggerContext extension as "TriggerContext discriminated union concrete classes" plus "the discriminator union: TriggerMetadata = Union[DailyScheduledMetadata, ManualMetadata, ...]". Pre-write reconciliation Finding 3 at S54 build mode surfaced that changing TriggerContext.metadata from `dict[str, Any]` to a typed union would break S53 unit tests (`test_trigger_context_carries_per_type_metadata` constructs with `metadata={"threshold_rule_id": ...}`).
+
+Disposition: TriggerContext.metadata stays as `dict[str, Any]` per the S53 shape; typed `DailyScheduledMetadata` and `ManualMetadata` land as convenience-constructor dataclasses at `shared_kernel/broadcast_flow.py` that serialise into the dict via a helper. The idempotency key resolver consumes the dict directly. The discriminator-union shape lands as a typed-helper layer above the open dict, preserving structural backward compatibility.
+
+This is the sixth recurrence of the interface-versus-implementation discipline (S49 standing surface). The brief's framing was implementation-shaped (forcing the union type onto the existing TriggerContext); the interface decision (typed constructor helpers exposing the same data via a typed surface) preserves the structural shape while landing the typed-metadata discipline. The discipline now has six consecutive recurrence instances (S50, S51, S52, S52-framing, S53-brief, S54-brief); promotion-readiness for methodology.md continues to firm.
+
+  - triaged: 2026-05-28
+  - resolution: absorbed at S54 commit 3 (TriggerContext.metadata stays as dict[str, Any]; typed metadata classes plus serialise helper land alongside). The discipline at sixth recurrence is operationally enforced as standing pre-write reconciliation. Recorded at S54 commit 1.

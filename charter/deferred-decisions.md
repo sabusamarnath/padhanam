@@ -749,3 +749,43 @@ P15 framing committed Path B (source tool services externally) with self-hosted 
 **Activation triggers.** Migration to Path A activates if any of: (a) vendor pricing inversion at Phase 2-B+ scale — monthly Nango spend exceeds the loaded cost of Padhanam-owned OAuth substrate plus the relevant per-service integrations; (b) privacy compliance escalation — Padhanam-owned ICP requires attestations vendor pass-through cannot satisfy (the operator-controlled self-hosted Nango at Phase 2-A keeps data inside operator infrastructure, but a regulated-customer deployment may need Padhanam-owned cryptographic custody of tokens at a finer granularity than self-hosted Nango exposes); (c) feature divergence — the bet's substrate evolution requires OAuth handling or tool-service capability that Nango does not provide and that maintaining a fork against Nango would cost more than building Padhanam-native.
 
 **Architectural disposition.** D14's separate-service pattern plus D144's port-based ChannelResolver abstraction plus consumer-defined CalendarReader / EmailReader ports at calendar/email contexts support the migration without domain code changes — only adapter swaps at composition root. The specific Path A scope (which providers; OAuth flow shape; token persistence) commits at the activating session per the migration trigger evidence. References D14 (tools-as-configuration), D144 (ChannelResolver Protocol; port-based-abstraction precedent), the operator-tool-service-sourcing strategic decision recorded at `log/captures.md` 2026-05-27.
+
+## P15 S54 deferrals
+
+Architectural decisions deferred at P15 S54 framing (2026-05-27). Each names an activation trigger.
+
+### fired_triggers two-phase commit semantics
+
+D147 commits the fired_triggers table with race-safe idempotency via `INSERT ... ON CONFLICT DO NOTHING` and best-effort delivery between INSERT and BroadcastDispatch invocation. The fired_triggers row plus the BROADCAST_INITIATED audit event together record the attempt; if dispatch fails after INSERT succeeds, the operator misses that day's briefing on rare failures and structured logging captures the failure.
+
+**Activation triggers.** Two-phase commit semantics (status tracking; `attempt_count`; `last_attempted_at` columns; compensating-update on dispatch failure) activate if operator dogfooding surfaces unacceptable failure recovery — multiple missed briefings within a short window; unclear failure attribution; recurring dispatch failures that retry storms would aggravate. Activation trigger fires at the first dogfooding evidence of recurring failure.
+
+**Architectural disposition.** The fired_triggers table accommodates extension without restructuring (additive columns; no UNIQUE constraint changes). The FireTrigger use case sequence stays the same; the additional status-tracking logic lives at the use case boundary. References D147 (Failure handling section).
+
+### fired_triggers retention policy
+
+D147 commits no explicit retention policy at Phase 2-A. The fired_triggers table grows at one row per tenant+user+day at Phase 2-A dogfooding scale (low growth).
+
+**Activation triggers.** Phase 2-B+ scale (multi-tenant deployment; multiple broadcast types per day per user; multi-year operation) activates a retention policy — typically delete rows older than 90 days. Trigger fires at multi-tenant deployment or at fired_triggers table-size operational evidence (the table outgrowing the diagnostic-read pattern's responsiveness).
+
+**Architectural disposition.** A scheduled retention job (cron-driven via the existing HTTP trigger endpoint substrate; or a database-side scheduled task) deletes rows older than the configured window. The UNIQUE constraint on `(tenant_id, user_id, trigger_type, idempotency_key)` is not affected because retained rows are all in the historical past. References D147 (Retention section).
+
+### TriggerContext metadata schema completion at activation triggers
+
+S54 commits TriggerContext discriminated-helper dataclasses for DAILY_SCHEDULED (empty payload) and MANUAL (optional `caller_note`). The shared TriggerContext.metadata field stays as `dict[str, Any]` per pre-write reconciliation Finding 3 at S54 (preserves S53 test stability); typed metadata classes act as convenience constructors that serialise into the dict.
+
+**Activation triggers.** Each future trigger type commits its metadata schema at the session that activates the trigger:
+
+- THRESHOLD_CROSSED metadata commits at S57: fields `matched_audit_event_id`, `rule_id`, `matched_value`.
+- CALENDAR_EVENT metadata commits at the Phase 2-B+ session activating external-data threshold detection on calendar events.
+- EMAIL_RECEIVED metadata commits at the Phase 2-B+ session activating external-data threshold detection on email patterns.
+
+**Architectural disposition.** The idempotency key resolver at `contexts/messaging/domain/idempotency.py` raises `NotImplementedError` for trigger types whose metadata schema has not yet been committed. References D142 (TriggerContext shape), D147 (idempotency key semantics per trigger type).
+
+### Daily-briefing cell_payload activation trigger
+
+D146 commits daily-briefing without cell_payload persistence at first instance. Broadcasts do not have user-driven follow-up turns the way ConversationFlow implementers do; no cross-turn state extraction is required.
+
+**Activation triggers.** Cell-payload persistence for daily-briefing activates if (a) a future daily-briefing rendering needs the previous briefing's attention items for continuity (e.g., "you flagged these last time; status is now ..."); (b) any other BroadcastFlow implementer requires cross-turn state extraction symmetric to mirror-conversation's drill-down focus.
+
+**Architectural disposition.** D141's cell_payload persistence mechanism is already established and operates additively. The activation requires an implementer-side payload-shape commitment plus extract-on-read logic; no schema change at the messages table. References D141 (cell-payload persistence; implementer-side validation).

@@ -437,6 +437,40 @@ The endpoint sits at `/api/v1/internal/` prefix with internal-secret middleware.
 
 Per local-first standing rule: production swap is deployment configuration (external scheduler choice; secret rotation); the application code is identical across local development and production.
 
+### HTTP trigger endpoint implementation (D145, D147)
+
+D145 commits the architectural shape of the trigger entry point. D147 commits the idempotency mechanism that protects it. The HTTP route at `apps/api/routers/triggers.py` (`POST /api/v1/internal/triggers/fire`) authenticates via internal-secret header middleware (`X-Internal-Secret` validated against MessagingSettings.internal_secret). The endpoint handler delegates to the FireTrigger use case at `contexts/messaging/application/fire_trigger.py`.
+
+The FireTrigger use case sequence: validate authentication (delegated to middleware); parse and validate the trigger payload (trigger_type plus tenant_id plus user_id plus optional metadata); resolve idempotency_key per trigger_type via the idempotency key resolver function at `contexts/messaging/domain/idempotency.py`; attempt INSERT into fired_triggers with `ON CONFLICT DO NOTHING`; if conflict, return 200 OK with structured "already fired" logging and exit; if inserted, emit BROADCAST_INITIATED audit event with the trigger_id; invoke BroadcastDispatch with the constructed TriggerContext; return 200 OK with trigger_id.
+
+The endpoint sits behind the `/api/v1/internal/` prefix. The deployment's external scheduler holds the internal-secret; the operator's WhatsApp surface never reaches the endpoint. Per local-first standing rule, production swap is deployment configuration (the secret rotates at deployment time; the scheduler choice swaps; the application code is identical across environments).
+
+### fired_triggers idempotency substrate (D147)
+
+A new table at messaging substrate carries `(tenant_id, user_id, trigger_type, idempotency_key, fired_at)` tuples. UNIQUE constraint on `(tenant_id, user_id, trigger_type, idempotency_key)` prevents races at database level. The table is tenant-scoped per database-per-tenant standing rule. Alembic 0025 commits the schema at S54.
+
+Idempotency key semantics differ per trigger_type. DAILY_SCHEDULED: date string in operator timezone (one row per tenant+user+day). MANUAL: null (the UNIQUE constraint accommodates multiple null values per Postgres semantics). THRESHOLD_CROSSED at S57: composite of `matched_audit_event_id` plus `rule_id`. The generic idempotency_key column accommodates heterogeneous semantics without per-trigger-type schema variation.
+
+Audit chain timing: BROADCAST_INITIATED fires after successful idempotency check (INSERT succeeded), not at every trigger attempt. The audit trail captures only actual broadcast attempts; skipped duplicates leave no audit noise.
+
+Failure handling between INSERT and dispatch is best-effort delivery at S54 first instance. The fired_triggers row plus the BROADCAST_INITIATED event together record the attempt; rare dispatch failures result in the operator missing that day's briefing; structured logging captures the failure. Two-phase commit semantics defer to the dogfooding-evidence activation trigger.
+
+### BROADCAST_INITIATED audit event class (D147)
+
+A new audit-event shape added via constants and a draft-helper at `contexts/messaging/application/audit_events.py`. Per pre-write reconciliation Finding 1 at S54: no discrete "event class set" exists at `contexts/audit/domain/`; audit events use `action_verb` plus `resource_type` strings, and per-context audit_events.py modules define the constants. The BROADCAST_INITIATED event uses `resource_type=broadcast`, `action_verb=messaging.broadcast.initiated`; the draft helper records `trigger_id`, `trigger_type`, `tenant_id`, `user_id`, `triggered_at`. The audit chain integration follows D110 tamper-evidence discipline. BroadcastFlow implementers' response value objects cite the BROADCAST_INITIATED event via `cited_audit_events` for chain traversability per D131.
+
+### Daily-briefing context (D146)
+
+The daily_briefing bounded context at `contexts/daily_briefing/` carries the first BroadcastFlow implementer. Structure mirrors audit_conversation and mirror_conversation precedents from P14: `domain/` for value objects (DailyBriefingResponse satisfying CitedResponse Protocol; BriefingPeriod value object); `application/ports/` for consumer ports (DailyBriefingReader for the composition reads; DailyBriefingComposer for the LLM summarization call); `application/` for the BroadcastFlow implementer that registers with the BroadcastFlow registry at composition root; `prompts/` for the LLM composer's prompt template.
+
+The implementer's `fire` method composes the response across five steps. (1) Resolve the briefing window from MessagingSettings (default 24 hours) plus operator timezone. (2) Read recent IntakeRecords from the window via DailyBriefingReader.read_intake_records. (3) Read recent audit events from the window via DailyBriefingReader.read_audit_events. (4) Read active Cases via DailyBriefingReader.read_active_cases. (5) Compose the response via the LLM composer with the structured output schema; populate the citation tuples; render the channel-agnostic body; resolve channel via ChannelResolver; persist and send via the messaging send_message use case; return DailyBriefingResponse.
+
+DailyBriefingReader is a consumer port at the daily_briefing context; the wiring adapter at composition root (`apps/api/_daily_briefing_wiring.py`) composes the reads from producer contexts via the cross-context discipline. The adapter delegates: read_intake_records to the intake context's IntakeRepository.list_for_tenant (filtering to the window in-memory per pre-write reconciliation Finding 2); read_audit_events to audit context's AuditEventReader; read_active_cases to portfolio context's list_cases use case.
+
+DailyBriefingResponse extends CitedResponse Protocol with one extension field (`briefing_period: BriefingPeriod`) for the render header. Cell-payload persistence does not activate at first instance.
+
+LLM summarization uses StructuredOutputPort (D130) at REAL_TIME_REQUIRED latency tier (D122). The structured output schema produces prose narrative. The empty-day case is handled by the composer's prompt template adjustment, not by skip logic at the implementer.
+
 ### Phase 2 domain vocabulary
 
 Phase 2 commits a domain vocabulary that aligns with the karma prior-art specification. Items here are domain entities or domain concepts that recur across the substrate and need consistent naming.

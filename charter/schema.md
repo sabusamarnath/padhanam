@@ -1375,6 +1375,49 @@ one of the four known identifiers (`manual_entry`, `audit_conversation`,
 ConversationFlow implementers at P15+ extend the accepted set as
 they register.
 
+### `fired_triggers`
+
+| Column            | Type           | Constraints                                                                                                          |
+|-------------------|----------------|----------------------------------------------------------------------------------------------------------------------|
+| `id`              | `uuid`         | primary key; default `gen_random_uuid()`                                                                             |
+| `tenant_id`       | `uuid`         | not null                                                                                                             |
+| `user_id`         | `text`         | not null; CHECK `user_id <> ''`                                                                                      |
+| `trigger_type`    | `text`         | not null; CHECK ∈ {`daily_scheduled`, `threshold_crossed`, `calendar_event`, `email_received`, `manual`}             |
+| `idempotency_key` | `text`         | nullable; semantics differ per `trigger_type` per D147                                                               |
+| `fired_at`        | `timestamptz`  | not null; default `now()`                                                                                            |
+| UNIQUE            | composite      | UNIQUE on `(tenant_id, user_id, trigger_type, idempotency_key)`                                                      |
+
+The fired_triggers table provides race-safe idempotency for
+platform-initiated broadcasts per D147. The HTTP trigger endpoint
+use case (FireTrigger) consults this table via INSERT with
+`ON CONFLICT DO NOTHING` before BROADCAST_INITIATED audit event
+emission. Idempotency key semantics vary per `trigger_type`:
+DAILY_SCHEDULED uses the date string in operator timezone (one row
+per tenant+user+day); MANUAL uses null (Postgres UNIQUE permits
+multiple null rows per construction); THRESHOLD_CROSSED at S57 uses
+a composite of `matched_audit_event_id` plus `rule_id`; future
+trigger types commit semantics at activation sessions. Index
+`ix_fired_triggers_tenant_user_type` on `(tenant_id, user_id,
+trigger_type)` supports diagnostic lookups for the last firing per
+user per trigger type. Migration `0025_fired_triggers` (S54) ships
+the table on every per-tenant database.
+
+### FiredTrigger (messaging value object)
+
+| Field            | Type        | Constraints                                                          |
+|------------------|-------------|----------------------------------------------------------------------|
+| `id`             | `UUID`      | not null                                                             |
+| `tenant_id`      | `UUID`      | not null                                                             |
+| `user_id`        | `str`       | not null; non-empty                                                  |
+| `trigger_type`   | `str`       | not null; one of the BroadcastTriggerType enum values                |
+| `idempotency_key`| `str \| None`| nullable per D147 semantics                                          |
+| `fired_at`       | `datetime`  | not null; timezone-aware                                             |
+
+A frozen dataclass representing a successful trigger fire. The
+read shape is informational (diagnostic reads); the write path is
+through the FiredTriggersRepository's `insert_or_skip` method that
+returns the boolean fresh-vs-conflict outcome per D147.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,
