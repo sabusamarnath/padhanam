@@ -431,9 +431,19 @@ def _build_default_compositions() -> AppCompositions:
 
     # S54 (D146): daily-briefing DailyBriefingReader adapter composing
     # the intake repository, the audit event reader, and the portfolio
-    # list_cases read. The composer + BroadcastFlow implementer
-    # registration land at S54 commit 6.
-    from apps.api._daily_briefing_wiring import build_daily_briefing_reader
+    # list_cases read; plus the LLM composer, the outbound notifier, and
+    # the BroadcastFlow implementer registered against the messaging
+    # composition's BroadcastFlow registry with trigger_type=DAILY_SCHEDULED.
+    from apps.api._daily_briefing_wiring import (
+        BriefingNotifierAdapter,
+        build_daily_briefing_implementer,
+        build_daily_briefing_reader,
+    )
+    from contexts.daily_briefing.adapters.llm.litellm_daily_briefing_composer_adapter import (  # noqa: E501
+        LiteLLMDailyBriefingComposerAdapter,
+    )
+    from padhanam.config import MessagingSettings
+    from shared_kernel.broadcast_flow import BroadcastTriggerType
 
     daily_briefing_reader = build_daily_briefing_reader(
         tenant_registry=registry,
@@ -442,6 +452,26 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         intake_repository=intake_repository,
         audit_event_reader=audit_event_reader,
+    )
+    _messaging_settings = MessagingSettings()
+    daily_briefing_implementer = build_daily_briefing_implementer(
+        reader=daily_briefing_reader,
+        composer=LiteLLMDailyBriefingComposerAdapter(
+            structured_output_port=inference_port,
+        ),
+        notifier=BriefingNotifierAdapter(
+            repository=messaging.repository,
+            delivery_port=messaging.delivery_port,
+            audit_port=audit_adapter,
+            channel_resolver=messaging.channel_resolver,
+            from_address=messaging.from_address,
+        ),
+        jurisdiction=_messaging_settings.webhook_jurisdiction,
+        window_hours=_messaging_settings.daily_briefing_window_hours,
+    )
+    messaging.broadcast_flow_registry.register(
+        trigger_type=BroadcastTriggerType.DAILY_SCHEDULED,
+        implementer=daily_briefing_implementer,
     )
 
     return AppCompositions(

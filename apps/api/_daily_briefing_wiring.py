@@ -29,15 +29,31 @@ from typing import Any, Awaitable, Callable
 from uuid import UUID
 
 from contexts.audit.domain.destination import AuditDestination
+from contexts.audit.domain.ports import AuditPort
 from contexts.audit.domain.query_filters import AuditEventListFilters
 from contexts.audit.ports.reader import AuditEventReader
+from contexts.daily_briefing.application.daily_briefing_implementer import (
+    DailyBriefingImplementer,
+)
+from contexts.daily_briefing.application.ports.daily_briefing_composer import (
+    DailyBriefingComposer,
+)
 from contexts.daily_briefing.application.ports.daily_briefing_reader import (
     DailyBriefingAuditEvent,
     DailyBriefingCase,
     DailyBriefingIntakeRecord,
+    DailyBriefingReader,
 )
 from contexts.intake.domain import ManualEntryPayload
 from contexts.intake.ports.intake_repository import IntakeRepository
+from contexts.messaging.application.ports.channel_resolver import (
+    ChannelResolver,
+)
+from contexts.messaging.application.send_message import send_message
+from contexts.messaging.domain import MessageChannel
+from contexts.messaging.domain.channel_type import ChannelType
+from contexts.messaging.ports.message_delivery_port import MessageDeliveryPort
+from contexts.messaging.ports.message_repository import MessageRepository
 from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
 )
@@ -51,6 +67,7 @@ from contexts.tenancy.application.connection_resolution import (
 from padhanam.observability.security_events import SecurityEventLogger
 from padhanam.security import Principal
 from shared_kernel import ActorContext, TenantContext, TenantId
+from shared_kernel.message_intent import MessageIntent
 
 _SessionFactoryForTenant = Callable[[TenantContext], Awaitable[Any]]
 
@@ -197,7 +214,81 @@ def build_daily_briefing_reader(
     )
 
 
+_CHANNEL_TYPE_TO_MESSAGE_CHANNEL = {
+    ChannelType.WHATSAPP: MessageChannel.WHATSAPP,
+}
+
+
+class BriefingNotifierAdapter:
+    """apps/ adapter implementing daily-briefing's BriefingNotifier port (D146).
+
+    The legal cross-context seam (D17): ``apps/`` may import
+    ``contexts.messaging.application`` directly, so this adapter
+    resolves the operator's channel destination via the ChannelResolver
+    (D144) and invokes the messaging ``send_message`` use case with
+    ``message_intent=BROADCAST_DAILY_BRIEFING``. send_message owns
+    delivery, persistence, and the outbound audit event.
+    """
+
+    def __init__(
+        self,
+        *,
+        repository: MessageRepository,
+        delivery_port: MessageDeliveryPort,
+        audit_port: AuditPort,
+        channel_resolver: ChannelResolver,
+        from_address: str,
+    ) -> None:
+        self._repository = repository
+        self._delivery_port = delivery_port
+        self._audit_port = audit_port
+        self._channel_resolver = channel_resolver
+        self._from_address = from_address
+
+    async def send_briefing(self, *, actor: ActorContext, body: str) -> None:
+        destination = await self._channel_resolver.resolve_channel(
+            tenant_id=UUID(str(actor.tenant_context.tenant_id)),
+            user_id=actor.actor_id,
+            message_intent=MessageIntent.BROADCAST_DAILY_BRIEFING,
+        )
+        channel = _CHANNEL_TYPE_TO_MESSAGE_CHANNEL.get(
+            destination.channel_type, MessageChannel.WHATSAPP
+        )
+        await send_message(
+            repository=self._repository,
+            delivery_port=self._delivery_port,
+            audit_port=self._audit_port,
+            channel_resolver=self._channel_resolver,
+            actor=actor,
+            from_address=self._from_address,
+            to_address=destination.channel_address,
+            body=body,
+            channel=channel,
+            message_intent=MessageIntent.BROADCAST_DAILY_BRIEFING,
+        )
+
+
+def build_daily_briefing_implementer(
+    *,
+    reader: DailyBriefingReader,
+    composer: DailyBriefingComposer,
+    notifier: BriefingNotifierAdapter,
+    jurisdiction: str,
+    window_hours: int,
+) -> DailyBriefingImplementer:
+    """Wire the daily-briefing BroadcastFlow implementer (D142, D146)."""
+    return DailyBriefingImplementer(
+        reader=reader,
+        composer=composer,
+        notifier=notifier,
+        jurisdiction=jurisdiction,
+        window_hours=window_hours,
+    )
+
+
 __all__ = [
+    "BriefingNotifierAdapter",
     "DailyBriefingReaderAdapter",
+    "build_daily_briefing_implementer",
     "build_daily_briefing_reader",
 ]
