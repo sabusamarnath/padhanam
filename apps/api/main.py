@@ -38,6 +38,7 @@ from apps.api._errors import (
     register_retrieval_evaluation_error_handlers,
     register_run_history_error_handlers,
 )
+from apps.api._internal_secret import register_internal_secret_error_handlers
 from apps.api._messaging_errors import register_messaging_error_handlers
 from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
@@ -53,6 +54,7 @@ from apps.api.routers import portfolio as portfolio_router
 from apps.api.routers import retrieval_evaluation as retrieval_evaluation_router
 from apps.api.routers import run_history as run_history_router
 from apps.api.routers import tenant_audit as tenant_audit_router
+from apps.api.routers import triggers as triggers_router
 from apps.api.routers.agent import AgentRuntimeComposition
 from contexts.audit.ports.reader import AuditEventReader
 from contexts.optimization.ports.optimization_run_reader import (
@@ -553,6 +555,11 @@ def create_app(
     # the redirect-away-from-over-budget-files discipline.
     register_messaging_error_handlers(app)
 
+    # S54 (D145, D147): internal-secret error handler — internal_secret_invalid
+    # (401) for the HTTP trigger endpoint. The endpoint bypasses bearer
+    # auth; the X-Internal-Secret header is its authentication.
+    register_internal_secret_error_handlers(app)
+
     # OTel FastAPI instrumentation populates a server span around every
     # request. The instrumentation must run after middleware is
     # registered so span context propagates into the auth-middleware
@@ -606,6 +613,12 @@ def create_app(
     # Twilio WhatsApp webhook (bearer-auth-bypassed, signature-verified),
     # and the GET single and list surfaces.
     app.include_router(messaging_router.router)
+
+    # S54 (D145, D147): HTTP trigger endpoint — POST
+    # /api/v1/internal/triggers/fire (bearer-auth-bypassed,
+    # internal-secret-verified). The deployment's external scheduler
+    # fires platform-initiated broadcasts here.
+    app.include_router(triggers_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port

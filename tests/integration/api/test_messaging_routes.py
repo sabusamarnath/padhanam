@@ -48,6 +48,7 @@ from shared_kernel.authorisation import (
 from tests.unit.contexts.intake.application._fakes import FakeIntakeRepository
 from tests.unit.contexts.messaging.application._fakes import (
     FakeAuditPort,
+    FakeFiredTriggersRepository,
     FakeMessageDeliveryPort,
     FakeMessageRepository,
 )
@@ -388,6 +389,7 @@ def _build(
         cell_dispatch=cell_dispatch,
         broadcast_dispatch=broadcast_dispatch_composite,
         broadcast_flow_registry=broadcast_dispatch_composite,
+        fired_triggers_repository=FakeFiredTriggersRepository(),
         channel_resolver=StaticConfigChannelResolverAdapter(
             operator_default_channel=ChannelType.WHATSAPP,
             operator_default_address="+14155238886",

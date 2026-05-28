@@ -86,6 +86,25 @@ class MessagingSettings(PadhanamSettings):
     # at multi-channel activation.
     operator_default_channel: ChannelType = ChannelType.WHATSAPP
     operator_default_address: str = ""
+    # D146 (S54): daily-briefing composition window and operator
+    # timezone. ``daily_briefing_window_hours`` bounds the look-back
+    # the DailyBriefingReader composes over (recent IntakeRecords,
+    # recent audit events). ``operator_timezone`` is the IANA timezone
+    # name the DAILY_SCHEDULED idempotency key derives its date string
+    # from (one fired_triggers row per tenant+user+operator-day per
+    # D147). Per-user window and timezone configuration defers to the
+    # multi-user activation trigger.
+    daily_briefing_window_hours: int = 24
+    operator_timezone: str = "UTC"
+    # D145/D147 (S54): the internal-secret the HTTP trigger endpoint
+    # validates on the ``X-Internal-Secret`` header. The deployment's
+    # external scheduler holds the secret; the operator's WhatsApp
+    # surface never reaches the endpoint. Empty default keeps local
+    # development without a configured scheduler from breaking
+    # MessagingSettings construction; an empty configured secret means
+    # the endpoint rejects every request (fail-closed) rather than
+    # accepting unauthenticated fires.
+    internal_secret: str = ""
 
     @model_validator(mode="after")
     def require_confidence_cutoffs_ordered(self) -> "MessagingSettings":

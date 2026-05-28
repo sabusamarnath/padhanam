@@ -84,6 +84,9 @@ from contexts.messaging.application.ports.meta_classifier import (
 from contexts.messaging.application.ports.pending_clarification_reader import (
     PendingClarificationReader,
 )
+from contexts.messaging.adapters.outbound.postgres.fired_triggers_postgres_adapter import (  # noqa: E501
+    PostgresFiredTriggersAdapter,
+)
 from contexts.messaging.adapters.outbound.postgres.message_repository import (
     PostgresMessageRepository,
 )
@@ -100,6 +103,9 @@ from contexts.messaging.domain.pending_clarification import (
 from contexts.messaging.domain.query_filters import (
     MessageListCursor,
     MessageListFilters,
+)
+from contexts.messaging.ports.fired_triggers_repository import (
+    FiredTriggersRepository,
 )
 from contexts.messaging.ports.message_delivery_port import MessageDeliveryPort
 from contexts.messaging.ports.message_repository import MessageListPage
@@ -197,6 +203,44 @@ class MessageRepositoryAdapter:
             filters=filters,
             cursor=cursor,
             page_size=page_size,
+        )
+
+
+class FiredTriggersRepositoryAdapter:
+    """Per-request-tenant-resolving wiring for FiredTriggersRepository (D147)."""
+
+    def __init__(
+        self, *, session_factory_for_tenant: _SessionFactoryForTenant
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def _build(
+        self, tenant_context: TenantContext
+    ) -> PostgresFiredTriggersAdapter:
+        sessionmaker = await self._session_factory_for_tenant(tenant_context)
+
+        async def _resolver(_tid: TenantId) -> object:
+            return sessionmaker
+
+        return PostgresFiredTriggersAdapter(
+            per_tenant_sessionmaker_resolver=_resolver,
+            bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
+        )
+
+    async def insert_or_skip(
+        self,
+        *,
+        tenant_context: TenantContext,
+        user_id: str,
+        trigger_type: str,
+        idempotency_key: str | None,
+    ) -> bool:
+        adapter = await self._build(tenant_context)
+        return await adapter.insert_or_skip(
+            tenant_context=tenant_context,
+            user_id=user_id,
+            trigger_type=trigger_type,
+            idempotency_key=idempotency_key,
         )
 
 
@@ -407,6 +451,10 @@ class MessagingComposition:
     # briefing, ThresholdEvaluator) on ``broadcast_flow_registry``.
     broadcast_dispatch: BroadcastDispatch
     broadcast_flow_registry: BroadcastFlowRegistry
+    # D147 (S54): the fired_triggers idempotency substrate the
+    # FireTrigger use case consults at the HTTP trigger endpoint before
+    # BROADCAST_INITIATED audit emission.
+    fired_triggers_repository: FiredTriggersRepository
     # D144 (S53): ChannelResolver Protocol activated as D136 Primitive 2
     # at Phase 2-A. Static-config adapter returns the operator-default
     # channel regardless of input; second-channel activation swaps for
@@ -529,6 +577,9 @@ def build_messaging_composition(
         cell_dispatch=InProcessCellDispatchAdapter(),
         broadcast_dispatch=broadcast_dispatch_composite,
         broadcast_flow_registry=broadcast_dispatch_composite,
+        fired_triggers_repository=FiredTriggersRepositoryAdapter(
+            session_factory_for_tenant=session_factory_for_tenant,
+        ),
         channel_resolver=StaticConfigChannelResolverAdapter(
             operator_default_channel=settings.operator_default_channel,
             operator_default_address=settings.operator_default_address,
@@ -573,6 +624,7 @@ def build_messaging_composition(
 
 
 __all__ = [
+    "FiredTriggersRepositoryAdapter",
     "MessageRepositoryAdapter",
     "MessageWriterAdapter",
     "MessagingComposition",

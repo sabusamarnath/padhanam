@@ -53,8 +53,17 @@ CORRELATION_ID_HEADER = "X-Correlation-Id"
 # (D129, S45): Twilio carries no Padhanam bearer token, so the
 # webhook bypasses bearer auth — its authentication is the
 # X-Twilio-Signature, verified inside the route handler.
+# /api/v1/internal/triggers/fire is the HTTP trigger endpoint
+# (D145, D147, S54): the deployment's external scheduler carries no
+# Padhanam bearer token, so the endpoint bypasses bearer auth — its
+# authentication is the X-Internal-Secret header, verified inside the
+# route handler.
 _PUBLIC_PATHS: frozenset[str] = frozenset(
-    {"/health", "/api/v1/messaging/inbound"}
+    {
+        "/health",
+        "/api/v1/messaging/inbound",
+        "/api/v1/internal/triggers/fire",
+    }
 )
 
 
