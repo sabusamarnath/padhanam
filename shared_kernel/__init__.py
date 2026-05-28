@@ -4,7 +4,10 @@ from shared_kernel.broadcast_flow import (
     BroadcastFlow,
     BroadcastResponse,
     BroadcastTriggerType,
+    DailyScheduledMetadata,
+    ManualMetadata,
     TriggerContext,
+    TriggerMetadata,
 )
 from shared_kernel.confidence_calculator import ConfidenceCalculator
 from shared_kernel.confidence_thresholds import (
@@ -53,8 +56,10 @@ __all__ = [
     "ConversationOutcome",
     "ConversationState",
     "DEFAULT_ACCOUNT",
+    "DailyScheduledMetadata",
     "Jurisdiction",
     "LatencyTier",
+    "ManualMetadata",
     "MessageIntent",
     "ModelConfiguration",
     "ModelIdentifier",
@@ -69,4 +74,5 @@ __all__ = [
     "ThresholdResolver",
     "ToolAllowlistEntry",
     "TriggerContext",
+    "TriggerMetadata",
 ]

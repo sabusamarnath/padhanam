@@ -21,6 +21,7 @@ sharing the same draft-then-recompute pattern.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import UUID
 
 from contexts.audit.domain.events import (
     GENESIS_HASH,
@@ -48,6 +49,17 @@ ACTION_PENDING_CLARIFICATION_RESOLVE: str = (
 ACTION_PENDING_CLARIFICATION_EXPIRE: str = (
     "messaging.pending_clarification.expire"
 )
+
+# D147 (S54): BROADCAST_INITIATED audit event for platform-initiated
+# broadcasts. Per S54 pre-write reconciliation Finding 1 there is no
+# discrete audit "event class set" at contexts/audit/domain/; audit
+# events use action_verb + resource_type strings and per-context
+# audit_events.py modules define the constants. The broadcast event
+# fires at the HTTP trigger endpoint after a fresh idempotency-check
+# insert and before BroadcastDispatch invocation. BroadcastFlow
+# implementers cite this event's id via cited_audit_events per D131.
+RESOURCE_TYPE_BROADCAST: str = "broadcast"
+ACTION_BROADCAST_INITIATED: str = "messaging.broadcast.initiated"
 
 
 def draft_message_event(
@@ -237,14 +249,74 @@ def draft_pending_clarification_expired_event(
     )
 
 
+def draft_broadcast_initiated_event(
+    *,
+    tenant_context: TenantContext,
+    actor: ActorReference,
+    trigger_id: UUID,
+    trigger_type: str,
+    user_id: str,
+    triggered_at: str,
+    correlation_id: str = "",
+) -> AuditEvent:
+    """Draft the BROADCAST_INITIATED audit event for a fresh trigger fire (D147).
+
+    Resource type ``broadcast``; action verb
+    ``messaging.broadcast.initiated``. The ``resource_id`` is the
+    ``trigger_id`` so a BroadcastFlow implementer's response can cite
+    this event via ``cited_audit_events`` for chain traversability
+    per D131. The after_state records the trigger's identifying
+    metadata; before_state is empty (the broadcast did not exist
+    before this fire). The adapter recomputes the chain hashes inside
+    its locking transaction per D37; the placeholder here is a draft
+    value the adapter overwrites.
+    """
+    after_state = {
+        "trigger_id": str(trigger_id),
+        "trigger_type": trigger_type,
+        "user_id": user_id,
+        "triggered_at": triggered_at,
+    }
+    draft_hash = compute_event_hash(
+        actor=actor.user_id,
+        tenant_id=tenant_context.tenant_id,
+        jurisdiction=tenant_context.jurisdiction,
+        timestamp=triggered_at,
+        action_verb=ACTION_BROADCAST_INITIATED,
+        resource_type=RESOURCE_TYPE_BROADCAST,
+        resource_id=str(trigger_id),
+        before_state={},
+        after_state=after_state,
+        correlation_id=correlation_id,
+        previous_event_hash=GENESIS_HASH,
+    )
+    return AuditEvent(
+        actor=actor.user_id,
+        tenant_id=tenant_context.tenant_id,
+        jurisdiction=tenant_context.jurisdiction,
+        timestamp=triggered_at,
+        action_verb=ACTION_BROADCAST_INITIATED,
+        resource_type=RESOURCE_TYPE_BROADCAST,
+        resource_id=str(trigger_id),
+        before_state={},
+        after_state=after_state,
+        correlation_id=correlation_id,
+        previous_event_hash=GENESIS_HASH,
+        this_event_hash=draft_hash,
+    )
+
+
 __all__ = [
+    "ACTION_BROADCAST_INITIATED",
     "ACTION_MESSAGE_RECEIVE",
     "ACTION_MESSAGE_SEND",
     "ACTION_PENDING_CLARIFICATION_CREATE",
     "ACTION_PENDING_CLARIFICATION_EXPIRE",
     "ACTION_PENDING_CLARIFICATION_RESOLVE",
+    "RESOURCE_TYPE_BROADCAST",
     "RESOURCE_TYPE_MESSAGE",
     "RESOURCE_TYPE_PENDING_CLARIFICATION",
+    "draft_broadcast_initiated_event",
     "draft_message_event",
     "draft_pending_clarification_created_event",
     "draft_pending_clarification_expired_event",

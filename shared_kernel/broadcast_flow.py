@@ -70,12 +70,67 @@ class TriggerContext:
     ``trigger_id`` is the platform-assigned identifier for chain
     traversability — the BROADCAST_INITIATED audit event references
     this id.
+
+    Per S54 pre-write reconciliation Finding 3 (sixth recurrence of
+    the interface-versus-implementation discipline), ``metadata``
+    stays as the open ``dict[str, Any]`` slot established at S53
+    rather than a typed discriminated union — changing the field type
+    would break S53's construction tests. The typed per-type metadata
+    classes below (``DailyScheduledMetadata``, ``ManualMetadata``) are
+    convenience constructors that serialise into this dict via
+    ``to_metadata``; consumers that want a typed view read the dict
+    keys directly. The idempotency key resolver at
+    ``contexts/messaging/domain/idempotency.py`` consumes the dict.
     """
 
     trigger_type: BroadcastTriggerType
     trigger_id: UUID
     triggered_at: str
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DailyScheduledMetadata:
+    """Per-type metadata for the DAILY_SCHEDULED trigger (D146, D147).
+
+    Empty payload — the daily-briefing fires once per tenant+user+day;
+    the idempotency key derives from the operator-timezone date string
+    at the endpoint (not from this metadata). The class exists so call
+    sites can name the empty payload explicitly rather than passing a
+    bare ``{}``.
+    """
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Serialise into the TriggerContext.metadata dict shape."""
+        return {}
+
+
+@dataclass(frozen=True)
+class ManualMetadata:
+    """Per-type metadata for the MANUAL trigger (D147).
+
+    ``caller_note`` is an optional free-text note the manual caller
+    attaches (e.g., "operator-triggered test fire"). MANUAL triggers
+    carry a null idempotency key — they are not idempotency-protected
+    per D147 — so this metadata does not feed the idempotency key
+    resolution; it rides for audit-trail context.
+    """
+
+    caller_note: str | None = None
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Serialise into the TriggerContext.metadata dict shape."""
+        if self.caller_note is None:
+            return {}
+        return {"caller_note": self.caller_note}
+
+
+# Typed per-type metadata union (S54). DAILY_SCHEDULED and MANUAL land
+# at S54; THRESHOLD_CROSSED metadata lands at S57; CALENDAR_EVENT and
+# EMAIL_RECEIVED metadata land at their Phase 2-B+ activation sessions.
+# The union is the typed-helper layer above TriggerContext.metadata's
+# open dict; it does not replace the dict (Finding 3).
+TriggerMetadata = DailyScheduledMetadata | ManualMetadata
 
 
 @runtime_checkable
@@ -132,5 +187,8 @@ __all__ = [
     "BroadcastFlow",
     "BroadcastResponse",
     "BroadcastTriggerType",
+    "DailyScheduledMetadata",
+    "ManualMetadata",
     "TriggerContext",
+    "TriggerMetadata",
 ]
