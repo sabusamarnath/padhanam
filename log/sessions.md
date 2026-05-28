@@ -2143,3 +2143,48 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## 2026-05-28 — [Ciborra audit] Phenomenological second-lens audit (standalone strategic-mode, read-only)
+roles: analyst, architect
+mode: strategic (assessment session; produces a finding artefact, not a decision artefact; read-only against all code)
+
+A standalone strategic-mode audit applying Claudio Ciborra's Heideggerian seven-concept lens (Gestell, breakdown, Stimmung, care/Sorge, authenticity-versus-das-Man, bricolage, drift) to the as-built Padhanam at HEAD `718c46e`. Complementary to the P12 engineering audit (`charter/p12-audit-findings.md`): where P12 verified D-entries against code through an engineering lens, this reads the code and git for whether they betray the phenomenological self-image the charter projects. Carries no S-series number — it ships no substrate. Read-only constraint held: the only files written are the audit document, this entry, and the captures entries below; `git diff --stat` shows zero changes under `contexts/`, `apps/`, `padhanam/`, `tests/`, or migrations.
+
+- Produced: the audit document at `charter/ciborra-phenomenological-audit.md` (location chosen to sit beside the P12 audit it complements; `docs/audits/` exists but is empty and was rejected for co-location legibility). Seven concept sections plus a header/provenance block, three reconciliation findings (R1–R3), and a synthesis. **Verdicts: aligned ×2 (breakdown, Stimmung), partially aligned ×4 (Gestell, care, authenticity, drift), aligned-in-practice-unnamed-in-vocabulary ×1 (bricolage).** Findings count: three reconciliation findings + at least four substantive departures/tensions the P12 engineering lens did not surface (the single-adapter-per-port Gestell creep; the cultivation→control drift under the interface-versus-implementation discipline; the karma-prior-art das Man transplant; the stale twelve-context anti-drift artefact). HEAD hash recorded in the document header per acceptance criterion 2.
+
+- Decisions: none. Assessment session; the audit assesses and does not act. No D-entry, no principle amendment, no PRFAQ edit. Findings that imply action are recorded as forward-carry items below, not executed.
+
+- Tests: none; no code change. The audit's claims are grounded in `path:line` code references and git references (commit hashes, `git log`/`git blame`/`grep` output) throughout.
+
+- Reflection prompts answered:
+
+  1. **Charter-vs-code fidelity — largest gap.** Gestell showed the largest gap. The principles file commits "vendor swap is configuration or adapter replacement, never domain change" and "vendor lock-in is not architectural" ([principles.md:10](../charter/principles.md)); at HEAD every load-bearing Phase-2-A port (`ChannelResolver`, `ConfidenceCalculator`, `CellDispatch`, `ThresholdResolver`, `BroadcastDispatch`) has exactly one adapter, several degenerate stubs that discard their own inputs — `StaticConfigChannelResolverAdapter` "returns the configured operator-default channel regardless of input" — with the second adapter named only in docstrings. The gap is not a clean charter overstatement: the methodology's own interface-versus-implementation discipline ([methodology.md:381](../charter/methodology.md)) honestly describes commit-the-interface-ship-one-adapter. It is closest to an honest difference of lens that tips into mild overstatement at the procurement-facing register: "pluggable / no lock-in" does rhetorical work the single-adapter reality has not yet earned. Code-honest with itself; oversold at the marketing surface.
+
+  2. **Code-audit versus charter-audit divergence.** The session prompt (drafted in the Claude.ai charter-based register) framed this as a Phase-1-close audit with "twelve bounded contexts." The code contradicts both: the repo is mid-Phase-2-A at S54, and `contexts/` holds nineteen directories, not twelve. I trust the code and git — `ls contexts/` and `git log` are authoritative; the prompt's count matched P12's snapshot at `afabe7a`, which the build has moved seven contexts and dozens of sessions past. The divergence enriched rather than blocked the audit: the Phase-2-A material (the single-adapter ports, the karma transplants, the cultivation→control shift) is precisely what a Phase-1-close snapshot would have hidden. Forward-carry routing adjusted accordingly — items route to the next phase audit, not to a "Phase 2 opening" that has already happened.
+
+  3. **Bricolage in git.** Yes — abundantly, and the methodology names none of it as bricolage (zero occurrences of "bricolag/improvis/materials at hand/recombin" across `charter/`, `docs/archive/`, `log/`). Two cross-referenced commits as evidence for the next-phase promotion candidate: (a) `9bb7c03` (S24), the hash_chain primitive promoted from `contexts/methodology/` to `padhanam/security/` when the agent context became a second consumer — reuse-and-recombine, framed as "second-consumer-promotes"; (b) the S39 mid-build reuse at [log/sessions.md:1799](sessions.md), where the brief planned to extract a new helper but, reading migration 0010 for an unrelated reason, the operator found `padhanam.security.hash_chain` already exposed the mechanism and abandoned the planned build — textbook Lévi-Strauss bricolage, framed as "mid-build pre-write reconciliation / third-consumer-confirms." A third, unnamed instance: the S53 `StaticConfigChannelResolverAdapter` improvised from `MessagingSettings.operator_default_channel` already to hand ([sessions.md:2057](sessions.md)). The finding is sharper than the prompt's binary anticipated: the methodology frames these neither as bricolage nor as "discipline lapses recovered" but as proactive, forward-binding disciplines. Codification of improvisation is the methodology's mechanism — the proprietary insight — and also its blind spot.
+
+  4. **Audit-posture honesty — hardest-to-write finding.** The karma-prior-art transplant (Authenticity section). Four of the most load-bearing Phase-2-A principles ([principles.md:115-154](../charter/principles.md)) each carry "Origin: karma prior-art product specification §11.x, transplanted at P13 framing" (`grep -c "karma prior-art" principles.md` → 4). This is uncomfortable for the bet precisely because the bet's self-image is situated reckoning "hard to copy"; the platform's next-phase spine was, in material part, copied from a prior product — easy to copy because it already had been. The transplant is honestly labelled, which is itself authentic practice, but transplantation-from-prior-art sits closer to das Man than to reckoning. I resisted softening it: it is the single finding most in tension with the proposition, and an audit that found only the D52-reversal authenticity story would have failed the adversarial-posture check.
+
+methodology: The audit surfaced a methodology observation about the methodology itself: Padhanam's signature move — converting every improvisation into a named, forward-binding discipline — is simultaneously the source of the methodology's teachability (the proprietary insight) and the mechanism by which the project's own bricolage and its Phase-2-A drift toward anticipatory control become invisible to the project. Once improvisation is renamed "discipline," it stops looking like improvisation. This is a phenomenological observation for the operator to weigh at promotion; it is not a build-mode methodology edit (D47 reserves methodology.md writes to strategic-mode/audit promotion).
+
+- Forward-carry items (routed to the next phase audit / Phase-2-close strategic-mode work; none executed here):
+  1. **Bricolage-vocabulary promotion candidate.** Git evidence assembled for the next phase audit's charter-decision consideration: commits `9bb7c03` (S24), `sessions.md:1799` (S39 mid-build reuse), `sessions.md:2057` (S53 config-to-hand resolver). The candidate is whether to name the codification-of-improvisation pattern explicitly. This audit produces the evidence; promotion is a charter decision the audit does not make (per the prompt's out-of-scope).
+  2. **Stale twelve-context anti-drift artefact.** P12 Entry 16's documented count (twelve) is stale at nineteen; the artefact built to prevent rediscovery has itself drifted. Hygiene refresh for the next audit conversation.
+  3. **karma-prior-art das Man tension.** Connects to the PRFAQ Option-B pluggability honesty correction the prompt names for Phase-2 opening (now passed); route to the next phase audit's authenticity review.
+  4. **Change-failure-rate metric reads 0% while the qualitative failure record is non-empty.** Zero sessions classified `corrective` in the entire log, so CFR computes to 0%, while Failure-modes-observed documents real drift events. A measurement-model honesty item for the Phase-2 audit's metric review.
+
+```
+metrics:
+  classification: audit
+  brief_started: no brief
+  session_started: 2026-05-28
+  session_closed: 2026-05-28
+  merged: 2026-05-28
+  close_state: clean (read-only audit; only the audit document, this entry, and captures entries written; git diff --stat confirms zero code/test/migration changes)
+  tests_passing: n/a
+  principles_intact: n/a
+  charter_touchpoints: charter/ciborra-phenomenological-audit.md (new audit artefact); log/sessions.md (this entry); log/captures.md (forward-carry captures entries)
+  corrects:
+  corrected_by:
+```

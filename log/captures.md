@@ -1071,3 +1071,31 @@ This is the sixth recurrence of the interface-versus-implementation discipline (
 
   - triaged: 2026-05-28
   - resolution: absorbed at S54 commit 3 (TriggerContext.metadata stays as dict[str, Any]; typed metadata classes plus serialise helper land alongside). The discipline at sixth recurrence is operationally enforced as standing pre-write reconciliation. Recorded at S54 commit 1.
+
+## 2026-05-28 — [Ciborra audit] Bricolage vocabulary absent from the methodology while bricolage is pervasive in git
+
+The Ciborra phenomenological audit (`charter/ciborra-phenomenological-audit.md`) found zero occurrences of "bricolage / improvise / materials at hand / recombine" across `charter/`, `docs/archive/`, and `log/`, while the git history is rich with reuse-of-fragment and mid-build recombination. Cross-referenced git evidence: commit `9bb7c03` (S24 hash_chain promotion at second consumer); `log/sessions.md:1799` (S39 mid-build reuse where the planned new helper was abandoned on finding `padhanam.security.hash_chain` already exposed the mechanism); `log/sessions.md:2057` (S53 StaticConfigChannelResolverAdapter improvised from `MessagingSettings.operator_default_channel` already to hand). The methodology frames each as a proactive, forward-binding discipline ("second-consumer-promotes," "mid-build pre-write reconciliation," "interface-versus-implementation," "build-at-second-instance"), neither as bricolage nor as recovered lapse.
+
+  - triaged: 2026-05-28
+  - resolution: defer to the next phase audit. The bricolage-vocabulary promotion (whether to name the codification-of-improvisation pattern in `charter/methodology.md`) is a charter decision the assessment session does not make; this audit produces the git evidence the promotion will rest on, per the session prompt's out-of-scope.
+
+## 2026-05-28 — [Ciborra audit] P12's twelve-bounded-context documentation note is stale at nineteen
+
+P12 audit Entry 16 (`charter/p12-audit-findings.md:235`) recorded the bounded-context count as twelve expressly so "future audit conversations inherit the documented count without rediscovery." At HEAD `718c46e`, `ls contexts/` returns nineteen (the twelve plus the seven Phase-2-A contexts: audit_conversation, daily_briefing, intake, intent_classification_evaluation, messaging, mirror_conversation, portfolio — all D-authorised). The code-layer count is benign drift (every context is chartered); the phenomenological finding is that the anti-drift artefact itself drifted under use.
+
+  - triaged: 2026-05-28
+  - resolution: note + defer to the next audit conversation for a documentation-count refresh. No code or charter-decision action; the count is authorised, only the P12 note is stale.
+
+## 2026-05-28 — [Ciborra audit] Phase-2-A principles transplanted from karma prior-art (das Man tension)
+
+`grep -c "karma prior-art" charter/principles.md` → 4: the frontend/backend-separation, audit-trail-as-source-of-truth, originals-never-erased, and authority-and-certainty-independent principles each carry "Origin: karma prior-art product specification §11.x, transplanted at P13 framing." The Ciborra audit's authenticity section reads this as the das Man pole the bet's situated-reckoning self-image is least comfortable with: the most load-bearing Phase-2-A architectural spine was, in material part, transplanted from a prior product rather than reckoned into being. The transplant is honestly labelled (authentic practice), but transplantation-from-prior-art is structurally easy-to-copy. Connects to the PRFAQ Option-B pluggability honesty correction the session prompt named for Phase-2 opening (now passed).
+
+  - triaged: 2026-05-28
+  - resolution: defer to the next phase audit's authenticity/PRFAQ-honesty review. Assessment-only; no action this session.
+
+## 2026-05-28 — [Ciborra audit] Change-failure-rate metric reads 0% while the qualitative failure record is non-empty
+
+`grep -c "classification: corrective" log/sessions.md` → 0: no session in the entire log is tagged corrective, so the methodology's change-failure-rate metric (`charter/methodology.md:248`) computes to 0%. Meanwhile the Failure-modes-observed section documents real drift events (silently-deferred package drift, fabrication-class drift, single-currency assumption). Failures are booked as narrative Failure-modes entries rather than via the corrective session classification, so the quantitative mood-signal reads calmer than the qualitative record.
+
+  - triaged: 2026-05-28
+  - resolution: defer to the next phase audit's metric review. A measurement-model honesty item: either the corrective classification is under-applied or the metric needs reconciling with the Failure-modes record. Assessment-only; no metric change this session.
