@@ -1099,3 +1099,62 @@ P12 audit Entry 16 (`charter/p12-audit-findings.md:235`) recorded the bounded-co
 
   - triaged: 2026-05-28
   - resolution: defer to the next phase audit's metric review. A measurement-model honesty item: either the corrective classification is under-applied or the metric needs reconciling with the Failure-modes record. Assessment-only; no metric change this session.
+
+## 2026-05-28 — Ciborra audit arc: the bricolage insight, the prune capability, and the champion-register seed
+
+I ran Claudio Ciborra's phenomenological reading of enterprise IT against Padhanam as a second lens, first against the charter and then against the as-built code and git. The arc produced more reflection than any single session, so I am capturing it here before it decays in chat history. Reflection is the bet's deliverable; this is a chunk of it. The commercial material at the end is structured so I can lift it straight into the Phase-2 champion-register artifact when I switch to strategic-commercial mode.
+
+### The durable reflection
+
+The lens resolved Padhanam into two layers running two epistemologies, and the split is honest rather than contradictory. The build layer is Ciborran: breakdown is surfaced as first-class state, drift is followed and codified, abstractions are cultivated rather than installed. The product layer is Gestell: it enframes agentic-system activity into calculable optimisation dimensions, deliberately, because that enframing is the procurement-grade proposition. The two are correctly differentiated for their audiences. The methodology is the proprietary insight that makes the enframing inspectable rather than imposed.
+
+The code-and-git audit earned its keep by catching what the engineering audit (P12) structurally could not. P12 verifies decisions against code and so reads a named discipline as evidence of rigour. The phenomenological lens reads the same discipline as a place drift can hide. That difference is the whole reason the second lens exists, and it found real fractures the first lens had passed clean: a pluggability overstate, a cultivation-to-control drift, and the bricolage blind spot below.
+
+### The bricolage insight (the deepest finding)
+
+My signature move is to convert every improvisation into a named discipline. That move is the proprietary insight: it makes a messy, senior skill teachable and repeatable, which is exactly what is hard to copy. It is also the blind spot. Once an improvisation is renamed a discipline, it stops looking like an improvisation, so my own drift becomes invisible to me. The codification habit produces the principled self-image it describes. An engineering audit reads the named disciplines as rigour; the phenomenological lens reads the same disciplines as where my improvisation and my drift toward control are most successfully hidden, not dishonestly, but by the ordinary working of a method whose core move is to make the contingent look principled.
+
+Bricolage is the name for the thing the method does and never named. The word appears zero times in the charter while the git history is full of it: reuse of fragments built for other purposes, mid-build recombination, resolvers improvised from configuration already at hand. The method captured every one of these moments faithfully and called them disciplines. The placement that resolves this: bricolage belongs in the audit, not the sessions. Sessions encode improvisation into discipline, which keeps the work moving. The audit decodes it back to check for hidden drift. Bricolage is what the decode step looks for.
+
+### What the method gained this arc
+
+Before this arc the method could only accumulate. The structural-promotion threshold told me when to create a discipline; nothing told me when to retire one, so disciplines only ever piled up. That asymmetry is the mechanism by which a method becomes a cage, which is the thing I stopped to ask about directly: am I fitting myself into a box. The answer was that the danger is not structure but a box I cannot leave, and the cure is not less structure but a structure that can shrink.
+
+So I built a death rule. The method now has a discipline-retirement (prune) rule symmetric with the birth rule, and a standing decode step that reverses the session-level encode and carries a reconcile-before-it-counts guard. I then exercised the prune rule on its first real case: I retired the loose build-at-second-instance discipline and superseded it with a two-threshold rule. Domain patterns still wait for the third instance. Integration boundaries build at the second only when the second adapter is structurally guaranteed, not merely anticipated, where the tell is whether I can name a second adapter that already exists or is committed this phase. A discipline genuinely died: the unconditional early-build permission. What survived is narrower and forbids what the old rule permitted. This is the cure for the cage made concrete. The method can now shrink, not only grow, which removes the accumulation failure mode that would otherwise have broken the bet's claim that the discipline holds at complexity.
+
+### Corrected self-understanding
+
+Two of the audit's own findings were wrong or overstated, and correcting them sharpened the picture.
+
+The das Man finding was wrong on the facts. The four "karma prior-art" principle transplants are not conformity to external prior-art; karma2 is my own prior product iteration. Reusing my own prior work is authentic, and it is bricolage in the truest sense: recombining materials from my own accumulated kit, each carrying what I learned the first time. The audit could not see this because the only thing written down was the label.
+
+The pluggability finding was overstated. The single-adapter-behind-a-Protocol pattern is sound YAGNI. The real finding narrowed to two things: a buyer-wording register gap, and one genuinely input-discarding stub (ChannelResolver), which I fixed. Reconciliation also corrected the audit's own quantifiers: "several" stubs was one, and "every port single-adapter" was false, because two ports (MetaClassifier, MessageDeliveryPort) already carry two real adapters each. The phenomenological lens finds the real defect and overstates its scope; only the code check corrects it, which is now a standing guard in the decode step.
+
+### Champion-register seed (extract for the Phase-2 commercial artifact)
+
+The clean distinction for the non-technical buyer: vibe coding is the build; bricolage is everything that happens to the build after it lands in the business. Vibe coding is linear, intent in and artifact out, two weeks. The workaround layer that follows is where the business actually lives, two years: customers using fields for unintended purposes, support workarounds in personal docs, analytics no one trusts, the founder still doing onboarding by hand. The exec does not live in vibe coding. The exec lives in the workaround layer, and has no visibility into it.
+
+Padhanam's position is complementary, not competitive. Vibe coding tools (Cursor, Windsurf, Lovable, Bolt, v0) race to commoditise the improvisation surface against hyperscaler economics. Padhanam is the observability-and-codification layer above it: it watches what customers do with what shipped, watches what the team does to make it work, and surfaces the patterns worth codifying. The pitch in three sentences: your team will ship faster than ever with vibe coding tools; the artifact is the easy part; we watch the workaround layer and tell you which patterns are real enough to bake into the next version.
+
+Three registers serve one B2B buyer journey. Builder gets the methodology vocabulary (internal). Champion, the technical advocate who must convert a procurement-approved evaluation into a funded deal, gets the workaround-layer vocabulary (this is the missing artifact). Procurement and IT, the ultimate blocker, get the procurement-grade vocabulary (the current PRFAQ, which is strong). Procurement-grade architecture is the binding-constraint-won; it gets Padhanam into the evaluation. The champion register is what closes it.
+
+Buyer-wording correction: drop "pluggable / no vendor lock-in," which oversells a single-adapter reality and reads as overclaiming under a procurement review. Lead instead with the true and stronger claim: pluggability is demonstrated at two ports today (MetaClassifier, MessageDeliveryPort), single-adapter-by-YAGNI elsewhere, extensible by design. That is a live proof point, not a promise.
+
+The moat, stated honestly: the methodology is situated and hard to copy, and the carried-forward architecture is my own accumulated judgment across karma2 and Padhanam, which a competitor cannot copy because they have not built both and learned what transferred. Both are the moat, for the same reason. The earlier framing that separated "the method (original)" from "the architecture (borrowed)" was wrong; the architecture is self-reuse, which is part of the moat.
+
+### Honest status
+
+The decode-to-prune-to-reframe loop ran end to end, but it ran because I drove it by hand. The decode step found the drift only because I commissioned a special Ciborra audit; the prune happened only because I caught the deferral and pushed; the reframe was reasoned out across several turns. None of that was the standing machinery running on its own. The status is proven-when-driven, not yet self-sustaining. The next phase audit, with the standing decode step and the threshold-supersession sub-check as its opening move, is the test of whether it runs unguided.
+
+### Forward-carry pointers
+
+Next phase audit: add the decode threshold-supersession sub-check as the mandatory opening move (this arc's build-at-second-instance reframe is its calibration case); run the per-principle fit-check on the four karma2 transplants; confirm the standing machinery catches drift without a special lens.
+
+Strategic-commercial mode: write the champion-register artifact from the seed above; correct the buyer-wording per the two-ports proof point.
+
+Audit doc: append the C3 line so "every port single-adapter" does not stand uncorrected (two ports already carry two adapters).
+
+Deferred by YAGNI: the send_message caller-side smell and the real UserScopedChannelResolverAdapter, both tied to the multi-channel activation trigger.
+
+  - triaged: 2026-05-28
+  - resolution: note (durable reflection + commercial seed). Forward-carry pointers above route to: the next phase audit (decode sub-check calibration, karma2 per-principle fit-check, standing-machinery test); strategic-commercial mode (champion-register artifact, buyer-wording correction); the audit doc (C3 line on the "every port" quantifier); and YAGNI-deferred (send_message caller-side smell, real UserScopedChannelResolverAdapter, both gated on multi-channel activation).
