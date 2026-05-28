@@ -111,6 +111,16 @@ def test_artefact_citation_rejects_empty_discriminator() -> None:
         ArtefactCitation(artefact_id=uuid4(), artefact_type="")
 
 
+def test_artefact_citation_accepts_meeting_discriminator() -> None:
+    citation = ArtefactCitation(artefact_id=uuid4(), artefact_type="meeting")
+    assert citation.artefact_type == "meeting"
+
+
+def test_artefact_citation_rejects_unknown_discriminator() -> None:
+    with pytest.raises(ValueError, match="artefact_type"):
+        ArtefactCitation(artefact_id=uuid4(), artefact_type="widget")
+
+
 def test_cited_response_is_runtime_checkable_against_conforming_object() -> None:
     from dataclasses import dataclass, field
     from uuid import UUID as _UUID

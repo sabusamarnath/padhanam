@@ -23,8 +23,9 @@ ConversationFlow implementer's response value object satisfies
 ``CitedResponse`` structurally by carrying three citation tuple fields.
 ``ArtefactCitation`` is the typed value object that populates
 ``cited_artefacts``: artefact id plus artefact-type discriminator. The
-Phase 2-A discriminator union is ``"case"`` and ``"data_point"``;
-future artefact types extend the union.
+Phase 2-A discriminator union is ``"case"``, ``"data_point"``, and
+``"meeting"`` (the calendar Meeting added at S55a, D148); future artefact
+types (``"email"`` at S56) extend the union.
 
 No implementer registers at S45 — audit-conversation (5.1) and
 portfolio mirror-conversation (4.1) implementers land at P14+. The
@@ -134,6 +135,18 @@ class ConversationFlow(Protocol):
         ...
 
 
+ARTEFACT_TYPE_CASE = "case"
+ARTEFACT_TYPE_DATA_POINT = "data_point"
+ARTEFACT_TYPE_MEETING = "meeting"
+
+# The discriminator union. Extended as new citable artefact types land
+# (``"email"`` at S56). A closed set so the discriminator is structural,
+# not just prose — an unknown type is a programming error, surfaced early.
+KNOWN_ARTEFACT_TYPES: frozenset[str] = frozenset(
+    {ARTEFACT_TYPE_CASE, ARTEFACT_TYPE_DATA_POINT, ARTEFACT_TYPE_MEETING}
+)
+
+
 @dataclass(frozen=True)
 class ArtefactCitation:
     """Typed citation for a domain artefact (D138 primitive, S51 shape).
@@ -142,20 +155,30 @@ class ArtefactCitation:
     manual entry cell module" claim was structurally false — pre-write
     reconciliation Finding 4 surfaced the absence). The discriminator
     surfaces artefact type at the citation surface because artefacts are
-    heterogeneous in ``cited_artefacts`` at P14: audit-conversation and
-    mirror-conversation both cite Case and DataPoint references through
-    one tuple field. Future artefact types extend the ``artefact_type``
-    discriminator union; Phase 2-A union: ``"case"``, ``"data_point"``.
+    heterogeneous in ``cited_artefacts``: audit-conversation and
+    mirror-conversation cite Case and DataPoint references through one
+    tuple field, and calendar Meetings join the union at S55a (D148) so
+    Meetings are citable. New artefact types extend ``KNOWN_ARTEFACT_TYPES``;
+    Phase 2-A union: ``"case"``, ``"data_point"``, ``"meeting"``.
+
+    The citation carries only the artefact id and type — it resolves to
+    the current artefact for display. For a Meeting (whose source state
+    can change asynchronously, with no platform action), the immutable
+    evidence record is the citation-time audit-payload snapshot, not this
+    pointer (the two-store split, D148); that snapshot wiring is S55b.
     """
 
     artefact_id: UUID
     artefact_type: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.artefact_type, str) or not self.artefact_type:
+        if (
+            not isinstance(self.artefact_type, str)
+            or self.artefact_type not in KNOWN_ARTEFACT_TYPES
+        ):
             raise ValueError(
-                "ArtefactCitation.artefact_type must be a non-empty string; "
-                f"got {self.artefact_type!r}"
+                "ArtefactCitation.artefact_type must be one of "
+                f"{sorted(KNOWN_ARTEFACT_TYPES)}; got {self.artefact_type!r}"
             )
 
 
