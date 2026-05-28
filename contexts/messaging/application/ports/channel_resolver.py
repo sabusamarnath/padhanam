@@ -35,11 +35,18 @@ from shared_kernel.message_intent import MessageIntent
 class ChannelResolver(Protocol):
     """Resolve the outbound channel destination for a (tenant, user, intent).
 
-    Phase 2-A implementation returns the configured operator-default
-    channel regardless of input (static-config adapter); Phase 2-B+
-    implementation consults user-scoped channel preferences. The
-    Protocol stays unchanged across adapters per D144's forward-
-    compatibility commitment.
+    Not-yet-implemented marker (Phase 2-A; Ciborra-audit C2 correction):
+    per-user and per-intent channel resolution is not yet built. The
+    ``user_id`` and ``message_intent`` parameters are declared for
+    forward-compatibility (D144), but no shipped adapter consumes them —
+    the only Phase-2-A adapter (``StaticConfigChannelResolverAdapter``)
+    returns the operator-default channel and discards these inputs
+    explicitly. Until a ``UserScopedChannelResolverAdapter`` lands —
+    gated on the D136 Primitive 1 User aggregate plus a second channel —
+    this Protocol declares more than any adapter delivers, by design and
+    disclosed here rather than silently claimed. The Protocol stays
+    unchanged across that swap per D144's forward-compatibility
+    commitment.
     """
 
     async def resolve_channel(

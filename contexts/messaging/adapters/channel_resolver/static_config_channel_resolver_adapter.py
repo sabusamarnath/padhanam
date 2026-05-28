@@ -47,14 +47,21 @@ class StaticConfigChannelResolverAdapter:
         user_id: str,
         message_intent: MessageIntent,
     ) -> ChannelDestination:
-        """Return the configured ChannelDestination.
+        """Return the configured operator-default ChannelDestination.
 
-        Inputs ignored per D136 Primitive 2 Phase 2-A static-config
-        commitment. The kwargs are still in the Protocol signature so
-        the second-channel activation swap (a new
-        UserScopedChannelResolverAdapter) is a no-call-site-change
-        adapter swap.
+        Not-yet-implemented: per-user / per-intent resolution. Phase 2-A
+        has a single channel (WhatsApp) and a single (operator) user, so
+        there is nothing to resolve the inputs against. The three inputs
+        are discarded explicitly below rather than silently, per the
+        No-silent-operation principle. The kwargs stay in the Protocol
+        signature so the second-channel activation swap (a new
+        ``UserScopedChannelResolverAdapter``, gated on the D136 Primitive
+        1 User aggregate) is a no-call-site-change adapter swap.
         """
+        # Not-yet-implemented: per-user/per-intent resolution. Discarded
+        # explicitly so the interface no longer claims, silently, a
+        # capability this adapter does not deliver (Ciborra-audit C2).
+        del tenant_id, user_id, message_intent
         return ChannelDestination(
             channel_type=self._channel,
             channel_address=self._address,

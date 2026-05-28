@@ -95,6 +95,45 @@ def test_resolve_ignores_tenant_and_user() -> None:
     assert first == second
 
 
+def test_per_user_per_intent_resolution_not_yet_implemented() -> None:
+    """Not-yet-implemented marker (D144; Ciborra-audit C2 correction).
+
+    Per-user / per-intent channel resolution is not built at Phase 2-A.
+    Across the full cross-product of distinct users and every
+    MessageIntent, the static-config adapter returns one invariant
+    operator-default destination — pinning the discard as the intended,
+    disclosed not-yet-implemented contract rather than an accidental
+    bug. When the UserScopedChannelResolverAdapter lands it is a new
+    adapter carrying its own per-user tests; this adapter's contract
+    stays operator-default-only.
+    """
+    adapter = StaticConfigChannelResolverAdapter(
+        operator_default_channel=ChannelType.WHATSAPP,
+        operator_default_address="+15551234567",
+    )
+
+    async def _drive() -> set[ChannelDestination]:
+        seen: set[ChannelDestination] = set()
+        for user_id in ("operator-001", "operator-002", "someone-else"):
+            for intent in MessageIntent:
+                seen.add(
+                    await adapter.resolve_channel(
+                        tenant_id=uuid4(),
+                        user_id=user_id,
+                        message_intent=intent,
+                    )
+                )
+        return seen
+
+    distinct = asyncio.run(_drive())
+    assert distinct == {
+        ChannelDestination(
+            channel_type=ChannelType.WHATSAPP,
+            channel_address="+15551234567",
+        )
+    }
+
+
 def test_resolve_returns_empty_address_when_not_configured() -> None:
     """Empty address default keeps local development without a configured
     operator-address able to construct MessagingSettings — the static-
