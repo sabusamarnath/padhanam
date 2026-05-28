@@ -21,17 +21,22 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
+from contexts.calendar.application.index_meeting import index_meeting
 from contexts.calendar.domain.calendar_event import CalendarEvent
 from contexts.calendar.domain.errors import (
     NoSuchConnectionError,
     SyncTokenExpiredError,
 )
-from contexts.calendar.domain.meeting import meeting_from_event
+from contexts.calendar.domain.meeting import Meeting, meeting_from_event
 from contexts.calendar.domain.sync_trigger import CalendarSyncTrigger
 from contexts.calendar.ports.calendar_event_source_port import (
     CalendarEventSourcePort,
 )
 from contexts.calendar.ports.connection_repository import ConnectionRepository
+from contexts.calendar.ports.meeting_index_ports import (
+    MeetingEmbeddingPort,
+    MeetingGraphIndexPort,
+)
 from contexts.calendar.ports.meeting_repository import (
     MeetingReader,
     MeetingRepository,
@@ -50,6 +55,7 @@ class CalendarSyncResult:
     changed_event_ids: tuple[str, ...]
     next_sync_token: str | None
     did_full_resync_after_410: bool = False
+    indexed: int = 0
 
 
 async def sync_calendar(
@@ -61,15 +67,21 @@ async def sync_calendar(
     connections: ConnectionRepository,
     meetings: MeetingRepository,
     meeting_reader: MeetingReader,
+    embedder: MeetingEmbeddingPort | None = None,
+    graph_index: MeetingGraphIndexPort | None = None,
     window_days_past: int = 30,
     window_days_future: int = 90,
     now: datetime | None = None,
 ) -> CalendarSyncResult:
-    """Pull, store, and sync one calendar connection.
+    """Pull, store, sync, and (when wired) index one calendar connection.
 
     ``trigger`` is the trigger-agnostic seam: a poll drives it today; a
     future webhook would drive the same function. It is recorded for
-    observability and does not change the pull logic.
+    observability and does not change the pull logic. When ``embedder``
+    and ``graph_index`` are supplied (the inherited substrate, bridged at
+    apps/ wiring), new-or-content-changed Meetings are re-embedded and
+    re-indexed after store — a content change re-indexes, not only updates
+    the row.
     """
     del trigger  # recorded by the caller; no branch on it today
     now = now or datetime.now(timezone.utc)
@@ -112,6 +124,7 @@ async def sync_calendar(
     upserted = 0
     tombstoned = 0
     changed: list[str] = []
+    changed_meetings: list[Meeting] = []
     for event in events:
         if event.is_tombstone:
             await meetings.tombstone_meeting(
@@ -140,6 +153,22 @@ async def sync_calendar(
         upserted += 1
         if existing is None or existing.content_hash != meeting.content_hash:
             changed.append(event.google_event_id)
+            changed_meetings.append(meeting)
+
+    # Index new-or-content-changed Meetings into the inherited substrate
+    # when the embedding + graph ports are wired (the survey result: a
+    # content change re-embeds and re-indexes, not only updates the row).
+    indexed = 0
+    if embedder is not None and graph_index is not None:
+        for meeting in changed_meetings:
+            await index_meeting(
+                tenant_context=tenant_context,
+                meeting=meeting,
+                embedder=embedder,
+                graph_index=graph_index,
+                meetings=meetings,
+            )
+            indexed += 1
 
     # Persist the next sync token for the following incremental pull. A
     # sync run that returns no token (shouldn't happen on a completed run)
@@ -159,6 +188,7 @@ async def sync_calendar(
         changed_event_ids=tuple(changed),
         next_sync_token=next_token,
         did_full_resync_after_410=did_full_resync,
+        indexed=indexed,
     )
 
 
