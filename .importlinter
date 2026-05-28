@@ -190,6 +190,15 @@ layers =
     contexts.daily_briefing.application
     contexts.daily_briefing.domain
 
+[importlinter:contract:layers-calendar]
+name = Calendar layers (hexagonal)
+type = layers
+layers =
+    contexts.calendar.adapters
+    contexts.calendar.application
+    contexts.calendar.ports
+    contexts.calendar.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -226,6 +235,7 @@ modules =
     contexts.audit_conversation.domain
     contexts.mirror_conversation.domain
     contexts.daily_briefing.domain
+    contexts.calendar.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -256,6 +266,7 @@ modules =
     contexts.audit_conversation.application
     contexts.mirror_conversation.application
     contexts.daily_briefing.application
+    contexts.calendar.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -283,6 +294,7 @@ modules =
     contexts.messaging.adapters
     contexts.intent_classification_evaluation.adapters
     contexts.daily_briefing.adapters
+    contexts.calendar.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -323,6 +335,7 @@ source_modules =
     contexts.intake.domain
     contexts.messaging.domain
     contexts.intent_classification_evaluation.domain
+    contexts.calendar.domain
 forbidden_modules =
     pydantic
     pydantic_settings
