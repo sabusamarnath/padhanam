@@ -200,6 +200,11 @@ class AppCompositions:
     # adapter, the selected delivery adapter, the MessageWriter
     # consumer-port adapter, and the inbound-webhook configuration.
     messaging: MessagingComposition | None = None
+    # S54 (D146): daily-briefing DailyBriefingReader consumer-port
+    # adapter composing intake + audit + portfolio reads. Defaults to
+    # None so test fixtures without the daily-briefing stack keep their
+    # narrow factory invocations; production wiring populates it.
+    daily_briefing_reader: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -424,6 +429,21 @@ def _build_default_compositions() -> AppCompositions:
         audit_event_reader=audit_event_reader,
     )
 
+    # S54 (D146): daily-briefing DailyBriefingReader adapter composing
+    # the intake repository, the audit event reader, and the portfolio
+    # list_cases read. The composer + BroadcastFlow implementer
+    # registration land at S54 commit 6.
+    from apps.api._daily_briefing_wiring import build_daily_briefing_reader
+
+    daily_briefing_reader = build_daily_briefing_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        intake_repository=intake_repository,
+        audit_event_reader=audit_event_reader,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -449,6 +469,7 @@ def _build_default_compositions() -> AppCompositions:
         intake_repository=intake_repository,
         portfolio_writer=portfolio_writer,
         messaging=messaging,
+        daily_briefing_reader=daily_briefing_reader,
     )
 
 
@@ -647,6 +668,8 @@ def create_app(
     app.state.portfolio_reader = compositions.portfolio_reader
     # S45 (D129): messaging composition seam.
     app.state.messaging = compositions.messaging
+    # S54 (D146): daily-briefing reader composition seam.
+    app.state.daily_briefing_reader = compositions.daily_briefing_reader
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository
     app.state.portfolio_writer = compositions.portfolio_writer

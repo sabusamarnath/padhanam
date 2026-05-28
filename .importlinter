@@ -182,6 +182,14 @@ layers =
     contexts.mirror_conversation.application
     contexts.mirror_conversation.domain
 
+[importlinter:contract:layers-daily-briefing]
+name = Daily-briefing layers (hexagonal)
+type = layers
+layers =
+    contexts.daily_briefing.adapters
+    contexts.daily_briefing.application
+    contexts.daily_briefing.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -217,6 +225,7 @@ modules =
     contexts.intent_classification_evaluation.domain
     contexts.audit_conversation.domain
     contexts.mirror_conversation.domain
+    contexts.daily_briefing.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -246,6 +255,7 @@ modules =
     contexts.intent_classification_evaluation.application
     contexts.audit_conversation.application
     contexts.mirror_conversation.application
+    contexts.daily_briefing.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -272,6 +282,7 @@ modules =
     contexts.intake.adapters
     contexts.messaging.adapters
     contexts.intent_classification_evaluation.adapters
+    contexts.daily_briefing.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
