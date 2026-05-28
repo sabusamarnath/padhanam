@@ -2397,3 +2397,20 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+### Verification addendum — green gate confirmed (operator-executed)
+
+Stage-6 verification passed on the operator's machine: Auth plus Proxy working end-to-end against real Google Calendar through self-hosted Nango. Nango Proxy pulled live calendar data (calendar operator@example.com, Europe/London; one upcoming event returned). The read-only scope assumption the calendar design rests on is now verified, not pending: the granted scope is calendar.readonly.
+
+Verified handles (the S55 calendar adapter references these):
+- environment: dev (Nango env id 2)
+- integration unique key (Provider-Config-Key): google-calendar
+- connection id: d46195b2-ad85-4d1c-a876-b978b9347ccd
+- proxy base path: /proxy/calendar/v3/... maps to https://www.googleapis.com/calendar/v3/...
+- granted scope: calendar.readonly
+
+Operational cautions (preserved because they cause baffling failures later if forgotten):
+- The connection persists in the nango_db_data volume across docker compose down. Stopping the stack does not lose the connection; only removing the volume does.
+- Do not change NANGO_ENCRYPTION_KEY after a connection is stored. The stored token is encrypted with it; changing the key makes the token undecryptable and forces a re-grant.
+
+Status: Nango provisioning complete and verified. S55 (calendar build) is unblocked.
