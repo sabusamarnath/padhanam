@@ -2186,5 +2186,68 @@ metrics:
   principles_intact: n/a
   charter_touchpoints: charter/ciborra-phenomenological-audit.md (new audit artefact); log/sessions.md (this entry); log/captures.md (forward-carry captures entries)
   corrects:
+  corrected_by: 2026-05-28 post-Ciborra-audit corrections session (C1 das Man + C2 pluggability findings; stale twelve-context note; ChannelResolver input-discard fix)
+```
+
+## 2026-05-28 — [Corrections] Post-Ciborra-audit corrections (standalone build-mode)
+roles: analyst, architect, engineer, technical writer
+mode: build session, no S-series substrate ID (builds no substrate; corrects two of the Ciborra audit's own findings, fixes the genuine code defect it surfaced, and clears a stale documentation artefact)
+
+A standalone corrections session at the Phase-2-A boundary, acting on the Ciborra phenomenological audit (`charter/ciborra-phenomenological-audit.md`). HEAD audited against: `20c8f37` (clean tree at open, `git status` → nothing to commit). It corrects two audit findings (C1 das Man, C2 pluggability), fixes the one genuine input-discarding stub the audit surfaced, and replaces a stale frozen count with a live-count instruction. Three commits, charter ahead of code per acceptance criterion 9.
+
+- Produced:
+  - **Commit 1** (`a76fd0f`, `docs(audit): append corrections section to ciborra audit`): the verbatim `## Corrections` section appended to `charter/ciborra-phenomenological-audit.md`; the findings above it are byte-unchanged (append-only). C1 reclassifies the four karma2 principle transplants as self-reuse / bricolage (karma2 is the operator's own prior iteration, not external prior-art), authentic, with the residual per-principle fit-check as the only open item. C2 affirms the single-adapter-behind-a-Protocol YAGNI engineering and narrows the section-1 finding to the buyer-wording register gap (strategic mode) plus the input-discarding stubs (fixed here).
+  - **Commit 2** (`880efee`, `docs(audit): replace frozen context count with live-count instruction`): P12 Entry 16's frozen "twelve" replaced with a live-count instruction (derive via `ls contexts/` at audit time); current count recorded as nineteen as of 2026-05-28, noted to grow as D-authorised contexts ship; the D16 observability-split observation kept as the durable thing to inherit.
+  - **Commit 3** (`4fff1ce`, `fix(messaging): mark ChannelResolver per-user/per-intent resolution not-yet-implemented`): the sole bucket-(c) port. The adapter now discards its three required inputs explicitly (`del`) instead of silently, the port + adapter docstrings state the deferral and its activation trigger, and a cross-product test pins the discard as the intended not-yet-implemented contract. 179 messaging unit tests pass; 36/36 import-linter contracts kept.
+
+- Port inventory and classification (acceptance criterion 4). Every Phase-2-A port whose adapter could plausibly discard a declared input was read against its interface. Decision/resolver/dispatch/calculator/composer ports:
+
+  | Port | path:line | Bucket | Reason |
+  |---|---|---|---|
+  | ChannelResolver | contexts/messaging/application/ports/channel_resolver.py:35 | **(c)** | Three **required** inputs (tenant_id, user_id, message_intent) all discarded silently by the sole adapter; the interface claimed per-user/per-intent resolution the code does not deliver. **Fixed this session.** |
+  | ConfidenceCalculator | shared_kernel/confidence_calculator.py:37 | (b) | Adapter reads `response.confidence` (its primary input); `del request` is explicit forward-compat; 0.5 is a disclosed "no-signal" default. The audit's own named honest-stub example. |
+  | ThresholdResolver | shared_kernel/confidence_thresholds.py:50 | (b) | `operation_class` is **optional** (`= None`); the contract explicitly says "implementations may ignore" and callers pass None at Phase 2-A. Honest disclosed stub. |
+  | CellDispatch | contexts/messaging/application/ports/cell_dispatch.py:27 | (a) | Adapter runs `cell_run()` and logs `context` on failure — both declared inputs consumed. |
+  | BroadcastDispatch | contexts/messaging/application/ports/broadcast_dispatch.py:57 | (a) | Adapter routes by `trigger_context.trigger_type`, logs tenant_id/user_id/context, invokes `implementer.fire` — all inputs consumed. |
+  | BroadcastFlowRegistry | contexts/messaging/application/ports/broadcast_flow_registry.py:26 | (a) | register/get/registered_types each consume their inputs. |
+  | MetaClassifier | contexts/messaging/application/ports/meta_classifier.py:86 | (a) | **Two** real adapters (LLM + rule-based); both classify from the message text. `del tenant_id` is a disclosed tenant-agnostic-classification choice, not the classification input. |
+  | MessageDeliveryPort | contexts/messaging/ports/message_delivery_port.py:38 | (a) | **Two** real adapters (local_echo + twilio); both consume channel/from/to/body. |
+  | DailyBriefingComposer | contexts/daily_briefing/application/ports/daily_briefing_composer.py:52 | (a) | LiteLLM adapter formats all four inputs (period + three projections) into the prompt; `attention_items=()` is a disclosed forward-compat output field. |
+  | BriefingNotifier | contexts/daily_briefing/application/ports/briefing_notifier.py:29 | (a) | Adapter resolves channel and sends; consumes actor + body. |
+  | PortfolioGateway | contexts/messaging/application/ports/portfolio_gateway.py:109 | (a) | Adapter queries portfolio per actor; consumes inputs. |
+
+  Repository / reader / lookup / writer ports across the Phase-2-A contexts (portfolio, messaging, intake, daily_briefing, audit_conversation, mirror_conversation, intent_classification_evaluation) are bucket (a) by construction — they persist or query exactly the inputs passed. A `grep` sweep for the deliberate-discard idiom (`del <param>`, "regardless of input", "ignored") across `contexts/` and `apps/` surfaced exactly four discard sites: ConfidenceCalculator (b), ThresholdResolver (b), MetaClassifier `del tenant_id` (a), ChannelResolver (c). No reader/repository port discards a declared filter.
+
+- Decisions: none. Corrections session; it corrects findings and fixes a defect, it does not select between architectural alternatives.
+
+- Tests: 179 messaging unit tests pass; the channel-resolver adapter test file gains `test_per_user_per_intent_resolution_not_yet_implemented` (cross-product of three users × every MessageIntent → one invariant operator-default destination, pinning the discard as the intended contract). 36/36 import-linter contracts kept; no regressions. (Charter commits 1–2 touch no code.)
+
+- Reflection prompts answered:
+
+  1. **Inventory result.** Eleven decision-class ports inventoried plus the reader/repository/writer/lookup set: **one bucket-(c) (ChannelResolver), two bucket-(b) (ConfidenceCalculator, ThresholdResolver), and the remainder bucket-(a).** The audit's "several [input-discarding] stubs share the shape" did **not** hold up on close reading — it conflated three distinct shapes. The audit listed `ChannelResolver`, `ConfidenceCalculator`, `CellDispatch`, `ThresholdResolver`, `BroadcastDispatch` as "same shape — Protocol plus exactly one adapter." But single-adapter ≠ input-discarding: CellDispatch and BroadcastDispatch fully consume their inputs (they dispatch the work); ConfidenceCalculator reads its primary input and discloses a placeholder for the absent signal; ThresholdResolver's discarded argument is optional and documented as ignorable. The genuine bucket-(c) marker is a **required** input the adapter discards while the interface implies a capability — and only ChannelResolver (three required inputs, all discarded, silently) met it. The reconciliation instruction earned its keep: fixing from the remembered "several" would have over-fixed two honest disclosed stubs and failed the anti-over-fix criterion.
+
+  2. **Fix choice.** For ChannelResolver I chose **mark not-yet-implemented**, not honour-the-inputs, because honouring is not viable: both `MessageChannel` and `ChannelType` carry exactly one value (`WHATSAPP`) and Phase 2-A has a single (operator) user, so there is genuinely nothing to resolve `user_id`/`message_intent` against. A real resolver is the deferred `UserScopedChannelResolverAdapter`, gated on the D136 Primitive 1 User aggregate plus a second channel — a whole session's work, correctly deferred per YAGNI (the YAGNI trigger). The marker took the codebase's own blessed form: explicit `del` of the discarded inputs (matching ThresholdResolver and ConfidenceCalculator) plus port and adapter docstrings that name the deferral and its trigger, converting a **silent** discard into a disclosed one (the No-silent-operation principle). One adjacent observation surfaced and was deliberately left unfixed: `send_message` ([contexts/messaging/application/send_message.py:96](send_message.py)) calls `resolve_channel` and discards the returned `ChannelDestination`, delivering on its `channel` kwarg instead — so the resolver is doubly hollow on the reactive path (inputs ignored by the adapter, output ignored by the caller). At Phase 2-A this is benign (identity routing, single channel); but at multi-channel activation `send_message` must consume the resolved destination. This is a distinct defect class (caller discards output, not adapter discards input) and an architectural question about where resolution should live — out of scope for a corrections session, recorded as a forward-carry below.
+
+  3. **Residual strategic item.** Confirmed: the buyer-wording correction — drop "pluggable / no vendor lock-in," use "vendor swap is one adapter, not a rebuild" — is **not** executed here. C2 in the appended Corrections section records it as routed to strategic mode (the next PRFAQ / procurement-facing touch). The code is now honest (the interface no longer silently claims a capability it lacks); the procurement-facing language is not yet corrected, and that correction is a strategic-mode forward-carry, listed below.
+
+methodology: First session in the entire log classified `corrective` — which directly answers the Ciborra audit's forward-carry item 4 (CFR computed to 0% because no session carried the corrective classification while the qualitative failure record was non-empty). The session is genuinely corrective: it remediates a shipped code over-claim (the S53/D144 ChannelResolver interface) plus two audit mis-readings. One methodology observation: the (b)-versus-(c) distinction that the reconciliation turned on — required-and-undocumented-discard (c) versus optional-or-forward-compat-disclosed-discard (b) — is a sharper test than "single adapter behind a Protocol," and is the operational read of the interface-versus-implementation discipline at the honesty register. Forwarded to the next phase audit as a candidate refinement, not promoted here (D47 reserves methodology.md writes to strategic mode).
+
+- Forward-carry items (none executed here):
+  1. **Buyer-wording register correction** → strategic mode / next PRFAQ touch. Drop "pluggable / no vendor lock-in"; use "vendor swap is one adapter, not a rebuild." Recorded in C2.
+  2. **Per-principle fit-check on the four karma2 transplants** (C1's residual item) → next phase audit. Confirm each transplanted principle fits Padhanam's situation on its own merits rather than on having worked in karma2.
+  3. **`send_message` discards the resolver's output** → tied to the multi-channel activation trigger (D136 Primitive 1 User aggregate + second channel). When the `UserScopedChannelResolverAdapter` lands, `send_message` must consume the resolved `ChannelDestination` rather than its `channel` kwarg. Benign at Phase 2-A (single channel); a real routing bug the moment a second channel exists.
+
+```
+metrics:
+  classification: corrective
+  brief_started: 2026-05-28
+  session_started: 2026-05-28
+  session_closed: 2026-05-28
+  merged: 2026-05-28
+  close_state: clean (three commits, two charter ahead of one code per AC 9; one bucket-(c) port fixed; 179 messaging unit tests pass; 36/36 import-linter contracts kept; two honest disclosed stubs left byte-unchanged per anti-over-fix AC 6)
+  tests_passing: yes
+  principles_intact: yes
+  charter_touchpoints: charter/ciborra-phenomenological-audit.md (Corrections section C1+C2); charter/p12-audit-findings.md (Entry 16 live-count correction); contexts/messaging/application/ports/channel_resolver.py (not-yet-implemented marker); contexts/messaging/adapters/channel_resolver/static_config_channel_resolver_adapter.py (explicit del + docstring); tests/unit/contexts/messaging/adapters/test_static_config_channel_resolver_adapter.py (not-yet-implemented contract test); log/sessions.md (this entry)
+  corrects: charter/ciborra-phenomenological-audit.md (sections 1 + 5); charter/p12-audit-findings.md (Entry 16); contexts/messaging ChannelResolver over-claim (shipped S53/D144)
   corrected_by:
 ```
