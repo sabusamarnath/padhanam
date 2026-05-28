@@ -98,6 +98,54 @@ class FakeMessageDeliveryPort:
         )
 
 
+class FakeFiredTriggersRepository:
+    """In-memory FiredTriggersRepository simulating the four-tuple UNIQUE (D147).
+
+    ``insert_or_skip`` returns True on a fresh four-tuple and False on
+    a duplicate, mirroring the Postgres ON CONFLICT DO NOTHING
+    semantics. A ``None`` idempotency_key is treated as a distinct
+    key per insertion (mirroring Postgres NULL semantics where
+    multiple NULL rows are permitted) — each MANUAL trigger inserts
+    fresh. The ``inserted`` list records every successful insertion
+    keyed by tenant for tenant-isolation assertions.
+    """
+
+    def __init__(self) -> None:
+        self._seen: set[tuple[str, str, str, str]] = set()
+        self.inserted: list[tuple[str, str, str, str | None]] = []
+        self._null_counter = 0
+
+    async def insert_or_skip(
+        self,
+        *,
+        tenant_context: TenantContext,
+        user_id: str,
+        trigger_type: str,
+        idempotency_key: str | None,
+    ) -> bool:
+        if idempotency_key is None:
+            # Postgres permits multiple NULL rows under a UNIQUE
+            # constraint; each null-keyed insert is fresh.
+            self._null_counter += 1
+            self.inserted.append(
+                (str(tenant_context.tenant_id), user_id, trigger_type, None)
+            )
+            return True
+        key = (
+            str(tenant_context.tenant_id),
+            user_id,
+            trigger_type,
+            idempotency_key,
+        )
+        if key in self._seen:
+            return False
+        self._seen.add(key)
+        self.inserted.append(
+            (str(tenant_context.tenant_id), user_id, trigger_type, idempotency_key)
+        )
+        return True
+
+
 class FakeChannelResolver:
     """Returns the configured destination; records resolution requests.
 

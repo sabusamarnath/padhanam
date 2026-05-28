@@ -1,17 +1,19 @@
 """SQLAlchemy Core table definitions for the messaging per-tenant tables.
 
-Two tables — ``messages`` (the Message aggregate root per D129) and
+Three tables — ``messages`` (the Message aggregate root per D129),
 ``pending_clarifications`` (the multi-turn conversation state per
-D134, S47). Migrations
-``alembic/tenant/versions/0019_messaging_substrate`` and
-``0021_pending_clarifications`` ship the tables on every per-tenant
-database; the definitions here must stay in lockstep with those
-migrations.
+D134, S47), and ``fired_triggers`` (the broadcast idempotency
+substrate per D147, S54). Migrations
+``alembic/tenant/versions/0019_messaging_substrate``,
+``0021_pending_clarifications``, and ``0025_fired_triggers`` ship the
+tables on every per-tenant database; the definitions here must stay
+in lockstep with those migrations.
 
 SQLAlchemy 2.0 Core — no DeclarativeBase, no ORM, mirroring the
 intake precedent. CHECK constraints, the ``intake_id`` foreign key,
-and the PENDING-status partial unique index live in the migrations;
-these definitions carry columns and indexes for query building.
+the PENDING-status partial unique index, and the fired_triggers
+UNIQUE constraint live in the migrations; these definitions carry
+columns and indexes for query building.
 """
 
 from __future__ import annotations
@@ -87,4 +89,27 @@ pending_clarifications = sa.Table(
 )
 
 
-__all__ = ["messages", "metadata", "pending_clarifications"]
+fired_triggers = sa.Table(
+    "fired_triggers",
+    metadata,
+    sa.Column("id", pg.UUID(as_uuid=False), primary_key=True),
+    sa.Column("tenant_id", pg.UUID(as_uuid=False), nullable=False),
+    sa.Column("user_id", sa.Text, nullable=False),
+    sa.Column("trigger_type", sa.Text, nullable=False),
+    sa.Column("idempotency_key", sa.Text, nullable=True),
+    sa.Column(
+        "fired_at",
+        sa.TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=sa.text("now()"),
+    ),
+    sa.Index(
+        "ix_fired_triggers_tenant_user_type",
+        "tenant_id",
+        "user_id",
+        "trigger_type",
+    ),
+)
+
+
+__all__ = ["fired_triggers", "messages", "metadata", "pending_clarifications"]
