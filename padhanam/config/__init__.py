@@ -1,4 +1,5 @@
 from padhanam.config.base import PadhanamSettings, SecretManagerSource
+from padhanam.config.calendar import CalendarSettings
 from padhanam.config.graph import Neo4jSettings
 from padhanam.config.inference import (
     PRICING_TABLE,
@@ -18,6 +19,7 @@ from padhanam.config.tenancy import ControlPlaneSettings, TenantPostgresSettings
 
 __all__ = [
     "AuthBackend",
+    "CalendarSettings",
     "ControlPlaneSettings",
     "CostBreakdown",
     "InferenceSettings",
