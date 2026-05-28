@@ -28,3 +28,7 @@ class SyncTokenExpiredError(Exception):
     The pipeline must clear its stored sync token and perform a full
     resync without a sync token.
     """
+
+
+class NoSuchConnectionError(Exception):
+    """The requested calendar connection does not exist for the tenant."""
