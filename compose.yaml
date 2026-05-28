@@ -461,6 +461,103 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # Nango self-hosted (Nango provisioning session, prerequisite to S55
+  # calendar). Separate tool-service per D14: Padhanam consumes it over
+  # HTTP from the calendar context (S55) and email context (S56); no
+  # vendor SDK enters domain code. Free self-hosting scope is Auth +
+  # Proxy only — Syncs, Functions, and Webhooks are Enterprise — which is
+  # why the calendar plan is pull-on-demand via Proxy (see
+  # charter/deferred-decisions.md "Calendar tool service" and the
+  # 2026-05-28 calendar-retrieval-design captures entry). Reconciled
+  # against the upstream compose (NangoHQ/nango master) and Docker Hub at
+  # 2026-05-28; the upstream `nango` network, the providers.yaml source
+  # mount, and the optional nango-redis are dropped (see below).
+  #
+  # Port gotcha (NangoHQ/nango issue #5305, 2026-01-24): the published
+  # image bakes PORT=8080 and resolves SERVER_PORT -> PORT -> 3003, so a
+  # naive 3003:3003 mapping leaves the server listening on 8080 and
+  # unreachable. Resolved by setting SERVER_PORT explicitly so the server
+  # listens on the same port the mapping publishes.
+  #
+  # No Caddy route and no Elasticsearch: the dashboard and the drop-in
+  # OAuth Connect UI are reached by the operator over a loopback-only host
+  # binding (the S5-rule dev exception, same shape as
+  # postgres-control-plane and padhanam-api), and NANGO_LOGS_ENABLED=false
+  # sends logs to stdout so the optional Elasticsearch service is omitted.
+  # Redis is omitted too: the free Auth+Proxy server config references no
+  # Redis env (the upstream nango-redis serves Enterprise sync/
+  # orchestration, out of scope). Production swaps nango-db for an
+  # external managed Postgres per local-first.
+  nango-db:
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    environment:
+      POSTGRES_USER: ${NANGO_DB_USER}
+      POSTGRES_PASSWORD: ${NANGO_DB_PASSWORD}
+      POSTGRES_DB: ${NANGO_DB_NAME}
+    volumes:
+      - nango_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  nango-server:
+    image: nangohq/nango-server:hosted-0.70.5@sha256:12f35eb47c0b73c071a72bf8cc476b7b992898cda89addfb26a8ef6b09327938
+    # Published image is linux/amd64 only; runs under emulation on Apple
+    # Silicon / ARM (the runbook warns the operator).
+    platform: linux/amd64
+    depends_on:
+      nango-db:
+        condition: service_healthy
+    # Loopback-only host binding (S5-rule dev exception, scoped to
+    # 127.0.0.1): the operator's browser reaches the dashboard on
+    # SERVER_PORT and the OAuth Connect UI on CONNECT_UI_PORT to establish
+    # the Google Calendar connection. Production removes these bindings.
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-3003}:${SERVER_PORT:-3003}"
+      - "127.0.0.1:${CONNECT_UI_PORT:-3009}:${CONNECT_UI_PORT:-3009}"
+    environment:
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY}
+      NANGO_DB_USER: ${NANGO_DB_USER}
+      NANGO_DB_PASSWORD: ${NANGO_DB_PASSWORD}
+      NANGO_DB_HOST: nango-db
+      NANGO_DB_NAME: ${NANGO_DB_NAME}
+      NANGO_DB_PORT: "5432"
+      NANGO_DB_SSL: "false"
+      RECORDS_DATABASE_URL: postgresql://${NANGO_DB_USER}:${NANGO_DB_PASSWORD}@nango-db:5432/${NANGO_DB_NAME}
+      # Port-gotcha resolution (#5305): SERVER_PORT overrides the image's
+      # baked PORT=8080 so the server listens on the published port.
+      SERVER_PORT: ${SERVER_PORT:-3003}
+      NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
+      NANGO_PUBLIC_SERVER_URL: ${NANGO_PUBLIC_SERVER_URL:-http://localhost:3003}
+      CONNECT_UI_PORT: ${CONNECT_UI_PORT:-3009}
+      FLAG_SERVE_CONNECT_UI: "true"
+      # Dashboard Basic Auth on, matching the project's auth-on posture.
+      FLAG_AUTH_ENABLED: "true"
+      NANGO_DASHBOARD_USERNAME: ${NANGO_DASHBOARD_USERNAME}
+      NANGO_DASHBOARD_PASSWORD: ${NANGO_DASHBOARD_PASSWORD}
+      # Elasticsearch omitted; logs to stdout.
+      NANGO_LOGS_ENABLED: "false"
+      LOG_LEVEL: info
+      # Not in the upstream compose; included for the project's
+      # telemetry-off posture (harmless if the image ignores it).
+      TELEMETRY: "false"
+    # TCP-connect check on the resolved SERVER_PORT: path-independent and
+    # uses node (the app runtime, guaranteed on PATH), so it does not
+    # assume wget. It confirms exactly what #5305 breaks — the server
+    # listening on the published port. The runbook does the richer HTTP
+    # /health check from the host.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('net').connect(Number(process.env.SERVER_PORT||3003),'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   postgres_control_plane_data:
@@ -476,3 +573,4 @@ volumes:
   ollama_data:
   neo4j_data:
   neo4j_logs:
+  nango_db_data:
