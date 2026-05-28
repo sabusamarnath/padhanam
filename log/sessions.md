@@ -2302,3 +2302,51 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## 2026-05-28 — [Prune-and-reframe] Build-at-second-instance retirement + two-threshold rule (standalone strategic-mode, charter-only, prune rule's first exercise)
+roles: analyst, architect, technical writer
+mode: strategic (deliverable is a methodology.md revision; methodology writes are reserved to strategic-mode / audit-boundary promotion per D47). Opened in strategic mode deliberately — session B opened as build and had to self-correct; not repeated here.
+
+A standalone strategic-mode methodology session at the Phase-2-A boundary, the **prune rule's first exercise** (the rule was built in session B, commit `b112a85`). HEAD at open: `a2075dd` (clean tree). Charter-only: `git diff --stat HEAD~2 HEAD` shows `charter/methodology.md` as the sole file across both upgrade commits. No vendor specifics touched, so no vendor-documentation reconciliation was required.
+
+- Code-evidence reconciliation (the reframe's entire justification — verified against the tree at HEAD `a2075dd`, confirming session A's inventory still holds):
+  - *Early-build justified (second adapter structurally guaranteed, reached).* `MetaClassifier` → two real adapters: `RuleBasedMetaClassifierAdapter` ([contexts/messaging/adapters/rule_based_meta_classifier.py:50](rule_based_meta_classifier.py)), `LlmMetaClassifierAdapter` ([contexts/messaging/adapters/llm_meta_classifier.py:43](llm_meta_classifier.py)). `MessageDeliveryPort` → two real adapters: `LocalEchoMessageDeliveryAdapter` ([contexts/messaging/adapters/outbound/local_echo/local_echo_message_delivery.py:28](local_echo_message_delivery.py)), `TwilioMessageDeliveryAdapter` ([contexts/messaging/adapters/outbound/twilio/twilio_message_delivery.py:93](twilio_message_delivery.py)).
+  - *Early-build a drift (second instance merely anticipated).* `ChannelResolver` → one adapter: `StaticConfigChannelResolverAdapter` ([contexts/messaging/adapters/channel_resolver/static_config_channel_resolver_adapter.py:31](static_config_channel_resolver_adapter.py)), built for a second channel that does not exist; became the input-discarding stub corrected in session A. The evidence holds; the reframe was safe to write.
+
+- Produced (two commits, both `charter/methodology.md`):
+  - **Commit 1** (`baa3cea`): the append-only retirement record under the prune rule — a new `### Retired disciplines` log, first entry retiring the loose build-at-second-instance form via criterion 3, with the code evidence above and the supersession pointer.
+  - **Commit 2** (`<this commit>`): the `## Abstraction-threshold rule (domain and integration)` section superseding the loose form (domain: third, unchanged; integration: second-when-structurally-guaranteed, with the checkable tell); the line-415 interface-versus-implementation reference annotated as superseded so no second live abstraction-threshold discipline remains; the v5 version-log entry naming the Phase-1-to-2 refinement and recording that it dissolves the audit's Care-section finding.
+
+- Reflection prompts answered:
+
+  1. **Did a discipline actually die?** Yes — not a relabelling. What died: the *uniform early-build instinct* — the unconditional permission to commit an integration interface at the second instance, ship one adapter, and defer the rest, regardless of whether the second adapter was real. What survived: early-build under a *new precondition* the loose form did not have — the second adapter must be structurally guaranteed (already exists or committed this phase). The test for a real death is whether the new rule forbids something the old one permitted: it does. The loose form permitted ChannelResolver's early build; the two-threshold rule forbids it (no nameable real second adapter). A relabelling would permit exactly the same set of builds under a new name; this narrows the permitted set, so a discipline genuinely died and a narrower one took its place.
+
+  2. **Checkable tell.** Quoted: *"Before building an integration interface early, name the second adapter and confirm it exists or is committed this phase. If you cannot name a real second adapter, the second instance is merely anticipated; wait. The tell is checkable, not a judgment call: a named, currently-existing-or-this-phase-committed second adapter, or no early build."* Walked against ChannelResolver: at S53 the only candidate second adapter was the `UserScopedChannelResolverAdapter` for a second channel that did not exist and was explicitly deferred (D136 Primitive 1 User aggregate + a second channel, Phase 2-B+) — so the builder could not name a second adapter that exists or is committed *this phase*, only a future-maybe. The tell returns "merely anticipated; wait." It would have stopped ChannelResolver's early build. It is strong enough because it is binary and evidence-bound (a name plus a commitment, or no build), not a reading of intent — the same failure (no real second instance) that produced the stub is exactly what the tell checks for.
+
+  3. **Drift dissolved or relabelled?** Dissolved. The named justification the early-build now rests on: *integration boundary with a structurally-guaranteed second instance.* Before the reframe, MetaClassifier's and MessageDeliveryPort's early builds and ChannelResolver's early build were all permitted by the same unstated instinct — which is why the audit read uniform build-upfront as anticipatory control. After the reframe, the permitted early builds (MetaClassifier, MessageDeliveryPort) carry that named principle as their justification, and the unjustified one (ChannelResolver) is ruled out by the same principle. The drift was "early-build justified by nothing nameable, reading as control"; it is dissolved by giving the justified early-builds a name and forbidding the rest, not by renaming the old permission. The named justification is pointable: the integration-boundary bullet and the tell in the Abstraction-threshold rule.
+
+  4. **Sub-check calibration (forward-carry).** This reframe is a worked instance of the threshold-supersession class that session B's Finding 1 decode sub-check ("does this discipline move a threshold or supersede a principle the method already set, without naming the change as a drift?") is meant to catch automatically. Recorded as the calibration case for that sub-check: the next phase audit, when it adds the sub-check (its mandatory opening move per B's forward-carry), can calibrate against this known case — a threshold that moved from three (domain) to two (integration) unnamed, read as drift, then named and split — rather than inventing a synthetic example. The sub-check itself is *not* added this session (out of scope; it is about the decode step's general future capability, not this specific reframe).
+
+methodology: The prune rule's first exercise produced a genuine narrowing (uniform early-build permission died; conditioned early-build survived), which is first evidence the death rule has teeth rather than being decorative — paired with session B's observation that the rule surfaced its first candidate in the same session it was written. The reframe also demonstrates the decode→prune→reframe loop end to end: the Ciborra decode found the drift (Care section), the prune rule retired the discipline that masked it, and the two-threshold rule named the refinement that dissolves it. Per D47 the methodology.md write is legitimate as strategic-mode audit-boundary promotion.
+
+- Decisions: the supersession (retire the loose build-at-second-instance form; install the two-threshold Abstraction-threshold rule) is the session's decision, recorded as version-log **v5**. No new D-entry — confirmed against the file: the methodology document is the living-hypothesis surface (D113) within D40's existing measurement-and-discipline commitment, revised by version-log entry rather than per-revision D-entry, matching session B's v4 handling.
+
+- Tests: none; charter-only. `git diff --stat HEAD~2 HEAD` confirms `charter/methodology.md` is the sole file touched (AC 9).
+
+- Forward-carry items (to the next phase audit; none executed here):
+  1. **Decode sub-check calibration (from prompt 4).** This session is the worked example for session B's Finding 1 threshold-supersession sub-check. The next phase audit adds the sub-check as its opening move and calibrates it against this case.
+
+```
+metrics:
+  classification: reframe
+  brief_started: 2026-05-28
+  session_started: 2026-05-28
+  session_closed: 2026-05-28
+  merged: 2026-05-28
+  close_state: clean (two charter commits, methodology.md only per AC 9; loose build-at-second-instance retired via the prune rule's first exercise; two-threshold rule installed; loose form not left live; Phase-1-to-2 refinement named, dissolving the Ciborra Care-section finding)
+  tests_passing: n/a
+  principles_intact: yes
+  charter_touchpoints: charter/methodology.md (Retired disciplines log + build-at-second-instance retirement record under the prune rule; Abstraction-threshold rule section; interface-versus-implementation line-415 supersession annotation; v5 version-log entry); log/sessions.md (this entry)
+  corrects:
+  corrected_by:
+```
