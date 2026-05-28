@@ -535,8 +535,13 @@ services:
       NANGO_PUBLIC_SERVER_URL: ${NANGO_PUBLIC_SERVER_URL:-http://localhost:3003}
       CONNECT_UI_PORT: ${CONNECT_UI_PORT:-3009}
       FLAG_SERVE_CONNECT_UI: "true"
-      # Dashboard Basic Auth on, matching the project's auth-on posture.
-      FLAG_AUTH_ENABLED: "true"
+      # Dashboard auth. FLAG_AUTH_ENABLED=false disables Nango's
+      # email-based login/signup and, together with the dashboard
+      # username/password, fronts the dashboard with HTTP Basic Auth
+      # (the NangoHQ/nango .env.example convention). Setting it true
+      # instead forces the email-account signup flow, which is wrong for
+      # a single-operator loopback-only dev instance.
+      FLAG_AUTH_ENABLED: "false"
       NANGO_DASHBOARD_USERNAME: ${NANGO_DASHBOARD_USERNAME}
       NANGO_DASHBOARD_PASSWORD: ${NANGO_DASHBOARD_PASSWORD}
       # Elasticsearch omitted; logs to stdout.

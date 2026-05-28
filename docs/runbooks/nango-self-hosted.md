@@ -80,10 +80,14 @@ first suspect — see Troubleshooting.
 
 ## Stage 3 — Dashboard access
 
-Open `http://localhost:3003` in the browser. Authenticate with Basic Auth using
-`NANGO_DASHBOARD_USERNAME` / `NANGO_DASHBOARD_PASSWORD` from `.env`
-(`FLAG_AUTH_ENABLED=true`). Note the **secret key** the dashboard shows for API
-access — you need it for the Proxy verification in stage 6.
+Open `http://localhost:3003` in the browser. The dashboard is fronted by HTTP
+Basic Auth — `FLAG_AUTH_ENABLED=false` disables Nango's email login/signup and
+turns `NANGO_DASHBOARD_USERNAME` / `NANGO_DASHBOARD_PASSWORD` into the Basic Auth
+credentials. Enter those from `.env` at the browser's native auth prompt (a
+"valid email address" form instead means `FLAG_AUTH_ENABLED` is still `true` —
+set it `false` and recreate the container). Note the **secret key** the
+dashboard shows for API access — you need it for the Proxy verification in
+stage 6.
 
 ## Stage 4 — Configure the Google Calendar integration
 
