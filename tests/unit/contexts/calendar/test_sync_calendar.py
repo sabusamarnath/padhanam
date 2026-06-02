@@ -1,8 +1,13 @@
-"""Unit tests for the trigger-agnostic sync_calendar pipeline (D148).
+"""Unit tests for the trigger-agnostic sync_calendar pipeline (D148, D149).
 
-In-memory fakes for the four ports exercise full sync, incremental sync,
-the 410 -> full-resync path, tombstoning, content-change detection, and
-id/created_at reuse on update — without live infrastructure.
+The active path is a scoped full pull on every refresh (D149): no sync
+token is read or written, an absent ``next_sync_token`` is expected, and
+cancellations arrive as ``status=cancelled`` tombstones via the full
+pull's ``show_deleted=True``. In-memory fakes for the four ports exercise
+the full-pull store loop, content-change detection, id/created_at reuse,
+tombstoning, the absent-token case, and page-draining-before-tombstone —
+without live infrastructure. The incremental syncToken/410 machinery is
+covered as a dormant path in ``test_nango_proxy_calendar_adapter.py``.
 """
 
 from __future__ import annotations
@@ -20,10 +25,7 @@ from contexts.calendar.domain.calendar_event import (
     CalendarEventStatus,
 )
 from contexts.calendar.domain.connection import Connection
-from contexts.calendar.domain.errors import (
-    NoSuchConnectionError,
-    SyncTokenExpiredError,
-)
+from contexts.calendar.domain.errors import NoSuchConnectionError
 from contexts.calendar.domain.meeting import meeting_from_event
 from contexts.calendar.domain.sync_trigger import CalendarSyncTrigger
 from shared_kernel.tenant_context import TenantContext
@@ -66,38 +68,29 @@ def _event(event_id: str, *, summary: str = "Sync", cancelled: bool = False) -> 
 
 
 class FakeEventSource:
-    def __init__(
-        self,
-        *,
-        full_pages: list[CalendarEventPage] | None = None,
-        incremental_pages: list[CalendarEventPage] | None = None,
-        raise_410_on_incremental: bool = False,
-    ) -> None:
+    def __init__(self, *, full_pages: list[CalendarEventPage] | None = None) -> None:
         self._full = list(full_pages or [])
-        self._incremental = list(incremental_pages or [])
-        self._raise_410 = raise_410_on_incremental
         self.full_calls = 0
         self.incremental_calls = 0
+        self.last_show_deleted: bool | None = None
 
-    async def list_events_full(self, **_kwargs) -> CalendarEventPage:
+    async def list_events_full(self, *, show_deleted: bool = True, **_kwargs) -> CalendarEventPage:
         self.full_calls += 1
+        self.last_show_deleted = show_deleted
         return self._full.pop(0) if self._full else CalendarEventPage(events=())
 
-    async def list_events_incremental(self, **_kwargs) -> CalendarEventPage:
+    async def list_events_incremental(self, **_kwargs) -> CalendarEventPage:  # pragma: no cover
+        # Dormant under D149 — the active pipeline never calls this.
         self.incremental_calls += 1
-        if self._raise_410:
-            raise SyncTokenExpiredError("410")
-        return (
-            self._incremental.pop(0)
-            if self._incremental
-            else CalendarEventPage(events=())
-        )
+        return CalendarEventPage(events=())
 
 
 class FakeConnectionRepo:
     def __init__(self, connection: Connection | None, token: str | None = None) -> None:
         self._connection = connection
         self.token = token
+        self.get_token_calls = 0
+        self.set_token_calls = 0
 
     async def save_connection(self, **_kwargs) -> None:  # pragma: no cover
         pass
@@ -106,9 +99,13 @@ class FakeConnectionRepo:
         return self._connection
 
     async def get_sync_token(self, *, tenant_context, connection_id) -> str | None:
+        # Dormant under D149; the active path must not call this.
+        self.get_token_calls += 1
         return self.token
 
     async def set_sync_token(self, *, tenant_context, connection_id, sync_token) -> None:
+        # Dormant under D149; the active path must not call this.
+        self.set_token_calls += 1
         self.token = sync_token
 
 
@@ -151,12 +148,12 @@ def _run(source, conns, store, **kwargs):
     )
 
 
-def test_full_sync_stores_events_and_persists_sync_token() -> None:
+def test_full_pull_stores_events_and_writes_no_sync_token() -> None:
+    # A bounded full sync returns no nextSyncToken; the active path must
+    # not depend on one and must not write connections.sync_token (D149).
     source = FakeEventSource(
         full_pages=[
-            CalendarEventPage(
-                events=(_event("a"), _event("b")), next_sync_token="TOK1"
-            )
+            CalendarEventPage(events=(_event("a"), _event("b")), next_sync_token=None)
         ]
     )
     conns = FakeConnectionRepo(_connection(), token=None)
@@ -166,47 +163,37 @@ def test_full_sync_stores_events_and_persists_sync_token() -> None:
     assert result.mode == "full"
     assert result.upserted == 2
     assert set(result.changed_event_ids) == {"a", "b"}
-    assert conns.token == "TOK1"
     assert source.full_calls == 1
+    # The full pull asks for deletions so cancellations tombstone.
+    assert source.last_show_deleted is True
+    # No sync-token machinery touched on the active path.
+    assert conns.set_token_calls == 0
+    assert conns.get_token_calls == 0
+    assert conns.token is None
+    assert source.incremental_calls == 0
 
 
-def test_incremental_sync_uses_stored_token() -> None:
+def test_absent_token_full_pull_does_not_raise() -> None:
+    # The defining D149 case: a completed full pull with no token is the
+    # normal, expected outcome — never an error.
     source = FakeEventSource(
-        incremental_pages=[
-            CalendarEventPage(events=(_event("a", summary="Updated"),), next_sync_token="TOK2")
-        ]
+        full_pages=[CalendarEventPage(events=(_event("a"),), next_sync_token=None)]
     )
-    conns = FakeConnectionRepo(_connection(), token="TOK1")
+    conns = FakeConnectionRepo(_connection(), token=None)
     store = FakeMeetingStore()
-    result = _run(source, conns, store)
+    result = _run(source, conns, store)  # must not raise
 
-    assert result.mode == "incremental"
-    assert source.incremental_calls == 1
-    assert source.full_calls == 0
-    assert conns.token == "TOK2"
-
-
-def test_410_triggers_full_resync() -> None:
-    source = FakeEventSource(
-        raise_410_on_incremental=True,
-        full_pages=[CalendarEventPage(events=(_event("a"),), next_sync_token="FRESH")],
-    )
-    conns = FakeConnectionRepo(_connection(), token="STALE")
-    store = FakeMeetingStore()
-    result = _run(source, conns, store)
-
-    assert result.did_full_resync_after_410 is True
     assert result.mode == "full"
-    assert conns.token == "FRESH"
-    assert source.full_calls == 1
+    assert result.fetched == 1
+    assert conns.set_token_calls == 0
 
 
-def test_cancelled_event_is_tombstoned() -> None:
+def test_cancelled_event_is_tombstoned_via_full_pull() -> None:
     source = FakeEventSource(
         full_pages=[
             CalendarEventPage(
                 events=(_event("a"), _event("b", cancelled=True)),
-                next_sync_token="TOK",
+                next_sync_token=None,
             )
         ]
     )
@@ -217,6 +204,29 @@ def test_cancelled_event_is_tombstoned() -> None:
     assert result.tombstoned == 1
     assert "b" in store.tombstoned
     assert "a" in store.by_event
+
+
+def test_full_pull_drains_all_pages_before_tombstone_pass() -> None:
+    # Page 1 carries a live event and a next_page_token; page 2 carries a
+    # cancellation. The store loop runs only after both pages are drained,
+    # so the cancellation on page 2 still tombstones and no live event is
+    # processed against a partial window.
+    source = FakeEventSource(
+        full_pages=[
+            CalendarEventPage(events=(_event("a"),), next_page_token="P2"),
+            CalendarEventPage(events=(_event("b", cancelled=True),), next_page_token=None),
+        ]
+    )
+    conns = FakeConnectionRepo(_connection(), token=None)
+    store = FakeMeetingStore()
+    result = _run(source, conns, store)
+
+    assert source.full_calls == 2
+    assert result.fetched == 2
+    assert result.upserted == 1
+    assert "a" in store.by_event
+    assert result.tombstoned == 1
+    assert "b" in store.tombstoned
 
 
 def test_unchanged_content_not_marked_changed_and_id_reused() -> None:
@@ -232,11 +242,11 @@ def test_unchanged_content_not_marked_changed_and_id_reused() -> None:
     store.by_event["a"] = existing
 
     source = FakeEventSource(
-        incremental_pages=[
-            CalendarEventPage(events=(_event("a", summary="Sync"),), next_sync_token="T")
+        full_pages=[
+            CalendarEventPage(events=(_event("a", summary="Sync"),), next_sync_token=None)
         ]
     )
-    conns = FakeConnectionRepo(_connection(), token="OLD")
+    conns = FakeConnectionRepo(_connection(), token=None)
     result = _run(source, conns, store)
 
     # Same content -> not flagged for re-index; id + created_at preserved.

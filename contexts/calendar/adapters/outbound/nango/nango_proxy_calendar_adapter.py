@@ -7,13 +7,24 @@ wire format or Nango Proxy's headers; everything Google- or Nango-
 specific lives here (no-vendor-SDK-in-domain).
 
 Reconciled against the current Google Calendar API ``events.list`` docs
-(2026-05-28): ``syncToken`` is mutually exclusive with
-``timeMin``/``timeMax``/``q``/``orderBy``/``updatedMin`` (400 if mixed),
-so full and incremental sync are separate request shapes; an expired
-sync token returns ``410 GONE`` (→ SyncTokenExpiredError → full resync);
-cancelled events carry ``status: "cancelled"`` and are always present in
-incremental results. The sync path never sends ``q`` — search runs
-locally over the substrate.
+(2026-05-28, re-confirmed 2026-06-02): ``syncToken`` is mutually
+exclusive with ``timeMin``/``timeMax``/``q``/``orderBy``/``updatedMin``
+(400 if mixed), so full and incremental sync are separate request shapes;
+an expired sync token returns ``410 GONE`` (→ SyncTokenExpiredError). The
+sync path never sends ``q`` — search runs locally over the substrate.
+
+D149: the active pipeline uses the **full** sync only. A bounded full
+sync (``timeMin``/``timeMax``/``orderBy``) never returns ``nextSyncToken``
+(Google emits it only on an unbounded sync), so the full sync carries
+``showDeleted=true`` to surface cancelled events as ``status=cancelled``
+tombstones rather than relying on incremental deltas. ``list_events_incremental``
+and the 410 mapping remain for the dormant incremental path (reactivation
+trigger named in D149).
+
+Auth is ``Authorization: Bearer <secret>`` — self-hosted Nango (0.70.5)
+rejects HTTP Basic on the Proxy with a misleading ``not a UUID v4`` error
+even for a valid key, so the Bearer form is load-bearing, not incidental
+(pinned by a unit test).
 """
 
 from __future__ import annotations
@@ -75,11 +86,13 @@ class NangoProxyCalendarAdapter:
         page_token: str | None = None,
         calendar_id: str = "primary",
         single_events: bool = True,
+        show_deleted: bool = True,
     ) -> CalendarEventPage:
         params: dict[str, str] = {
             "timeMin": _rfc3339(time_min),
             "timeMax": _rfc3339(time_max),
             "singleEvents": "true" if single_events else "false",
+            "showDeleted": "true" if show_deleted else "false",
             "maxResults": str(self._max_results),
         }
         if single_events:
