@@ -383,7 +383,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: padhanam-api:dev@sha256:11957175c799c10f3327217e6b55ee84d4cb8290f761d1c2d1b91842601e1663
+    image: padhanam-api:dev@sha256:b69c6e0b7b45902d31d256345931169302d83e12782fc9757fe21ab226da1bb3
     depends_on:
       litellm:
         condition: service_healthy
@@ -453,6 +453,13 @@ services:
       WEBHOOK_TENANT_ID: ${WEBHOOK_TENANT_ID}
       WEBHOOK_JURISDICTION: ${WEBHOOK_JURISDICTION}
       WEBHOOK_URL: ${WEBHOOK_URL}
+      # Calendar: Nango Proxy reach + auth (P15/S55a, D148). Read by
+      # CalendarSettings in padhanam/config/calendar.py for the
+      # NangoProxyCalendarAdapter. NANGO_BASE_URL is the URL Padhanam uses
+      # to reach the Proxy; NANGO_SECRET_KEY is the dashboard secret key
+      # used as the Proxy bearer token. Values resolve from .env.
+      NANGO_BASE_URL: ${NANGO_BASE_URL}
+      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
