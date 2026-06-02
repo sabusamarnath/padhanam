@@ -1,0 +1,69 @@
+# Calendar-conversation gold-set fixture (D137, D138, D148, P15, S55b-1).
+#
+# Operator-shaped inputs paired with expected calendar-intent classifications.
+# Coverage: each of the five CalendarIntentType values (find_by_date_range,
+# find_by_attendee, find_by_title, find_next_meeting, unclear_calendar).
+# The intent_surface field selects the calendar-conversation prompt+schema
+# the D137 runner uses (the S51 parameterisation, extended at S55b-1).
+#
+# find_by_date_range is shared with the audit surface as a string; here it
+# means a calendar time-window query. The calendar surface is read-only
+# (D148: Google is the sole writer), so write requests ("schedule…",
+# "cancel…") map to unclear_calendar — a deliberate, defensible mapping a
+# future write surface would revisit (noted in the S55b-1 reflection).
+
+name: calendar_conversation_p15_s55b1
+intent_surface: calendar_conversation
+entries:
+  # ----- find_by_date_range (4) -----
+  - input_phrasing: "What's on my calendar today?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "What meetings do I have this week?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "Am I busy tomorrow?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "What does my schedule look like next week?"
+    expected_intent_class: find_by_date_range
+
+  # ----- find_by_attendee (4) -----
+  - input_phrasing: "Do I have any meetings with Ada?"
+    expected_intent_class: find_by_attendee
+  - input_phrasing: "When am I next meeting Bob?"
+    expected_intent_class: find_by_attendee
+  - input_phrasing: "Show me my meetings with sarah@example.com"
+    expected_intent_class: find_by_attendee
+  - input_phrasing: "Which meetings is the finance team on?"
+    expected_intent_class: find_by_attendee
+
+  # ----- find_by_title (4) -----
+  - input_phrasing: "When is the board sync?"
+    expected_intent_class: find_by_title
+  - input_phrasing: "What time is the quarterly business review?"
+    expected_intent_class: find_by_title
+  - input_phrasing: "Tell me about the Acme kickoff meeting"
+    expected_intent_class: find_by_title
+  - input_phrasing: "Details on the design review"
+    expected_intent_class: find_by_title
+
+  # ----- find_next_meeting (4) -----
+  - input_phrasing: "What's my next meeting?"
+    expected_intent_class: find_next_meeting
+  - input_phrasing: "What's coming up next?"
+    expected_intent_class: find_next_meeting
+  - input_phrasing: "When's my next call?"
+    expected_intent_class: find_next_meeting
+  - input_phrasing: "What do I have next on my calendar?"
+    expected_intent_class: find_next_meeting
+
+  # ----- unclear_calendar (4) -----
+  # Greetings and capability questions do not map to a read query.
+  - input_phrasing: "Hi there"
+    expected_intent_class: unclear_calendar
+  - input_phrasing: "What can you help me with?"
+    expected_intent_class: unclear_calendar
+  # Write requests are out of scope on the read-only calendar surface (D148);
+  # they map to unclear here until a write surface exists.
+  - input_phrasing: "Schedule a meeting with Ada tomorrow at 3pm"
+    expected_intent_class: unclear_calendar
+  - input_phrasing: "Cancel my 2pm today"
+    expected_intent_class: unclear_calendar

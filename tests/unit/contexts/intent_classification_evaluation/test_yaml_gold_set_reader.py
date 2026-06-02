@@ -27,6 +27,10 @@ _MIRROR_FIXTURE = (
     Path(__file__).resolve().parents[3]
     / "fixtures/intent_classification/mirror_conversation_gold_set.yaml"
 )
+_CALENDAR_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/calendar_conversation_gold_set.yaml"
+)
 
 
 def test_yaml_reader_loads_audit_conversation_fixture() -> None:
@@ -92,6 +96,22 @@ def test_yaml_reader_loads_mirror_conversation_fixture() -> None:
     assert "show_parent" in classes
     assert "show_siblings" in classes
     assert "unclear_mirror" in classes
+
+
+def test_yaml_reader_loads_calendar_conversation_fixture() -> None:
+    """S55b-1: fifth instance of the parameterised D137 substrate."""
+    reader = YamlGoldSetReader(path=_CALENDAR_FIXTURE)
+    gold_set = reader.get_gold_set("calendar_conversation_p15_s55b1")
+    assert gold_set.name == "calendar_conversation_p15_s55b1"
+    assert gold_set.intent_surface == "calendar_conversation"
+    assert len(gold_set.entries) >= 18
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    # Every calendar-conversation intent class has at least one entry.
+    assert "find_by_date_range" in classes
+    assert "find_by_attendee" in classes
+    assert "find_by_title" in classes
+    assert "find_next_meeting" in classes
+    assert "unclear_calendar" in classes
 
 
 def test_yaml_reader_loads_manual_entry_fixture_with_default_surface() -> None:

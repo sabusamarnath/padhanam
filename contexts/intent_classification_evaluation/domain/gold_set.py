@@ -59,6 +59,12 @@ INTENT_CLASSES: tuple[str, ...] = (
     "show_parent",
     "show_siblings",
     "unclear_mirror",
+    # Calendar-conversation surface (S55b-1, five classes). find_by_date_range
+    # is shared with the audit surface (same string) so it is not repeated.
+    "find_by_attendee",
+    "find_by_title",
+    "find_next_meeting",
+    "unclear_calendar",
 )
 
 
@@ -111,6 +117,7 @@ INTENT_SURFACES: tuple[str, ...] = (
     "audit_conversation",
     "dispatch_classifier",
     "mirror_conversation",
+    "calendar_conversation",
 )
 DEFAULT_INTENT_SURFACE: str = "manual_entry"
 
