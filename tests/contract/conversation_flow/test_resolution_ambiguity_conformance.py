@@ -70,6 +70,9 @@ from contexts.mirror_conversation.application.cell import (
 from contexts.mirror_conversation.application.ports.mirror_portfolio_reader import (  # noqa: E501
     MirrorCaseSummary,
 )
+from tests.contract.conversation_flow.test_calendar_conversation_conversation_flow import (  # noqa: E501
+    build_calendar_conversation_with_ambiguous_resolution,
+)
 
 
 # --------------------------------------------------------- manual_entry_cell
@@ -347,6 +350,13 @@ _AMBIGUOUS_RESOLUTION_FACTORIES = {
             purpose="mirror_query", actor_id="resolution-ambiguity-harness"
         ),
         ConversationInput(text="show me the Q3 portfolio review"),
+    ),
+    "calendar_conversation_cell": (
+        build_calendar_conversation_with_ambiguous_resolution,
+        ConversationInvocation(
+            purpose="calendar_query", actor_id="resolution-ambiguity-harness"
+        ),
+        ConversationInput(text="show me the Q3 portfolio review meeting"),
     ),
 }
 
