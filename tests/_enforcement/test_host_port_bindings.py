@@ -45,6 +45,27 @@ _ALLOWLIST: dict[str, tuple[str, ...]] = {
     # (127.0.0.1) keeps the binding off the LAN. Production manifests
     # remove the binding entirely.
     "postgres-control-plane": ("127.0.0.1:5433:5432",),
+    # Loopback-only host port for padhanam-api (added at 7af8e88 for
+    # webhook smoke testing — dev-only exception per S5; the allowlist
+    # sync was missed in that commit and restored at S55a-fix). The host
+    # reaches the API on 127.0.0.1:8000 for webhook/HTTP smoke without
+    # going through Caddy; the loopback prefix keeps it off the LAN.
+    # Production manifests remove the binding entirely.
+    "padhanam-api": ("127.0.0.1:8000:8000",),
+    # Loopback-only host ports for self-hosted Nango (added at the
+    # 2026-05-28 Nango provisioning session; allowlist sync missed there
+    # and restored at S55a-fix, 2026-06-02). The operator reaches the
+    # Nango dashboard (SERVER_PORT, default 3003) and the Connect UI
+    # (CONNECT_UI_PORT, default 3009) on loopback during dev bring-up and
+    # OAuth setup per docs/runbooks/nango-self-hosted.md; the 127.0.0.1
+    # prefix keeps both off the LAN (the S5-rule dev exception, as for
+    # postgres-control-plane). Padhanam itself reaches the Proxy over the
+    # Compose network (NANGO_BASE_URL=http://nango-server:3003), not via
+    # these host bindings. Production manifests remove them entirely.
+    "nango-server": (
+        "127.0.0.1:${SERVER_PORT:-3003}:${SERVER_PORT:-3003}",
+        "127.0.0.1:${CONNECT_UI_PORT:-3009}:${CONNECT_UI_PORT:-3009}",
+    ),
 }
 
 
