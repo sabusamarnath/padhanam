@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -19,7 +19,8 @@ help:
 	@echo "  smoke-llm   End-to-end smoke through LiteLLM: completion + Langfuse trace"
 	@echo "  scan        Trivy + pip-audit; gates session-closing commits (D25)"
 	@echo "  sbom        Generate SBOM (stub until real Python deps land in S7)"
-	@echo "  lint        Run import-linter against the architectural contracts"
+	@echo "  clean-pyc   Remove all __pycache__ and .pyc so enforcement runs from fresh bytecode"
+	@echo "  lint        Run import-linter against the architectural contracts (clears bytecode first)"
 	@echo "  test        Run the unit and contract test suites (default tier; excludes live_llm per D99)"
 	@echo "  test-live-llm  Run integration tests that exercise real LLM via LiteLLM/Ollama (D99)"
 	@echo "  migrate     Apply Alembic migrations: control-plane phase, then per-tenant phase against each registered tenant (D36)"
@@ -101,12 +102,21 @@ sbom:
 	@echo "SBOM generation lands in S7 with first Python deps."
 	@exit 0
 
-lint:
-	uv run lint-imports
-	uv run pytest tests/_enforcement/
+# Clear Python bytecode before enforcement so a stale .pyc can never
+# mask a red contract or carry a pre-rename co_filename into tracebacks
+# (the S55a-fix finding: the host-port-binding contract read red only
+# from clean bytecode). `pytest -p no:cacheprovider` additionally drops
+# pytest's own cache; this target drops the interpreter's __pycache__.
+clean-pyc:
+	@find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name '*.pyc' -delete 2>/dev/null || true
 
-test:
-	uv run pytest
+lint: clean-pyc
+	uv run lint-imports
+	uv run pytest -p no:cacheprovider tests/_enforcement/
+
+test: clean-pyc
+	uv run pytest -p no:cacheprovider
 
 # Live-LLM tier per D99. Default `make test` excludes these via the
 # `addopts = -m 'not live_llm'` config in pyproject.toml; this target
