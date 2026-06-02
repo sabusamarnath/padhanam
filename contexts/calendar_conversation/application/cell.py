@@ -29,12 +29,18 @@ structured ``CalendarConversationResponse``), ``intent_class``, and
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import UUID, uuid4
 
 from contexts.calendar.domain.meeting import Meeting
 from contexts.calendar.ports.meeting_repository import MeetingReader
+
+from contexts.calendar_conversation.application.ports.calendar_refresh import (
+    CalendarRefreshError,
+    CalendarRefreshPort,
+)
 
 from contexts.calendar_conversation.application.query_builder import (
     meetings_in_window,
@@ -151,6 +157,8 @@ class CalendarConversationCell:
         pending_clarification_reader: PendingClarificationReader,
         pending_clarification_repository: PendingClarificationRepository,
         audit_port: Any,
+        refresh_port: CalendarRefreshPort | None = None,
+        refresh_timeout_seconds: float = 2.0,
         originating_channel: str = "WHATSAPP",
         originating_intake_id: UUID | None = None,
         page_size: int = 10,
@@ -164,10 +172,13 @@ class CalendarConversationCell:
         self._pending_reader = pending_clarification_reader
         self._pending_repo = pending_clarification_repository
         self._audit_port = audit_port
+        self._refresh_port = refresh_port
+        self._refresh_timeout = refresh_timeout_seconds
         self._originating_channel = originating_channel
         self._originating_intake_id = originating_intake_id
         self._page_size = page_size
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._staleness_note: str | None = None
 
     # ------------------------------------------------------------------ open
     async def open(
@@ -196,6 +207,11 @@ class CalendarConversationCell:
         self, state: ConversationState, user_input: ConversationInput
     ) -> ConversationState:
         raw_text = user_input.text
+
+        # Refresh-before-answer (D150 Option A): refresh the calendar within
+        # the tier budget before querying; on timeout or failure, fall back
+        # to the cached store and carry a staleness note onto any answer.
+        await self._maybe_refresh()
 
         active = await self._pending_reader.get_active(
             tenant_id=self._actor.tenant_context.tenant_id,
@@ -259,6 +275,35 @@ class CalendarConversationCell:
             )
 
         return await self._handle_high_confidence(state=state, intent=intent)
+
+    # ------------------------------------------------------------- refresh
+    async def _maybe_refresh(self) -> None:
+        """Refresh the calendar within the tier budget (D150 Option A).
+
+        Sets ``self._staleness_note`` when the refresh times out or fails,
+        so any answer composed this turn carries the freshness caveat; a
+        successful (or absent) refresh clears it. Never raises — a refresh
+        miss must not fail the turn.
+        """
+        self._staleness_note = None
+        if self._refresh_port is None:
+            return
+        try:
+            await asyncio.wait_for(
+                self._refresh_port.refresh(
+                    tenant_context=self._actor.tenant_context
+                ),
+                timeout=self._refresh_timeout,
+            )
+        except asyncio.TimeoutError:
+            self._staleness_note = (
+                "Showing your cached calendar — the live refresh timed out."
+            )
+        except CalendarRefreshError:
+            self._staleness_note = (
+                "Showing your cached calendar — the live refresh is "
+                "currently unavailable."
+            )
 
     # ---------------------------------------------------------- intent extract
     async def _extract_intent(
@@ -370,14 +415,19 @@ class CalendarConversationCell:
     def _compose(
         self, meetings: list[Meeting], *, summary: str
     ) -> CalendarConversationResponse:
+        # The answer is drawn from the (possibly cached) Meeting store; if
+        # the turn's refresh fell back, the staleness note rides along (D150).
+        note = self._staleness_note
         if not meetings:
-            return _empty_response(f"No meetings {summary}.")
+            return CalendarConversationResponse(
+                text=f"No meetings {summary}.", staleness_note=note
+            )
         lines = [f"Meetings {summary}: {len(meetings)} found."]
         for m in meetings:
             lines.append(_summarise_meeting(m))
         cited = tuple(meeting_citation(m.id) for m in meetings)
         return CalendarConversationResponse(
-            text="\n".join(lines), cited_artefacts=cited
+            text="\n".join(lines), cited_artefacts=cited, staleness_note=note
         )
 
     # ----------------------------------------------------- dispatch medium
