@@ -55,6 +55,7 @@ KNOWN_TARGET_CELLS: frozenset[str] = frozenset(
         "manual_entry",
         "audit_conversation",
         "mirror_conversation",
+        "calendar_conversation",
         "dispatch_clarification",
     }
 )

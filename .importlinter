@@ -182,6 +182,13 @@ layers =
     contexts.mirror_conversation.application
     contexts.mirror_conversation.domain
 
+[importlinter:contract:layers-calendar-conversation]
+name = Calendar-conversation layers (hexagonal)
+type = layers
+layers =
+    contexts.calendar_conversation.application
+    contexts.calendar_conversation.domain
+
 [importlinter:contract:layers-daily-briefing]
 name = Daily-briefing layers (hexagonal)
 type = layers
