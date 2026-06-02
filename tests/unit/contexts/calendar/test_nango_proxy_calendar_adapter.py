@@ -1,10 +1,19 @@
-"""Unit tests for the Nango Proxy calendar adapter (D148).
+"""Unit tests for the Nango Proxy calendar adapter (D148, D149).
 
 Uses httpx.MockTransport to assert request construction (the verified
-headers; the vendor-reconciliation constraint that full sync never sends
-syncToken and incremental sync never sends timeMin/timeMax/q/orderBy) and
-response mapping (200 page, 410 -> SyncTokenExpiredError, auth -> config
-error, 5xx -> retryable error, cancelled tombstone).
+headers; the Bearer auth form Nango 0.70.5 requires; the full sync's
+show_deleted=true for tombstones; the vendor-reconciliation constraint
+that full sync never sends syncToken and incremental sync never sends
+timeMin/timeMax/q/orderBy) and response mapping (200 page, 410 ->
+SyncTokenExpiredError, auth -> config error, 5xx -> retryable error,
+cancelled tombstone).
+
+D149 note on MockTransport's limits: these tests return author-populated
+response bodies, so they verify the adapter *parses* a response shape —
+they cannot verify what real Google *emits*. The live S55a smoke is the
+gate for emit-side vendor contract (it caught that a bounded full sync
+returns no nextSyncToken). The incremental + 410 tests below cover the
+DORMANT path (no active caller under D149; reactivation trigger in D149).
 """
 
 from __future__ import annotations
@@ -106,6 +115,8 @@ def test_full_sync_request_shape_and_parsing() -> None:
     q = dict(req.url.params)
     assert "timeMin" in q and "timeMax" in q
     assert q["singleEvents"] == "true"
+    # D149: the full pull asks for deletions so cancellations tombstone.
+    assert q["showDeleted"] == "true"
     # Full sync must NOT carry syncToken or the free-text q (local search).
     assert "syncToken" not in q
     assert "q" not in q
@@ -122,7 +133,26 @@ def test_full_sync_request_shape_and_parsing() -> None:
     assert page.events[1].status is CalendarEventStatus.CANCELLED
 
 
+def test_proxy_auth_is_bearer_not_basic() -> None:
+    # Pin the auth form. Nango 0.70.5 rejects HTTP Basic on the Proxy with
+    # a misleading "not a UUID v4" error even for a valid key, so the
+    # Bearer form is load-bearing (captures 2026-06-02 [S55a-fix] Finding 3).
+    # A regression to Basic must fail here, not at a live smoke.
+    adapter, seen = _adapter(lambda req: httpx.Response(200, json=_PAGE_BODY))
+    asyncio.run(
+        adapter.list_events_full(
+            connection=_connection(), time_min=_T0, time_max=_T1
+        )
+    )
+    auth = seen[0].headers["Authorization"]
+    assert auth == "Bearer sek_test"
+    assert auth.startswith("Bearer ")
+    assert not auth.startswith("Basic ")
+
+
 def test_incremental_sync_sends_only_sync_token() -> None:
+    # Dormant path under D149 (no active caller); kept covered for the
+    # reactivation trigger named in D149.
     adapter, seen = _adapter(lambda req: httpx.Response(200, json=_PAGE_BODY))
     asyncio.run(
         adapter.list_events_incremental(
@@ -137,6 +167,8 @@ def test_incremental_sync_sends_only_sync_token() -> None:
 
 
 def test_410_raises_sync_token_expired() -> None:
+    # Dormant path under D149 (no active caller); the 410 mapping is kept
+    # for the reactivation trigger named in D149.
     adapter, _ = _adapter(lambda req: httpx.Response(410, text="Gone"))
     with pytest.raises(SyncTokenExpiredError):
         asyncio.run(
