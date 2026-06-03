@@ -66,10 +66,12 @@ class TriggerContext:
 
     ``trigger_type`` discriminates the trigger source. ``metadata`` is
     an implementer-owned open slot the trigger source populates with
-    per-type metadata (e.g., the THRESHOLD_CROSSED trigger carries
-    ``threshold_rule_id`` plus ``matched_audit_event_id``;
-    DAILY_SCHEDULED carries no extra metadata at the Phase 2-A first
-    instance). ``triggered_at`` is the ISO timestamp of trigger entry.
+    per-type metadata (e.g., the THRESHOLD_CROSSED trigger carries the
+    crossing fields from ``RuleMatch.to_trigger_metadata`` — ``rule_id``,
+    ``google_event_id``, ``crossing_identity``, and the displayable
+    fields — per D153; DAILY_SCHEDULED carries no extra metadata at the
+    Phase 2-A first instance). ``triggered_at`` is the ISO timestamp of
+    trigger entry.
     ``trigger_id`` is the platform-assigned identifier for chain
     traversability — the BROADCAST_INITIATED audit event references
     this id.

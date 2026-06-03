@@ -23,9 +23,9 @@ ConversationFlow implementer's response value object satisfies
 ``CitedResponse`` structurally by carrying three citation tuple fields.
 ``ArtefactCitation`` is the typed value object that populates
 ``cited_artefacts``: artefact id plus artefact-type discriminator. The
-Phase 2-A discriminator union is ``"case"``, ``"data_point"``, and
-``"meeting"`` (the calendar Meeting added at S55a, D148); future artefact
-types (``"email"`` at S56) extend the union.
+Phase 2-A discriminator union is ``"case"``, ``"data_point"``,
+``"meeting"`` (the calendar Meeting added at S55a, D148), and ``"email"``
+(added at S56a, D151); future artefact types extend the union.
 
 No implementer registers at S45 — audit-conversation (5.1) and
 portfolio mirror-conversation (4.1) implementers land at P14+. The
@@ -166,9 +166,10 @@ class ArtefactCitation:
     surfaces artefact type at the citation surface because artefacts are
     heterogeneous in ``cited_artefacts``: audit-conversation and
     mirror-conversation cite Case and DataPoint references through one
-    tuple field, and calendar Meetings join the union at S55a (D148) so
-    Meetings are citable. New artefact types extend ``KNOWN_ARTEFACT_TYPES``;
-    Phase 2-A union: ``"case"``, ``"data_point"``, ``"meeting"``.
+    tuple field, calendar Meetings join the union at S55a (D148), and
+    Emails join at S56a (D151) so both are citable. New artefact types
+    extend ``KNOWN_ARTEFACT_TYPES``; Phase 2-A union: ``"case"``,
+    ``"data_point"``, ``"meeting"``, ``"email"``.
 
     The citation carries only the artefact id and type — it resolves to
     the current artefact for display. For a Meeting (whose source state

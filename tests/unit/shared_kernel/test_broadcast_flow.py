@@ -44,8 +44,9 @@ def test_trigger_context_construction_with_each_trigger_type() -> None:
 def test_trigger_context_carries_per_type_metadata() -> None:
     """Per-type metadata populates via the open ``metadata`` slot."""
     threshold_metadata = {
-        "threshold_rule_id": str(uuid4()),
-        "matched_audit_event_id": str(uuid4()),
+        "rule_id": "calendar.meeting_cancelled",
+        "google_event_id": str(uuid4()),
+        "crossing_identity": "calendar.meeting_cancelled:evt-1",
     }
     context = TriggerContext(
         trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,

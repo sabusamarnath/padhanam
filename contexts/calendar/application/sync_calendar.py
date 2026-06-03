@@ -93,6 +93,11 @@ async def sync_calendar(
     token is read or written; an absent ``next_sync_token`` is expected,
     not an error. Cancelled events arrive as ``status=cancelled``
     tombstones via ``showDeleted=true`` on the full pull.
+
+    Emits no audit events: per D155 the calendar ``meetings`` store is an
+    external-source mutable cache, excluded from the audit-trail-as-source-
+    of-truth principle; its upsert/tombstone churn is not chained (the
+    audited surfaces are the citation snapshot and the broadcast outcome).
     """
     del trigger  # recorded by the caller; no branch on it today
     now = now or datetime.now(timezone.utc)

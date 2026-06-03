@@ -14,6 +14,11 @@ Indexing the changed Emails (body chunking + embedding + graph) is layered
 on when the indexing tools are supplied — wired at commit 5; this function
 reports which messages are new-or-content-changed so the indexing step
 knows what to re-chunk.
+
+Emits no audit events: per D155 the email store is an external-source
+mutable cache, excluded from the audit-trail-as-source-of-truth principle;
+its upsert/tombstone churn is not chained (email cites directly, so the
+audited surface is the citation, not the cache write).
 """
 
 from __future__ import annotations
