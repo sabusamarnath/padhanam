@@ -39,6 +39,7 @@ _PAYLOAD_KEY_PER_IMPLEMENTER: dict[str, str] = {
     "audit_conversation_cell": "audit_response",
     "mirror_conversation_cell": "mirror_response",
     "calendar_conversation_cell": "calendar_response",
+    "email_conversation_cell": "email_response",
 }
 
 
