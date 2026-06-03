@@ -7,7 +7,7 @@ For architectural synthesis with diagrams, see `charter/architecture.md`. For fu
 ## Architectural
 
 - Hexagonal throughout. External systems behind interfaces. Domain code never imports vendor SDKs (per D4, D16).
-- Vendor flexibility. External dependencies — LLM provider, embedding model, database backend, vector store, graph store, audit target, observability target — sit behind ports; vendor swap is configuration or adapter replacement, never domain change. Procurement-grade commitment: vendor lock-in is not architectural. Operationalised at the producer-context level through MetricCalculator and RecommendationRule pluggable domain abstractions (Phase 1, D111); ported domain-layer pluggability is the same principle applied to pluggable evaluation techniques and recommendation rules.
+- Vendor flexibility. External dependencies — LLM provider, embedding model, database backend, vector store, graph store, audit target, observability target — sit behind ports; vendor swap is configuration or adapter replacement, never domain change. Procurement-grade commitment: vendor lock-in is not architectural. Operationalised at the producer-context level through MetricCalculator and RecommendationRule pluggable domain abstractions (Phase 1, D111); ported domain-layer pluggability is the same principle applied to pluggable evaluation techniques and recommendation rules. The procurement-facing claim is "vendor swap is one adapter, not a rebuild," not "pluggable today": Phase 2-A ports ship one adapter each and the second adapter is built at the second-vendor threshold, not pre-built (the two-threshold rule).
 - Local-first. Full stack runs on the laptop. Production swap is configuration, not refactor.
 - Database-per-tenant. No code path assumes a single shared database (per D1, D32).
 - LLM-provider-agnostic via LiteLLM. Default development model is Ollama (per D4, D15).
@@ -101,6 +101,7 @@ The invariant set is versioned in this file per the existing append-only princip
 - Each framework operates at its own moment of the work. Conflating them produces ceremony without reasoning value.
 - Phase audits review Kano-category distribution (too many must-haves suggests conflation with default), RICE-score defensibility (forecasts versus post-hoc rationalisations), and roadmap reasoning-category distribution per D44.
 - Phase audits review UX-and-safety verification alongside Kano-category distribution and RICE-score defensibility. The cadence inherits the phase-audit pattern; verification artefacts live in `briefs/p<n>/phase-audit.md` at audit time.
+- Any D-entry that narrows or reverses a prior clause names the superseded clause in its title and the prior entry's index line is annotated `(… clause superseded by D-n)`. Precedent: D149's "supersedes D148's receive-side sync clause."
 
 ## Token discipline
 

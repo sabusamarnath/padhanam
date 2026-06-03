@@ -19,6 +19,11 @@ When a numbered D-entry closes a deferred entry, the entry gains a "Status: clos
 9. [Phase 2 design 7-Step deferrals](#phase-2-design-7-step-deferrals)
 10. [Phase 2-A P13 framing deferrals](#phase-2-a-p13-framing-deferrals)
 11. [P13 S45 deferrals](#p13-s45-deferrals)
+12. [P14 framing deferrals](#p14-framing-deferrals)
+13. [P14 close deferrals](#p14-close-deferrals)
+14. [P15 framing deferrals](#p15-framing-deferrals)
+15. [P15 S54 deferrals](#p15-s54-deferrals)
+16. [P15 audit deferrals](#p15-audit-deferrals)
 
 ## Architectural primitives awaiting activation
 
@@ -474,7 +479,7 @@ Activates when public Padhanam needs an email integration for any package work (
 
 **The specific D-entry lands when implementation begins**, capturing protocol choice, authentication shape, and integration scope. Premature commitment ahead of integration is paper architecture.
 
-**Status: activated at P15 framing (2026-05-27).** Operator chose self-hosted Nango under Elastic License symmetric to the calendar tool entry above (Path B). The specific D-entry covering the protocol/auth/scope choice lands at S56 (email substrate session) with the live integration verification. Path A migration triggers apply identically to the calendar tool service entry.
+**Status: closed by D151, 2026-06-02.** Activated at P15 framing (2026-05-27): operator chose self-hosted Nango under Elastic License symmetric to the calendar tool entry above (Path B). The specific D-entry covering the protocol/auth/scope choice landed at S56a as D151 (Gmail-API-via-Nango google-mail, `gmail.readonly`, full-pull-only at Phase 2-A, email-local chunk store, cite-directly) with the live integration verification. Path A migration triggers apply identically to the calendar tool service entry.
 
 ### Per-invocation human-in-the-loop confirmation pathway for high-classification tools
 
@@ -742,6 +747,8 @@ P15 framing Surface 5 Sub-question 5.6 committed pull-on-demand sync mechanics a
 
 **Architectural disposition.** Phase 2-A commits pull-on-demand only. The specific persistence shape (per-tenant calendar_events and email_messages tables vs. event-store-shaped tables vs. domain-driven aggregates per calendar/email contexts) commits at the activating session with the latency-evidence the activation produced. References D14 (separate-service for tool capabilities), D110 (audit-event-level tamper-evidence — background sync would emit per-fetch audit events).
 
+**Refined by D152 (S56b).** Email refresh ships as Option A (full-pull-in-turn) behind `EmailRefreshPort`; background-sync-then-serve and incremental are deferred as measurement-gated port-implementation swaps, decided against a representative inbox at the dogfooding gate, not a cell rewrite (the cell never reaches through to `sync_email`). References extend to D152 (email refresh strategy) and D150 (the calendar Option A precedent).
+
 ### MCP transport swap for calendar and email tool services
 
 P15 framing Surface 5 Sub-question 5.1 committed HTTP transport for tool service consumption at Phase 2-A: the calendar (`contexts/calendar/`) and email (`contexts/email/`) contexts consume Nango self-hosted via HTTP adapter per D14 separate-service pattern.
@@ -784,7 +791,7 @@ S54 commits TriggerContext discriminated-helper dataclasses for DAILY_SCHEDULED 
 
 **Activation triggers.** Each future trigger type commits its metadata schema at the session that activates the trigger:
 
-- THRESHOLD_CROSSED metadata commits at S57: fields `matched_audit_event_id`, `rule_id`, `matched_value`.
+- THRESHOLD_CROSSED metadata commits at S57 as the derived-state crossing identity per D153: `rule_id, rule_type, google_event_id, meeting_id, title, summary, cancelled_at, partner_event_id, partner_title, crossing_identity` (SSOT: `contexts/threshold_briefing/domain/rule_match.py` `to_trigger_metadata`). No `matched_audit_event_id`; no `matched_value`. The idempotency key is `crossing_identity`, which excludes `cancelled_at` per D153's live-smoke refinement.
 - CALENDAR_EVENT metadata commits at the Phase 2-B+ session activating external-data threshold detection on calendar events.
 - EMAIL_RECEIVED metadata commits at the Phase 2-B+ session activating external-data threshold detection on email patterns.
 
@@ -815,3 +822,31 @@ Surfaced by the S57 live smoke. Two coupled calendar-substrate limitations the t
 2. **The tombstone purges meeting content.** `tombstone_meeting` NULLs the encrypted content (title/description/location) and the embedding, so a cancellation briefing reads "(untitled)" from the store and can only say "a meeting was cancelled" without naming it. Naming the cancelled meeting needs the pre-cancellation title, which the calendar `meeting_citation` audit snapshots retain (D148 option b) but the threshold evaluator does not consult. Enrichment options: retain a plaintext title on the tombstone (a classification call — titles were judged D21-sensitive at D148), or have the evaluator look up the last `meeting_citation` snapshot for the event.
 
 **What defers.** Both are calendar-substrate (or threshold-to-audit-coupling) changes deliberately not taken at the P15-closing session (Design 1's no-substrate-touch principle, D153). **Activation trigger.** Dogfooding signal that "a meeting was cancelled" without the title is too low-signal to earn the interruption (the reverse-Kano test applied to the briefing's *content*, not just its firing), or a need for a literal original-cancellation-time audit field. References D153, D148 (calendar Meeting content encryption), the reverse-Kano discipline.
+
+## P15 audit deferrals
+
+Register-completeness entries surfaced at the P15 audit (2026-06-03): deferrals named in P15 D-entries, session logs, or architecture.md but not previously registered here with an activation trigger. The decisions stand as taken at their originating sessions; this section makes them findable in the register per the deferred-decisions discipline (a deferral lives in the register, not only in a D-entry clause).
+
+### Calendar meeting-moved threshold
+
+**What defers.** A threshold rule firing when a confirmed meeting's start moves. Detecting a move needs a prior-versus-current start comparison that current cache state alone cannot give, requiring a calendar-substrate touch (prior-start retention or a move audit event). Named in D153, D154, and architecture.md.
+
+**Activation trigger.** The Phase 2-A dogfooding gate, alongside the email volume debts; lands against real-use evidence once a representative calendar connects. References D153, D154, the "Stable original cancellation timestamp + cancellation-title enrichment" entry above (the coupled calendar-substrate-touch deferral).
+
+### Email incremental-sync graduation
+
+**What defers.** Graduating email sync from full-pull-only to incremental, volume-gated. The D151 email D149-shape gotcha applies and must be carried forward: `history.list` expires to 404 and mandates full resync more readily than calendar's syncToken 410 (historyId retention is typically a week, may be less or unavailable), and `history.list` is mailbox-wide and ignores the window, so a bounded full pull does not bootstrap a window-scoped cursor and deltas must be window-filtered client-side. Named in D151, D154.
+
+**Activation trigger.** A representative-inbox volume that makes repeated full pulls wasteful, measured at the dogfooding gate. Sits behind `EmailRefreshPort` (D152), so graduation is a port-implementation swap, not a cell rewrite. References D151, D152, D154.
+
+### Email IMAP / provider-agnostic transport
+
+**What defers.** Transport beyond Gmail-API-via-Nango (IMAP or a provider-agnostic abstraction). Named in D151, deferred to Phase 2-B per the two-threshold rule (no second real provider this phase).
+
+**Activation trigger.** A second, committed email provider that the single Gmail-API adapter cannot serve, at which point a transport abstraction earns its second instance. References D151, D14 (tools-as-configuration), the two-threshold rule.
+
+### Evaluator/Scan abstraction split from BroadcastFlow
+
+**What defers.** A distinct `Evaluator`/`Scan` abstraction alongside BroadcastFlow. ThresholdEvaluator satisfies BroadcastFlow but is semantically "evaluate-and-emit," not "compose-and-send"; reusing BroadcastDispatch for both is the deliberate Phase 2-A cost (D153, architecture.md, the `threshold_evaluator` docstring).
+
+**Activation trigger.** A third, evaluator-shaped implementer — the second instance of the strained fit — forces the split per the two-threshold rule. References D142 (BroadcastFlow Protocol), D143 (BroadcastDispatch), D153, the two-threshold rule.

@@ -89,6 +89,8 @@ The codebase has twelve bounded contexts: agent, audit, evaluation, inference, i
 
 **Disposition.** Non-action. The count is correct, every context is charter-authorised, the split is principled. The observation lands as documentation that the count is twelve, not nine; future audit conversations inherit the count without rediscovery.
 
+**Superseded by Entry 16 (post-Ciborra-audit correction, 2026-05-28):** do not inherit a frozen count; derive it live with `ls contexts/` at audit time. The frozen "twelve" above, and Entry 16's "nineteen as of 2026-05-28," are both stale; the count grows with each D-authorised context (P15 added calendar, calendar_conversation, email, email_conversation, threshold_briefing). The durable observation is the contexts-vs-padhanam observability split, not the number.
+
 ### Finding B2: Tenant audit HTTP route at `/tenant/{tenant_id}/audit/test-event` is a session-scoped operator utility not enumerated in HTTP-surface D-entries
 
 `apps/api/routers/tenant_audit.py` exposes a `POST /tenant/{tenant_id}/audit/test-event` endpoint per S12-era integration testing requirements. The endpoint is operator-context-gated via `OPERATOR_ROLE` and emits a probe audit event to verify the per-tenant audit chain. D-entries that frame HTTP surface (D98 run-history, D103 audit reader, D104 ingestion management, D112 retrieval_evaluation + optimization) do not enumerate this endpoint; its existence traces to the integration-testing carryover from S12.

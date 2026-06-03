@@ -1394,8 +1394,11 @@ use case (FireTrigger) consults this table via INSERT with
 emission. Idempotency key semantics vary per `trigger_type`:
 DAILY_SCHEDULED uses the date string in operator timezone (one row
 per tenant+user+day); MANUAL uses null (Postgres UNIQUE permits
-multiple null rows per construction); THRESHOLD_CROSSED at S57 uses
-a composite of `matched_audit_event_id` plus `rule_id`; future
+multiple null rows per construction); THRESHOLD_CROSSED at S57 keys
+on the derived-state crossing identity per D153: a cancellation is
+`rule_id:google_event_id`; a conflict is `rule_id:eventA|eventB`
+(sorted). The identity excludes `cancelled_at`. No
+`matched_audit_event_id`. Future
 trigger types commit semantics at activation sessions. Index
 `ix_fired_triggers_tenant_user_type` on `(tenant_id, user_id,
 trigger_type)` supports diagnostic lookups for the last firing per
