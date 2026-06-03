@@ -31,6 +31,10 @@ _CALENDAR_FIXTURE = (
     Path(__file__).resolve().parents[3]
     / "fixtures/intent_classification/calendar_conversation_gold_set.yaml"
 )
+_META_FOUR_WAY_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/meta_classifier_four_way_gold_set.yaml"
+)
 
 
 def test_yaml_reader_loads_audit_conversation_fixture() -> None:
@@ -112,6 +116,30 @@ def test_yaml_reader_loads_calendar_conversation_fixture() -> None:
     assert "find_by_title" in classes
     assert "find_next_meeting" in classes
     assert "unclear_calendar" in classes
+
+
+def test_yaml_reader_loads_meta_classifier_four_way_fixture() -> None:
+    """S55b-2: the meta-classifier gold set extended to the fourth route."""
+    reader = YamlGoldSetReader(path=_META_FOUR_WAY_FIXTURE)
+    gold_set = reader.get_gold_set("meta_classifier_four_way_p15_s55b2")
+    assert gold_set.name == "meta_classifier_four_way_p15_s55b2"
+    assert gold_set.intent_surface == "dispatch_classifier"
+    assert len(gold_set.entries) >= 20
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    assert classes.issubset(
+        {
+            "manual_entry",
+            "audit_conversation",
+            "mirror_conversation",
+            "calendar_conversation",
+            "dispatch_clarification",
+        }
+    )
+    # All four real surfaces carry at least one entry.
+    assert "manual_entry" in classes
+    assert "audit_conversation" in classes
+    assert "mirror_conversation" in classes
+    assert "calendar_conversation" in classes
 
 
 def test_yaml_reader_loads_manual_entry_fixture_with_default_surface() -> None:

@@ -46,11 +46,13 @@ INTENT_CLASSES: tuple[str, ...] = (
     "find_by_event_type",
     "find_by_combination",
     "unclear_audit",
-    # Dispatch classifier surface (S52 D140, four classes).
+    # Dispatch classifier surface (S52 D140, four classes; calendar_conversation
+    # added at S55b-2 D140 four-way extension).
     "manual_entry",
     "audit_conversation",
     "mirror_conversation",
     "dispatch_clarification",
+    "calendar_conversation",
     # Mirror-conversation surface (S52 commit 8, seven classes).
     "show_case",
     "list_cases",

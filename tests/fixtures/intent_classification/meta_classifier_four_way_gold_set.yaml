@@ -1,0 +1,74 @@
+# Meta-classifier four-way routing gold-set fixture (D137, D140, P15, S55b-2).
+#
+# Operator-shaped inbounds paired with the cell each should route to,
+# extending the S52 three-way meta-classifier gold set to the fourth
+# surface (calendar_conversation, D140 four-way extension at S55b-2).
+# Scoped to calendar *queries* for the calendar route — the calendar
+# surface is read-only (D148), so calendar-mutation phrasings are not
+# part of the routing gold set (they route to calendar_conversation and
+# the cell returns unclear_calendar; that read-only boundary is exercised
+# at the cell's own gold set, not here).
+#
+# Uses the dispatch_classifier surface (the runner's META_CLASSIFIER
+# schema + prompt, now four-way). Four deliberately ambiguous entries
+# carry their best-guess identifier per the S48b reflection-2 recurrence
+# test; the expected production behaviour on genuine ambiguity is the
+# D140 Step 5 low-confidence routing to dispatch_clarification, not a
+# confident misclassification.
+
+name: meta_classifier_four_way_p15_s55b2
+intent_surface: dispatch_classifier
+entries:
+  # ----- manual_entry (4) -----
+  - input_phrasing: "Add a data point for Q3 revenue: 5M"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Create a new case for the Acme deal"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Note that the partnership review slipped to next month"
+    expected_intent_class: manual_entry
+  - input_phrasing: "Start tracking my hiring pipeline"
+    expected_intent_class: manual_entry
+
+  # ----- audit_conversation (4) -----
+  - input_phrasing: "Show me the audit history for the Q3 review case"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "What happened with the marketing deck last week?"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "audit log for the Acme deal"
+    expected_intent_class: audit_conversation
+  - input_phrasing: "Who changed the revenue figure and when?"
+    expected_intent_class: audit_conversation
+
+  # ----- mirror_conversation (4) -----
+  - input_phrasing: "Show me the Q3 portfolio review"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "List my open cases"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "Drill down into the children of the Acme case"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "What's the current status of the partnership review?"
+    expected_intent_class: mirror_conversation
+
+  # ----- calendar_conversation (5, query-scoped) -----
+  - input_phrasing: "What's on my calendar today?"
+    expected_intent_class: calendar_conversation
+  - input_phrasing: "Do I have any meetings with Ada this week?"
+    expected_intent_class: calendar_conversation
+  - input_phrasing: "When is the board sync?"
+    expected_intent_class: calendar_conversation
+  - input_phrasing: "What's my next meeting?"
+    expected_intent_class: calendar_conversation
+  - input_phrasing: "Am I free tomorrow afternoon?"
+    expected_intent_class: calendar_conversation
+
+  # ----- deliberately ambiguous (4) -----
+  # Best-guess identifier recorded; production routes these to
+  # dispatch_clarification at low confidence (D140 Step 5).
+  - input_phrasing: "Tell me about revenue"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "the Acme deal"
+    expected_intent_class: mirror_conversation
+  - input_phrasing: "update on the board"
+    expected_intent_class: calendar_conversation
+  - input_phrasing: "what's next"
+    expected_intent_class: calendar_conversation
