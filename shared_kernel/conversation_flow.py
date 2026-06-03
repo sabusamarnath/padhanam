@@ -138,12 +138,21 @@ class ConversationFlow(Protocol):
 ARTEFACT_TYPE_CASE = "case"
 ARTEFACT_TYPE_DATA_POINT = "data_point"
 ARTEFACT_TYPE_MEETING = "meeting"
+ARTEFACT_TYPE_EMAIL = "email"
 
 # The discriminator union. Extended as new citable artefact types land
-# (``"email"`` at S56). A closed set so the discriminator is structural,
-# not just prose — an unknown type is a programming error, surfaced early.
+# (``"email"`` added at S56a, D151). A closed set so the discriminator is
+# structural, not just prose — an unknown type is a programming error,
+# surfaced early. The email_conversation cell that cites Email artefacts
+# lands at S56b; the discriminator is added here at the substrate session
+# so the Email artefact is citable when S56b builds the cell.
 KNOWN_ARTEFACT_TYPES: frozenset[str] = frozenset(
-    {ARTEFACT_TYPE_CASE, ARTEFACT_TYPE_DATA_POINT, ARTEFACT_TYPE_MEETING}
+    {
+        ARTEFACT_TYPE_CASE,
+        ARTEFACT_TYPE_DATA_POINT,
+        ARTEFACT_TYPE_MEETING,
+        ARTEFACT_TYPE_EMAIL,
+    }
 )
 
 
