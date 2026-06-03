@@ -73,6 +73,10 @@ from shared_kernel.intent_classification_calendar import (
     CALENDAR_INTENT_EXTRACTION_SCHEMA,
     build_calendar_extraction_prompt,
 )
+from shared_kernel.intent_classification_email import (
+    EMAIL_INTENT_EXTRACTION_SCHEMA,
+    build_email_extraction_prompt,
+)
 from shared_kernel.intent_classification_mirror import (
     MIRROR_INTENT_EXTRACTION_SCHEMA,
     build_mirror_extraction_prompt,
@@ -130,6 +134,11 @@ _SURFACE_PRIMITIVES: dict[str, tuple[Any, dict, str]] = {
     "calendar_conversation": (
         build_calendar_extraction_prompt,
         CALENDAR_INTENT_EXTRACTION_SCHEMA,
+        "intent_class",
+    ),
+    "email_conversation": (
+        build_email_extraction_prompt,
+        EMAIL_INTENT_EXTRACTION_SCHEMA,
         "intent_class",
     ),
 }

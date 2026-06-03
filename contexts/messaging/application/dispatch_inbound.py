@@ -119,6 +119,10 @@ _DISPATCH_CLARIFICATION_LEXICON: dict[str, CellIdentifier] = {
     "calendar": CellIdentifier.CALENDAR_CONVERSATION,
     "calendar_conversation": CellIdentifier.CALENDAR_CONVERSATION,
     "meetings": CellIdentifier.CALENDAR_CONVERSATION,
+    "5": CellIdentifier.EMAIL_CONVERSATION,
+    "email": CellIdentifier.EMAIL_CONVERSATION,
+    "email_conversation": CellIdentifier.EMAIL_CONVERSATION,
+    "inbox": CellIdentifier.EMAIL_CONVERSATION,
 }
 
 # Operator-facing routing-prompt body the dispatch_clarification PendingClarification
@@ -130,7 +134,8 @@ _ROUTING_PROMPT_BODY = (
     "  2. Ask about audit history.\n"
     "  3. View current portfolio state.\n"
     "  4. Ask about your calendar.\n"
-    "(reply with the number, or 'manual', 'audit', 'mirror', or 'calendar')."
+    "  5. Ask about your email.\n"
+    "(reply with the number, or 'manual', 'audit', 'mirror', 'calendar', or 'email')."
 )
 
 

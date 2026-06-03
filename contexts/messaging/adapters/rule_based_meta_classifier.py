@@ -50,6 +50,10 @@ _CALENDAR_TOKENS = (
     "whats on", "next meeting", "free tomorrow", "free today",
     "am i busy", "am i free", "on my calendar",
 )
+_EMAIL_TOKENS = (
+    "email", "emails", "inbox", "what came in", "what came through",
+    "did i get", "any mail", "unread", "message from", "messages from",
+)
 
 
 class RuleBasedMetaClassifierAdapter:
@@ -93,6 +97,15 @@ class RuleBasedMetaClassifierAdapter:
         if any(token in lowered for token in _CALENDAR_TOKENS):
             return MetaClassificationResult(
                 cell_identifier=CellIdentifier.CALENDAR_CONVERSATION,
+                confidence=self._default_confidence,
+            )
+
+        # Email conversation wins on email/inbox/message-arrival nouns,
+        # checked before the generic mirror read-verbs so "show my
+        # emails" routes to the email surface (S56b).
+        if any(token in lowered for token in _EMAIL_TOKENS):
+            return MetaClassificationResult(
+                cell_identifier=CellIdentifier.EMAIL_CONVERSATION,
                 confidence=self._default_confidence,
             )
 

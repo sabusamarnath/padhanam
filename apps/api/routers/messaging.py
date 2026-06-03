@@ -59,6 +59,19 @@ from contexts.calendar_conversation.application.cell import (
 from contexts.calendar_conversation.application.response import (
     render_for_whatsapp as render_calendar_for_whatsapp,
 )
+from apps.cli._email import build_email_refresh_adapter
+from contexts.email.adapters.outbound.postgres._tables import (
+    email_connections as email_connections_table,
+)
+from contexts.email.adapters.outbound.postgres.email_store import (
+    PostgresEmailStore,
+)
+from contexts.email_conversation.application.cell import (
+    EmailConversationCell,
+)
+from contexts.email_conversation.application.response import (
+    render_for_whatsapp as render_email_for_whatsapp,
+)
 from contexts.mirror_conversation.application.cell import (
     MirrorConversationCell,
 )
@@ -428,6 +441,109 @@ async def _resolve_calendar_connection_id(
     return UUID(str(row[0])) if row is not None else None
 
 
+async def _resolve_email_connection_id(
+    *, session_factory, tenant_id: str
+) -> UUID | None:
+    """Resolve the tenant's google-mail connection id, or None.
+
+    Mirror of ``_resolve_calendar_connection_id`` for the email surface:
+    the email runner needs the connection id to wire the refresh adapter,
+    and the repository lookup is by-id only. A small select on the
+    email_connections table is the seam.
+    """
+    stmt = sa.select(email_connections_table.c.id).where(
+        email_connections_table.c.tenant_id == tenant_id,
+        email_connections_table.c.provider_config_key == "google-mail",
+    )
+    async with session_factory() as session:
+        result = await session.execute(stmt)
+        row = result.first()
+    return UUID(str(row[0])) if row is not None else None
+
+
+async def _run_email_conversation_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    inbound_body: str,
+    reply_to: str,
+    inbound_intake_id: UUID,
+) -> None:
+    """Run the email-conversation cell over an inbound message and reply (S56b).
+
+    Mirrors the calendar runner: reuses the messaging composition's shared
+    ports and builds the email-specific collaborators per request — the
+    email store (reader) and the D152 refresh adapter wired to the real
+    Nango Proxy + embedder + graph. When no google-mail connection exists
+    for the tenant, the cell runs without a refresh port and answers from
+    the cached store. The cell reaches the substrate only through the
+    refresh port — it never calls ``sync_email`` directly (D152).
+    """
+    tenant_id = str(actor.tenant_context.tenant_id)
+    wiring = build_tenant_wiring(tenant_id)
+    session_factory = wiring.session_factory
+
+    async def _resolver(_tid):
+        return session_factory
+
+    bound = TenantId(str(actor.tenant_context.tenant_id))
+    email_store = PostgresEmailStore(
+        per_tenant_sessionmaker_resolver=_resolver, bound_tenant_id=bound
+    )
+    connection_id = await _resolve_email_connection_id(
+        session_factory=session_factory, tenant_id=tenant_id
+    )
+    refresh_port = (
+        build_email_refresh_adapter(
+            tenant_id=tenant_id, connection_id=connection_id
+        )
+        if connection_id is not None
+        else None
+    )
+
+    cell = EmailConversationCell(
+        structured_output_port=messaging.structured_output_port,
+        email_reader=email_store,
+        actor=actor,
+        confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
+        pending_clarification_reader=messaging.pending_clarification_reader,
+        pending_clarification_repository=(
+            messaging.pending_clarification_repository
+        ),
+        audit_port=audit_port,
+        refresh_port=refresh_port,
+        originating_intake_id=inbound_intake_id,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose="email_query", actor_id=actor.actor_id
+        )
+    )
+    state = await cell.turn(state, ConversationInput(text=inbound_body))
+    await cell.close(
+        state, ConversationClosure(reason="email_query handled")
+    )
+
+    from datetime import datetime, timezone
+
+    response = state.payload["email_response"]
+    rendered = render_email_for_whatsapp(
+        response, composed_at=datetime.now(timezone.utc)
+    )
+    await send_message(
+        repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        audit_port=audit_port,
+        channel_resolver=messaging.channel_resolver,
+        actor=actor,
+        from_address=messaging.from_address,
+        to_address=reply_to,
+        body=rendered,
+    )
+
+
 async def _run_calendar_conversation_cell(
     *,
     messaging: MessagingComposition,
@@ -560,11 +676,22 @@ def _build_cell_runners(
             inbound_intake_id=context.inbound_intake_id,
         )
 
+    async def _email_runner(context: DispatchContext) -> None:
+        await _run_email_conversation_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=context.inbound_text,
+            reply_to=reply_to,
+            inbound_intake_id=context.inbound_intake_id,
+        )
+
     return {
         CellIdentifier.MANUAL_ENTRY: _manual_entry_runner,
         CellIdentifier.AUDIT_CONVERSATION: _audit_runner,
         CellIdentifier.MIRROR_CONVERSATION: _mirror_runner,
         CellIdentifier.CALENDAR_CONVERSATION: _calendar_runner,
+        CellIdentifier.EMAIL_CONVERSATION: _email_runner,
     }
 
 

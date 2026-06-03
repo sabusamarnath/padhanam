@@ -216,3 +216,43 @@ def test_llm_adapter_routes_calendar_at_high_confidence() -> None:
         )
     )
     assert result.cell_identifier is CellIdentifier.CALENDAR_CONVERSATION
+
+
+def test_rule_based_routes_email_on_inbox_query() -> None:
+    """S56b: the fifth route. An email/inbox query routes to email."""
+    adapter = RuleBasedMetaClassifierAdapter()
+    result = _run(
+        adapter.classify(
+            tenant_id=uuid4(),
+            inbound_text="what came in to my inbox today?",
+        )
+    )
+    assert result.cell_identifier is CellIdentifier.EMAIL_CONVERSATION
+    assert result.confidence >= 0.5
+
+
+def test_rule_based_routes_email_not_calendar_on_email_word() -> None:
+    """S56b: 'email from <person>' routes to email, not calendar or mirror."""
+    adapter = RuleBasedMetaClassifierAdapter()
+    result = _run(
+        adapter.classify(
+            tenant_id=uuid4(),
+            inbound_text="show me the email from Priya",
+        )
+    )
+    assert result.cell_identifier is CellIdentifier.EMAIL_CONVERSATION
+
+
+def test_llm_adapter_routes_email_at_high_confidence() -> None:
+    """S56b: the meta-classifier schema enum now accepts email_conversation."""
+    stub = _StubStructuredOutput(
+        {"cell_identifier": "email_conversation", "confidence": 0.9}
+    )
+    adapter = LlmMetaClassifierAdapter(structured_output_port=stub)
+    result = _run(
+        adapter.classify(
+            tenant_id=uuid4(),
+            inbound_text="did I get an email from the bank?",
+        )
+    )
+    assert result.cell_identifier is CellIdentifier.EMAIL_CONVERSATION

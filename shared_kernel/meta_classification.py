@@ -22,8 +22,8 @@ from typing import Any
 META_CLASSIFIER_PREAMBLE: str = (
     "You route a portfolio-management message to the correct "
     "conversational surface inside Padhanam's private-assistant "
-    "platform. Four surfaces handle the user's inbounds, plus a "
-    "fifth sentinel for ambiguous cases:\n\n"
+    "platform. Five surfaces handle the user's inbounds, plus a "
+    "sixth sentinel for ambiguous cases:\n\n"
     "- manual_entry: the user is recording new portfolio state "
     "(creating a case, adding a data point against a case, revising "
     "an existing data point). Look for verbs like 'add', 'create', "
@@ -43,6 +43,13 @@ META_CLASSIFIER_PREAMBLE: str = (
     "week, meetings with a person, a specific meeting by name, or their "
     "next meeting. Look for words like 'calendar', 'meeting', 'meetings', "
     "'schedule', 'event', 'what's on', 'free', 'busy', 'next meeting'.\n"
+    "- email_conversation: the user is asking about their email — messages "
+    "in their inbox, what came in, email from a person, a specific email by "
+    "subject. Look for words like 'email', 'inbox', 'message', 'what came "
+    "in', 'did I get', 'from <person>', 'reply' (note: read-only — the "
+    "platform reads email but does not send). Use email when the inbound is "
+    "about received messages; use calendar when it is about meetings/"
+    "schedule; use mirror when it is about portfolio case/data-point state.\n"
     "- dispatch_clarification: reserved for the routing layer when "
     "no single surface fits. **Do not return this value yourself**; "
     "if the inbound is ambiguous between surfaces, return your best "
@@ -67,6 +74,7 @@ META_CLASSIFIER_SCHEMA: dict[str, Any] = {
                 "audit_conversation",
                 "mirror_conversation",
                 "calendar_conversation",
+                "email_conversation",
             ],
             "description": (
                 "the conversational surface the inbound routes to"

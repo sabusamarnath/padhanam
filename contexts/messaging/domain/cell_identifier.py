@@ -30,6 +30,7 @@ class CellIdentifier(str, Enum):
     AUDIT_CONVERSATION = "audit_conversation"
     MIRROR_CONVERSATION = "mirror_conversation"
     CALENDAR_CONVERSATION = "calendar_conversation"
+    EMAIL_CONVERSATION = "email_conversation"
     DISPATCH_CLARIFICATION = "dispatch_clarification"
 
 
