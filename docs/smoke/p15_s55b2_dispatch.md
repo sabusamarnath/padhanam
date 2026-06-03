@@ -92,16 +92,13 @@ Ollama + Nango + Google + Neo4j stack.
   contract altitude (`test_citation_snapshot_conformance`) and unit altitude;
   a live rename + re-pull was not exercised (read-only agent cannot mutate
   the calendar).
-- **Stage 4 (cancellation tombstone) — STILL OPERATOR-GATED.** The calendar
-  held 4 confirmed events with no in-window cancellations (`showDeleted=true`
-  returned 0 cancelled); the read-only agent cannot cancel an event. The
-  tombstone path is unit-proven; the live confirmation carries to S56 (or
-  any session after the operator cancels an in-window event and re-runs the
-  S55a Stage 2 refresh).
+- **Stage 4 (cancellation tombstone) — PASS (operator cancelled an event 2026-06-03).** After the operator cancelled the in-window "live smoke test" event, a citation snapshot of its stored Meeting was captured (decrypts to "live smoke test"), then the S55a Stage 2 refresh (`sync_calendar`, `showDeleted=true`) ran: `tombstoned=1`. The meetings row for the cancelled event is `status=cancelled` with `enc_ciphertext` / `content_hash` / `embedding` all NULL and `cancelled_at` set, **row retained** (count=1). **Snapshot immutability under a real refresh — closed:** the captured citation snapshot still decrypts to "live smoke test" *after* the refresh erased the live row's content — the evidence survived full erasure of the mutable source, the strongest D148 option-b demonstration.
 
-**Verdict: stages 1, 2, 3 green; stage 4 operator-gated.** Calendar dispatch
-integration is live (four-way routing reaches the calendar cell, refresh
-fires, citations render), and the citation evidence is plaintext-free and
-decryptable against the real stack. S55b closes; P15 continues to S56.
+**Verdict: all four stages green.** Calendar dispatch integration is live
+(four-way routing reaches the calendar cell, refresh fires, citations
+render), the citation evidence is plaintext-free and decryptable against
+the real stack, the cancellation tombstones at rest, and the citation
+snapshot survives the live row's erasure. S55b closes fully; P15 continues
+to S56. The last operator-gated calendar-substrate behavior is now closed.
 
-**Status: executed live 2026-06-03 (stages 1/2/3 green; stage 4 operator-gated).**
+**Status: executed live 2026-06-03 (all four stages green).**

@@ -406,6 +406,14 @@ Activates at Phase 2 close, when the drafted methodology comparison content is v
 
 ## Compliance and security
 
+### Tenant-content-at-rest encryption classification (portfolio Case titles / DataPoint values; intake hints; pending-clarification summaries)
+
+Surfaced by the S55b-2 audit `after_state` encryption-posture backward check (`log/captures.md` 2026-06-03 [S55b-2]). The check confirmed there is **no audit-leak gap today** — every audit `after_state` matches its store's encryption posture, and `meeting_citation` (calendar) is the first and only case where the store envelope-encrypts content (D21), which the citation snapshot also encrypts. But it surfaced an upstream classification question that pre-dates calendar: **portfolio Case `title` (`sa.Text`) and DataPoint `value` (`pg.JSONB`) are stored plaintext at rest** (no `enc_*` columns; D124-era choice), as are intake `intent_hint` and messaging `proposed_action_summary` in their audit `after_state`. Calendar deliberately envelope-encrypts Meeting content because attendee emails/locations were judged more sensitive than portfolio Cases (D148); whether portfolio/intake/messaging content warrants the same D21 treatment is an unmade classification decision.
+
+**What defers.** The decision whether tenant-authored portfolio content (and the intake/messaging echoes of it) must be envelope-encrypted at rest per D21, like calendar Meeting content. If yes, it is a package-sized hygiene item: envelope-encrypt the portfolio store columns *and* backfill the historical plaintext audit `after_state` rows, and it flips the deferred general "no plaintext D21-classified content in any audit `after_state`" guard (currently two-threshold-deferred with calendar as the lone instance) to **overdue** (portfolio's `after_state` becomes a second instance). If no (the classification stays "portfolio content is not D21-sensitive"), the current posture is consistent and the general guard stays deferred.
+
+**Revisit triggers.** A procurement/compliance review that requires all tenant-authored content encrypted at rest; or a tenant whose data carries content (health, legal, financial specifics in Case titles/values) that clearly warrants envelope encryption; or a second cell freezing encrypted-store content into audit `after_state` (which makes the general guard overdue independent of this decision). Estimated size when activated: medium (store migration + audit backfill + the general `after_state` guard).
+
 ### Per-tenant supply-chain surveillance for tenant-supplied tools and extensions
 
 Activates when tools and extensions enter the codebase (P5 or wherever tools and extensions first land).
