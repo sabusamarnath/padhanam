@@ -82,14 +82,61 @@ def test_scheduled_evaluation_returns_none() -> None:
 
 
 def test_threshold_crossed_uses_crossing_identity() -> None:
-    """THRESHOLD_CROSSED keys on the crossing's derived-state identity (S57)."""
+    """THRESHOLD_CROSSED keys on the crossing's derived-state identity (S57).
+
+    The identity is ``rule_id:google_event_id`` for a cancellation — it
+    excludes ``cancelled_at`` per D153's live-smoke refinement.
+    """
     key = resolve_idempotency_key(
         trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
-        metadata={"crossing_identity": "calendar.meeting_cancelled:evt-1:2026-06-03T09:00:00+00:00"},
+        metadata={"crossing_identity": "calendar.meeting_cancelled:evt-1"},
         operator_timezone="UTC",
         now=_FIXED_NOW,
     )
-    assert key == "calendar.meeting_cancelled:evt-1:2026-06-03T09:00:00+00:00"
+    assert key == "calendar.meeting_cancelled:evt-1"
+    assert "cancelled_at" not in key
+
+
+def test_threshold_crossed_key_matches_rulematch_ssot_and_excludes_cancelled_at() -> None:
+    """The resolved key equals ``RuleMatch.crossing_identity()`` and omits cancelled_at.
+
+    Binds the messaging idempotency key to the threshold-briefing SSOT
+    (``RuleMatch.to_trigger_metadata`` / ``crossing_identity``): a
+    cancellation match carrying a populated ``cancelled_at`` still keys on
+    ``rule_id:google_event_id``, so a re-scan that churns ``cancelled_at``
+    resolves to the same key (no double-brief) — the S57 live-smoke fix.
+    """
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    from contexts.threshold_briefing.domain.rule_match import RuleMatch
+    from contexts.threshold_briefing.domain.threshold_rule import ThresholdRuleType
+
+    match = RuleMatch(
+        rule_id="calendar.meeting_cancelled",
+        rule_type=ThresholdRuleType.MEETING_CANCELLED,
+        google_event_id="evt-1",
+        meeting_id=UUID(int=1),
+        title="Standup",
+        summary="Meeting cancelled: Standup",
+        cancelled_at=datetime(2026, 6, 3, 9, 0, tzinfo=timezone.utc),
+    )
+    key = resolve_idempotency_key(
+        trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
+        metadata=match.to_trigger_metadata(),
+        operator_timezone="UTC",
+    )
+    assert key == match.crossing_identity() == "calendar.meeting_cancelled:evt-1"
+
+    # A later scan re-tombstones with a churned cancelled_at; the key holds.
+    churned = match.to_trigger_metadata()
+    churned["cancelled_at"] = "2026-06-03T11:30:00+00:00"
+    key_rescan = resolve_idempotency_key(
+        trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
+        metadata=churned,
+        operator_timezone="UTC",
+    )
+    assert key_rescan == key
 
 
 def test_threshold_crossed_same_crossing_two_scans_same_key() -> None:
@@ -108,8 +155,13 @@ def test_threshold_crossed_same_crossing_two_scans_same_key() -> None:
     assert k1 == k2 == "calendar.meeting_conflict:a|b"
 
 
-def test_threshold_crossed_falls_back_to_composite_when_identity_absent() -> None:
-    """A malformed crossing (no crossing_identity) still dedupes deterministically."""
+def test_threshold_crossed_reconstructs_stable_identity_when_identity_absent() -> None:
+    """Absent crossing_identity (the HTTP path) reconstructs the stable shape, no cancelled_at.
+
+    The fallback mirrors ``RuleMatch.crossing_identity()``: a cancellation
+    is ``rule_id:google_event_id`` even when ``cancelled_at`` is present in
+    the metadata — the timestamp is never embedded in the key.
+    """
     key = resolve_idempotency_key(
         trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
         metadata={
@@ -119,7 +171,22 @@ def test_threshold_crossed_falls_back_to_composite_when_identity_absent() -> Non
         },
         operator_timezone="UTC",
     )
-    assert key == "calendar.meeting_cancelled:evt-1:2026-06-03T09:00:00+00:00"
+    assert key == "calendar.meeting_cancelled:evt-1"
+    assert "2026-06-03" not in key
+
+
+def test_threshold_crossed_reconstructs_conflict_pair_when_identity_absent() -> None:
+    """Absent crossing_identity for a conflict reconstructs rule_id + sorted event pair."""
+    key = resolve_idempotency_key(
+        trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
+        metadata={
+            "rule_id": "calendar.meeting_conflict",
+            "google_event_id": "evt-b",
+            "partner_event_id": "evt-a",
+        },
+        operator_timezone="UTC",
+    )
+    assert key == "calendar.meeting_conflict:evt-a|evt-b"
 
 
 @pytest.mark.parametrize(
