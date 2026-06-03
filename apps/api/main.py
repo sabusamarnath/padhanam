@@ -474,6 +474,65 @@ def _build_default_compositions() -> AppCompositions:
         implementer=daily_briefing_implementer,
     )
 
+    # S57 (D153): the proactive threshold arc. The ThresholdEvaluator
+    # (SCHEDULED_EVALUATION) refreshes calendar then evaluates over the
+    # calendar STATE store and emits THRESHOLD_CROSSED through the
+    # FireTrigger idempotency flow; the threshold-briefing implementer
+    # (THRESHOLD_CROSSED) composes and dispatches. Phase 2-A binds the
+    # evaluator's state-read + refresh to the single broadcast tenant.
+    from apps.api._threshold_briefing_wiring import (
+        ActiveRuleRefreshAdapter,
+        ThresholdCrossedEmitterAdapter,
+        ThresholdNotifierAdapter,
+        build_calendar_state_reader,
+    )
+    from contexts.threshold_briefing.adapters.llm.litellm_threshold_briefing_composer_adapter import (  # noqa: E501
+        LiteLLMThresholdBriefingComposerAdapter,
+    )
+    from contexts.threshold_briefing.application.rule_config import phase_2a_rules
+    from contexts.threshold_briefing.application.threshold_briefing_implementer import (  # noqa: E501
+        ThresholdBriefingImplementer,
+    )
+    from contexts.threshold_briefing.application.threshold_evaluator import (
+        ThresholdEvaluator,
+    )
+
+    _broadcast_tenant = _messaging_settings.webhook_tenant_id
+    threshold_evaluator = ThresholdEvaluator(
+        state_reader=build_calendar_state_reader(tenant_id=_broadcast_tenant),
+        emitter=ThresholdCrossedEmitterAdapter(
+            fired_triggers_repository=messaging.fired_triggers_repository,
+            audit_port=audit_adapter,
+            broadcast_dispatch=messaging.broadcast_dispatch,
+            jurisdiction=_messaging_settings.webhook_jurisdiction,
+            operator_timezone=_messaging_settings.operator_timezone,
+        ),
+        rules=phase_2a_rules(),
+        jurisdiction=_messaging_settings.webhook_jurisdiction,
+        refresh_port=ActiveRuleRefreshAdapter(tenant_id=_broadcast_tenant),
+    )
+    threshold_briefing_implementer = ThresholdBriefingImplementer(
+        composer=LiteLLMThresholdBriefingComposerAdapter(
+            structured_output_port=inference_port,
+        ),
+        notifier=ThresholdNotifierAdapter(
+            repository=messaging.repository,
+            delivery_port=messaging.delivery_port,
+            audit_port=audit_adapter,
+            channel_resolver=messaging.channel_resolver,
+            from_address=messaging.from_address,
+        ),
+        jurisdiction=_messaging_settings.webhook_jurisdiction,
+    )
+    messaging.broadcast_flow_registry.register(
+        trigger_type=BroadcastTriggerType.SCHEDULED_EVALUATION,
+        implementer=threshold_evaluator,
+    )
+    messaging.broadcast_flow_registry.register(
+        trigger_type=BroadcastTriggerType.THRESHOLD_CROSSED,
+        implementer=threshold_briefing_implementer,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),

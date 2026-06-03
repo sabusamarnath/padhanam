@@ -258,6 +258,7 @@ def draft_broadcast_initiated_event(
     user_id: str,
     triggered_at: str,
     correlation_id: str = "",
+    metadata: dict | None = None,
 ) -> AuditEvent:
     """Draft the BROADCAST_INITIATED audit event for a fresh trigger fire (D147).
 
@@ -270,6 +271,14 @@ def draft_broadcast_initiated_event(
     before this fire). The adapter recomputes the chain hashes inside
     its locking transaction per D37; the placeholder here is a draft
     value the adapter overwrites.
+
+    ``metadata`` (S57, D153) is the trigger's per-type metadata; when
+    non-empty it is recorded under after_state["metadata"] so a
+    THRESHOLD_CROSSED fire captures the crossing identity (rule_id,
+    google_event_id, cancelled_at) — procurement traceability of *why*
+    the briefing fired. Empty/absent metadata (DAILY_SCHEDULED, MANUAL)
+    leaves after_state unchanged so existing event shapes and hashes are
+    untouched.
     """
     after_state = {
         "trigger_id": str(trigger_id),
@@ -277,6 +286,8 @@ def draft_broadcast_initiated_event(
         "user_id": user_id,
         "triggered_at": triggered_at,
     }
+    if metadata:
+        after_state["metadata"] = dict(metadata)
     draft_hash = compute_event_hash(
         actor=actor.user_id,
         tenant_id=tenant_context.tenant_id,

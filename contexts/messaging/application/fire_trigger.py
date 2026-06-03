@@ -134,6 +134,7 @@ async def fire_trigger(
             trigger_type=trigger_context.trigger_type.value,
             user_id=user_id,
             triggered_at=trigger_context.triggered_at,
+            metadata=trigger_context.metadata,
         )
     )
 

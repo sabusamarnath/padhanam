@@ -69,6 +69,40 @@ def test_draft_broadcast_initiated_event_hash_is_recomputable() -> None:
     assert event.this_event_hash == recomputed
 
 
+def test_metadata_recorded_in_after_state_when_present() -> None:
+    """A THRESHOLD_CROSSED fire records the crossing metadata in after_state (S57)."""
+    crossing = {
+        "rule_id": "calendar.meeting_cancelled",
+        "google_event_id": "evt-1",
+        "cancelled_at": "2026-06-03T09:00:00+00:00",
+        "crossing_identity": "calendar.meeting_cancelled:evt-1:2026-06-03T09:00:00+00:00",
+    }
+    event = draft_broadcast_initiated_event(
+        tenant_context=_ctx(),
+        actor=ActorReference(user_id="operator-001"),
+        trigger_id=uuid4(),
+        trigger_type="threshold_crossed",
+        user_id="operator-001",
+        triggered_at="2026-06-03T10:00:00+00:00",
+        metadata=crossing,
+    )
+    assert event.after_state["metadata"] == crossing
+
+
+def test_empty_metadata_leaves_after_state_unchanged() -> None:
+    """Empty/absent metadata does not add the key (existing shapes untouched)."""
+    event = draft_broadcast_initiated_event(
+        tenant_context=_ctx(),
+        actor=ActorReference(user_id="operator-001"),
+        trigger_id=uuid4(),
+        trigger_type="daily_scheduled",
+        user_id="operator-001",
+        triggered_at="2026-05-28T06:00:00+00:00",
+        metadata={},
+    )
+    assert "metadata" not in event.after_state
+
+
 def test_draft_broadcast_initiated_event_threads_correlation_id() -> None:
     event = draft_broadcast_initiated_event(
         tenant_context=_ctx(),

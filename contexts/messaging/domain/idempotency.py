@@ -13,8 +13,15 @@ semantics determine the idempotency window per trigger type:
 - MANUAL: ``None`` — manual triggers are not idempotency-protected;
   the UNIQUE constraint accommodates multiple null rows per Postgres
   semantics so every manual fire is fresh.
-- THRESHOLD_CROSSED: raises ``NotImplementedError`` (S57 implements
-  the composite-of-matched-event-plus-rule key).
+- SCHEDULED_EVALUATION: ``None`` (S57) — the threshold-evaluator scan
+  is not idempotency-protected; it runs on every cadence tick (a
+  per-day or per-hour key would suppress later scans). Dedup happens
+  one stage downstream, at the THRESHOLD_CROSSED key, so the same
+  crossing found on successive scans does not double-brief.
+- THRESHOLD_CROSSED: the crossing's derived-state identity (S57, D153)
+  — ``metadata["crossing_identity"]`` (rule_id + event + cancelled_at,
+  or rule_id + the unordered conflict pair). One brief per crossing,
+  no double-fire across scans.
 - CALENDAR_EVENT, EMAIL_RECEIVED: raise ``NotImplementedError``
   (their metadata schemas commit at their Phase 2-B+ activation
   sessions per the deferred-decisions entry).
@@ -73,12 +80,36 @@ def resolve_idempotency_key(
         return _operator_today(operator_timezone, now=now)
     if trigger_type is BroadcastTriggerType.MANUAL:
         return None
+    if trigger_type is BroadcastTriggerType.SCHEDULED_EVALUATION:
+        # Not idempotency-protected: the scan runs every cadence tick;
+        # dedup is the downstream THRESHOLD_CROSSED key (D153).
+        return None
+    if trigger_type is BroadcastTriggerType.THRESHOLD_CROSSED:
+        return _threshold_crossed_key(metadata)
     raise NotImplementedError(
         f"idempotency key resolution for trigger_type="
         f"{trigger_type.value!r} is not committed yet; "
-        "THRESHOLD_CROSSED lands at S57; CALENDAR_EVENT and "
-        "EMAIL_RECEIVED land at their Phase 2-B+ activation sessions"
+        "CALENDAR_EVENT and EMAIL_RECEIVED land at their Phase 2-B+ "
+        "activation sessions"
     )
+
+
+def _threshold_crossed_key(metadata: dict[str, Any]) -> str:
+    """Derived-state idempotency key for a THRESHOLD_CROSSED crossing (D153).
+
+    Prefers the ``crossing_identity`` the evaluator placed on the
+    metadata (rule_id + event + cancelled_at, or rule_id + sorted
+    conflict pair). Falls back to a composite of the rule and event ids
+    when ``crossing_identity`` is absent, so a malformed metadata still
+    dedupes deterministically rather than every fire being fresh.
+    """
+    identity = str(metadata.get("crossing_identity", "")).strip()
+    if identity:
+        return identity
+    rule_id = str(metadata.get("rule_id", "")).strip()
+    google_event_id = str(metadata.get("google_event_id", "")).strip()
+    cancelled_at = str(metadata.get("cancelled_at", "")).strip()
+    return f"{rule_id}:{google_event_id}:{cancelled_at}"
 
 
 __all__ = ["resolve_idempotency_key"]
