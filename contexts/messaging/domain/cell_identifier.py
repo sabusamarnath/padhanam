@@ -29,6 +29,7 @@ class CellIdentifier(str, Enum):
     MANUAL_ENTRY = "manual_entry"
     AUDIT_CONVERSATION = "audit_conversation"
     MIRROR_CONVERSATION = "mirror_conversation"
+    CALENDAR_CONVERSATION = "calendar_conversation"
     DISPATCH_CLARIFICATION = "dispatch_clarification"
 
 

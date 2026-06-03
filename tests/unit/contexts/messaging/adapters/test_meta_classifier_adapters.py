@@ -188,3 +188,31 @@ def test_llm_adapter_renders_history_into_prompt() -> None:
     )
     assert "Q3 review: revenue 5M" in captured["prompt"]
     assert "tell me about revenue" in captured["prompt"]
+
+
+def test_rule_based_routes_calendar_on_meeting_query() -> None:
+    """S55b-2: the fourth route. A meeting/calendar query routes to calendar."""
+    adapter = RuleBasedMetaClassifierAdapter()
+    result = _run(
+        adapter.classify(
+            tenant_id=uuid4(),
+            inbound_text="What's on my calendar this week?",
+        )
+    )
+    assert result.cell_identifier is CellIdentifier.CALENDAR_CONVERSATION
+    assert result.confidence >= 0.5
+
+
+def test_llm_adapter_routes_calendar_at_high_confidence() -> None:
+    """S55b-2: the meta-classifier schema enum now accepts calendar_conversation."""
+    stub = _StubStructuredOutput(
+        {"cell_identifier": "calendar_conversation", "confidence": 0.9}
+    )
+    adapter = LlmMetaClassifierAdapter(structured_output_port=stub)
+    result = _run(
+        adapter.classify(
+            tenant_id=uuid4(),
+            inbound_text="when is my next meeting?",
+        )
+    )
+    assert result.cell_identifier is CellIdentifier.CALENDAR_CONVERSATION

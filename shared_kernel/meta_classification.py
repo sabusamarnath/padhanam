@@ -22,8 +22,8 @@ from typing import Any
 META_CLASSIFIER_PREAMBLE: str = (
     "You route a portfolio-management message to the correct "
     "conversational surface inside Padhanam's private-assistant "
-    "platform. Three surfaces handle the user's inbounds, plus a "
-    "fourth sentinel for ambiguous cases:\n\n"
+    "platform. Four surfaces handle the user's inbounds, plus a "
+    "fifth sentinel for ambiguous cases:\n\n"
     "- manual_entry: the user is recording new portfolio state "
     "(creating a case, adding a data point against a case, revising "
     "an existing data point). Look for verbs like 'add', 'create', "
@@ -38,6 +38,11 @@ META_CLASSIFIER_PREAMBLE: str = (
     "siblings of an artefact already in context. Look for words like "
     "'show', 'list', 'tell me about', 'drill down', 'parent', "
     "'siblings'.\n"
+    "- calendar_conversation: the user is asking about their calendar "
+    "— meetings and events on their schedule, what is on today or this "
+    "week, meetings with a person, a specific meeting by name, or their "
+    "next meeting. Look for words like 'calendar', 'meeting', 'meetings', "
+    "'schedule', 'event', 'what's on', 'free', 'busy', 'next meeting'.\n"
     "- dispatch_clarification: reserved for the routing layer when "
     "no single surface fits. **Do not return this value yourself**; "
     "if the inbound is ambiguous between surfaces, return your best "
@@ -61,6 +66,7 @@ META_CLASSIFIER_SCHEMA: dict[str, Any] = {
                 "manual_entry",
                 "audit_conversation",
                 "mirror_conversation",
+                "calendar_conversation",
             ],
             "description": (
                 "the conversational surface the inbound routes to"

@@ -45,6 +45,11 @@ _MIRROR_TOKENS = (
 _MIRROR_RELATIVE_TOKENS = (
     "tell me about", "what about ", "drill down", "parent", "siblings",
 )
+_CALENDAR_TOKENS = (
+    "calendar", "meeting", "meetings", "schedule", "what's on",
+    "whats on", "next meeting", "free tomorrow", "free today",
+    "am i busy", "am i free", "on my calendar",
+)
 
 
 class RuleBasedMetaClassifierAdapter:
@@ -79,6 +84,15 @@ class RuleBasedMetaClassifierAdapter:
         if any(token in lowered for token in _AUDIT_TOKENS):
             return MetaClassificationResult(
                 cell_identifier=CellIdentifier.AUDIT_CONVERSATION,
+                confidence=self._default_confidence,
+            )
+
+        # Calendar conversation wins on calendar/meeting/schedule nouns,
+        # checked before the generic mirror read-verbs so "show my
+        # meetings" routes to the calendar surface (S55b-2).
+        if any(token in lowered for token in _CALENDAR_TOKENS):
+            return MetaClassificationResult(
+                cell_identifier=CellIdentifier.CALENDAR_CONVERSATION,
                 confidence=self._default_confidence,
             )
 

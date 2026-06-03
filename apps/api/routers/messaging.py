@@ -23,6 +23,7 @@ import urllib.parse
 from typing import Annotated
 from uuid import UUID
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from apps.api._errors import BoundTenantIdMismatchError
@@ -43,6 +44,20 @@ from contexts.audit.domain.ports import AuditPort
 from contexts.audit_conversation.application.cell import AuditConversationCell
 from contexts.audit_conversation.application.response import (
     render_for_whatsapp as render_audit_for_whatsapp,
+)
+from apps.cli._calendar import build_calendar_refresh_adapter
+from apps.cli._runtime import build_tenant_wiring
+from contexts.calendar.adapters.outbound.postgres._tables import (
+    connections as calendar_connections_table,
+)
+from contexts.calendar.adapters.outbound.postgres.meeting_store import (
+    PostgresMeetingStore,
+)
+from contexts.calendar_conversation.application.cell import (
+    CalendarConversationCell,
+)
+from contexts.calendar_conversation.application.response import (
+    render_for_whatsapp as render_calendar_for_whatsapp,
 )
 from contexts.mirror_conversation.application.cell import (
     MirrorConversationCell,
@@ -77,6 +92,7 @@ from shared_kernel import (
     ConversationInput,
     ConversationInvocation,
     TenantContext,
+    TenantId,
 )
 from shared_kernel.authorisation import ROLE_OPERATOR, authorisations_for_roles
 
@@ -393,6 +409,108 @@ async def _load_conversation_history(
     return tuple(turns)
 
 
+async def _resolve_calendar_connection_id(
+    *, session_factory, tenant_id: str
+) -> UUID | None:
+    """Resolve the tenant's google-calendar connection id, or None.
+
+    Composition-root lookup: the calendar runner needs the connection id
+    to wire the refresh adapter, and ConnectionRepository.get_connection
+    is by-id only. A small select on the connections table is the seam.
+    """
+    stmt = sa.select(calendar_connections_table.c.id).where(
+        calendar_connections_table.c.tenant_id == tenant_id,
+        calendar_connections_table.c.provider_config_key == "google-calendar",
+    )
+    async with session_factory() as session:
+        result = await session.execute(stmt)
+        row = result.first()
+    return UUID(str(row[0])) if row is not None else None
+
+
+async def _run_calendar_conversation_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    inbound_body: str,
+    reply_to: str,
+    inbound_intake_id: UUID,
+) -> None:
+    """Run the calendar-conversation cell over an inbound message and reply (S55b-2).
+
+    Mirrors the audit/mirror runners: reuses the messaging composition's
+    shared ports (structured-output, confidence, threshold, pending) and
+    builds the calendar-specific collaborators per request — the Meeting
+    store (reader) and the D150 refresh adapter wired to the real Nango
+    Proxy + embedder + graph (the consumer landed at S55b-1). When no
+    calendar connection exists for the tenant, the cell runs without a
+    refresh port and answers from the cached store.
+    """
+    tenant_id = str(actor.tenant_context.tenant_id)
+    wiring = build_tenant_wiring(tenant_id)
+    session_factory = wiring.session_factory
+
+    async def _resolver(_tid):
+        return session_factory
+
+    bound = TenantId(str(actor.tenant_context.tenant_id))
+    meeting_store = PostgresMeetingStore(
+        per_tenant_sessionmaker_resolver=_resolver, bound_tenant_id=bound
+    )
+    connection_id = await _resolve_calendar_connection_id(
+        session_factory=session_factory, tenant_id=tenant_id
+    )
+    refresh_port = (
+        build_calendar_refresh_adapter(
+            tenant_id=tenant_id, connection_id=connection_id
+        )
+        if connection_id is not None
+        else None
+    )
+
+    cell = CalendarConversationCell(
+        structured_output_port=messaging.structured_output_port,
+        meeting_reader=meeting_store,
+        actor=actor,
+        confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
+        pending_clarification_reader=messaging.pending_clarification_reader,
+        pending_clarification_repository=(
+            messaging.pending_clarification_repository
+        ),
+        audit_port=audit_port,
+        refresh_port=refresh_port,
+        originating_intake_id=inbound_intake_id,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose="calendar_query", actor_id=actor.actor_id
+        )
+    )
+    state = await cell.turn(state, ConversationInput(text=inbound_body))
+    await cell.close(
+        state, ConversationClosure(reason="calendar_query handled")
+    )
+
+    from datetime import datetime, timezone
+
+    response = state.payload["calendar_response"]
+    rendered = render_calendar_for_whatsapp(
+        response, composed_at=datetime.now(timezone.utc)
+    )
+    await send_message(
+        repository=messaging.repository,
+        delivery_port=messaging.delivery_port,
+        audit_port=audit_port,
+        channel_resolver=messaging.channel_resolver,
+        actor=actor,
+        from_address=messaging.from_address,
+        to_address=reply_to,
+        body=rendered,
+    )
+
+
 def _build_cell_runners(
     *,
     messaging: MessagingComposition,
@@ -432,10 +550,21 @@ def _build_cell_runners(
             inbound_intake_id=context.inbound_intake_id,
         )
 
+    async def _calendar_runner(context: DispatchContext) -> None:
+        await _run_calendar_conversation_cell(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            inbound_body=context.inbound_text,
+            reply_to=reply_to,
+            inbound_intake_id=context.inbound_intake_id,
+        )
+
     return {
         CellIdentifier.MANUAL_ENTRY: _manual_entry_runner,
         CellIdentifier.AUDIT_CONVERSATION: _audit_runner,
         CellIdentifier.MIRROR_CONVERSATION: _mirror_runner,
+        CellIdentifier.CALENDAR_CONVERSATION: _calendar_runner,
     }
 
 
