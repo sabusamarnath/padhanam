@@ -67,6 +67,41 @@ no-plaintext + immutability evidence, and the cancellation-tombstone
 status. Green stages 1 and 3 confirm calendar dispatch integration plus
 procurement-grade citation evidence, closing S55b.
 
-**Status: pending operator execution** (per the procedural-then-executed
-precedent). S55b closes and P15 continues to S56 after stages 1 and 3 run
-green.
+## Executed — 2026-06-03 (live, against the running stack)
+
+Run live against `tenant_a` with working-tree source synced into the
+running `padhanam-api` container (`make sync-code`) and the real LiteLLM/
+Ollama + Nango + Google + Neo4j stack.
+
+- **Stage 1 (dispatch routing) — PASS.** The live LLM meta-classifier
+  routed all four calendar phrasings to `calendar_conversation` at 0.9
+  confidence ("what's on my calendar this week?", "do I have any meetings
+  with Ada?", "when is the board sync?", "what's my next meeting?"), and a
+  cited calendar turn produced `find_by_date_range`, 2 `meeting` citations,
+  refresh fired (no staleness note).
+- **Stage 2 (four-way no-regression) — PASS.** "Add a data point…" →
+  `manual_entry`; "Show me the audit history…" → `audit_conversation`;
+  "List my open cases" → `mirror_conversation` (all 0.9). The fourth route
+  did not regress the prior three.
+- **Stage 3 (citation-snapshot evidence) — PASS.** The cited turn emitted
+  one `meeting_citation` audit event; its `after_state` carries the
+  encrypted content blob (`enc_content`) and **no plaintext title** (the
+  cited meeting's title "Smoke Test 55a" does not appear in the after_state
+  JSON); the snapshot decrypts to the cited title and carries the
+  content_hash. The immutability-under-refresh property is proven at the
+  contract altitude (`test_citation_snapshot_conformance`) and unit altitude;
+  a live rename + re-pull was not exercised (read-only agent cannot mutate
+  the calendar).
+- **Stage 4 (cancellation tombstone) — STILL OPERATOR-GATED.** The calendar
+  held 4 confirmed events with no in-window cancellations (`showDeleted=true`
+  returned 0 cancelled); the read-only agent cannot cancel an event. The
+  tombstone path is unit-proven; the live confirmation carries to S56 (or
+  any session after the operator cancels an in-window event and re-runs the
+  S55a Stage 2 refresh).
+
+**Verdict: stages 1, 2, 3 green; stage 4 operator-gated.** Calendar dispatch
+integration is live (four-way routing reaches the calendar cell, refresh
+fires, citations render), and the citation evidence is plaintext-free and
+decryptable against the real stack. S55b closes; P15 continues to S56.
+
+**Status: executed live 2026-06-03 (stages 1/2/3 green; stage 4 operator-gated).**
