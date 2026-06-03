@@ -43,12 +43,25 @@ def detect_cancellations(
     window_start: datetime,
     window_end: datetime,
 ) -> tuple[RuleMatch, ...]:
-    """Cancelled meetings whose ``cancelled_at`` is in [window_start, window_end]."""
+    """Cancelled meetings whose ``cancelled_at`` is at or after ``window_start``.
+
+    Lower-bound only, deliberately (the S57 live-smoke finding): the
+    calendar tombstone sets ``cancelled_at`` to the refresh time, and
+    refresh-then-evaluate runs the refresh *inside* the scan — so a
+    freshly-refreshed cancellation's ``cancelled_at`` lands a moment
+    *after* the trigger's ``window_end``, and an upper bound would
+    exclude exactly the cancellations the scan is meant to catch. Matching
+    ``cancelled_at >= window_start`` catches currently-cancelled events
+    (idempotency then briefs each once); a Google-dropped tombstone whose
+    ``cancelled_at`` froze before ``window_start`` ages out. ``window_end``
+    is accepted for signature symmetry but not used as an upper bound.
+    """
+    del window_end  # not an upper bound; see docstring
     matches: list[RuleMatch] = []
     for m in meetings:
         if m.status != _CANCELLED or m.cancelled_at is None:
             continue
-        if not (window_start <= m.cancelled_at <= window_end):
+        if m.cancelled_at < window_start:
             continue
         matches.append(
             RuleMatch(

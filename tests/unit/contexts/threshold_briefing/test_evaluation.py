@@ -37,7 +37,7 @@ def test_detect_cancellations_matches_cancelled_in_window() -> None:
     assert "Board sync" in matches[0].summary
 
 
-def test_detect_cancellations_ignores_cancelled_outside_window() -> None:
+def test_detect_cancellations_ignores_cancelled_before_window_start() -> None:
     meetings = (
         make_meeting(title="Old cancel", status="cancelled", cancelled_at=at(9, day=1)),
     )
@@ -45,6 +45,36 @@ def test_detect_cancellations_ignores_cancelled_outside_window() -> None:
         meetings, rule_id="r", window_start=_WINDOW_START, window_end=_WINDOW_END
     )
     assert matches == ()
+
+
+def test_detect_cancellations_matches_cancelled_after_window_end() -> None:
+    """Lower-bound only (S57 live finding): a cancelled_at past window_end still matches.
+
+    The calendar tombstone sets cancelled_at to the refresh time, which —
+    under refresh-then-evaluate — lands after the trigger's window_end; an
+    upper bound would drop exactly the cancellations the scan must catch.
+    """
+    meetings = (
+        make_meeting(title="Just cancelled", status="cancelled", cancelled_at=at(23, day=4)),
+    )
+    matches = detect_cancellations(
+        meetings, rule_id="r", window_start=_WINDOW_START, window_end=_WINDOW_END
+    )
+    assert len(matches) == 1
+
+
+def test_cancellation_identity_excludes_cancelled_at() -> None:
+    """The cancellation crossing identity is stable across cancelled_at churn (S57)."""
+    m1 = detect_cancellations(
+        (make_meeting(title="X", status="cancelled", cancelled_at=at(9), google_event_id="evt-1"),),
+        rule_id="r", window_start=_WINDOW_START, window_end=_WINDOW_END,
+    )[0]
+    m2 = detect_cancellations(
+        (make_meeting(title="X", status="cancelled", cancelled_at=at(14), google_event_id="evt-1"),),
+        rule_id="r", window_start=_WINDOW_START, window_end=_WINDOW_END,
+    )[0]
+    # Same event, different cancelled_at (a re-tombstone): same identity → dedupes.
+    assert m1.crossing_identity() == m2.crossing_identity() == "r:evt-1"
 
 
 def test_detect_conflicts_matches_overlapping_confirmed_pair() -> None:

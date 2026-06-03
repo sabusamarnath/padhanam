@@ -1310,3 +1310,13 @@ Why it may generalise (the promotion question for the audit): this is the first 
 
   - triaged: pending (P15 audit)
   - resolution: pending
+
+## 2026-06-03 — [S57] Live-smoke findings: calendar tombstone resets cancelled_at, and purges content
+
+Source: the S57 threshold-briefing live wiring-proof smoke. Two findings the live run surfaced that the unit/contract tests could not (they stub the store), both handled inside the threshold context (Design 1's no-calendar-touch principle) with the deeper fixes deferred (`charter/deferred-decisions.md`).
+
+- **`cancelled_at` churn.** `tombstone_meeting` resets `cancelled_at` to the refresh time on every sync, and refresh-then-evaluate refreshes inside the scan — so a still-cancelled event's `cancelled_at` lands *after* the trigger's `window_end`. The initial THRESHOLD_CROSSED idempotency key (rule + event + `cancelled_at`) would have changed every scan and re-briefed the same cancellation forever — the exact reverse-Kano noise D153 exists to prevent. Fixed: the cancellation identity excludes `cancelled_at` (rule + event only), and the scan-window match is lower-bound only. This is the *same class of finding* as the S57 pre-build reconciliation (an assumption about substrate behaviour falsified by reality) but surfaced one layer deeper — at the live smoke rather than at reconciliation — because it depends on the *runtime* tombstone behaviour, not the static code shape. The lesson: a live smoke against real substrate state catches state-churn assumptions that stubbed tests structurally cannot.
+- **Tombstone purges content.** The briefing renders "a meeting was cancelled" without the title (the tombstone NULLs encrypted content). Accepted for Phase 2-A; title enrichment deferred.
+
+  - triaged: 2026-06-03
+  - resolution: identity + window fixes applied in-build (`contexts/threshold_briefing/domain/{rule_match,evaluation}.py`); D153 + architecture corrected; deeper calendar-substrate fixes deferred (`charter/deferred-decisions.md`). The reverse-Kano-applied-to-content angle folds into the existing [S57] reverse-Kano promotion candidate.

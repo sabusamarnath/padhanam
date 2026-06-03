@@ -50,15 +50,25 @@ class RuleMatch:
     def crossing_identity(self) -> str:
         """Stable derived-state identity seeding the idempotency key (D153).
 
-        Cancellation → ``rule_id:event:cancelled_at``. Conflict →
-        ``rule_id:eventA|eventB`` with the pair sorted so the identity is
-        order-independent (the same conflict found on two scans dedupes).
+        Cancellation → ``rule_id:event``. Conflict → ``rule_id:eventA|eventB``
+        with the pair sorted so the identity is order-independent.
+
+        The cancellation identity deliberately **excludes** ``cancelled_at``
+        (the S57 live-smoke finding): the calendar tombstone resets
+        ``cancelled_at`` to the refresh time on every sync (a still-cancelled
+        event that Google keeps returning is re-tombstoned with
+        ``cancelled_at=now``), so including it would change the identity on
+        every scan and re-brief the same cancellation forever — the exact
+        noise D153's restraint discipline forbids. Keying on rule + event
+        means a given event's cancellation briefs once, ever, regardless of
+        the ``cancelled_at`` churn. (The deeper fix — a stable original
+        ``cancelled_at`` in the calendar tombstone — is a calendar-substrate
+        change deferred to the dogfooding gate; see deferred-decisions.)
         """
         if self.partner_event_id is not None:
             pair = "|".join(sorted([self.google_event_id, self.partner_event_id]))
             return f"{self.rule_id}:{pair}"
-        marker = self.cancelled_at.isoformat() if self.cancelled_at else ""
-        return f"{self.rule_id}:{self.google_event_id}:{marker}"
+        return f"{self.rule_id}:{self.google_event_id}"
 
     def to_trigger_metadata(self) -> dict[str, Any]:
         """Serialise the crossing into the THRESHOLD_CROSSED metadata dict.
