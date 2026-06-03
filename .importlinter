@@ -206,6 +206,15 @@ layers =
     contexts.calendar.ports
     contexts.calendar.domain
 
+[importlinter:contract:layers-email]
+name = Email layers (hexagonal)
+type = layers
+layers =
+    contexts.email.adapters
+    contexts.email.application
+    contexts.email.ports
+    contexts.email.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
