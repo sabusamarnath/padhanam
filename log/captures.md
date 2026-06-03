@@ -1299,3 +1299,14 @@ Two pre-write reconciliation corrections to the S56a prompt's assumptions (non-b
 
   - triaged: 2026-06-02
   - resolution: vendor findings recorded in D151 (`charter/decisions.md`); the two corrections applied in-build (getProfile anchor; email-local chunker + inherited embedder). No charter contradiction; the design holds with the anchor source and chunker placement corrected.
+
+## 2026-06-03 — [S57] The reverse Kano category governs proactive-tool design — signal-to-noise is the product, restraint over coverage
+
+Source: the S57 D153 framing (threshold-briefing). Recorded as a build-mode observation, **flagged as a methodology-promotion candidate for the P15 audit** (strategic mode), not promoted here.
+
+The observation: for a proactive, attention-interrupting surface (the threshold-briefing), the binding design constraint is not "which signals can we detect" but "which signals earn the interruption." A threshold that fires on low-signal events is a **reverse-Kano feature** — its presence actively *reduces* satisfaction by training the user to dismiss briefings, which then collapses the attentional-infrastructure value of the whole surface. So signal-to-noise is the product itself, not a quality metric layered on top; and the correct design move is restraint — ship a deliberately narrow must-have set (cancel + conflict), exclude the plausible-but-noisy (new-meeting until it distinguishes externally- from self-initiated; volume-count thresholds), and let dogfooding discover which additions earn their place via configuration rather than guessing at build time.
+
+Why it may generalise (the promotion question for the audit): this is the first platform surface that *initiates* rather than *responds*, and the reverse-category discipline is specific to initiation — a reactive surface (the conversation cells) can be permissive because the user pulled; a proactive surface must be conservative because the platform pushed. If P16+ adds more proactive surfaces, "restraint against the reverse category on any platform-initiated surface" may be a methodology principle worth stating once rather than re-deriving per surface. Held as a candidate, not promoted, pending the 3x-recurrence-or-structural-novelty bar at the P15 audit.
+
+  - triaged: pending (P15 audit)
+  - resolution: pending
