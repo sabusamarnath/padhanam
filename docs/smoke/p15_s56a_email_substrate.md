@@ -66,6 +66,42 @@ encryption evidence (Stage 2), the set-diff tombstone status (Stage 3), and
 the index evidence (Stage 4). The measurement is the input the email
 sync-mechanism and refresh-strategy decisions are made from, ahead of S56b.
 
-**Status: pending operator execution** (the google-mail Nango provisioning
-gate is not yet complete; the agent cannot run the measurement). The email
-sync and refresh decisions get made from the measurement before S56b opens.
+## Executed — 2026-06-03 (live, against the baked image; WIRING-PROOF, n=1)
+
+Operator provisioned the google-mail Nango integration + connection
+(`d7a7b48d-24ca-482a-b0ef-7ef2588999c2`); the gate is green (Proxy
+`messages.list` 200 returning `{id, threadId}` stubs; `getProfile` 200,
+historyId present). The baked image was rebuilt (`make build-api`, digest
+`sha256:280d1d4d…`, force-recreated) — confirmed to carry the S56a email
+substrate **and** the S55b-2 four-way enum + email artefact type, **retiring
+the S55b-2 synced-source residue**.
+
+`sync_email` ran end to end against `tenant_a` and the real mailbox:
+- **full pull-store-index = 1602 ms** at **n=1** (1 message in the
+  30-day window; `getProfile messagesTotal=1`); upserted=1, changed=1,
+  indexed=1, tombstoned=0; `history_id='1405'` stored (dormant anchor).
+- `emails` row encrypted at rest (`enc_ciphertext` + `content_hash`
+  present); `email_chunks` row encrypted + embedded; set-diff ran (nothing
+  to delete — correct).
+
+**This is a WIRING-PROOF, not a substrate-proof or a volume measurement.**
+The chain connects live (pull → store → encrypt → chunk → embed → graph →
+set-diff → anchor), and the residue is retired — both real and banked. But
+the **four paths that are email's actual divergences from calendar were
+NOT exercised** at n=1: the **batched** N+1 get (one message = a single
+get, not a batch), **pagination** (one page), **multi-chunk** body
+indexing (one short message = one chunk), and **populated set-diff** (an
+empty window beyond the one message). Those are exactly where email differs
+from calendar and where bugs would hide; they remain unproven.
+
+**The 1602 ms / n=1 number does NOT settle the deferred decisions and must
+not be used to.** The email sync-mechanism (full-pull-only vs incremental)
+and refresh-strategy (D150 Option A vs background-sync-then-serve) stay
+**open**, decided only against a **representative** measurement (a populated
+test mailbox or a secondary real inbox — a few thousand messages), never
+this n=1 number or the reconnaissance estimate (the D149 lesson: measure,
+don't predict).
+
+**Status: executed live 2026-06-03 — wiring-proven (n=1); volume paths
+(batching, pagination, multi-chunk, populated set-diff) and the
+sync/refresh decisions held for a representative inbox.**
