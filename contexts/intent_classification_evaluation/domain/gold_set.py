@@ -67,6 +67,13 @@ INTENT_CLASSES: tuple[str, ...] = (
     "find_by_title",
     "find_next_meeting",
     "unclear_calendar",
+    # Email-conversation surface (S56b). find_by_date_range is shared again.
+    "find_from_sender",
+    "find_by_subject",
+    "find_recent",
+    "unclear_email",
+    # Email dispatch target (the five-way routing gold set).
+    "email_conversation",
 )
 
 
@@ -120,6 +127,7 @@ INTENT_SURFACES: tuple[str, ...] = (
     "dispatch_classifier",
     "mirror_conversation",
     "calendar_conversation",
+    "email_conversation",
 )
 DEFAULT_INTENT_SURFACE: str = "manual_entry"
 
