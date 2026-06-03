@@ -68,13 +68,19 @@ def test_trigger_context_is_frozen() -> None:
 
 
 def test_broadcast_trigger_type_values() -> None:
-    """The five Phase 2-A trigger types each carry a string value."""
+    """The Phase 2-A trigger types each carry a string value.
+
+    Six values: the five from S53 plus SCHEDULED_EVALUATION (S57, D153 —
+    the threshold-evaluator scan trigger, the additive extension D142
+    anticipated).
+    """
     assert BroadcastTriggerType.DAILY_SCHEDULED.value == "daily_scheduled"
+    assert BroadcastTriggerType.SCHEDULED_EVALUATION.value == "scheduled_evaluation"
     assert BroadcastTriggerType.THRESHOLD_CROSSED.value == "threshold_crossed"
     assert BroadcastTriggerType.CALENDAR_EVENT.value == "calendar_event"
     assert BroadcastTriggerType.EMAIL_RECEIVED.value == "email_received"
     assert BroadcastTriggerType.MANUAL.value == "manual"
-    assert len(list(BroadcastTriggerType)) == 5
+    assert len(list(BroadcastTriggerType)) == 6
 
 
 # --------------------------------------------------------------------------- BroadcastResponse
