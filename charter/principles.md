@@ -122,13 +122,13 @@ Origin: karma prior-art product specification §11.3, transplanted at P13 framin
 
 ### Audit trail as source of truth
 
-The audit trail is the canonical record of what happened in the system. Every state change emits an audit event before persistence completes. Derived state (rendered views, cached aggregates, analytical projections) reconstructs from the audit trail when needed. The audit trail is queryable, immutable, and hash-chained.
+The audit trail is the canonical record of what happened in the system. Every state change on tenant-authored canonical state emits an audit event before persistence completes. Per D155 this clause is scoped: external-source mutable caches (the calendar and email stores) are excluded and carry a re-pull-plus-citation-snapshot provenance model instead of chained cache churn. Derived state (rendered views, cached aggregates, analytical projections) reconstructs from the audit trail when needed. The audit trail is queryable, immutable, and hash-chained.
 
 Origin: karma prior-art product specification §11.5, transplanted at P13 framing per Decision 6 option (c). Padhanam P3 already commits the hash-chained append-only audit substrate; this principle elevates the substrate to a charter-grade discipline that binds every subsequent surface design decision.
 
 ### Originals never erased
 
-Persisted artefacts (assertions, intake records, gate decisions, messages, attachments) are never deleted. Updates create new versions; user-initiated removal marks artefacts as archived but does not erase them. The Revisable Protocol per D114 carries this discipline at the entity level; this principle carries it at the system level.
+Persisted artefacts (assertions, intake records, gate decisions, messages, attachments) are never deleted. Updates create new versions; user-initiated removal marks artefacts as archived but does not erase them. The Revisable Protocol per D114 carries this discipline at the entity level; this principle carries it at the system level. Per D155 this binds tenant-authored canonical originals; eviction of an external-source mutable cache row (for example, the calendar tombstone purging an uncited cancelled meeting's content) is not erasure of an original, because the row is a cache whose source of truth is external.
 
 Origin: karma prior-art product specification §11.5, transplanted at P13 framing per Decision 6 option (c). The discipline supports two requirements that the platform's commercial positioning depends on: audit-grade defensibility under regulatory review, and trust-relationship preservation when the user revises positions over time.
 
