@@ -37,6 +37,9 @@ from uuid import UUID, uuid4
 from contexts.calendar.domain.meeting import Meeting
 from contexts.calendar.ports.meeting_repository import MeetingReader
 
+from contexts.calendar_conversation.application.audit_events import (
+    draft_meeting_citation_event,
+)
 from contexts.calendar_conversation.application.ports.calendar_refresh import (
     CalendarRefreshError,
     CalendarRefreshPort,
@@ -76,6 +79,7 @@ from contexts.messaging.api import (
 
 from shared_kernel import (
     ActorContext,
+    ActorReference,
     ConfidenceCalculator,
     ConversationClosure,
     ConversationInput,
@@ -345,7 +349,9 @@ class CalendarConversationCell:
             intent.title_reference, meetings
         )
         if matched is not None:
-            response = self._compose([matched], summary=f"“{intent.title_reference}”")
+            response = await self._compose_and_emit(
+                [matched], summary=f"“{intent.title_reference}”"
+            )
             return self._render_turn_state(
                 state=state,
                 response=response,
@@ -404,13 +410,38 @@ class CalendarConversationCell:
         else:
             return await self._handle_unclear(state=state, intent=intent)
 
-        response = self._compose(list(matched[: self._page_size]), summary=summary)
+        response = await self._compose_and_emit(
+            list(matched[: self._page_size]), summary=summary
+        )
         return self._render_turn_state(
             state=state,
             response=response,
             intent_class=intent_class,
             confidence_band="high",
         )
+
+    async def _compose_and_emit(
+        self, meetings: list[Meeting], *, summary: str
+    ) -> CalendarConversationResponse:
+        """Compose a cited answer and freeze its citation evidence (D148 option b).
+
+        When meetings are cited, emit a ``meeting_citation`` audit event
+        carrying an immutable, plaintext-free snapshot of each cited
+        Meeting (sensitive content envelope-encrypted per D21). The live
+        Meeting row remains the mutable search cache; this snapshot is the
+        evidence record, frozen by the append-only audit chain.
+        """
+        response = self._compose(meetings, summary=summary)
+        if meetings:
+            await self._audit_port.emit(
+                draft_meeting_citation_event(
+                    tenant_context=self._actor.tenant_context,
+                    actor=ActorReference(user_id=self._actor.actor_id),
+                    meetings=tuple(meetings),
+                    emitted_at=self._clock().isoformat(),
+                )
+            )
+        return response
 
     def _compose(
         self, meetings: list[Meeting], *, summary: str
@@ -532,7 +563,9 @@ class CalendarConversationCell:
                 intent_class=CalendarIntentType.FIND_BY_TITLE.value,
                 confidence_band="resolution_stale",
             )
-        response = self._compose([meeting], summary=f"“{chosen.get('label', '')}”")
+        response = await self._compose_and_emit(
+            [meeting], summary=f"“{chosen.get('label', '')}”"
+        )
         return self._render_turn_state(
             state=state,
             response=response,
