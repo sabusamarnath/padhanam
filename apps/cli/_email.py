@@ -154,8 +154,75 @@ def build_email_sync_components(*, tenant_id: str):  # pragma: no cover - compos
     }
 
 
+class EmailRefreshAdapter:
+    """Implements EmailRefreshPort over the D151 sync_email full pull (D152 Option A).
+
+    Bound to one tenant's email connection. ``refresh`` runs the full-pull
+    sync (store + chunk + embed + graph) in-turn and returns on success;
+    any source/pipeline failure is mapped to ``EmailRefreshError`` so the
+    cell serves the cached store with a staleness note. The deferred
+    background-sync optimization swaps *this* adapter for a warm-store one
+    behind the same port — the cell does not change.
+    """
+
+    def __init__(
+        self, *, connection_id, message_source, connections, emails, email_reader,
+        embedder, graph_index, chunks, trigger=None,
+    ) -> None:
+        self._connection_id = connection_id
+        self._message_source = message_source
+        self._connections = connections
+        self._emails = emails
+        self._email_reader = email_reader
+        self._embedder = embedder
+        self._graph_index = graph_index
+        self._chunks = chunks
+        self._trigger = trigger
+
+    async def refresh(self, *, tenant_context) -> None:
+        from contexts.email.application.sync_email import sync_email
+        from contexts.email.domain.errors import (
+            EmailSourceConfigurationError, EmailSourceError, NoSuchConnectionError,
+        )
+        from contexts.email.domain.sync_trigger import EmailSyncTrigger
+        from contexts.email_conversation.application.ports.email_refresh import EmailRefreshError
+        from contexts.ingestion.ports.chunk_embedder_port import (
+            EmbedderConfigurationError, EmbedderError,
+        )
+        from contexts.ingestion.ports.graph_repository_port import (
+            GraphRepositoryConfigurationError, GraphRepositoryError,
+        )
+
+        try:
+            await sync_email(
+                tenant_context=tenant_context, connection_id=self._connection_id,
+                trigger=self._trigger or EmailSyncTrigger.POLL,
+                message_source=self._message_source, connections=self._connections,
+                emails=self._emails, email_reader=self._email_reader,
+                embedder=self._embedder, graph_index=self._graph_index, chunks=self._chunks,
+            )
+        except (
+            EmailSourceError, EmailSourceConfigurationError, NoSuchConnectionError,
+            EmbedderError, EmbedderConfigurationError,
+            GraphRepositoryError, GraphRepositoryConfigurationError,
+        ) as exc:
+            raise EmailRefreshError(f"email refresh failed: {type(exc).__name__}: {exc}") from exc
+
+
+def build_email_refresh_adapter(*, tenant_id: str, connection_id):  # pragma: no cover - composition-root wiring
+    """Wire the D152 Option-A refresh adapter (sync_email full-pull-in-turn behind the port)."""
+    c = build_email_sync_components(tenant_id=tenant_id)
+    return EmailRefreshAdapter(
+        connection_id=connection_id, message_source=c["message_source"], connections=c["connections"],
+        emails=c["emails"], email_reader=c["email_reader"], embedder=c["embedder"],
+        graph_index=c["graph_index"], chunks=c["chunks"],
+    )
+
+
 __all__ = [
     "EmailChunkEmbedderBridge",
     "EmailGraphIndexBridge",
+    "EmailRefreshAdapter",
+    "build_email_refresh_adapter",
     "build_email_sync_components",
 ]
