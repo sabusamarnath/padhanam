@@ -1252,4 +1252,22 @@ The S55a-fix live smoke (Stages 1–3 green against `tenant_a` and the real Goog
 - **The live cancellation-tombstone sub-step** (S55a Stage 2 step 3): operator-gated because the granted scope is `calendar.readonly`, so the build agent cannot cancel a calendar event to drive the tombstone path live. The tombstone-via-full-pull path is unit-proven (`test_cancelled_event_is_tombstoned_via_full_pull`); the live confirmation folds into the S55b-1 close smoke if the operator has cancelled an in-window event, else remains operator-gated and is recorded as such.
 
   - triaged: 2026-06-02
-  - resolution: note (residue-closure plan). Both confirmations are scoped into the S55b-1 close smoke (`docs/smoke/p15_s55b1_calendar_conversation.md`), which rebuilds the baked image first. No charter change; this is verification-residue bookkeeping, not an architectural decision.
+  - resolution: note (residue-closure plan). Both confirmations are scoped into the S55b-1 close smoke (`docs/smoke/p15_s55b1_calendar_conversation.md`), which rebuilds the baked image first. No charter change; this is verification-residue bookkeeping, not an architectural decision. **Update (S55b-1 close, 2026-06-03):** baked-image confirmation executed live (digest `c1d5c067…`; the `show_deleted` param confirmed in the artifact; Stage 1 green); the cancellation tombstone remained operator-gated at S55b-1 close and carries to the S55b-2 close smoke.
+
+## 2026-06-02 — [S55b-2] Two process notes: build-prompts must not direct methodology promotions; the closed-union touchpoint checklist for new cells
+
+Source: S55b-2 pre-write reconciliation, acting on the D47 tension the S55b-1 close surfaced.
+
+### Prompt-drafting: a build prompt may direct a build-mode observation to the living-hypothesis surface, but must never direct a methodology *promotion*
+
+The S55b-1 prompt directed the clean-bytecode promotion to `charter/methodology.md` as a build task. Under D47 a methodology promotion is a strategic-mode deliverable — it is ratified strategic-mode and recorded in a charter commit with explicit strategic provenance — whereas a build session's legitimate charter writes are session-scoped (session-log entries, captures, the D-entries and current-package/architecture touchpoints a build necessarily lands). D47's realistic reading is that it governs the *authority and provenance* of a methodology promotion, not the file-write mechanics (every charter file commits through the build UI; a strict no-build-write reading would make `methodology.md` uncommittable). The discipline forward: a strategic-mode prompt drafts methodology promotions; a build-mode prompt may at most route a *build-mode observation* to the living-hypothesis surface (D40/D113) and flag a promotion *candidate*, never direct the promotion itself. The S55b-2 charter commit applies the provenance correction to v6 (annotate, not revert — a revert would discard a true lesson).
+
+  - triaged: 2026-06-02
+  - resolution: acted on at S55b-2 commit 1 (the v6 provenance annotation). Recurrence test: a second build-prompt-directed promotion promotes this to a `charter/methodology.md` process note; single instance for now.
+
+### Closed-union touchpoint checklist for adding a conversation cell
+
+Adding a ConversationFlow cell touches a known set of closed unions, and S55b-1 hit all of them ad hoc (each surfaced as a test failure or a reconciliation finding rather than from a checklist): the `ArtefactCitation` discriminator (`KNOWN_ARTEFACT_TYPES`, shared_kernel) — already carried `meeting` from S55a; `KNOWN_TARGET_CELLS` (messaging pending_clarification) — needed `calendar_conversation` added; `INTENT_CLASSES` / `INTENT_SURFACES` (intent_classification_evaluation gold_set) — needed the calendar classes + surface; and the meta-classifier `cell_identifier` enum (`shared_kernel/meta_classification.py`) plus the `CellIdentifier` dispatch map — extended at S55b-2 for routing. Forward: a cell-adding prompt (S56 email five-way) names these four closed unions upfront so they are extended deliberately in one pass, not discovered one failing test at a time.
+
+  - triaged: 2026-06-02
+  - resolution: note (reusable checklist). S56's email-cell prompt should carry the four-union list; if S56 hits a *fifth* closed union not on this list, the checklist gains an item.
