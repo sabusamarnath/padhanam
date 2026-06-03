@@ -45,12 +45,15 @@ from shared_kernel.conversation_flow import ArtefactCitation, CitedResponse
 class BroadcastTriggerType(StrEnum):
     """The trigger type discriminator on TriggerContext (D142).
 
-    Phase 2-A registers five values. Future trigger types extend
-    additively; the BroadcastDispatch registry routes by this
-    discriminator deterministically (no classifier consultation).
+    Phase 2-A registers six values (``SCHEDULED_EVALUATION`` added at S57
+    for the threshold-evaluator scan, per D153 — the additive extension
+    D142 anticipated). Future trigger types extend additively; the
+    BroadcastDispatch registry routes by this discriminator
+    deterministically (no classifier consultation).
     """
 
     DAILY_SCHEDULED = "daily_scheduled"
+    SCHEDULED_EVALUATION = "scheduled_evaluation"
     THRESHOLD_CROSSED = "threshold_crossed"
     CALENDAR_EVENT = "calendar_event"
     EMAIL_RECEIVED = "email_received"

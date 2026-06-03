@@ -222,6 +222,14 @@ layers =
     contexts.email.ports
     contexts.email.domain
 
+[importlinter:contract:layers-threshold-briefing]
+name = Threshold-briefing layers (hexagonal)
+type = layers
+layers =
+    contexts.threshold_briefing.adapters
+    contexts.threshold_briefing.application
+    contexts.threshold_briefing.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
