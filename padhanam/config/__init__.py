@@ -1,5 +1,6 @@
 from padhanam.config.base import PadhanamSettings, SecretManagerSource
 from padhanam.config.calendar import CalendarSettings
+from padhanam.config.email import EmailSettings
 from padhanam.config.graph import Neo4jSettings
 from padhanam.config.inference import (
     PRICING_TABLE,
@@ -22,6 +23,7 @@ __all__ = [
     "CalendarSettings",
     "ControlPlaneSettings",
     "CostBreakdown",
+    "EmailSettings",
     "InferenceSettings",
     "LatencyTierConfig",
     "MessagingAdapter",

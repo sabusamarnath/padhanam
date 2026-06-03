@@ -22,12 +22,21 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
+from contexts.email.application.index_email import index_email
 from contexts.email.domain.email import Email, email_from_message
 from contexts.email.domain.errors import NoSuchConnectionError
 from contexts.email.domain.sync_trigger import EmailSyncTrigger
 from contexts.email.ports.connection_repository import ConnectionRepository
+from contexts.email.ports.email_index_ports import (
+    EmailChunkEmbeddingPort,
+    EmailGraphIndexPort,
+)
 from contexts.email.ports.email_message_source_port import EmailMessageSourcePort
-from contexts.email.ports.email_repository import EmailReader, EmailRepository
+from contexts.email.ports.email_repository import (
+    EmailChunkRepository,
+    EmailReader,
+    EmailRepository,
+)
 from shared_kernel.tenant_context import TenantContext
 
 _MAX_PAGES = 200
@@ -42,6 +51,7 @@ class EmailSyncResult:
     changed_message_ids: tuple[str, ...]
     history_id: str | None = None
     changed_emails: tuple[Email, ...] = field(default_factory=tuple)
+    indexed: int = 0
 
 
 async def sync_email(
@@ -53,6 +63,9 @@ async def sync_email(
     connections: ConnectionRepository,
     emails: EmailRepository,
     email_reader: EmailReader,
+    embedder: EmailChunkEmbeddingPort | None = None,
+    graph_index: EmailGraphIndexPort | None = None,
+    chunks: EmailChunkRepository | None = None,
     window_days: int = 30,
     now: datetime | None = None,
 ) -> EmailSyncResult:
@@ -118,6 +131,22 @@ async def sync_email(
         )
         tombstoned += 1
 
+    # Index new-or-content-changed Emails into the inherited substrate when
+    # the indexing tools are wired (apps/ composition): chunk the body,
+    # embed the chunks, replace the message's chunk rows, and merge the
+    # participant graph. A content change re-chunks and re-embeds.
+    indexed = 0
+    if embedder is not None and graph_index is not None and chunks is not None:
+        for email in changed_emails:
+            await index_email(
+                tenant_context=tenant_context,
+                email=email,
+                embedder=embedder,
+                graph_index=graph_index,
+                chunks=chunks,
+            )
+            indexed += 1
+
     # Store the dormant mailbox history anchor (no incremental consumes it).
     history_id = await message_source.get_mailbox_history_id(connection=connection)
     if history_id is not None:
@@ -135,6 +164,7 @@ async def sync_email(
         changed_message_ids=tuple(changed),
         history_id=history_id,
         changed_emails=tuple(changed_emails),
+        indexed=indexed,
     )
 
 
