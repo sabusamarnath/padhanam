@@ -35,6 +35,14 @@ _META_FOUR_WAY_FIXTURE = (
     Path(__file__).resolve().parents[3]
     / "fixtures/intent_classification/meta_classifier_four_way_gold_set.yaml"
 )
+_EMAIL_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/email_conversation_gold_set.yaml"
+)
+_META_FIVE_WAY_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures/intent_classification/meta_classifier_five_way_gold_set.yaml"
+)
 
 
 def test_yaml_reader_loads_audit_conversation_fixture() -> None:
@@ -140,6 +148,48 @@ def test_yaml_reader_loads_meta_classifier_four_way_fixture() -> None:
     assert "audit_conversation" in classes
     assert "mirror_conversation" in classes
     assert "calendar_conversation" in classes
+
+
+def test_yaml_reader_loads_email_conversation_fixture() -> None:
+    """S56b: sixth instance of the parameterised D137 substrate."""
+    reader = YamlGoldSetReader(path=_EMAIL_FIXTURE)
+    gold_set = reader.get_gold_set("email_conversation_p15_s56b")
+    assert gold_set.name == "email_conversation_p15_s56b"
+    assert gold_set.intent_surface == "email_conversation"
+    assert len(gold_set.entries) >= 18
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    # Every email-conversation intent class has at least one entry.
+    assert "find_by_date_range" in classes
+    assert "find_from_sender" in classes
+    assert "find_by_subject" in classes
+    assert "find_recent" in classes
+    assert "unclear_email" in classes
+
+
+def test_yaml_reader_loads_meta_classifier_five_way_fixture() -> None:
+    """S56b: the meta-classifier gold set extended to the fifth route."""
+    reader = YamlGoldSetReader(path=_META_FIVE_WAY_FIXTURE)
+    gold_set = reader.get_gold_set("meta_classifier_five_way_p15_s56b")
+    assert gold_set.name == "meta_classifier_five_way_p15_s56b"
+    assert gold_set.intent_surface == "dispatch_classifier"
+    assert len(gold_set.entries) >= 25
+    classes = {e.expected_intent_class for e in gold_set.entries}
+    assert classes.issubset(
+        {
+            "manual_entry",
+            "audit_conversation",
+            "mirror_conversation",
+            "calendar_conversation",
+            "email_conversation",
+            "dispatch_clarification",
+        }
+    )
+    # All five real surfaces carry at least one entry.
+    assert "manual_entry" in classes
+    assert "audit_conversation" in classes
+    assert "mirror_conversation" in classes
+    assert "calendar_conversation" in classes
+    assert "email_conversation" in classes
 
 
 def test_yaml_reader_loads_manual_entry_fixture_with_default_surface() -> None:

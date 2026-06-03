@@ -1,0 +1,69 @@
+# Email-conversation gold-set fixture (D137, D138, D151, P15, S56b).
+#
+# Operator-shaped inputs paired with expected email-intent classifications.
+# Coverage: each of the five EmailIntentType values (find_by_date_range,
+# find_from_sender, find_by_subject, find_recent, unclear_email).
+# The intent_surface field selects the email-conversation prompt+schema
+# the D137 runner uses (the S51 parameterisation, extended at S56b).
+#
+# find_by_date_range is shared with the audit and calendar surfaces as a
+# string; here it means an inbox time-window query. The email surface is
+# read-only (D151: the platform reads email but never sends), so send/
+# reply requests ("reply to…", "send…") map to unclear_email — a
+# deliberate, defensible mapping a future write surface would revisit.
+
+name: email_conversation_p15_s56b
+intent_surface: email_conversation
+entries:
+  # ----- find_by_date_range (4) -----
+  - input_phrasing: "What email came in today?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "Show me my inbox from this week"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "Any messages yesterday?"
+    expected_intent_class: find_by_date_range
+  - input_phrasing: "What did I get over the weekend?"
+    expected_intent_class: find_by_date_range
+
+  # ----- find_from_sender (4) -----
+  - input_phrasing: "Did I get an email from Priya?"
+    expected_intent_class: find_from_sender
+  - input_phrasing: "Show me messages from the bank"
+    expected_intent_class: find_from_sender
+  - input_phrasing: "Any email from sarah@example.com?"
+    expected_intent_class: find_from_sender
+  - input_phrasing: "What has finance sent me?"
+    expected_intent_class: find_from_sender
+
+  # ----- find_by_subject (4) -----
+  - input_phrasing: "Find the email about the board pack"
+    expected_intent_class: find_by_subject
+  - input_phrasing: "Where's the message about the Q3 invoice?"
+    expected_intent_class: find_by_subject
+  - input_phrasing: "Pull up the email titled term sheet"
+    expected_intent_class: find_by_subject
+  - input_phrasing: "The email about the Acme renewal"
+    expected_intent_class: find_by_subject
+
+  # ----- find_recent (4) -----
+  - input_phrasing: "What's the latest email?"
+    expected_intent_class: find_recent
+  - input_phrasing: "Show me my most recent messages"
+    expected_intent_class: find_recent
+  - input_phrasing: "What just came in?"
+    expected_intent_class: find_recent
+  - input_phrasing: "Anything new in my inbox?"
+    expected_intent_class: find_recent
+
+  # ----- unclear_email (4) -----
+  # Greetings and capability questions do not map to a read query.
+  - input_phrasing: "Hi there"
+    expected_intent_class: unclear_email
+  - input_phrasing: "What can you help me with?"
+    expected_intent_class: unclear_email
+  # Send/reply requests are out of scope on the read-only email surface
+  # (D151); they map to unclear here until a write surface exists.
+  - input_phrasing: "Reply to Priya saying I'll be there"
+    expected_intent_class: unclear_email
+  - input_phrasing: "Send an email to the team about the launch"
+    expected_intent_class: unclear_email
