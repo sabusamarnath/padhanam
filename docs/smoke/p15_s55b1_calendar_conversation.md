@@ -87,6 +87,40 @@ Stage 4 staleness-note fallback. Green stages 1 and 3 confirm the calendar
 conversation surface answers from a freshly-refreshed Meeting store with
 meeting citations, and the fix is in the baked artifact.
 
-**Status: pending operator execution** (build environment cannot reach
-docker/Nango/Google/Ollama as a standing guarantee). S55b-2 opens after
-the operator runs stages 1 and 3 green.
+## Executed — 2026-06-03 (live, against the rebuilt baked image)
+
+Run live against the full stack after `make build-api` rebuilt the
+`padhanam-api` image (digest `sha256:c1d5c067…`, repinned in `compose.yaml`)
+and `docker compose up -d --force-recreate padhanam-api` brought it up.
+The baked image was confirmed to carry the `show_deleted` parameter (the
+D149 fix is in the artifact, not synced source — the S55a-fix residue is
+closed).
+
+- **Stage 1 (baked-image pull) — PASS.** Scoped full pull returned 4
+  confirmed events, `next_sync_token is None: True`; latency **524 ms cold,
+  259 / 249 ms steady** (holds against the ~376 ms S55a-fix baseline).
+- **Stage 2 (cancellation tombstone) — STILL OPERATOR-GATED.** The
+  calendar held 4 confirmed events with no in-window cancellations, and the
+  build agent cannot mutate the `calendar.readonly` calendar. Tombstone
+  path remains unit-proven (`test_cancelled_event_is_tombstoned_via_full_pull`).
+- **Stage 3 (cell end-to-end) — PASS.** Against `tenant_a` with the real
+  LiteLLM structured-output port and `build_calendar_refresh_adapter`:
+  - "What's on my calendar this week?" → `find_by_date_range`, high
+    confidence, **refresh fired (no staleness note)**, **2 meetings cited**
+    with `meeting`-discriminated citations (the refresh pulled fresh
+    through Nango → Google, stored to tenant_a, embedded via Ollama, graph-
+    indexed via Neo4j).
+  - "What's my next meeting?" → `find_next_meeting`, high, 1 citation.
+- **Stage 4 (refresh fallback) — PASS.** With `nango-server` stopped, the
+  refresh raised `CalendarRefreshError`; the cell served the **cached**
+  Meeting store (2 meetings), appended the staleness note "Showing your
+  cached calendar — the live refresh is currently unavailable.", and the
+  turn did not fail (`is_open=True`). `nango-server` restarted.
+
+**Verdict: stages 1, 3, 4 green; Stage 2 operator-gated.** The calendar
+conversation surface answers from a freshly-refreshed Meeting store with
+meeting citations, falls back to the cached store with a staleness note
+when the refresh is unavailable, and the D149 fix is confirmed in the baked
+artifact. **S55b-2 may open.**
+
+**Status: executed live 2026-06-03 (stages 1/3/4 green; stage 2 operator-gated).**
