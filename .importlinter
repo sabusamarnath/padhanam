@@ -189,6 +189,13 @@ layers =
     contexts.calendar_conversation.application
     contexts.calendar_conversation.domain
 
+[importlinter:contract:layers-email-conversation]
+name = Email-conversation layers (hexagonal)
+type = layers
+layers =
+    contexts.email_conversation.application
+    contexts.email_conversation.domain
+
 [importlinter:contract:layers-daily-briefing]
 name = Daily-briefing layers (hexagonal)
 type = layers
