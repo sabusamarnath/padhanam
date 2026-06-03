@@ -1498,6 +1498,76 @@ the content for embedding and the hash. `Connection` is a frozen dataclass
 carrying identity and the opaque provider references. Both are
 framework-free per D16.
 
+## Email context tables (per-tenant)
+
+Migration `0027_email_substrate` (S56a, D151) ships these on every
+per-tenant database. Per-tenant only per D32. Table names carry the
+`email_` prefix so they do not collide with calendar's `connections`/
+`meetings` on the same per-tenant database.
+
+### `email_connections`
+
+| Column                    | Type          | Constraints                                                          |
+|---------------------------|---------------|----------------------------------------------------------------------|
+| `id`                      | `uuid`        | primary key                                                          |
+| `tenant_id`               | `uuid`        | not null                                                             |
+| `jurisdiction`            | `text`        | not null                                                             |
+| `provider`                | `text`        | not null (e.g. `google_mail`)                                        |
+| `provider_config_key`     | `text`        | not null (opaque Nango integration key, e.g. `google-mail`)          |
+| `provider_connection_ref` | `text`        | not null (opaque Nango connection id)                                |
+| `history_id`              | `text`        | nullable; dormant mailbox incremental anchor (getProfile; D151)      |
+| `created_at` / `updated_at` | `timestamptz` | not null; default `now()`                                          |
+| UNIQUE                    | composite     | UNIQUE on `(tenant_id, provider, provider_config_key)`              |
+
+### `emails`
+
+| Column                | Type          | Constraints                                                                 |
+|-----------------------|---------------|-----------------------------------------------------------------------------|
+| `id`                  | `uuid`        | primary key                                                                 |
+| `tenant_id`           | `uuid`        | not null                                                                    |
+| `jurisdiction`        | `text`        | not null                                                                    |
+| `message_id`          | `text`        | not null (stable Gmail message id)                                          |
+| `thread_id`           | `text`        | nullable                                                                    |
+| `received_at`         | `timestamptz` | nullable (internalDate); the set-diff window scope                          |
+| `labels`              | `jsonb`       | not null; default `'[]'` (Gmail label ids — non-sensitive metadata)         |
+| `history_id`          | `text`        | nullable; per-message history id (metadata)                                 |
+| `content_hash`        | `text`        | nullable; digest of subject+body; NULL when tombstoned                      |
+| `enc_*` (5 columns)   | `bytea`/`int` | P3 envelope-encrypted content (subject/body/addresses/snippet; D21); NULL when tombstoned |
+| `created_at` / `updated_at` | `timestamptz` | not null; default `now()`                                             |
+| `deleted_at`          | `timestamptz` | nullable; set-diff soft-delete tombstone (row retained)                     |
+| UNIQUE                | composite     | UNIQUE on `(tenant_id, message_id)`; index on `(tenant_id, received_at)`    |
+
+Subject, body, from/to/cc addresses, and snippet are field-level encrypted
+via P3 envelope encryption (D21) into the five `enc_*` columns; structural
+metadata stays plaintext for querying. Deletion is set-diff (D151): Gmail's
+bounded query excludes Trash, so a message present last pull and absent
+this pull is tombstoned (`deleted_at` set; `enc_*`, `content_hash`, and the
+message's chunk rows purged; row retained). Email content is immutable
+once received, so an Email cites directly with no citation-time snapshot.
+
+### `email_chunks`
+
+| Column                | Type          | Constraints                                                          |
+|-----------------------|---------------|----------------------------------------------------------------------|
+| `id`                  | `uuid`        | primary key                                                          |
+| `tenant_id`           | `uuid`        | not null                                                             |
+| `jurisdiction`        | `text`        | not null                                                             |
+| `email_id`            | `uuid`        | not null (the parent Email)                                          |
+| `message_id`          | `text`        | not null                                                             |
+| `chunk_index`         | `integer`     | not null                                                             |
+| `enc_*` (5 columns)   | `bytea`/`int` | P3 envelope-encrypted chunk text (D21)                               |
+| `embedding`           | `vector(768)` | per-chunk embedding; HNSW cosine index `email_chunks_embedding_hnsw_idx` |
+| `created_at`          | `timestamptz` | not null; default `now()`                                            |
+| UNIQUE                | composite     | UNIQUE on `(tenant_id, message_id, chunk_index)`; index on `(tenant_id, message_id)` |
+
+The email-local body-chunk store (D151) — the largest divergence from
+calendar, since email bodies are long. Bodies are chunked (an email-local
+chunker) and each chunk embedded via ingestion's inherited
+`ChunkEmbedderPort.embed(chunks)` (the embedder is a port; ingestion's
+parsers are not reused). `replace_chunks` is the unit of write (delete +
+re-insert per message); the `embedding vector(768)` column is added in raw
+SQL with an HNSW cosine index, mirroring calendar/ingestion.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,
