@@ -889,6 +889,17 @@ on-device boundary mirroring the operator's standalone-tool posture.
 of personal-data-at-rest in the graph store, whichever is first. References D156, D63 (graph
 tenant scoping), D21 (envelope encryption).
 
+**Wipe-completeness requirement (surfaced at dogfood setup).** The operator requires a clean wipe
+of their personal data. Database-per-tenant makes this a single database drop today, because the
+daily driver is Postgres-only. As personal data spreads, a complete wipe grows to a Postgres
+tenant-DB drop plus a Neo4j delete-by-tenant-property (the graph is a shared instance scoped by
+property per D63, not a per-tenant database) plus a Langfuse trace clear (when conversational
+cells capture prompts). This requirement strengthens the case for resolving the isolation
+decision toward a per-tenant or separate graph store and a deliberate trace-retention policy,
+because clean-wipeability is hard to guarantee on a shared, property-scoped store. The dogfood
+wipe tooling (`ops/dogfood_wipe.sh`, `docs/ops/dogfood-runbook.md`) covers the Postgres drop only,
+and names the Neo4j and trace-store steps as out of scope until personal data reaches them.
+
 ### Quantitative causal-inference engine
 
 Surfaced by D156. Phase 2 ships a qualitative causal map: directed factor-and-link structure
