@@ -250,10 +250,11 @@
         let detail;
         try { detail = await api(`/portfolio/cases/${it.item_id}`); }
         catch { return; }
+        const c = detail.case || detail;
         const dps = (detail.data_points || []).map((dp) => `
-          <div class="dp"><div class="dt">${escapeHtml(dp.data_point_type || dp.type || "data point")}</div>${escapeHtml(JSON.stringify(dp.value || {}))}</div>`).join("");
-        body.innerHTML = `<div class="cell">${it.target_cell}</div><h2>${escapeHtml(detail.title)}</h2>
-          <p class="detail">Status: ${escapeHtml(detail.status)}</p>
+          <div class="dp"><div class="dt">${escapeHtml(dp.data_point_type || "data point")}</div>${escapeHtml(JSON.stringify(dp.current_value || dp.value || {}))}</div>`).join("");
+        body.innerHTML = `<div class="cell">${it.target_cell}</div><h2>${escapeHtml(c.title)}</h2>
+          <p class="detail">Status: ${escapeHtml(c.status)}</p>
           <div class="section-label">Data points</div>${dps || '<p class="empty">No data points yet.</p>'}`;
       } else {
         body.innerHTML = `<div class="cell">${it.target_cell}</div><h2>${escapeHtml(it.title)}</h2>
