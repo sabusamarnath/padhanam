@@ -1,0 +1,202 @@
+"""HTTP routes for the daily-driver context (D157, S58).
+
+The first operator-facing daily-driver surface:
+
+- ``GET  /api/v1/daily-driver/today`` — the prioritised-today list
+  (OPEN Cases + Commitments), each with computed status and default
+  priority order, the user's persisted ordering applied.
+- ``POST /api/v1/daily-driver/commitments`` — create a user-authored
+  Commitment.
+- ``POST /api/v1/daily-driver/commitments/{id}/completions`` — log a
+  completion (clears the "behind on this" signal at render).
+- ``PUT  /api/v1/daily-driver/today/order`` — persist the user's
+  ordering.
+- ``POST /api/v1/daily-driver/today/done`` — set an item's
+  done-for-today mark.
+
+Plus the served operator surface:
+
+- ``GET /app`` — the self-contained daily-driver HTML page (auth-exempt
+  per ``_PUBLIC_PATHS``; the page carries a dev-token field and makes
+  authenticated fetches to the routes above).
+
+Each data route resolves a request-scoped ``ActorContext`` via
+``get_actor_context``; the use cases enforce authorisation at the
+use-case boundary, and an ``AuthorisationDenied`` propagates to the 403
+handler at ``apps/api/_auth_errors.py``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import FileResponse
+
+from apps.api.middleware import get_actor_context
+from apps.api.routers._daily_driver_dto import (
+    CommitmentDTO,
+    CompletionDTO,
+    CreateCommitmentRequest,
+    MarkDoneRequest,
+    SetOrderRequest,
+    TodayDTO,
+    today_view_to_dto,
+)
+from contexts.daily_driver.application import (
+    create_commitment,
+    list_today,
+    log_commitment_completion,
+    mark_item_done,
+    set_today_order,
+)
+from contexts.daily_driver.ports import (
+    CommitmentRepository,
+    DayRepository,
+    OpenCasesReader,
+)
+from shared_kernel import ActorContext
+
+router = APIRouter(prefix="/api/v1/daily-driver", tags=["daily-driver"])
+ui_router = APIRouter(tags=["daily-driver-ui"])
+
+_PAGE_PATH = Path(__file__).resolve().parent.parent / "static" / "daily_driver.html"
+
+
+def _state(request: Request, name: str) -> object:
+    value = getattr(request.app.state, name, None)
+    if value is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{name} not configured on this API instance",
+        )
+    return value
+
+
+def get_commitment_repository(request: Request) -> CommitmentRepository:
+    """FastAPI dependency: the daily-driver CommitmentRepository."""
+    return _state(request, "daily_driver_commitment_repository")  # type: ignore[return-value]
+
+
+def get_day_repository(request: Request) -> DayRepository:
+    """FastAPI dependency: the daily-driver DayRepository."""
+    return _state(request, "daily_driver_day_repository")  # type: ignore[return-value]
+
+
+def get_open_cases_reader(request: Request) -> OpenCasesReader:
+    """FastAPI dependency: the daily-driver OpenCasesReader."""
+    return _state(request, "daily_driver_open_cases_reader")  # type: ignore[return-value]
+
+
+@router.get("/today", response_model=TodayDTO)
+async def get_today(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    open_cases_reader: Annotated[
+        OpenCasesReader, Depends(get_open_cases_reader)
+    ],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+    day_repository: Annotated[DayRepository, Depends(get_day_repository)],
+) -> TodayDTO:
+    """Return the actor's prioritised-today list."""
+    view = await list_today(
+        open_cases_reader=open_cases_reader,
+        commitment_repository=commitment_repository,
+        day_repository=day_repository,
+        actor=actor,
+    )
+    return today_view_to_dto(view)
+
+
+@router.post("/commitments", response_model=CommitmentDTO, status_code=201)
+async def post_commitment(
+    body: CreateCommitmentRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> CommitmentDTO:
+    """Create a user-authored Commitment."""
+    commitment = await create_commitment(
+        repository=commitment_repository,
+        actor=actor,
+        name=body.name,
+        expected_interval_days=body.expected_interval_days,
+    )
+    return CommitmentDTO(
+        id=commitment.id,
+        name=commitment.name,
+        expected_interval_days=commitment.expected_interval_days,
+        created_at=commitment.created_at,
+    )
+
+
+@router.post(
+    "/commitments/{commitment_id}/completions",
+    response_model=CompletionDTO,
+    status_code=201,
+)
+async def post_completion(
+    commitment_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> CompletionDTO:
+    """Log a completion for a Commitment (clears the overdue signal)."""
+    completion = await log_commitment_completion(
+        repository=commitment_repository,
+        actor=actor,
+        commitment_id=commitment_id,
+    )
+    if completion is None:
+        raise HTTPException(status_code=404, detail="commitment not found")
+    return CompletionDTO(
+        id=completion.id,
+        commitment_id=completion.commitment_id,
+        completed_at=completion.completed_at,
+    )
+
+
+@router.put("/today/order", status_code=204)
+async def put_order(
+    body: SetOrderRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    day_repository: Annotated[DayRepository, Depends(get_day_repository)],
+) -> Response:
+    """Persist the user's ordering of today-items."""
+    await set_today_order(
+        day_repository=day_repository,
+        actor=actor,
+        ordered_keys=tuple((ref.kind, ref.item_id) for ref in body.ordered),
+    )
+    return Response(status_code=204)
+
+
+@router.post("/today/done", status_code=204)
+async def post_done(
+    body: MarkDoneRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    day_repository: Annotated[DayRepository, Depends(get_day_repository)],
+) -> Response:
+    """Set or clear an item's done-for-today mark."""
+    await mark_item_done(
+        day_repository=day_repository,
+        actor=actor,
+        kind=body.kind,
+        item_id=body.item_id,
+        done=body.done,
+    )
+    return Response(status_code=204)
+
+
+@ui_router.get("/app", include_in_schema=False)
+async def daily_driver_page() -> FileResponse:
+    """Serve the self-contained daily-driver operator surface (auth-exempt)."""
+    return FileResponse(_PAGE_PATH, media_type="text/html")
+
+
+__all__ = ["router", "ui_router"]

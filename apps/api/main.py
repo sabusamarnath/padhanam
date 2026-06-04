@@ -44,6 +44,7 @@ from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
+from apps.api.routers import daily_driver as daily_driver_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
 from apps.api.routers import ingestion as ingestion_router
@@ -205,6 +206,14 @@ class AppCompositions:
     # None so test fixtures without the daily-briefing stack keep their
     # narrow factory invocations; production wiring populates it.
     daily_briefing_reader: object | None = None
+    # S58 (D157): daily-driver context seams — the CommitmentRepository
+    # and DayRepository per-request-tenant routers and the OpenCasesReader
+    # consumer adapter composing portfolio list_cases (OPEN filter).
+    # Default to None so narrow test fixtures keep working; production
+    # wiring populates each via the builders in _daily_driver_wiring.py.
+    daily_driver_commitment_repository: object | None = None
+    daily_driver_day_repository: object | None = None
+    daily_driver_open_cases_reader: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -533,6 +542,36 @@ def _build_default_compositions() -> AppCompositions:
         implementer=threshold_briefing_implementer,
     )
 
+    # S58 (D157): daily-driver context — the CommitmentRepository and
+    # DayRepository per-request-tenant routers plus the OpenCasesReader
+    # consumer adapter (the D17 seam composing portfolio list_cases,
+    # OPEN filter). All share the per-tenant session factory cache,
+    # operator principal, and security-events logger.
+    from apps.api._daily_driver_wiring import (
+        build_commitment_repository,
+        build_day_repository,
+        build_open_cases_reader,
+    )
+
+    daily_driver_commitment_repository = build_commitment_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    daily_driver_day_repository = build_day_repository(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    daily_driver_open_cases_reader = build_open_cases_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+
     return AppCompositions(
         inference_port=inference_port,
         event_bus=SynchronousEventBus(),
@@ -559,6 +598,9 @@ def _build_default_compositions() -> AppCompositions:
         portfolio_writer=portfolio_writer,
         messaging=messaging,
         daily_briefing_reader=daily_briefing_reader,
+        daily_driver_commitment_repository=daily_driver_commitment_repository,
+        daily_driver_day_repository=daily_driver_day_repository,
+        daily_driver_open_cases_reader=daily_driver_open_cases_reader,
     )
 
 
@@ -730,6 +772,13 @@ def create_app(
     # fires platform-initiated broadcasts here.
     app.include_router(triggers_router.router)
 
+    # S58 (D157): daily-driver routes — GET /today, POST /commitments,
+    # POST /commitments/{id}/completions, PUT /today/order, POST
+    # /today/done (all under principal-derived actor context), plus the
+    # served operator surface GET /app (auth-exempt per _PUBLIC_PATHS).
+    app.include_router(daily_driver_router.router)
+    app.include_router(daily_driver_router.ui_router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -759,6 +808,16 @@ def create_app(
     app.state.messaging = compositions.messaging
     # S54 (D146): daily-briefing reader composition seam.
     app.state.daily_briefing_reader = compositions.daily_briefing_reader
+    # S58 (D157): daily-driver composition seams.
+    app.state.daily_driver_commitment_repository = (
+        compositions.daily_driver_commitment_repository
+    )
+    app.state.daily_driver_day_repository = (
+        compositions.daily_driver_day_repository
+    )
+    app.state.daily_driver_open_cases_reader = (
+        compositions.daily_driver_open_cases_reader
+    )
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository
     app.state.portfolio_writer = compositions.portfolio_writer

@@ -63,6 +63,13 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
         "/health",
         "/api/v1/messaging/inbound",
         "/api/v1/internal/triggers/fire",
+        # D157, S58: the daily-driver operator surface is a static HTML
+        # page served at /app. The page itself carries no bearer token
+        # (a browser GET); it prompts for a dev token and attaches it to
+        # the authenticated fetches it makes to /api/v1/daily-driver/*.
+        # The data routes stay bearer-authed; only the page bytes are
+        # public.
+        "/app",
     }
 )
 

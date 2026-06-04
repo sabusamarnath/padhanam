@@ -18,6 +18,10 @@ from apps.api.middleware import get_actor_context, get_platform_operator_princip
 from padhanam.security import PlatformOperatorPrincipal, Principal, PrincipalType
 from shared_kernel import ActorContext, TenantId
 from shared_kernel.authorisation import (
+    DAILY_DRIVER_COMMITMENT_COMPLETE,
+    DAILY_DRIVER_COMMITMENT_CREATE,
+    DAILY_DRIVER_TODAY_READ,
+    DAILY_DRIVER_TODAY_WRITE,
     INTAKE_RECORD_CREATE,
     INTAKE_RECORD_GET,
     INTAKE_RECORD_LIST,
@@ -171,6 +175,10 @@ def test_get_actor_context_resolves_the_phase_2a_permissions() -> None:
             MESSAGING_PENDING_CLARIFICATION_CREATE,
             MESSAGING_PENDING_CLARIFICATION_RESOLVE,
             MESSAGING_PENDING_CLARIFICATION_EXPIRE,
+            DAILY_DRIVER_TODAY_READ,
+            DAILY_DRIVER_TODAY_WRITE,
+            DAILY_DRIVER_COMMITMENT_CREATE,
+            DAILY_DRIVER_COMMITMENT_COMPLETE,
         }
     )
 
