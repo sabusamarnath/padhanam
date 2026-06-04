@@ -24,6 +24,7 @@ When a numbered D-entry closes a deferred entry, the entry gains a "Status: clos
 14. [P15 framing deferrals](#p15-framing-deferrals)
 15. [P15 S54 deferrals](#p15-s54-deferrals)
 16. [P15 audit deferrals](#p15-audit-deferrals)
+17. [Phase 2 daily-driver deferrals](#phase-2-daily-driver-deferrals)
 
 ## Architectural primitives awaiting activation
 
@@ -850,3 +851,31 @@ Register-completeness entries surfaced at the P15 audit (2026-06-03): deferrals 
 **What defers.** A distinct `Evaluator`/`Scan` abstraction alongside BroadcastFlow. ThresholdEvaluator satisfies BroadcastFlow but is semantically "evaluate-and-emit," not "compose-and-send"; reusing BroadcastDispatch for both is the deliberate Phase 2-A cost (D153, architecture.md, the `threshold_evaluator` docstring).
 
 **Activation trigger.** A third, evaluator-shaped implementer — the second instance of the strained fit — forces the split per the two-threshold rule. References D142 (BroadcastFlow Protocol), D143 (BroadcastDispatch), D153, the two-threshold rule.
+
+## Phase 2 daily-driver deferrals
+
+### Personal causal-graph isolation and encryption posture
+
+Surfaced by D156. The causal decision graph reuses the Neo4j graph store, which is a shared
+instance scoped by a tenant property per D63. A personal causal graph holds the user's most
+sensitive linkages (the wiring between health, personal matters, and work), which is weaker
+protection than the relational side gets under D21 envelope encryption.
+
+**What defers.** Whether the personal causal graph needs stronger isolation than property-scoping
+on a shared Neo4j instance: a per-tenant graph deployment, node-property encryption, or an
+on-device boundary mirroring the operator's standalone-tool posture.
+
+**Activation trigger.** The causal-decision-graph epic opening at Phase 2-B, or a privacy review
+of personal-data-at-rest in the graph store, whichever is first. References D156, D63 (graph
+tenant scoping), D21 (envelope encryption).
+
+### Quantitative causal-inference engine
+
+Surfaced by D156. Phase 2 ships a qualitative causal map: directed factor-and-link structure
+producing recommendation-shaped ripple narratives per D9, not weighted probabilistic inference.
+
+**What defers.** A quantitative Decision-Intelligence engine (edge weights, confidence, what-if
+propagation with magnitudes).
+
+**Activation trigger.** Dogfooding evidence that qualitative ripple narratives are insufficient to
+drive decisions, per the two-threshold rule. References D156, D9 (recommendation-shaped output).

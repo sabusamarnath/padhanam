@@ -16,6 +16,12 @@ The segment carries three populations with distinct substrate landscapes:
 
 The "augmenting human EA/CoS" framing applies to the established-firm senior leaders. For the founders bucket across both early-stage and Series A/B, the platform substitutes for the EA/CoS that the founder cannot yet afford or has not yet hired.
 
+Per D156, the ICP is seen whole. A senior leader juggles professional and personal load as one
+day, and a product that serves only the professional half gets abandoned the way a passive
+tracker does. The daily driver and its causal model therefore span both, not as a widening of
+the audience but as an honest view of the same audience; the causal chains that reach
+professional outcomes run through personal inputs, so the model cannot exclude them.
+
 ## Vertical-wedge candidates for Phase 3
 
 The May 2026 competitor research and operator domain expertise produced vertical-wedge candidates for Phase 3 sequencing analysis:

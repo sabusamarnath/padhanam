@@ -27,6 +27,12 @@ Cross-cutting methodologies (selected independently, applied across stages):
 - Strategy: Lean Value Tree, North Star Framework, OKRs, Wardley Mapping.
 - Prioritisation and validation: Kano, RICE, MoSCoW, ICE, Opportunity Solution Tree.
 
+Decision Intelligence and the Causal Decision Diagram (CDD) join the stack at D156 as the
+causal-reasoning methodology: mapping actions and circumstances through intermediate factors to
+desired outcomes, so a change in one factor's status surfaces its ripple to the outcomes that
+depend on it. The CDD is the structural core of the Phase 2 daily driver and the form the
+observability and optimization differentiator takes at the human level.
+
 ### Marketing
 
 1. Marketing Audit: Kotler's Marketing Audit Framework, SOSTAC, Forrester Marketing Maturity Model.
