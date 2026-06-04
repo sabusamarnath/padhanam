@@ -85,6 +85,30 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Dogfood personal tenant ([dogfood-setup], D32). A dedicated
+  # per-tenant Postgres instance for the operator's personal
+  # dogfooding data, isolated from the tenant-a/tenant-b test set by
+  # the same database-per-tenant topology. Provisioned + registered via
+  # `make dogfood-provision`; wiped via `make dogfood-wipe` (the wipe
+  # operates inside this container only, so it is structurally unable to
+  # reach tenant-a/tenant-b/control-plane). Synthetic creds only — no
+  # real identity is encoded here.
+  postgres-tenant-personal:
+    image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
+    environment:
+      POSTGRES_USER: ${POSTGRES_TENANT_PERSONAL_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_TENANT_PERSONAL_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_TENANT_PERSONAL_DB}
+    volumes:
+      - postgres_tenant_personal_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # Shared Neo4j 5 Community (P6/S21, D63). One instance for all
   # tenants; isolation is property-based (every :Entity node and every
   # relationship carries `tenant_id`) and structurally gated by the
@@ -426,6 +450,12 @@ services:
       POSTGRES_TENANT_B_USER: ${POSTGRES_TENANT_B_USER}
       POSTGRES_TENANT_B_PASSWORD: ${POSTGRES_TENANT_B_PASSWORD}
       POSTGRES_TENANT_B_DB: ${POSTGRES_TENANT_B_DB}
+      # Dogfood personal tenant ([dogfood-setup], D32). Passed through so
+      # ops.dogfood_provision can build the plaintext TenantConnectionConfig
+      # at registration time via TenantPostgresSettings.for_tenant("personal").
+      POSTGRES_TENANT_PERSONAL_USER: ${POSTGRES_TENANT_PERSONAL_USER:-tenant_personal}
+      POSTGRES_TENANT_PERSONAL_PASSWORD: ${POSTGRES_TENANT_PERSONAL_PASSWORD:-tenant_personal}
+      POSTGRES_TENANT_PERSONAL_DB: ${POSTGRES_TENANT_PERSONAL_DB:-tenant_personal}
       # Shared Neo4j connection (S21, D63). Read by Neo4jSettings in
       # padhanam/config/graph.py for the GraphRepository adapter, the
       # tenant-scoped session wrapper, and the ops.migrate_neo4j Cypher
@@ -575,6 +605,7 @@ volumes:
   postgres_control_plane_data:
   postgres_tenant_a_data:
   postgres_tenant_b_data:
+  postgres_tenant_personal_data:
   redis_data:
   caddy_data:
   caddy_config:

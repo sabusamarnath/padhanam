@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -191,6 +191,28 @@ sync-code:
 # Runs inside padhanam-api so the Compose service hostnames resolve.
 seed-tenants: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_tenants
+
+# --- Dogfood personal tenant ([dogfood-setup], D32) -----------------
+# Provision the dedicated personal tenant: bring up its Postgres
+# container, register it in the control plane (ops.dogfood_provision),
+# and migrate it (ops.migrate applies the per-tenant track to every
+# registered tenant, idempotent on a/b). Run after `make up`.
+dogfood-provision: derive-env
+	$(COMPOSE) up -d postgres-tenant-personal
+	$(COMPOSE) exec padhanam-api python -m ops.dogfood_provision
+	$(COMPOSE) exec padhanam-api python -m ops.migrate
+
+# Mint a dev bearer token for the personal tenant (paste into /app).
+dogfood-token: derive-env
+	@$(COMPOSE) exec padhanam-api python -c "from padhanam.security.auth import issue_dev_token; print(issue_dev_token(subject='operator-001', tenant_id='00000000-0000-4000-8000-00000000d001', roles=['operator']))"
+
+# Scoped wipe: drop + recreate ONLY the personal tenant's database,
+# then re-migrate it. The guard in ops/dogfood_wipe.sh refuses any
+# target other than the personal tenant and operates inside the
+# postgres-tenant-personal container only (structurally unable to reach
+# tenant-a/tenant-b/control-plane). See docs/ops/dogfood-runbook.md.
+dogfood-wipe: derive-env
+	COMPOSE="$(COMPOSE)" ./ops/dogfood_wipe.sh
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,
