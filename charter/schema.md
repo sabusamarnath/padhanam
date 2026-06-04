@@ -1571,6 +1571,80 @@ parsers are not reused). `replace_chunks` is the unit of write (delete +
 re-insert per message); the `embedding vector(768)` column is added in raw
 SQL with an HNSW cosine index, mirroring calendar/ingestion.
 
+## Daily-driver context substrate (per-tenant)
+
+Per-tenant substrate for `contexts/daily_driver/` per D157 (the P16/S58
+daily-driver first slice). Three tables on each tenant's dedicated
+Postgres data plane per D32. The slice's load-bearing discipline is
+*compute-at-render*: status and overdue are never stored — they are
+computed from the completion log against the commitment interval at read
+time — so no status or overdue column exists on any of these tables.
+Every table carries `tenant_id` and `jurisdiction` per D12. Migration
+`alembic/tenant/versions/0028_daily_driver_substrate` ships these tables.
+Tamper-evidence (audit-chain coverage) is not added at S58: the Day
+ordering/done churn is per-day UI state, not canonical tenant-authored
+state, consistent with D155's reasoning that not every mutation is
+canonical; commitment create/complete audit emission is a named
+carryover if procurement review demands it.
+
+### `commitments`
+
+| Column                   | Type          | Constraints                                          |
+|--------------------------|---------------|------------------------------------------------------|
+| `id`                     | `uuid`        | primary key; default `gen_random_uuid()`             |
+| `tenant_id`              | `uuid`        | not null; jurisdiction-bearing per D12               |
+| `jurisdiction`           | `text`        | not null; CHECK `jurisdiction <> ''`                 |
+| `name`                   | `text`        | not null; CHECK `name <> ''`                         |
+| `expected_interval_days` | `integer`     | not null; CHECK `expected_interval_days > 0`         |
+| `authored_by_user_id`    | `text`        | not null; the user-authored cadence's author         |
+| `created_at`             | `timestamptz` | not null; default `now()`                            |
+
+The minimal user-authored cadence: a name plus an expected interval in
+days. The full cadence-with-staleness primitive (threshold-engine
+integration per D153, multiple cadence types, richer completion
+semantics) defers to Phase 2-B per the deferred-decisions
+"Cadence-with-staleness primitive (full)" entry. Index
+`ix_commitments_tenant_id` on `(tenant_id)`.
+
+### `commitment_completions`
+
+| Column          | Type          | Constraints                                                |
+|-----------------|---------------|------------------------------------------------------------|
+| `id`            | `uuid`        | primary key; default `gen_random_uuid()`                   |
+| `commitment_id` | `uuid`        | not null; FK → `commitments.id` ON DELETE CASCADE          |
+| `tenant_id`     | `uuid`        | not null; jurisdiction-bearing per D12                     |
+| `jurisdiction`  | `text`        | not null                                                   |
+| `completed_at`  | `timestamptz` | not null; default `now()`                                  |
+
+The append-only completion log. The latest `completed_at` per commitment
+is the staleness rule's last-activity input (falling back to the
+commitment's `created_at` when the log is empty). Indexes
+`ix_commitment_completions_commitment_id` on `(commitment_id)` and
+`ix_commitment_completions_tenant_id` on `(tenant_id)`.
+
+### `day_item_states`
+
+| Column         | Type          | Constraints                                                |
+|----------------|---------------|------------------------------------------------------------|
+| `id`           | `uuid`        | primary key; default `gen_random_uuid()`                   |
+| `tenant_id`    | `uuid`        | not null; jurisdiction-bearing per D12                     |
+| `jurisdiction` | `text`        | not null                                                   |
+| `user_id`      | `text`        | not null                                                   |
+| `day_date`     | `date`        | not null                                                   |
+| `item_kind`    | `text`        | not null; CHECK ∈ {`CASE`, `COMMITMENT`}                   |
+| `item_id`      | `uuid`        | not null; the Case id or Commitment id                     |
+| `position`     | `integer`     | nullable; the user's explicit ordering, 0-based            |
+| `done`         | `boolean`     | not null; default `false`; the done-for-today mark         |
+| `updated_at`   | `timestamptz` | not null; default `now()`                                  |
+
+The minimal Day concept: the only state that persists is the user's
+per-day ordering (`position`) and done-for-today mark (`done`). UNIQUE
+`ux_day_item_states_tenant_user_day_item` on
+`(tenant_id, user_id, day_date, item_kind, item_id)` makes ordering and
+done independent upserts (reordering does not clobber a done mark and
+vice versa). Index `ix_day_item_states_tenant_user_day` on
+`(tenant_id, user_id, day_date)` supports the per-day read.
+
 ## Cross-cutting binding shapes
 
 This section formalises non-table binding shapes — value objects,

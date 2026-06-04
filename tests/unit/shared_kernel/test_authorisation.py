@@ -8,6 +8,10 @@ import pytest
 
 from shared_kernel import ActorContext, TenantContext
 from shared_kernel.authorisation import (
+    DAILY_DRIVER_COMMITMENT_COMPLETE,
+    DAILY_DRIVER_COMMITMENT_CREATE,
+    DAILY_DRIVER_TODAY_READ,
+    DAILY_DRIVER_TODAY_WRITE,
     INTAKE_RECORD_CREATE,
     INTAKE_RECORD_GET,
     INTAKE_RECORD_LIST,
@@ -51,8 +55,9 @@ def _actor(*, authorisation_set: frozenset[str]) -> ActorContext:
 def test_operator_role_grants_the_phase_2a_permissions() -> None:
     """The operator role grants the five portfolio permissions, the
     three intake permissions (D127, S44b), the four messaging
-    permissions (D129, S45), and the three PendingClarification
-    permissions (D134, S47) — fifteen in total."""
+    permissions (D129, S45), the three PendingClarification
+    permissions (D134, S47), and the four daily-driver permissions
+    (D157, S58) — nineteen in total."""
     granted = authorisations_for_roles(frozenset({ROLE_OPERATOR}))
     assert granted == frozenset(
         {
@@ -71,6 +76,10 @@ def test_operator_role_grants_the_phase_2a_permissions() -> None:
             MESSAGING_PENDING_CLARIFICATION_CREATE,
             MESSAGING_PENDING_CLARIFICATION_RESOLVE,
             MESSAGING_PENDING_CLARIFICATION_EXPIRE,
+            DAILY_DRIVER_TODAY_READ,
+            DAILY_DRIVER_TODAY_WRITE,
+            DAILY_DRIVER_COMMITMENT_CREATE,
+            DAILY_DRIVER_COMMITMENT_COMPLETE,
         }
     )
 

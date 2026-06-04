@@ -230,6 +230,15 @@ layers =
     contexts.threshold_briefing.application
     contexts.threshold_briefing.domain
 
+[importlinter:contract:layers-daily-driver]
+name = Daily-driver layers (hexagonal)
+type = layers
+layers =
+    contexts.daily_driver.adapters
+    contexts.daily_driver.application
+    contexts.daily_driver.ports
+    contexts.daily_driver.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -267,6 +276,7 @@ modules =
     contexts.mirror_conversation.domain
     contexts.daily_briefing.domain
     contexts.calendar.domain
+    contexts.daily_driver.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -298,6 +308,7 @@ modules =
     contexts.mirror_conversation.application
     contexts.daily_briefing.application
     contexts.calendar.application
+    contexts.daily_driver.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -326,6 +337,7 @@ modules =
     contexts.intent_classification_evaluation.adapters
     contexts.daily_briefing.adapters
     contexts.calendar.adapters
+    contexts.daily_driver.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -367,6 +379,7 @@ source_modules =
     contexts.messaging.domain
     contexts.intent_classification_evaluation.domain
     contexts.calendar.domain
+    contexts.daily_driver.domain
 forbidden_modules =
     pydantic
     pydantic_settings

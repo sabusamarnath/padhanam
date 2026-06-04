@@ -71,6 +71,12 @@ MESSAGING_PENDING_CLARIFICATION_EXPIRE = (
     "messaging.pending_clarification.expire"
 )
 
+# --- Phase 2-A daily-driver permissions (D157, S58) ----------------
+DAILY_DRIVER_TODAY_READ = "daily_driver.today.read"
+DAILY_DRIVER_TODAY_WRITE = "daily_driver.today.write"
+DAILY_DRIVER_COMMITMENT_CREATE = "daily_driver.commitment.create"
+DAILY_DRIVER_COMMITMENT_COMPLETE = "daily_driver.commitment.complete"
+
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
 
@@ -92,6 +98,10 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             MESSAGING_PENDING_CLARIFICATION_CREATE,
             MESSAGING_PENDING_CLARIFICATION_RESOLVE,
             MESSAGING_PENDING_CLARIFICATION_EXPIRE,
+            DAILY_DRIVER_TODAY_READ,
+            DAILY_DRIVER_TODAY_WRITE,
+            DAILY_DRIVER_COMMITMENT_CREATE,
+            DAILY_DRIVER_COMMITMENT_COMPLETE,
         }
     ),
 }
@@ -171,6 +181,10 @@ def requires_authorisation(
 
 
 __all__ = [
+    "DAILY_DRIVER_COMMITMENT_COMPLETE",
+    "DAILY_DRIVER_COMMITMENT_CREATE",
+    "DAILY_DRIVER_TODAY_READ",
+    "DAILY_DRIVER_TODAY_WRITE",
     "INTAKE_RECORD_CREATE",
     "INTAKE_RECORD_GET",
     "INTAKE_RECORD_LIST",
