@@ -26,7 +26,7 @@ Verify the three tables landed on tenant_a:
 
 ```bash
 docker compose exec postgres-tenant-a \
-  psql -U padhanam -d tenant_a -c "\dt commitments|commitment_completions|day_item_states"
+  psql -U tenant_a -d tenant_a -c "\dt commitments|commitment_completions|day_item_states"
 ```
 
 Expect all three tables present, each with `tenant_id` and `jurisdiction`
@@ -51,7 +51,7 @@ so to see the **BEHIND** "behind on this" row at smoke time, seed one with a
 backdated `created_at` and no completions:
 
 ```bash
-docker compose exec postgres-tenant-a psql -U padhanam -d tenant_a -c \
+docker compose exec postgres-tenant-a psql -U tenant_a -d tenant_a -c \
 "INSERT INTO commitments (id, tenant_id, jurisdiction, name, expected_interval_days, authored_by_user_id, created_at) \
  VALUES (gen_random_uuid(), '00000000-0000-4000-8000-00000000a001', 'eu-west', \
  'Weekly 1:1 with each report', 7, 'operator-001', now() - interval '30 days');"
