@@ -854,6 +854,26 @@ Register-completeness entries surfaced at the P15 audit (2026-06-03): deferrals 
 
 ## Phase 2 daily-driver deferrals
 
+### Cadence-with-staleness primitive (full)
+
+Surfaced by D156 as a Phase 2-B epic; its minimal instance lands at P16/S58 per D157.
+
+**What lands at S58 (the minimal instance).** A user-authored `Commitment` (a name plus an
+expected interval in days) with a completion log, and a render-time staleness rule (overdue is
+computed from elapsed-since-last-completion against the interval, no persisted flag). Surfaces the
+"behind on this" item in the prioritised-today list — the active-surfacing differentiator at its
+thinnest dogfoodable cut.
+
+**What defers (the full primitive).** Integration with the threshold engine (D153) so cadence
+staleness fires proactive briefings rather than only rendering on the daily-driver surface;
+multiple cadence types beyond a fixed day-interval (day-of-week, monthly, business-day-aware);
+richer completion semantics (partial completion, streaks, grace windows); and any persisted
+status/overdue projection if render-time computation proves insufficient at volume.
+
+**Activation trigger.** The Phase 2-B cadence epic, or dogfooding evidence that the render-time
+minimal instance is insufficient to drive the active-surfacing behaviour, per the two-threshold
+rule. References D156, D157, D153 (threshold engine).
+
 ### Personal causal-graph isolation and encryption posture
 
 Surfaced by D156. The causal decision graph reuses the Neo4j graph store, which is a shared
