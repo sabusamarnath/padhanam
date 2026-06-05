@@ -19,23 +19,32 @@ are dependency-injected by the daily-driver routes:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
+from contexts.calendar.adapters.outbound.postgres.meeting_store import (
+    PostgresMeetingStore,
+)
+from contexts.calendar.domain.meeting import Meeting
 from contexts.daily_driver.adapters.outbound.postgres.commitment_repository import (  # noqa: E501
     PostgresCommitmentRepository,
 )
 from contexts.daily_driver.adapters.outbound.postgres.day_repository import (
     PostgresDayRepository,
 )
+from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
 from contexts.daily_driver.domain.commitment import (
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
 )
 from contexts.daily_driver.domain.day import DayItemState
-from contexts.daily_driver.domain.today_item import ItemKind, OpenCase
+from contexts.daily_driver.domain.today_item import (
+    CalendarToday,
+    ItemKind,
+    OpenCase,
+)
 from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
 )
@@ -237,6 +246,71 @@ class OpenCasesReaderAdapter:
         )
 
 
+class CalendarEventsReaderAdapter:
+    """apps/ adapter implementing daily-driver's ``CalendarEventsReader`` (D159, D17).
+
+    Composes the calendar context's ``PostgresMeetingStore`` (bound to the
+    request's tenant — the isolation defence-in-depth), lists the stored
+    Meetings, filters to the events occurring on ``day_date`` (UTC), and
+    maps each onto the daily-driver-local ``CalendarToday`` projection
+    carrying the connection's resolved domain tag. Cancelled meetings are
+    excluded (the store tombstones them out of ``list_meetings``).
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory_for_tenant: _SessionFactoryForTenant,
+        domain_tag: str,
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+        self._domain_tag = domain_tag
+
+    async def list_today_events(
+        self, *, actor: ActorContext, day_date: date
+    ) -> tuple[CalendarToday, ...]:
+        sessionmaker = await self._session_factory_for_tenant(
+            actor.tenant_context
+        )
+        store = PostgresMeetingStore(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        meetings = await store.list_meetings(
+            tenant_context=actor.tenant_context, include_cancelled=False
+        )
+        day_start = datetime.combine(day_date, time.min, tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        domain = resolve_calendar_domain(self._domain_tag)
+        events = [
+            _calendar_today(meeting, domain=domain)
+            for meeting in meetings
+            if _starts_on_day(meeting, day_start=day_start, day_end=day_end)
+        ]
+        return tuple(events)
+
+
+def _starts_on_day(
+    meeting: Meeting, *, day_start: datetime, day_end: datetime
+) -> bool:
+    """True when the meeting's start falls within the [day_start, day_end) window."""
+    start = meeting.start_at
+    if start is None:
+        return False
+    return day_start <= start < day_end
+
+
+def _calendar_today(meeting: Meeting, *, domain: str) -> CalendarToday:
+    return CalendarToday(
+        meeting_id=meeting.id,
+        google_event_id=meeting.google_event_id,
+        title=meeting.title or "(untitled meeting)",
+        start_at=meeting.start_at,
+        end_at=meeting.end_at,
+        domain=domain,
+    )
+
+
 def build_commitment_repository(
     *,
     tenant_registry: PostgresTenantRegistry,
@@ -291,10 +365,32 @@ def build_open_cases_reader(
     )
 
 
+def build_calendar_events_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+    domain_tag: str,
+) -> CalendarEventsReaderAdapter:
+    """Wire the daily-driver CalendarEventsReader consumer adapter (D159, D17)."""
+    return CalendarEventsReaderAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        ),
+        domain_tag=domain_tag,
+    )
+
+
 __all__ = [
+    "CalendarEventsReaderAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
     "OpenCasesReaderAdapter",
+    "build_calendar_events_reader",
     "build_commitment_repository",
     "build_day_repository",
     "build_open_cases_reader",

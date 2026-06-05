@@ -32,6 +32,8 @@ class TodayItemDTO(BaseModel):
     position: int | None
     done: bool
     overdue_by_days: int | None
+    domain: str
+    start_at: datetime | None
 
 
 class TodayDTO(BaseModel):
@@ -106,6 +108,8 @@ def _item_to_dto(item: TodayItem) -> TodayItemDTO:
         position=item.position,
         done=item.done,
         overdue_by_days=item.overdue_by_days,
+        domain=item.domain,
+        start_at=item.start_at,
     )
 
 

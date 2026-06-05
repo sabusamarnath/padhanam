@@ -215,6 +215,10 @@ class AppCompositions:
     daily_driver_commitment_repository: object | None = None
     daily_driver_day_repository: object | None = None
     daily_driver_open_cases_reader: object | None = None
+    # S60 (D159): the calendar consumer adapter composing the calendar
+    # MeetingReader, filtered to today. None when unwired (the list
+    # degrades to Cases + Commitments).
+    daily_driver_calendar_reader: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -549,10 +553,12 @@ def _build_default_compositions() -> AppCompositions:
     # OPEN filter). All share the per-tenant session factory cache,
     # operator principal, and security-events logger.
     from apps.api._daily_driver_wiring import (
+        build_calendar_events_reader,
         build_commitment_repository,
         build_day_repository,
         build_open_cases_reader,
     )
+    from padhanam.config.calendar import CalendarSettings
 
     daily_driver_commitment_repository = build_commitment_repository(
         tenant_registry=registry,
@@ -571,6 +577,13 @@ def _build_default_compositions() -> AppCompositions:
         session_factory_cache=session_factory_cache,
         operator_principal=operator_principal,
         security_events=sec,
+    )
+    daily_driver_calendar_reader = build_calendar_events_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        domain_tag=CalendarSettings().calendar_domain_tag,
     )
 
     return AppCompositions(
@@ -602,6 +615,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_commitment_repository=daily_driver_commitment_repository,
         daily_driver_day_repository=daily_driver_day_repository,
         daily_driver_open_cases_reader=daily_driver_open_cases_reader,
+        daily_driver_calendar_reader=daily_driver_calendar_reader,
     )
 
 
@@ -825,6 +839,9 @@ def create_app(
     )
     app.state.daily_driver_open_cases_reader = (
         compositions.daily_driver_open_cases_reader
+    )
+    app.state.daily_driver_calendar_reader = (
+        compositions.daily_driver_calendar_reader
     )
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository

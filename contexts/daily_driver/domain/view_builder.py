@@ -23,6 +23,7 @@ from contexts.daily_driver.domain.commitment import CommitmentActivity
 from contexts.daily_driver.domain.day import DayItemState, item_key
 from contexts.daily_driver.domain.staleness import is_overdue, overdue_by_days
 from contexts.daily_driver.domain.today_item import (
+    CalendarToday,
     ItemKind,
     ItemStatus,
     OpenCase,
@@ -30,17 +31,23 @@ from contexts.daily_driver.domain.today_item import (
     TodayView,
 )
 
-# Default rank by computed status (lower sorts first). Done items are
-# pushed below everything via a separate leading sort key, so DONE is
-# not ranked here.
-_STATUS_RANK: dict[ItemStatus, int] = {
-    ItemStatus.BEHIND: 0,
-    ItemStatus.NEEDS_YOU: 1,
-    ItemStatus.ON_TRACK: 2,
-}
+# Default rank band (lower sorts first), computed per item from kind +
+# status. Done items are pushed below everything via a separate leading
+# sort key. BEHIND commitments lead (the active-surfacing signal); a
+# calendar item is time-anchored and sits just below, above the
+# pull-when-ready Cases (NEEDS_YOU) and the steady ON_TRACK commitments.
+_RANK_BEHIND = 0
+_RANK_CALENDAR = 1
+_RANK_NEEDS_YOU = 2
+_RANK_ON_TRACK = 3
 
 _CASE_CELL = "mirror_conversation"
 _COMMITMENT_CELL = "commitment_detail"
+_CALENDAR_CELL = "calendar_conversation"
+
+# Cases and Commitments are the work domain at Phase 2-A (the portfolio is
+# professional); a calendar item inherits its connection's tag (D159).
+_WORK_DOMAIN = "work"
 
 
 def _case_item(case: OpenCase, state: DayItemState | None) -> TodayItem:
@@ -57,7 +64,55 @@ def _case_item(case: OpenCase, state: DayItemState | None) -> TodayItem:
         position=position,
         done=done,
         overdue_by_days=None,
+        domain=_WORK_DOMAIN,
     )
+
+
+def _calendar_item(event: CalendarToday, *, now: datetime) -> TodayItem:
+    """Build a read-through calendar today-item (D159).
+
+    A calendar event carries no ``DayItemState`` — it is an external-source
+    fact, not a user-authored item, so it is not a reorder or done target
+    this slice (position ``None``). Status reuses the shared vocabulary: an
+    event whose end has passed is ``DONE``; one upcoming or in progress is
+    ``ON_TRACK``. The human time rides ``detail``; the structured start
+    drives time-ordering and the drawer's When field.
+    """
+    ended = event.end_at is not None and event.end_at <= now
+    in_progress = (
+        event.start_at is not None
+        and event.start_at <= now
+        and (event.end_at is None or now < event.end_at)
+    )
+    status = ItemStatus.DONE if ended else ItemStatus.ON_TRACK
+    detail = _calendar_detail(event, now=now, in_progress=in_progress)
+    return TodayItem(
+        kind=ItemKind.CALENDAR,
+        item_id=event.meeting_id,
+        title=event.title,
+        status=status,
+        target_cell=_CALENDAR_CELL,
+        artefact_type="meeting",
+        detail=detail,
+        position=None,
+        done=ended,
+        overdue_by_days=None,
+        domain=event.domain,
+        start_at=event.start_at,
+    )
+
+
+def _calendar_detail(
+    event: CalendarToday, *, now: datetime, in_progress: bool
+) -> str:
+    if event.start_at is None:
+        return "today"
+    when = event.start_at.strftime("%H:%M")
+    if in_progress:
+        return f"now · started {when}"
+    if event.end_at is not None and event.end_at <= now:
+        return f"earlier · {when}"
+    return f"today · {when}"
 
 
 def _commitment_item(
@@ -105,18 +160,33 @@ def _commitment_item(
         position=position,
         done=done,
         overdue_by_days=overshoot,
+        domain=_WORK_DOMAIN,
     )
 
 
-def _status_for_rank(item: TodayItem) -> ItemStatus:
-    """The status used for default ranking (DONE is handled separately)."""
-    if item.done:
-        if item.kind is ItemKind.CASE:
-            return ItemStatus.NEEDS_YOU
-        if item.overdue_by_days is not None:
-            return ItemStatus.BEHIND
-        return ItemStatus.ON_TRACK
-    return item.status
+def _default_rank(item: TodayItem) -> int:
+    """Default rank band for an item (lower sorts first; DONE handled separately).
+
+    Uses kind + status so a calendar item ranks by its own band rather
+    than borrowing a commitment's status meaning. For a done item the rank
+    is its underlying (not-done) band, so done items keep a stable order
+    among themselves once sunk to the bottom.
+    """
+    if item.kind is ItemKind.CALENDAR:
+        return _RANK_CALENDAR
+    if item.kind is ItemKind.CASE:
+        return _RANK_NEEDS_YOU
+    # Commitment: BEHIND leads, else ON_TRACK.
+    if item.overdue_by_days is not None or item.status is ItemStatus.BEHIND:
+        return _RANK_BEHIND
+    return _RANK_ON_TRACK
+
+
+def _tiebreak(item: TodayItem) -> str:
+    """Within a rank band: calendar items by start time, others by title."""
+    if item.kind is ItemKind.CALENDAR and item.start_at is not None:
+        return item.start_at.isoformat()
+    return item.title.lower()
 
 
 def _sort_key(item: TodayItem) -> tuple[int, int, str]:
@@ -124,8 +194,8 @@ def _sort_key(item: TodayItem) -> tuple[int, int, str]:
     if item.position is not None:
         order_key = item.position
     else:
-        order_key = 1000 + _STATUS_RANK[_status_for_rank(item)]
-    return (done_key, order_key, item.title.lower())
+        order_key = 1000 + _default_rank(item)
+    return (done_key, order_key, _tiebreak(item))
 
 
 def build_today_view(
@@ -135,8 +205,15 @@ def build_today_view(
     day_states: tuple[DayItemState, ...],
     now: datetime,
     day_date: date,
+    calendar_events: tuple[CalendarToday, ...] = (),
 ) -> TodayView:
-    """Compose the ordered prioritised-today list (D157)."""
+    """Compose the ordered prioritised-today list (D157, D159).
+
+    Three item sources render in one list typed by domain: OPEN Cases,
+    Commitments-with-activity, and today's calendar events. Calendar items
+    are read-through (no ``DayItemState``); Cases and Commitments carry the
+    user's persisted ordering and done marks.
+    """
     states_by_key = {
         item_key(state.kind, state.item_id): state for state in day_states
     }
@@ -149,6 +226,8 @@ def build_today_view(
             item_key(ItemKind.COMMITMENT, activity.commitment.id)
         )
         items.append(_commitment_item(activity, state, now=now))
+    for event in calendar_events:
+        items.append(_calendar_item(event, now=now))
     items.sort(key=_sort_key)
     return TodayView(day_date=day_date, items=tuple(items))
 

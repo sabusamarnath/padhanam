@@ -14,8 +14,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from contexts.daily_driver.domain.today_item import TodayView
+from contexts.daily_driver.domain.today_item import CalendarToday, TodayView
 from contexts.daily_driver.domain.view_builder import build_today_view
+from contexts.daily_driver.ports.calendar_events_reader import (
+    CalendarEventsReader,
+)
 from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
@@ -35,8 +38,15 @@ async def list_today(
     commitment_repository: CommitmentRepository,
     day_repository: DayRepository,
     actor: ActorContext,
+    calendar_events_reader: CalendarEventsReader | None = None,
 ) -> TodayView:
-    """Build the actor's prioritised-today list for the current UTC day."""
+    """Build the actor's prioritised-today list for the current UTC day.
+
+    The calendar source is optional (D159): when no reader is wired — or
+    no calendar is connected for the tenant — the list is the S58/S59
+    Cases-plus-Commitments view, so the surface degrades cleanly rather
+    than failing for an unconnected operator.
+    """
     now = datetime.now(timezone.utc)
     day_date = now.date()
     open_cases = await open_cases_reader.list_open_cases(actor=actor)
@@ -48,12 +58,18 @@ async def list_today(
         user_id=actor.actor_id,
         day_date=day_date,
     )
+    calendar_events: tuple[CalendarToday, ...] = ()
+    if calendar_events_reader is not None:
+        calendar_events = await calendar_events_reader.list_today_events(
+            actor=actor, day_date=day_date
+        )
     return build_today_view(
         open_cases=open_cases,
         commitment_activities=activities,
         day_states=day_states,
         now=now,
         day_date=day_date,
+        calendar_events=calendar_events,
     )
 
 

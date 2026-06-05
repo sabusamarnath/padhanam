@@ -22,6 +22,7 @@ class ItemKind(str, Enum):
 
     CASE = "CASE"
     COMMITMENT = "COMMITMENT"
+    CALENDAR = "CALENDAR"
 
 
 class ItemStatus(str, Enum):
@@ -54,8 +55,35 @@ class OpenCase:
 
 
 @dataclass(frozen=True)
+class CalendarToday:
+    """Daily-driver-local projection of a calendar Meeting for today (D159).
+
+    Returned by the ``CalendarEventsReader`` consumer port; the apps-layer
+    wiring adapter composes the calendar context's ``MeetingReader``,
+    filters to the current day, and maps each Meeting onto this shape (the
+    D17 cross-context seam, mirroring ``OpenCase``). ``domain`` is the
+    connection's calendar-to-domain tag (work / personal / family); the
+    event inherits it (D159).
+    """
+
+    meeting_id: UUID
+    google_event_id: str
+    title: str
+    start_at: datetime | None
+    end_at: datetime | None
+    domain: str
+
+
+@dataclass(frozen=True)
 class TodayItem:
-    """One rendered row on the prioritised-today surface (D157)."""
+    """One rendered row on the prioritised-today surface (D157, D159).
+
+    ``domain`` (work / personal / family) types the row by domain surface
+    (D159, design-language §2): Cases and Commitments are the work domain
+    at Phase 2-A; a calendar item inherits its connection's tag. ``start_at``
+    carries a calendar item's structured start for time-ordering and the
+    drawer's When field (``None`` for Cases and Commitments).
+    """
 
     kind: ItemKind
     item_id: UUID
@@ -67,6 +95,8 @@ class TodayItem:
     position: int | None
     done: bool
     overdue_by_days: int | None = None
+    domain: str = "work"
+    start_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +108,7 @@ class TodayView:
 
 
 __all__ = [
+    "CalendarToday",
     "ItemKind",
     "ItemStatus",
     "OpenCase",

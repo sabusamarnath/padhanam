@@ -27,3 +27,10 @@ class CalendarSettings(PadhanamSettings):
     # the example env; the operator pastes the dashboard secret. Resolved
     # by the production secret manager in deployed environments.
     nango_secret_key: str = ""
+    # Calendar-to-domain default tag (D159): the domain (work / personal /
+    # family) a connected calendar's events inherit on the Today surface.
+    # At single-personal-calendar scale this is one connection-level
+    # default; per-calendar persisted tags arrive at the second-calendar
+    # threshold (the two-threshold rule). The Connections manage panel
+    # surfaces it read-only.
+    calendar_domain_tag: str = "work"

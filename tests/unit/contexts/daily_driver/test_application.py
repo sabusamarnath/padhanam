@@ -26,7 +26,12 @@ from contexts.daily_driver.domain.commitment import (
     CommitmentCompletion,
 )
 from contexts.daily_driver.domain.day import DayItemState, item_key
-from contexts.daily_driver.domain.today_item import ItemKind, ItemStatus, OpenCase
+from contexts.daily_driver.domain.today_item import (
+    CalendarToday,
+    ItemKind,
+    ItemStatus,
+    OpenCase,
+)
 from shared_kernel import ActorContext, TenantContext
 from shared_kernel.authorisation import (
     AuthorisationDenied,
@@ -115,6 +120,16 @@ class FakeOpenCasesReader:
         return self._cases
 
 
+class FakeCalendarEventsReader:
+    def __init__(self, events: tuple[CalendarToday, ...]) -> None:
+        self._events = events
+        self.calls: list[date] = []
+
+    async def list_today_events(self, *, actor, day_date):
+        self.calls.append(day_date)
+        return self._events
+
+
 def test_create_commitment_persists_and_returns() -> None:
     repo = FakeCommitmentRepository()
     commitment = asyncio.run(
@@ -172,6 +187,50 @@ def test_list_today_surfaces_overdue_first() -> None:
     assert view.items[0].kind == ItemKind.COMMITMENT
     assert view.items[0].status == ItemStatus.BEHIND
     assert overdue.name == view.items[0].title
+
+
+def test_list_today_includes_calendar_events_when_reader_wired() -> None:
+    repo = FakeCommitmentRepository()
+    now = datetime.now(timezone.utc)
+    event = CalendarToday(
+        meeting_id=uuid4(),
+        google_event_id="evt-1",
+        title="Board call",
+        start_at=now.replace(hour=23, minute=0),
+        end_at=None,
+        domain="work",
+    )
+    reader = FakeCalendarEventsReader((event,))
+    view = asyncio.run(
+        list_today(
+            open_cases_reader=FakeOpenCasesReader(()),
+            commitment_repository=repo,
+            day_repository=FakeDayRepository(),
+            actor=_actor(),
+            calendar_events_reader=reader,
+        )
+    )
+    cal_items = [i for i in view.items if i.kind == ItemKind.CALENDAR]
+    assert len(cal_items) == 1
+    assert cal_items[0].title == "Board call"
+    assert cal_items[0].domain == "work"
+    # the reader is scoped to the current UTC day
+    assert reader.calls == [now.date()]
+
+
+def test_list_today_without_calendar_reader_is_cases_and_commitments() -> None:
+    repo = FakeCommitmentRepository()
+    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=datetime.now(timezone.utc))
+    view = asyncio.run(
+        list_today(
+            open_cases_reader=FakeOpenCasesReader((case,)),
+            commitment_repository=repo,
+            day_repository=FakeDayRepository(),
+            actor=_actor(),
+        )
+    )
+    assert all(i.kind != ItemKind.CALENDAR for i in view.items)
+    assert any(i.kind == ItemKind.CASE for i in view.items)
 
 
 def test_logging_completion_clears_overdue() -> None:

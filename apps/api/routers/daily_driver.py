@@ -53,6 +53,7 @@ from contexts.daily_driver.application import (
     set_today_order,
 )
 from contexts.daily_driver.ports import (
+    CalendarEventsReader,
     CommitmentRepository,
     DayRepository,
     OpenCasesReader,
@@ -90,6 +91,16 @@ def get_open_cases_reader(request: Request) -> OpenCasesReader:
     return _state(request, "daily_driver_open_cases_reader")  # type: ignore[return-value]
 
 
+def get_calendar_events_reader(request: Request) -> CalendarEventsReader | None:
+    """FastAPI dependency: the daily-driver CalendarEventsReader, if wired (D159).
+
+    Optional: returns ``None`` when unconfigured so the today list degrades
+    to Cases + Commitments rather than 503ing for an instance without the
+    calendar seam.
+    """
+    return getattr(request.app.state, "daily_driver_calendar_reader", None)
+
+
 @router.get("/today", response_model=TodayDTO)
 async def get_today(
     actor: Annotated[ActorContext, Depends(get_actor_context)],
@@ -100,13 +111,17 @@ async def get_today(
         CommitmentRepository, Depends(get_commitment_repository)
     ],
     day_repository: Annotated[DayRepository, Depends(get_day_repository)],
+    calendar_events_reader: Annotated[
+        CalendarEventsReader | None, Depends(get_calendar_events_reader)
+    ],
 ) -> TodayDTO:
-    """Return the actor's prioritised-today list."""
+    """Return the actor's prioritised-today list (Cases + Commitments + calendar)."""
     view = await list_today(
         open_cases_reader=open_cases_reader,
         commitment_repository=commitment_repository,
         day_repository=day_repository,
         actor=actor,
+        calendar_events_reader=calendar_events_reader,
     )
     return today_view_to_dto(view)
 
