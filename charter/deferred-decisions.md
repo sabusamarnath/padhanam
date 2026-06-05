@@ -874,6 +874,24 @@ status/overdue projection if render-time computation proves insufficient at volu
 minimal instance is insufficient to drive the active-surfacing behaviour, per the two-threshold
 rule. References D156, D157, D153 (threshold engine).
 
+### Cross-task conversational reference
+
+Surfaced at D158 (P16/S59). The live conversational surface holds a single focus item per
+conversation: opening a Case runs the mirror-conversation cell scoped to that Case and its
+data points, and drill-down stays within the focus item's subtree. Referencing *another* item
+from inside a cell — the `@`-mention → link-chip → back-stack mechanic that lets the operator
+pivot from "this Case" to "that Commitment" or "the meeting last Tuesday" without leaving the
+thread — is named out of S59 scope.
+
+**What defers.** The cross-item reference mechanic inside a conversation: an `@`-mention that
+resolves to another tracked item, renders as a link-chip in the thread, and pushes a back-stack
+frame so the operator can pivot and return. This spans the mirror cell's single-focus model and
+any future Commitment-focus or causal-node-focus cell.
+
+**Activation trigger.** Dogfooding evidence that single-item conversation scope blocks a real
+cross-item question, or the cross-context conversational-reference epic, whichever is first.
+References D158 (the live conversational surface), D17 (cross-context consumer-port seam).
+
 ### Personal causal-graph isolation and encryption posture
 
 Surfaced by D156. The causal decision graph reuses the Neo4j graph store, which is a shared
