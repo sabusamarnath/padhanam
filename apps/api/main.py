@@ -44,6 +44,7 @@ from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
+from apps.api.routers import connections as connections_router
 from apps.api.routers import conversation as conversation_router
 from apps.api.routers import daily_driver as daily_driver_router
 from apps.api.routers import health as health_router
@@ -219,6 +220,8 @@ class AppCompositions:
     # MeetingReader, filtered to today. None when unwired (the list
     # degrades to Cases + Commitments).
     daily_driver_calendar_reader: object | None = None
+    # S60 (D159): the Connections page status reader (design-language §9).
+    connections_status_reader: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -578,12 +581,22 @@ def _build_default_compositions() -> AppCompositions:
         operator_principal=operator_principal,
         security_events=sec,
     )
+    _calendar_domain_tag = CalendarSettings().calendar_domain_tag
     daily_driver_calendar_reader = build_calendar_events_reader(
         tenant_registry=registry,
         session_factory_cache=session_factory_cache,
         operator_principal=operator_principal,
         security_events=sec,
-        domain_tag=CalendarSettings().calendar_domain_tag,
+        domain_tag=_calendar_domain_tag,
+    )
+    from apps.api._connections_wiring import build_connections_status_reader
+
+    connections_status_reader = build_connections_status_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+        domain_tag=_calendar_domain_tag,
     )
 
     return AppCompositions(
@@ -616,6 +629,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_day_repository=daily_driver_day_repository,
         daily_driver_open_cases_reader=daily_driver_open_cases_reader,
         daily_driver_calendar_reader=daily_driver_calendar_reader,
+        connections_status_reader=connections_status_reader,
     )
 
 
@@ -801,6 +815,12 @@ def create_app(
     # messaging composition). Replaces the S58 read-only open-into-context.
     app.include_router(conversation_router.router)
 
+    # S60 (D159): the in-product Connections page — GET /api/v1/connections
+    # (tenant connection status, principal-derived actor context) plus the
+    # served page GET /connections (auth-exempt per _PUBLIC_PATHS).
+    app.include_router(connections_router.router)
+    app.include_router(connections_router.ui_router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -842,6 +862,9 @@ def create_app(
     )
     app.state.daily_driver_calendar_reader = (
         compositions.daily_driver_calendar_reader
+    )
+    app.state.connections_status_reader = (
+        compositions.connections_status_reader
     )
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository

@@ -70,6 +70,9 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
         # The data routes stay bearer-authed; only the page bytes are
         # public.
         "/app",
+        # D159, S60: the Connections page is served the same way — public
+        # page bytes, bearer-authed status route (/api/v1/connections).
+        "/connections",
     }
 )
 
