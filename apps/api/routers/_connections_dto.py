@@ -44,8 +44,33 @@ def connections_view_to_dto(view: ConnectionsView) -> ConnectionsStatusDTO:
     )
 
 
+class ConnectSessionDTO(BaseModel):
+    """A connect session the page opens to run the provider OAuth flow (D160)."""
+
+    provider_config_key: str
+    connect_url: str | None = None
+    session_token: str | None = None
+
+
+class ConnectCallbackRequest(BaseModel):
+    """The connect callback: the provider connection reference the flow issued."""
+
+    provider_connection_ref: str
+
+
+class StoredConnectionDTO(BaseModel):
+    """The stored connection + first-sync state."""
+
+    connection_id: str
+    synced: bool
+    sync_error: str | None = None
+
+
 __all__ = [
+    "ConnectCallbackRequest",
+    "ConnectSessionDTO",
     "ConnectionStatusDTO",
     "ConnectionsStatusDTO",
+    "StoredConnectionDTO",
     "connections_view_to_dto",
 ]

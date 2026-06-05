@@ -226,6 +226,11 @@ class AppCompositions:
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
     # google operator-gated).
     login_verifier: object | None = None
+    # S60b (D160): the calendar connect initiator (Nango, operator-gated)
+    # and the connect-callback connection store (writes the per-tenant
+    # connection + triggers the first sync).
+    calendar_connect_initiator: object | None = None
+    connection_store: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -605,6 +610,18 @@ def _build_default_compositions() -> AppCompositions:
     from apps.api._auth_login_wiring import build_login_verifier
 
     login_verifier = build_login_verifier()
+    from apps.api._calendar_connect_wiring import (
+        build_calendar_connect_initiator,
+        build_connection_store,
+    )
+
+    calendar_connect_initiator = build_calendar_connect_initiator()
+    connection_store = build_connection_store(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
 
     return AppCompositions(
         inference_port=inference_port,
@@ -638,6 +655,8 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_calendar_reader=daily_driver_calendar_reader,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
+        calendar_connect_initiator=calendar_connect_initiator,
+        connection_store=connection_store,
     )
 
 
@@ -882,6 +901,10 @@ def create_app(
         compositions.connections_status_reader
     )
     app.state.login_verifier = compositions.login_verifier
+    app.state.calendar_connect_initiator = (
+        compositions.calendar_connect_initiator
+    )
+    app.state.connection_store = compositions.connection_store
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository
     app.state.portfolio_writer = compositions.portfolio_writer

@@ -172,6 +172,39 @@
       return res.json();
     }
 
+    // Connect (D160): initiate the Nango connect session; the Nango adapter
+    // is operator-gated, so on 503 fall back to the runbook path — connect
+    // via the Nango flow out of band, then paste the issued connection
+    // reference, which the callback stores + first-syncs.
+    async function connect(provider) {
+      if (provider !== "google-calendar") {
+        toast("That provider is connectable but not wired into the list this slice.");
+        return;
+      }
+      let session = null;
+      try {
+        const res = await fetch(API + "/connections/calendar/initiate", { method: "POST", headers: authHeaders() });
+        if (res.ok) { session = await res.json(); }
+        else if (res.status !== 503) { toast(`Connect error ${res.status}`, true); return; }
+      } catch { toast("Network error.", true); return; }
+      if (session && session.connect_url) { window.open(session.connect_url, "_blank", "noopener"); }
+      const ref = window.prompt(
+        session
+          ? "Complete the Google consent in the opened tab, then paste the connection reference here:"
+          : "Calendar connect is operator-gated. Connect via the Nango self-hosted flow, then paste the connection reference here:"
+      );
+      if (!ref) return;
+      try {
+        const res = await fetch(API + "/connections/calendar/callback", {
+          method: "POST", headers: authHeaders(), body: JSON.stringify({ provider_connection_ref: ref.trim() }),
+        });
+        if (!res.ok) { toast(`Callback error ${res.status}`, true); return; }
+        const stored = await res.json();
+        toast(stored.synced ? "Connected and synced — your calendar is on Today." : "Connected. First sync is operator-gated; reload Today after a sync.");
+        load();
+      } catch { toast("Network error.", true); }
+    }
+
     async function load() {
       if (!token()) { document.getElementById("conn-list").innerHTML = '<div class="empty">Paste a dev token above to see your connections.</div>'; return; }
       let data;
@@ -213,10 +246,7 @@
       const rows = [connRow(data.calendar, true)]
         .concat((data.others || []).map((o) => connRow(o, false)));
       list.innerHTML = rows.join("");
-      // Connect is operator-gated (the Nango connect flow happens out of
-      // band; AC8). The button explains rather than mints a token here.
-      list.querySelectorAll("[data-connect]").forEach((b) => b.onclick = () =>
-        toast("Connect Google Calendar via the Nango connect flow, then reload."));
+      list.querySelectorAll("[data-connect]").forEach((b) => b.onclick = () => connect(b.dataset.connect));
     }
 
     document.getElementById("save-token").onclick = () => { localStorage.setItem("dd_token", document.getElementById("token").value.trim()); toast("Token saved"); load(); };
