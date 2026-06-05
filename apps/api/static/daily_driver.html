@@ -1,12 +1,19 @@
 <!DOCTYPE html>
 <!--
-  Daily-driver operator surface (D157, S58) — the first instance of the
-  Phase 2 whole-life causal daily driver. Self-contained: vanilla JS, no
-  build step, no external deps. Styling uses the Padhanam brand tokens
-  (charter/brand/tokens.css, inlined here because charter/ is not in the
-  API image; production serves the canonical tokens.css). Served at /app
-  (auth-exempt); the page prompts for a dev bearer token and attaches it
-  to the authenticated fetches it makes to /api/v1/daily-driver/*.
+  Daily-driver operator surface — the whole-life Today driver (D156/D157/
+  D158/D159). Self-contained: vanilla JS, no build step, no external deps.
+  Built to the settled design language (charter/design-language.md §1-3,
+  binding) against the Padhanam brand tokens (charter/brand/tokens.css),
+  inlined here because charter/ is not in the API image; production serves
+  the canonical tokens.css. Three channels carry three meanings with no
+  overload (design-language §2): colour = tier (warm personal / cool work),
+  icon = category, initials = the named context (optional). Served at /app
+  (auth-exempt); the page prompts for a dev bearer token and attaches it to
+  the authenticated fetches it makes to /api/v1/daily-driver/*.
+
+  S60 (D159): real calendar events render alongside OPEN Cases and
+  Commitments, typed by domain; a calendar item opens into the
+  calendar-conversation cell over the same HTTP-cell path as the Case cell.
 -->
 <html lang="en" data-theme="dark">
 <head>
@@ -15,151 +22,252 @@
   <title>Padhanam — Today</title>
   <style>
     :root {
-      --bg-primary: #1c1c1a; --bg-secondary: #252523; --bg-tertiary: #2c2c2a;
-      --bg-danger: #501313; --bg-warning: #412402; --bg-success: #173404;
-      --text-primary: #f0eeea; --text-secondary: #b4b2a9; --text-tertiary: #888780;
-      --text-danger: #f09595; --text-warning: #ef9f27; --text-success: #97c459;
-      --border-tertiary: rgba(240,238,234,0.12); --border-secondary: rgba(240,238,234,0.25);
-      --brand-teal: #2BA692; --brand-teal-accessible: #1A8070; --accent: #2E3264;
       --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --space-sm: 8px; --space-md: 12px; --space-lg: 16px; --space-xl: 20px; --space-2xl: 24px;
-      --radius-md: 8px; --radius-lg: 12px; --radius-full: 9999px;
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+      --font-mono: 'SF Mono', Consolas, 'Cascadia Code', monospace;
+      --ink-1: #1c1c1a; --ink-2: #5f5e5a; --ink-3: #888780;
+      --page: #eceef0;
+      --surface-work: #ffffff; --surface-personal: #faf6ec;
+      --surface-hover-work: #f6f8fa; --surface-hover-personal: #f4eee0;
+      --hairline: rgba(26,26,25,0.12); --hairline-strong: rgba(26,26,25,0.18);
+      --navy: #2e3264; --navy-hover: #262a55; --teal: #1a8070;
+      --on-track-bg: #eaf3de; --on-track-fg: #3b6d11;
+      --needs-bg: #eeedfe; --needs-fg: #534ab7;
+      --behind-bg: #faeeda; --behind-fg: #854f0b;
+      --risk-bg: #fcebeb; --risk-fg: #a32d2d;
+      --done-bg: #f0efec; --done-fg: #888780;
+      --backdrop: rgba(0,0,0,0.2); --shadow-panel: 0 8px 28px rgba(0,0,0,0.18);
+      --radius-row: 6px; --radius-card: 8px; --radius-input: 4px;
+      --warm: #b0997e; --cool: #7a8190;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    [data-theme="dark"] {
+      --ink-1: #f0eeea; --ink-2: #b4b2a9; --ink-3: #888780;
+      --page: #161614;
+      --surface-work: #232321; --surface-personal: #262320;
+      --surface-hover-work: #2a2a28; --surface-hover-personal: #2d2924;
+      --hairline: rgba(240,238,234,0.12); --hairline-strong: rgba(240,238,234,0.20);
+      --navy: #3b4080; --navy-hover: #464c95; --teal: #2ba692;
+      --on-track-bg: #1d2e0f; --on-track-fg: #8ea868;
+      --needs-bg: #211d44; --needs-fg: #9f9ad0;
+      --behind-bg: #3a2409; --behind-fg: #d3a05a;
+      --risk-bg: #421414; --risk-fg: #d68e8e;
+      --done-bg: #242422; --done-fg: #8a8980;
+      --backdrop: rgba(0,0,0,0.5); --shadow-panel: 0 8px 28px rgba(0,0,0,0.5);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: var(--font-sans); font-size: 14px; line-height: 1.6;
-      color: var(--text-primary); background: var(--bg-primary);
+      font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+      color: var(--ink-1); background: var(--page);
       -webkit-font-smoothing: antialiased; min-height: 100vh;
     }
-    .wrap { max-width: 720px; margin: 0 auto; padding: var(--space-2xl) var(--space-lg) 80px; }
-    header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--space-sm); }
-    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
-    h1 .teal { color: var(--brand-teal); }
-    .day { color: var(--text-tertiary); font-size: 13px; }
-    .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: var(--space-xl); }
+    .topbar {
+      height: 48px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; background: var(--surface-work);
+      border-bottom: 1px solid var(--hairline); position: sticky; top: 0; z-index: 10;
+    }
+    .topbar .brand { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+    .topbar .brand .teal { color: var(--teal); }
+    .topbar .controls { display: flex; align-items: center; gap: 14px; }
+    .ctrl {
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--ink-3); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+    }
+    .ctrl input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; }
+    .ctrl button {
+      font: inherit; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2);
+      background: none; border: 1px solid var(--hairline-strong); border-radius: var(--radius-input);
+      padding: 3px 9px; cursor: pointer;
+    }
+    .ctrl button:hover { color: var(--ink-1); }
+
+    .wrap { max-width: 680px; margin: 0 auto; padding: 28px 20px 80px; }
+    .day-head { margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; }
+    .day-head h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .day-head .date { font-size: 13px; color: var(--ink-2); }
+    .sub { color: var(--ink-2); font-size: 13px; margin: 6px 0 14px; }
+
     .token-bar {
-      display: flex; gap: var(--space-sm); margin-bottom: var(--space-xl);
-      background: var(--bg-secondary); border: 1px solid var(--border-tertiary);
-      border-radius: var(--radius-md); padding: var(--space-sm);
+      display: flex; gap: 8px; margin: 10px 0 16px; padding: 8px;
+      background: var(--surface-work); border: 1px solid var(--hairline);
+      border-radius: var(--radius-card);
     }
-    input, select {
-      font-family: var(--font-sans); font-size: 13px; color: var(--text-primary);
-      background: var(--bg-tertiary); border: 1px solid var(--border-tertiary);
-      border-radius: var(--radius-md); padding: 8px 10px;
+    .token-bar input {
+      flex: 1; font-family: var(--font-sans); font-size: 13px; color: var(--ink-1);
+      background: var(--page); border: 1px solid var(--hairline);
+      border-radius: var(--radius-input); padding: 7px 9px;
     }
-    input:focus, select:focus { outline: none; border-color: var(--brand-teal); }
-    .token-bar input { flex: 1; }
-    button {
-      font-family: var(--font-sans); font-size: 13px; font-weight: 500; cursor: pointer;
-      color: var(--text-primary); background: var(--bg-tertiary);
-      border: 1px solid var(--border-secondary); border-radius: var(--radius-md);
-      padding: 7px 12px; transition: background 0.12s, border-color 0.12s;
+    .token-bar input:focus { outline: none; border-color: var(--teal); }
+
+    .legend { display: flex; gap: 16px; margin: 14px 0 8px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .legend .swatch { width: 22px; height: 14px; border-radius: 3px; border: 1px solid var(--hairline); }
+    .legend .swatch.work { background: var(--surface-work); }
+    .legend .swatch.personal { background: var(--surface-personal); }
+
+    .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 13px 15px; border-radius: var(--radius-row);
+      border: 1px solid var(--hairline); cursor: pointer;
+      transition: background 0.14s ease, border-color 0.14s ease;
     }
-    button:hover { background: var(--accent); border-color: var(--brand-teal-accessible); }
-    button.primary { background: var(--brand-teal-accessible); border-color: var(--brand-teal); color: #fff; }
-    button.primary:hover { background: var(--brand-teal); }
-    button.ghost { background: transparent; border-color: var(--border-tertiary); color: var(--text-secondary); padding: 6px 9px; }
-    button:disabled { opacity: 0.4; cursor: default; }
-    ul { list-style: none; }
-    .item {
-      display: flex; align-items: center; gap: var(--space-md);
-      background: var(--bg-secondary); border: 1px solid var(--border-tertiary);
-      border-left: 3px solid var(--border-tertiary);
-      border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg); margin-bottom: 10px;
-    }
-    .item.behind { border-left-color: var(--text-danger); }
-    .item.needs_you { border-left-color: var(--text-warning); }
-    .item.on_track { border-left-color: var(--text-success); }
-    .item.done { opacity: 0.5; border-left-color: var(--text-tertiary); }
-    .item .body { flex: 1; min-width: 0; }
-    .item .title { font-weight: 500; }
-    .item.done .title { text-decoration: line-through; }
-    .item .detail { font-size: 12px; color: var(--text-secondary); }
-    .pill {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
-      padding: 3px 9px; border-radius: var(--radius-full); white-space: nowrap;
-    }
-    .pill.behind { background: var(--bg-danger); color: var(--text-danger); }
-    .pill.needs_you { background: var(--bg-warning); color: var(--text-warning); }
-    .pill.on_track { background: var(--bg-success); color: var(--text-success); }
-    .pill.done { background: var(--bg-tertiary); color: var(--text-tertiary); }
-    .reorder { display: flex; flex-direction: column; gap: 2px; }
-    .reorder button { padding: 2px 7px; font-size: 11px; line-height: 1.2; }
-    .actions { display: flex; gap: 6px; }
-    .kind-tag { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
-    .new-form {
-      display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center;
-      background: var(--bg-secondary); border: 1px solid var(--border-tertiary);
-      border-radius: var(--radius-md); padding: var(--space-md); margin-top: var(--space-xl);
-    }
+    .row[data-tier="work"]     { background: var(--surface-work); }
+    .row[data-tier="personal"] { background: var(--surface-personal); }
+    .row[data-tier="work"]:hover     { background: var(--surface-hover-work); border-color: var(--hairline-strong); }
+    .row[data-tier="personal"]:hover { background: var(--surface-hover-personal); border-color: var(--hairline-strong); }
+    .row.is-done { opacity: 0.6; }
+
+    .cue { flex-shrink: 0; height: 18px; color: var(--tint);
+      display: inline-flex; align-items: center; gap: 3px; transition: opacity 0.14s ease; }
+    .cue svg { width: 16px; height: 16px; display: block; }
+    .cue-init { font-size: 10px; font-weight: 700; letter-spacing: 0.02em; line-height: 1; }
+    body.cue-off .cue { display: none; }
+
+    .row .main { flex: 1; min-width: 0; }
+    .row .title { font-size: 14px; font-weight: 600; color: var(--ink-1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row.is-done .title { text-decoration: line-through; }
+    .row .meta { font-size: 12px; color: var(--ink-2); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .reorder { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+    .reorder button { font: inherit; font-size: 10px; line-height: 1; color: var(--ink-3);
+      background: none; border: 1px solid var(--hairline); border-radius: 3px; padding: 2px 5px; cursor: pointer; }
+    .reorder button:hover:not(:disabled) { color: var(--ink-1); border-color: var(--hairline-strong); }
+    .reorder button:disabled { opacity: 0.3; cursor: default; }
+
+    .pill { flex-shrink: 0; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
+    .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
+    .pill.needs_you { background: var(--needs-bg); color: var(--needs-fg); }
+    .pill.behind { background: var(--behind-bg); color: var(--behind-fg); }
+    .pill.done { background: var(--done-bg); color: var(--done-fg); }
+
+    .section-label { font-size: 11px; color: var(--ink-3); text-transform: uppercase;
+      letter-spacing: 0.07em; margin: 26px 0 8px; font-weight: 600; }
+    .new-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      background: var(--surface-work); border: 1px solid var(--hairline);
+      border-radius: var(--radius-card); padding: 12px; }
+    .new-form input { font-family: var(--font-sans); font-size: 13px; color: var(--ink-1);
+      background: var(--page); border: 1px solid var(--hairline);
+      border-radius: var(--radius-input); padding: 7px 9px; }
     .new-form input.name { flex: 1; min-width: 160px; }
-    .new-form input.days { width: 70px; }
-    .section-label { font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin: var(--space-xl) 0 var(--space-sm); }
-    .empty { color: var(--text-tertiary); font-style: italic; padding: var(--space-lg); text-align: center; }
+    .new-form input.days { width: 64px; }
+    .new-form .lbl { color: var(--ink-3); font-size: 13px; }
+    .empty { color: var(--ink-3); font-style: italic; padding: 18px; text-align: center; }
+
+    .btn-primary { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 15px; border: none;
+      border-radius: var(--radius-input); background: var(--navy); color: #fff; cursor: pointer;
+      transition: background 0.14s ease; }
+    .btn-primary:hover { background: var(--navy-hover); }
+    .btn-primary:disabled { opacity: 0.4; cursor: default; }
+    .btn-ghost { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 15px;
+      border: 1px solid var(--hairline-strong); border-radius: var(--radius-input);
+      background: none; color: var(--teal); cursor: pointer; }
+
+    .backdrop { position: fixed; inset: 0; background: var(--backdrop);
+      opacity: 0; pointer-events: none; transition: opacity 0.16s ease; z-index: 40; }
+    .backdrop.open { opacity: 1; pointer-events: auto; }
     .panel {
-      position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 92vw);
-      background: var(--bg-secondary); border-left: 1px solid var(--border-secondary);
-      box-shadow: var(--shadow-md); padding: var(--space-2xl); overflow-y: auto;
-      transform: translateX(100%); transition: transform 0.18s ease;
+      position: fixed; top: 0; right: 0; height: 100vh; width: 420px; max-width: 92vw;
+      background: var(--surface-work); border-left: 1px solid var(--hairline);
+      box-shadow: var(--shadow-panel); transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 50; display: flex; flex-direction: column;
     }
     .panel.open { transform: translateX(0); }
-    .panel h2 { font-size: 18px; margin-bottom: 4px; }
-    .panel .cell { font-size: 12px; color: var(--brand-teal); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-lg); }
-    .panel .close { position: absolute; top: var(--space-lg); right: var(--space-lg); }
-    .dp { background: var(--bg-tertiary); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm); }
-    .dp .dt { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; }
-    .toast {
-      position: fixed; bottom: var(--space-xl); left: 50%; transform: translateX(-50%);
-      background: var(--bg-tertiary); border: 1px solid var(--border-secondary);
-      border-radius: var(--radius-md); padding: 10px 16px; font-size: 13px;
-      opacity: 0; transition: opacity 0.2s; pointer-events: none;
-    }
-    .toast.show { opacity: 1; }
-    .toast.error { border-color: var(--text-danger); color: var(--text-danger); }
-    /* S59 (D158): live conversation drawer */
-    .thread { display: flex; flex-direction: column; gap: var(--space-md); margin: var(--space-lg) 0; }
-    .bubble { max-width: 90%; padding: 10px var(--space-md); border-radius: var(--radius-md); font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
-    .bubble.assistant { align-self: flex-start; background: var(--bg-tertiary); border: 1px solid var(--border-tertiary); }
-    .bubble.user { align-self: flex-end; background: var(--brand-teal-accessible); border: 1px solid var(--brand-teal); color: #fff; }
+    .panel[data-tier="personal"] { background: var(--surface-personal); }
+    .panel-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+      padding: 0 16px; border-bottom: 1px solid var(--hairline); }
+    .panel-top .ptitle { flex: 1; font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .panel-top .close { background: none; border: none; font-size: 18px; line-height: 1;
+      color: var(--ink-3); cursor: pointer; padding: 4px; }
+    .panel-top .close:hover { color: var(--ink-1); }
+    .panel-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .panel-body .pill-row { display: flex; gap: 8px; align-items: center; }
+    .panel-body .when { font-size: 12px; color: var(--ink-2); }
+    .field-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--ink-3); margin-bottom: 4px; }
+    .field-value { font-size: 14px; color: var(--ink-1); }
+    .panel-foot { flex-shrink: 0; padding: 14px 20px; border-top: 1px solid var(--hairline); display: flex; gap: 10px; }
+
+    /* the live conversation cell (D158/D159), inside the drawer */
+    .thread { display: flex; flex-direction: column; gap: 12px; }
+    .bubble { max-width: 92%; padding: 9px 12px; border-radius: var(--radius-card);
+      font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+    .bubble.assistant { align-self: flex-start; background: var(--page); border: 1px solid var(--hairline); }
+    .bubble.user { align-self: flex-end; background: var(--navy); border: 1px solid var(--navy); color: #fff; }
     .bubble.pending { opacity: 0.55; font-style: italic; }
-    .chips { display: flex; flex-wrap: wrap; gap: 5px; align-self: flex-start; max-width: 90%; margin-top: -6px; }
-    .chip { font-size: 10px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-tertiary); border-radius: var(--radius-full); padding: 2px 8px; }
-    .chip .ct { color: var(--brand-teal); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; margin-right: 4px; }
-    .composer { display: flex; gap: var(--space-sm); margin-top: var(--space-lg); }
-    .composer input { flex: 1; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; align-self: flex-start; max-width: 92%; margin-top: -6px; }
+    .chip { font-size: 10px; color: var(--ink-2); background: var(--page); border: 1px solid var(--hairline);
+      border-radius: 9999px; padding: 2px 8px; }
+    .chip .ct { color: var(--teal); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; margin-right: 4px; }
+    .composer { display: flex; gap: 8px; }
+    .composer input { flex: 1; font-family: var(--font-sans); font-size: 13px; color: var(--ink-1);
+      background: var(--page); border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 8px 10px; }
+    .composer input:focus { outline: none; border-color: var(--teal); }
+
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--surface-work); border: 1px solid var(--hairline-strong);
+      border-radius: var(--radius-card); padding: 10px 16px; font-size: 13px; z-index: 60;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none; box-shadow: var(--shadow-panel); }
+    .toast.show { opacity: 1; }
+    .toast.error { border-color: var(--risk-fg); color: var(--risk-fg); }
+
+    @media (prefers-reduced-motion: reduce) { .panel, .backdrop, .row { transition: none; } }
   </style>
 </head>
-<body>
+<body class="cue-on">
+  <div class="topbar">
+    <div class="brand">Padhanam <span class="teal">·</span> Today</div>
+    <div class="controls">
+      <label class="ctrl"><input type="checkbox" id="cueToggle" checked /> Domain cue</label>
+      <span class="ctrl"><button id="themeToggle">Light mode</button></span>
+    </div>
+  </div>
+
   <div class="wrap">
-    <header>
-      <h1>Padhanam <span class="teal">·</span> Today</h1>
-      <span class="day" id="day-date"></span>
-    </header>
+    <div class="day-head">
+      <h1>Today</h1>
+      <span class="date" id="day-date"></span>
+    </div>
     <p class="sub">One prioritised list across your whole day — what needs you, and what has gone quiet.</p>
 
     <div class="token-bar">
       <input id="token" type="password" placeholder="paste dev bearer token" autocomplete="off" />
-      <button id="save-token">Use token</button>
-      <button id="reload" class="ghost">Reload</button>
+      <button class="btn-primary" id="save-token">Use token</button>
+      <button class="btn-ghost" id="reload">Reload</button>
     </div>
 
-    <ul id="list"></ul>
+    <div class="legend">
+      <span><span class="swatch work"></span> Work surface</span>
+      <span><span class="swatch personal"></span> Personal surface</span>
+    </div>
+
+    <div class="list" id="list"></div>
 
     <div class="section-label">New commitment</div>
     <div class="new-form">
       <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
-      <span style="color:var(--text-tertiary);font-size:13px;">every</span>
+      <span class="lbl">every</span>
       <input class="days" id="c-days" type="number" min="1" value="7" />
-      <span style="color:var(--text-tertiary);font-size:13px;">days</span>
-      <button class="primary" id="c-add">Add commitment</button>
+      <span class="lbl">days</span>
+      <button class="btn-primary" id="c-add">Add commitment</button>
     </div>
   </div>
 
-  <div class="panel" id="panel">
-    <button class="ghost close" id="panel-close">Close</button>
-    <div id="panel-body"></div>
-  </div>
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="panel" id="panel" data-tier="work">
+    <div class="panel-top">
+      <span class="cue" id="panel-cue"></span>
+      <span class="ptitle" id="panel-title"></span>
+      <button class="close" id="panel-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+    <div class="panel-foot" id="panel-foot" style="display:none"></div>
+  </aside>
 
   <div class="toast" id="toast"></div>
 
@@ -167,6 +275,19 @@
     const API = "/api/v1";
     let order = [];        // current client-side ordering: [{kind, item_id}]
     let itemsByKey = {};   // key -> item
+
+    // Three channels (design-language §2): colour = tier, icon = category,
+    // initials = named context (optional). The DTO's domain drives all three.
+    const ICON_WORK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    const ICON_HOME = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>';
+    const ICON_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z"/></svg>';
+    const DOMAINS = {
+      work:     { tier: "work",     tint: "var(--cool)", icon: ICON_WORK },
+      personal: { tier: "personal", tint: "var(--warm)", icon: ICON_HEART },
+      family:   { tier: "personal", tint: "var(--warm)", icon: ICON_HOME },
+    };
+    const domainOf = (it) => DOMAINS[it.domain] || DOMAINS.work;
+    const pillLabel = (s) => ({ NEEDS_YOU: "Needs you", ON_TRACK: "On track", BEHIND: "Behind", DONE: "Done" }[s] || s);
 
     const keyOf = (it) => `${it.kind}:${it.item_id}`;
     const token = () => localStorage.getItem("dd_token") || "";
@@ -188,7 +309,7 @@
     }
 
     async function loadToday() {
-      if (!token()) { document.getElementById("list").innerHTML = '<li class="empty">Paste a dev token above to load your day.</li>'; return; }
+      if (!token()) { document.getElementById("list").innerHTML = '<div class="empty">Paste a dev token above to load your day.</div>'; return; }
       let data;
       try { data = await api("/daily-driver/today"); } catch { return; }
       document.getElementById("day-date").textContent = data.day_date;
@@ -198,38 +319,41 @@
       render(data.items);
     }
 
-    function render(items) {
-      const list = document.getElementById("list");
-      if (!items.length) { list.innerHTML = '<li class="empty">Nothing on your plate. Add a commitment below to start tracking a rhythm.</li>'; return; }
-      list.innerHTML = "";
-      items.forEach((it, idx) => {
-        const li = document.createElement("li");
-        li.className = "item " + it.status.toLowerCase();
-        const isCommitment = it.kind === "COMMITMENT";
-        const doneLabel = isCommitment ? "✓ Did it" : (it.done ? "↺ Undo" : "✓ Done");
-        li.innerHTML = `
-          <div class="reorder">
-            <button class="ghost" data-up="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
-            <button class="ghost" data-down="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>▼</button>
-          </div>
-          <span class="pill ${it.status.toLowerCase()}">${it.status.replace("_", " ")}</span>
-          <div class="body">
-            <div class="title">${escapeHtml(it.title)}</div>
-            <div class="detail"><span class="kind-tag">${it.kind}</span> · ${escapeHtml(it.detail)}</div>
-          </div>
-          <div class="actions">
-            <button data-done="${keyOf(it)}">${doneLabel}</button>
-            <button class="ghost" data-open="${keyOf(it)}">Open</button>
-          </div>`;
-        list.appendChild(li);
-      });
-      list.querySelectorAll("[data-up]").forEach((b) => b.onclick = () => move(+b.dataset.up, -1));
-      list.querySelectorAll("[data-down]").forEach((b) => b.onclick = () => move(+b.dataset.down, +1));
-      list.querySelectorAll("[data-done]").forEach((b) => b.onclick = () => onDone(b.dataset.done));
-      list.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openItem(b.dataset.open));
+    function cueHTML(it, init) {
+      const d = domainOf(it);
+      const initSpan = init ? `<span class="cue-init">${escapeHtml(init)}</span>` : "";
+      return `<span class="cue" style="--tint:${d.tint}">${d.icon}${initSpan}</span>`;
     }
 
-    function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+    function render(items) {
+      const list = document.getElementById("list");
+      if (!items.length) { list.innerHTML = '<div class="empty">Nothing on your plate. Connect a calendar or add a commitment below.</div>'; return; }
+      list.innerHTML = "";
+      items.forEach((it, idx) => {
+        const d = domainOf(it);
+        const row = document.createElement("div");
+        row.className = "row" + (it.done ? " is-done" : "");
+        row.dataset.tier = d.tier;
+        // Calendar items are read-through (D159): no reorder handle.
+        const reorder = it.kind === "CALENDAR" ? "" : `
+          <div class="reorder">
+            <button data-up="${idx}" ${idx === 0 ? "disabled" : ""} title="Move up">▲</button>
+            <button data-down="${idx}" ${idx === items.length - 1 ? "disabled" : ""} title="Move down">▼</button>
+          </div>`;
+        row.innerHTML = `${reorder}${cueHTML(it)}
+          <div class="main">
+            <div class="title">${escapeHtml(it.title)}</div>
+            <div class="meta">${escapeHtml(it.detail)}</div>
+          </div>
+          <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
+        row.addEventListener("click", (e) => { if (e.target.closest(".reorder")) return; openItem(keyOf(it)); });
+        list.appendChild(row);
+      });
+      list.querySelectorAll("[data-up]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); move(+b.dataset.up, -1); });
+      list.querySelectorAll("[data-down]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); move(+b.dataset.down, +1); });
+    }
+
+    function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
 
     async function move(idx, delta) {
       const j = idx + delta;
@@ -250,48 +374,84 @@
         } else {
           await api("/daily-driver/today/done", { method: "POST", body: JSON.stringify({ kind: it.kind, item_id: it.item_id, done: !it.done }) });
         }
+        closePanel();
         await loadToday();
       } catch {}
     }
 
-    // S59 (D158): a live conversation, not a read-only context panel.
-    // Opening a Case fires /conversation/open (the cell's open+turn), the
-    // thread renders, and the operator continues the conversation by
-    // posting turns to /conversation/turn. ConversationState threads
-    // through the client (stateless per turn, D115) — convState carries it.
-    let convState = null;     // {conversation_id, purpose, turn_count, is_open, cell_payload}
-    let convThread = [];      // [{role:'assistant'|'user', text, citations, pending}]
+    // Opening a Case or a calendar item fires /conversation/open (the cell's
+    // open+turn over HTTP, D158/D159); the thread renders, and the operator
+    // continues by posting turns to /conversation/turn. ConversationState
+    // threads through the client (stateless per turn, D115). A Commitment
+    // opens a read context (a commitment-focus cell is named out, D158).
+    let convState = null;
+    let convThread = [];
+    const CONVERSATIONAL = { CASE: "CASE", CALENDAR: "CALENDAR" };
 
-    async function openItem(key) {
+    function setPanelChrome(it) {
+      const d = domainOf(it);
+      document.getElementById("panel").dataset.tier = d.tier;
+      document.getElementById("panel-cue").style.setProperty("--tint", d.tint);
+      document.getElementById("panel-cue").innerHTML = d.icon;
+      document.getElementById("panel-title").textContent = it.title;
+    }
+
+    function openItem(key) {
       const it = itemsByKey[key];
-      const body = document.getElementById("panel-body");
-      if (it.kind === "CASE") {
-        convState = null;
-        convThread = [];
-        body.innerHTML = `<div class="cell">mirror conversation</div>
-          <h2>${escapeHtml(it.title)}</h2>
-          <div class="thread" id="thread"><div class="bubble assistant pending">Opening…</div></div>
-          <div class="composer">
-            <input id="turn-input" placeholder="Ask about this case…" autocomplete="off" disabled />
-            <button class="primary" id="turn-send" disabled>Send</button>
-          </div>`;
-        document.getElementById("panel").classList.add("open");
-        let turn;
-        try { turn = await api("/daily-driver/conversation/open", { method: "POST", body: JSON.stringify({ focus_kind: "CASE", focus_id: it.item_id }) }); }
-        catch { renderThread(); return; }
-        applyTurn(null, turn);
-        wireComposer();
+      const foot = document.getElementById("panel-foot");
+      setPanelChrome(it);
+      document.getElementById("panel").classList.add("open");
+      document.getElementById("backdrop").classList.add("open");
+
+      if (CONVERSATIONAL[it.kind]) {
+        openConversation(it);
+        // Cases carry a done-for-today overlay; calendar items do not.
+        if (it.kind === "CASE") {
+          foot.style.display = "flex";
+          foot.innerHTML = `<button class="btn-ghost" id="foot-done">${it.done ? "Undo done" : "Mark done"}</button>`;
+          document.getElementById("foot-done").onclick = () => onDone(key);
+        } else {
+          foot.style.display = "none";
+        }
       } else {
+        // Commitment: a read context plus the "Did it" completion action.
         convState = null;
-        body.innerHTML = `<div class="cell">${escapeHtml(it.target_cell)}</div><h2>${escapeHtml(it.title)}</h2>
-          <p class="detail">${escapeHtml(it.detail)}</p>
-          <p class="sub" style="margin-top:16px">A user-authored commitment. "Did it" logs a completion and clears the staleness signal.</p>`;
-        document.getElementById("panel").classList.add("open");
+        document.getElementById("panel-body").innerHTML = `
+          <div class="pill-row"><span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span></div>
+          <div><div class="field-label">Cadence</div><div class="field-value">${escapeHtml(it.detail)}</div></div>
+          <p class="sub">A user-authored commitment. “Did it” logs a completion and clears the staleness signal.</p>`;
+        foot.style.display = "flex";
+        foot.innerHTML = `<button class="btn-primary" id="foot-done">Did it</button>`;
+        document.getElementById("foot-done").onclick = () => onDone(key);
       }
     }
 
+    async function openConversation(it) {
+      convState = null;
+      convThread = [];
+      const when = it.start_at ? new Date(it.start_at).toLocaleString() : it.detail;
+      document.getElementById("panel-body").innerHTML = `
+        <div class="pill-row">
+          <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>
+          <span class="when">${escapeHtml(when)}</span>
+        </div>
+        <div class="thread" id="thread"><div class="bubble assistant pending">Opening…</div></div>
+        <div class="composer">
+          <input id="turn-input" placeholder="Ask about this…" autocomplete="off" disabled />
+          <button class="btn-primary" id="turn-send" disabled>Send</button>
+        </div>`;
+      let turn;
+      try {
+        turn = await api("/daily-driver/conversation/open", {
+          method: "POST",
+          body: JSON.stringify({ focus_kind: it.kind, focus_id: it.item_id }),
+        });
+      } catch { renderThread(); return; }
+      applyTurn(null, turn);
+      wireComposer();
+    }
+
     function applyTurn(userText, turn) {
-      // Drop any optimistic pending bubble, append the real exchange.
       convThread = convThread.filter((t) => !t.pending);
       if (userText !== null) convThread.push({ role: "user", text: userText, citations: [] });
       convThread.push({ role: "assistant", text: turn.reply, citations: turn.citations || [] });
@@ -355,11 +515,25 @@
       } catch {}
     }
 
+    function closePanel() {
+      document.getElementById("panel").classList.remove("open");
+      document.getElementById("backdrop").classList.remove("open");
+    }
+
     document.getElementById("save-token").onclick = () => { localStorage.setItem("dd_token", document.getElementById("token").value.trim()); toast("Token saved"); loadToday(); };
     document.getElementById("reload").onclick = loadToday;
     document.getElementById("c-add").onclick = addCommitment;
-    document.getElementById("panel-close").onclick = () => document.getElementById("panel").classList.remove("open");
+    document.getElementById("panel-close").onclick = closePanel;
+    document.getElementById("backdrop").onclick = closePanel;
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePanel(); });
     document.getElementById("c-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addCommitment(); });
+    document.getElementById("cueToggle").addEventListener("change", (e) => { document.body.classList.toggle("cue-off", !e.target.checked); });
+    const themeBtn = document.getElementById("themeToggle");
+    themeBtn.onclick = () => {
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+      themeBtn.textContent = dark ? "Dark mode" : "Light mode";
+    };
 
     document.getElementById("token").value = token();
     loadToday();
