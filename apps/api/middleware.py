@@ -73,6 +73,13 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
         # D159, S60: the Connections page is served the same way — public
         # page bytes, bearer-authed status route (/api/v1/connections).
         "/connections",
+        # D160, S60b: the login surface. The login page bytes and the
+        # token-exchange route are public (you cannot bearer-auth the act
+        # of signing in); the credential is the gate, and the issued token
+        # carries the tenant scope. All data routes stay bearer-authed.
+        "/",
+        "/login",
+        "/api/v1/auth/login",
     }
 )
 

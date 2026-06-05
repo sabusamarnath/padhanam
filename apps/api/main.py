@@ -44,6 +44,7 @@ from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
+from apps.api.routers import auth as auth_router
 from apps.api.routers import connections as connections_router
 from apps.api.routers import conversation as conversation_router
 from apps.api.routers import daily_driver as daily_driver_router
@@ -222,6 +223,9 @@ class AppCompositions:
     daily_driver_calendar_reader: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
+    # S60b (D160): the login verifier (token-exchange seam; dev wired,
+    # google operator-gated).
+    login_verifier: object | None = None
 
 
 def _build_default_compositions() -> AppCompositions:
@@ -598,6 +602,9 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         domain_tag=_calendar_domain_tag,
     )
+    from apps.api._auth_login_wiring import build_login_verifier
+
+    login_verifier = build_login_verifier()
 
     return AppCompositions(
         inference_port=inference_port,
@@ -630,6 +637,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_open_cases_reader=daily_driver_open_cases_reader,
         daily_driver_calendar_reader=daily_driver_calendar_reader,
         connections_status_reader=connections_status_reader,
+        login_verifier=login_verifier,
     )
 
 
@@ -821,6 +829,13 @@ def create_app(
     app.include_router(connections_router.router)
     app.include_router(connections_router.ui_router)
 
+    # S60b (D160): the login surface — POST /api/v1/auth/login (public
+    # token-exchange) plus the served login page at GET / and /login
+    # (auth-exempt per _PUBLIC_PATHS). Closes the paste-a-dev-token UX
+    # backdoor; the data routes stay bearer-authed.
+    app.include_router(auth_router.router)
+    app.include_router(auth_router.ui_router)
+
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
     app.state.event_bus = compositions.event_bus
@@ -866,6 +881,7 @@ def create_app(
     app.state.connections_status_reader = (
         compositions.connections_status_reader
     )
+    app.state.login_verifier = compositions.login_verifier
     # S44b (D127): intake write-surface composition seams.
     app.state.intake_repository = compositions.intake_repository
     app.state.portfolio_writer = compositions.portfolio_writer

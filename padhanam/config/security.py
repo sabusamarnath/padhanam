@@ -33,6 +33,19 @@ class SecuritySettings(PadhanamSettings):
     )
     auth_backend: AuthBackend = AuthBackend.DEV_SIGNED_TOKEN
 
+    # Login surface (D160, S60b). The dogfooding login exchanges a sign-in
+    # credential for the platform JWT the data routes already require. The
+    # dev login verifies this passphrase and issues a token for the
+    # configured tenant; production swaps the LoginVerifier to a Google/IdP
+    # adapter (operator-gated). Dev defaults keep the local loop running
+    # without .env edits; never the production posture.
+    login_backend: str = "dev"  # "dev" | "google"
+    dev_login_passphrase: str = "dev"
+    dev_login_subject: str = "operator"
+    # The tenant a successful dev login maps to — the personal dogfooding
+    # tenant by default (the dogfood-setup chore's tenant).
+    dev_login_tenant_id: str = "00000000-0000-4000-8000-00000000d001"
+
     @field_validator("kek_hex")
     @classmethod
     def kek_must_be_32_bytes(cls, v: str) -> str:

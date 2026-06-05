@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!--
+  Login surface (D160, S60b) — the real entry to the dogfooding loop,
+  closing the paste-a-dev-token backdoor (S58). Built from login-mock.html
+  against the brand tokens. The dev login posts a passphrase to
+  POST /api/v1/auth/login and stores the returned platform JWT (the same
+  `dd_token` key the shell, Today, and Connections pages read). "Continue
+  with Google" is the production-shaped §9 one-tap path and is
+  operator-gated (D160) — it explains rather than asserts Google's contract.
+-->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Padhanam — Sign in</title>
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --ink-1: #1c1c1a; --ink-2: #5f5e5a; --ink-3: #888780;
+      --page: #eceef0; --surface: #ffffff;
+      --hairline: rgba(26,26,25,0.12); --hairline-strong: rgba(26,26,25,0.18);
+      --navy: #2e3264; --navy-hover: #262a55; --teal: #1a8070;
+      --radius-card: 10px; --radius-input: 6px; --shadow: 0 8px 28px rgba(0,0,0,0.10);
+    }
+    [data-theme="dark"] {
+      --ink-1: #f0eeea; --ink-2: #b4b2a9; --ink-3: #888780;
+      --page: #161614; --surface: #232321;
+      --hairline: rgba(240,238,234,0.12); --hairline-strong: rgba(240,238,234,0.20);
+      --navy: #3b4080; --navy-hover: #464c95; --teal: #2ba692;
+      --shadow: 0 8px 28px rgba(0,0,0,0.5);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-sans); color: var(--ink-1); background: var(--page);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      -webkit-font-smoothing: antialiased; }
+    .card { width: 360px; max-width: 92vw; background: var(--surface);
+      border: 1px solid var(--hairline); border-radius: var(--radius-card);
+      box-shadow: var(--shadow); padding: 32px 28px; }
+    .mark { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; color: var(--teal); }
+    .mark svg { width: 28px; height: 28px; }
+    .mark .name { font-size: 15px; font-weight: 700; color: var(--ink-1); letter-spacing: 0.01em; }
+    h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+    .sub { font-size: 13px; color: var(--ink-2); margin: 5px 0 22px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 5px; }
+    .field { width: 100%; font-family: var(--font-sans); font-size: 14px; color: var(--ink-1);
+      background: var(--page); border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 10px 12px; }
+    .field:focus { outline: none; border-color: var(--teal); }
+    .btn { width: 100%; font: inherit; font-size: 14px; font-weight: 600; margin-top: 14px;
+      padding: 11px; border: none; border-radius: var(--radius-input); background: var(--navy);
+      color: #fff; cursor: pointer; transition: background 0.14s ease; }
+    .btn:hover { background: var(--navy-hover); }
+    .divider { display: flex; align-items: center; gap: 10px; color: var(--ink-3); font-size: 12px; margin: 18px 0; }
+    .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+    .btn-ghost { width: 100%; font: inherit; font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      padding: 10px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-input);
+      background: none; color: var(--ink-1); cursor: pointer; }
+    .btn-ghost svg { width: 18px; height: 18px; }
+    .btn-ghost:hover { border-color: var(--teal); }
+    .err { font-size: 12px; color: #d68e8e; margin-top: 10px; min-height: 16px; }
+    .foot { font-size: 12px; color: var(--ink-3); margin-top: 18px; text-align: center; }
+    .toggle { position: fixed; top: 16px; right: 16px; }
+    .toggle button { font: inherit; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--ink-2); background: none; border: 1px solid var(--hairline-strong);
+      border-radius: var(--radius-input); padding: 4px 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="toggle"><button id="themeToggle">Light mode</button></div>
+  <div class="card">
+    <div class="mark">
+      <svg viewBox="0 0 32 32" fill="none"><circle cx="11" cy="16" r="3.2" fill="currentColor"/><circle cx="21" cy="11" r="3.2" fill="currentColor"/><circle cx="21" cy="21" r="3.2" fill="currentColor"/><path d="M13.5 14.5 19 12 M13.5 17.5 19 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span class="name">Padhanam</span>
+    </div>
+    <h1>Sign in</h1>
+    <div class="sub">Welcome back. Pick up where your day left off.</div>
+
+    <label for="cred">Sign-in passphrase</label>
+    <input class="field" id="cred" type="password" placeholder="passphrase" autocomplete="current-password" />
+    <button class="btn" id="continueBtn">Continue</button>
+    <div class="err" id="err"></div>
+
+    <div class="divider">or</div>
+
+    <button class="btn-ghost" id="googleBtn">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.5c2-1.9 3.3-4.7 3.3-7.8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 4.9c1.6 0 3 .6 4.2 1.7l3.1-3.1A11 11 0 0 0 2 7.1l3.7 2.8C6.6 7.3 9.1 4.9 12 4.9z"/></svg>
+      Continue with Google
+    </button>
+
+    <div class="foot">The daily driver runs behind this sign-in.</div>
+  </div>
+
+  <script>
+    const API = "/api/v1";
+    const err = document.getElementById("err");
+
+    async function login() {
+      err.textContent = "";
+      const credential = document.getElementById("cred").value;
+      if (!credential) { err.textContent = "Enter your passphrase."; return; }
+      let res;
+      try {
+        res = await fetch(API + "/auth/login", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential }),
+        });
+      } catch { err.textContent = "Network error."; return; }
+      if (res.status === 401) { err.textContent = "That credential was not accepted."; return; }
+      if (!res.ok) { err.textContent = "Sign-in failed (" + res.status + ")."; return; }
+      const body = await res.json();
+      localStorage.setItem("dd_token", body.token);
+      window.location.href = "/app";
+    }
+
+    document.getElementById("continueBtn").onclick = login;
+    document.getElementById("cred").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+    document.getElementById("googleBtn").onclick = () => {
+      err.textContent = "Google sign-in is operator-gated for this stack — use the passphrase.";
+    };
+    const tb = document.getElementById("themeToggle");
+    tb.onclick = () => {
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+      tb.textContent = dark ? "Dark mode" : "Light mode";
+    };
+  </script>
+</body>
+</html>
