@@ -117,6 +117,17 @@
     }
     .toast.show { opacity: 1; }
     .toast.error { border-color: var(--text-danger); color: var(--text-danger); }
+    /* S59 (D158): live conversation drawer */
+    .thread { display: flex; flex-direction: column; gap: var(--space-md); margin: var(--space-lg) 0; }
+    .bubble { max-width: 90%; padding: 10px var(--space-md); border-radius: var(--radius-md); font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
+    .bubble.assistant { align-self: flex-start; background: var(--bg-tertiary); border: 1px solid var(--border-tertiary); }
+    .bubble.user { align-self: flex-end; background: var(--brand-teal-accessible); border: 1px solid var(--brand-teal); color: #fff; }
+    .bubble.pending { opacity: 0.55; font-style: italic; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; align-self: flex-start; max-width: 90%; margin-top: -6px; }
+    .chip { font-size: 10px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-tertiary); border-radius: var(--radius-full); padding: 2px 8px; }
+    .chip .ct { color: var(--brand-teal); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; margin-right: 4px; }
+    .composer { display: flex; gap: var(--space-sm); margin-top: var(--space-lg); }
+    .composer input { flex: 1; }
   </style>
 </head>
 <body>
@@ -243,25 +254,93 @@
       } catch {}
     }
 
+    // S59 (D158): a live conversation, not a read-only context panel.
+    // Opening a Case fires /conversation/open (the cell's open+turn), the
+    // thread renders, and the operator continues the conversation by
+    // posting turns to /conversation/turn. ConversationState threads
+    // through the client (stateless per turn, D115) — convState carries it.
+    let convState = null;     // {conversation_id, purpose, turn_count, is_open, cell_payload}
+    let convThread = [];      // [{role:'assistant'|'user', text, citations, pending}]
+
     async function openItem(key) {
       const it = itemsByKey[key];
       const body = document.getElementById("panel-body");
       if (it.kind === "CASE") {
-        let detail;
-        try { detail = await api(`/portfolio/cases/${it.item_id}`); }
-        catch { return; }
-        const c = detail.case || detail;
-        const dps = (detail.data_points || []).map((dp) => `
-          <div class="dp"><div class="dt">${escapeHtml(dp.data_point_type || "data point")}</div>${escapeHtml(JSON.stringify(dp.current_value || dp.value || {}))}</div>`).join("");
-        body.innerHTML = `<div class="cell">${it.target_cell}</div><h2>${escapeHtml(c.title)}</h2>
-          <p class="detail">Status: ${escapeHtml(c.status)}</p>
-          <div class="section-label">Data points</div>${dps || '<p class="empty">No data points yet.</p>'}`;
+        convState = null;
+        convThread = [];
+        body.innerHTML = `<div class="cell">mirror conversation</div>
+          <h2>${escapeHtml(it.title)}</h2>
+          <div class="thread" id="thread"><div class="bubble assistant pending">Opening…</div></div>
+          <div class="composer">
+            <input id="turn-input" placeholder="Ask about this case…" autocomplete="off" disabled />
+            <button class="primary" id="turn-send" disabled>Send</button>
+          </div>`;
+        document.getElementById("panel").classList.add("open");
+        let turn;
+        try { turn = await api("/daily-driver/conversation/open", { method: "POST", body: JSON.stringify({ focus_kind: "CASE", focus_id: it.item_id }) }); }
+        catch { renderThread(); return; }
+        applyTurn(null, turn);
+        wireComposer();
       } else {
-        body.innerHTML = `<div class="cell">${it.target_cell}</div><h2>${escapeHtml(it.title)}</h2>
+        convState = null;
+        body.innerHTML = `<div class="cell">${escapeHtml(it.target_cell)}</div><h2>${escapeHtml(it.title)}</h2>
           <p class="detail">${escapeHtml(it.detail)}</p>
           <p class="sub" style="margin-top:16px">A user-authored commitment. "Did it" logs a completion and clears the staleness signal.</p>`;
+        document.getElementById("panel").classList.add("open");
       }
-      document.getElementById("panel").classList.add("open");
+    }
+
+    function applyTurn(userText, turn) {
+      // Drop any optimistic pending bubble, append the real exchange.
+      convThread = convThread.filter((t) => !t.pending);
+      if (userText !== null) convThread.push({ role: "user", text: userText, citations: [] });
+      convThread.push({ role: "assistant", text: turn.reply, citations: turn.citations || [] });
+      convState = turn.state;
+      renderThread();
+    }
+
+    function renderThread() {
+      const thread = document.getElementById("thread");
+      if (!thread) return;
+      thread.innerHTML = "";
+      convThread.forEach((t) => {
+        const b = document.createElement("div");
+        b.className = "bubble " + t.role + (t.pending ? " pending" : "");
+        b.textContent = t.text;
+        thread.appendChild(b);
+        if (t.role === "assistant" && t.citations && t.citations.length) {
+          const chips = document.createElement("div");
+          chips.className = "chips";
+          chips.innerHTML = t.citations.map((c) =>
+            `<span class="chip"><span class="ct">${escapeHtml(c.type)}</span>${escapeHtml(c.label)}</span>`).join("");
+          thread.appendChild(chips);
+        }
+      });
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function wireComposer() {
+      const input = document.getElementById("turn-input");
+      const send = document.getElementById("turn-send");
+      if (!input || !send) return;
+      input.disabled = false; send.disabled = false;
+      input.focus();
+      send.onclick = sendTurn;
+      input.onkeydown = (e) => { if (e.key === "Enter") sendTurn(); };
+    }
+
+    async function sendTurn() {
+      const input = document.getElementById("turn-input");
+      const text = input.value.trim();
+      if (!text || !convState) return;
+      input.value = "";
+      convThread.push({ role: "user", text, citations: [] });
+      convThread.push({ role: "assistant", text: "…", citations: [], pending: true });
+      renderThread();
+      let turn;
+      try { turn = await api("/daily-driver/conversation/turn", { method: "POST", body: JSON.stringify({ state: convState, text }) }); }
+      catch { convThread = convThread.filter((t) => !t.pending); renderThread(); return; }
+      applyTurn(null, turn);
     }
 
     async function addCommitment() {
