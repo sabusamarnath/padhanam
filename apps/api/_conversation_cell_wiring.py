@@ -31,6 +31,13 @@ from uuid import UUID
 
 from apps.api._messaging_wiring import MessagingComposition
 from contexts.audit.domain.ports import AuditPort
+from contexts.calendar.ports.meeting_repository import MeetingReader
+from contexts.calendar_conversation.application.cell import (
+    CalendarConversationCell,
+)
+from contexts.calendar_conversation.application.response import (
+    CalendarConversationResponse,
+)
 from contexts.mirror_conversation.application.cell import (
     MirrorConversationCell,
 )
@@ -47,10 +54,15 @@ from shared_kernel import (
 from shared_kernel.conversation_flow import ArtefactCitation
 
 # The mirror-conversation cell answers a portfolio Case; the S59 surface
-# opens a Case into that cell. The focus kind the surface accepts.
+# opens a Case into that cell. The S60 surface (D159) also opens a calendar
+# item into the calendar-conversation cell over the *same* stateless path —
+# a second implementer, not a parallel state machine. The focus kinds the
+# surface accepts, and the purposes the two cells thread.
 FOCUS_KIND_CASE = "CASE"
+FOCUS_KIND_CALENDAR = "CALENDAR"
 
 _PURPOSE = "mirror_query"
+_CALENDAR_PURPOSE = "calendar_query"
 
 
 @dataclass(frozen=True)
@@ -281,11 +293,305 @@ async def advance_conversation(
     return await _result_from_state(reader=reader, actor=actor, state=state)
 
 
+# ===================================================================
+# Calendar conversation — the second implementer on the same path (D159)
+# ===================================================================
+#
+# A calendar item opens into the existing `calendar_conversation` cell
+# (S55b), reached through the same stateless open/turn shape as the mirror
+# cell. The differences are local and named: a different cell construction
+# (the Meeting store + the D150 refresh port), a different response payload
+# key (`calendar_response`), and `meeting`-typed citations. The cell holds
+# its own `PendingClarification` (D134/D139) exactly as the mirror cell
+# does; this adapter holds no conversation state, and the calendar cell
+# does not drill down, so `cell_payload` stays empty for calendar turns.
+
+
+def _build_calendar_collaborators(
+    actor: ActorContext,
+) -> tuple[MeetingReader, object | None]:
+    """Build the per-request Meeting store + optional refresh port (D150).
+
+    Mirrors ``messaging.py:_run_calendar_conversation_cell``: a Meeting
+    store bound to the request's tenant, plus the refresh adapter wired to
+    the real Nango Proxy when a google-calendar connection exists for the
+    tenant. When no calendar is connected the cell answers from the cached
+    store with no refresh (and the live smoke is operator-gated, AC8).
+    """
+    import sqlalchemy as sa
+
+    from apps.cli._runtime import build_tenant_wiring
+    from contexts.calendar.adapters.outbound.postgres._tables import (
+        connections as calendar_connections_table,
+    )
+    from contexts.calendar.adapters.outbound.postgres.meeting_store import (
+        PostgresMeetingStore,
+    )
+    from shared_kernel import TenantId
+
+    tenant_id = str(actor.tenant_context.tenant_id)
+    wiring = build_tenant_wiring(tenant_id)
+    session_factory = wiring.session_factory
+
+    async def _resolver(_tid):
+        return session_factory
+
+    bound = TenantId(tenant_id)
+    meeting_store = PostgresMeetingStore(
+        per_tenant_sessionmaker_resolver=_resolver, bound_tenant_id=bound
+    )
+
+    async def _resolve_connection_id() -> UUID | None:
+        stmt = sa.select(calendar_connections_table.c.id).where(
+            calendar_connections_table.c.tenant_id == tenant_id,
+            calendar_connections_table.c.provider_config_key
+            == "google-calendar",
+        )
+        async with session_factory() as session:
+            result = await session.execute(stmt)
+            row = result.first()
+        return UUID(str(row[0])) if row is not None else None
+
+    return meeting_store, _resolve_connection_id
+
+
+def build_calendar_cell(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    meeting_reader: MeetingReader,
+    refresh_port: object | None,
+) -> CalendarConversationCell:
+    """Construct the calendar-conversation cell, mirroring the messaging dispatch.
+
+    Same shared collaborators as ``_run_calendar_conversation_cell``
+    (structured-output, confidence, threshold, pending, audit); the
+    calendar-specific collaborators are the Meeting reader and the D150
+    refresh port. The originating channel is ``WEB`` (the S59 convention).
+    """
+    return CalendarConversationCell(
+        structured_output_port=messaging.structured_output_port,
+        meeting_reader=meeting_reader,
+        actor=actor,
+        confidence_calculator=messaging.confidence_calculator,
+        threshold_resolver=messaging.threshold_resolver,
+        pending_clarification_reader=messaging.pending_clarification_reader,
+        pending_clarification_repository=(
+            messaging.pending_clarification_repository
+        ),
+        audit_port=audit_port,
+        refresh_port=refresh_port,
+        originating_channel="WEB",
+    )
+
+
+async def _resolve_meeting_citations(
+    *,
+    meeting_reader: MeetingReader,
+    actor: ActorContext,
+    response: CalendarConversationResponse,
+) -> list[ResolvedCitation]:
+    """Resolve a calendar response's ``meeting`` citations to titles (D131).
+
+    Resolution reads through the same Meeting reader the cell answers from
+    (no second read path). A citation whose meeting can no longer load
+    falls back to a short-hex label rather than leaking a raw id.
+    """
+    if not response.cited_artefacts:
+        return []
+    meetings = await meeting_reader.list_meetings(
+        tenant_context=actor.tenant_context, include_cancelled=True
+    )
+    titles = {m.id: (m.title or None) for m in meetings}
+    resolved: list[ResolvedCitation] = []
+    for citation in response.cited_artefacts:
+        ref = _short_hex(citation.artefact_id)
+        title = titles.get(citation.artefact_id)
+        label = title if title else f"meeting {ref}"
+        resolved.append(ResolvedCitation(type="meeting", label=label, ref=ref))
+    return resolved
+
+
+async def _calendar_result_from_state(
+    *,
+    meeting_reader: MeetingReader,
+    actor: ActorContext,
+    state: ConversationState,
+) -> ConversationTurnResult:
+    """Map a calendar cell ``ConversationState`` to the stateless web turn result."""
+    response: CalendarConversationResponse = state.payload["calendar_response"]
+    citations = await _resolve_meeting_citations(
+        meeting_reader=meeting_reader, actor=actor, response=response
+    )
+    reply = response.text
+    if response.staleness_note:
+        reply = f"{reply}\n\n⚠ {response.staleness_note}"
+    return ConversationTurnResult(
+        conversation_id=state.conversation_id,
+        purpose=state.purpose,
+        turn_count=state.turn_count,
+        is_open=state.is_open,
+        cell_payload=None,
+        reply=reply,
+        citations=citations,
+    )
+
+
+async def open_calendar_conversation_with_reader(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    meeting_reader: MeetingReader,
+    refresh_port: object | None,
+    focus_id: UUID,
+) -> ConversationTurnResult | None:
+    """Open a calendar conversation given an injected reader (the testable core).
+
+    Returns ``None`` when the focus Meeting does not exist for the actor
+    (the router maps that to 404). The opening turn is the cell's real
+    resolution path on ``"show me {title}"`` (FindByTitle, REAL_TIME), which
+    grounds on the clicked meeting at dogfooding scale. The infra-wiring
+    wrapper (``open_calendar_conversation``) supplies the reader + refresh.
+    """
+    meetings = await meeting_reader.list_meetings(
+        tenant_context=actor.tenant_context, include_cancelled=True
+    )
+    focus = next((m for m in meetings if m.id == focus_id), None)
+    if focus is None:
+        return None
+    cell = build_calendar_cell(
+        messaging=messaging,
+        audit_port=audit_port,
+        actor=actor,
+        meeting_reader=meeting_reader,
+        refresh_port=refresh_port,
+    )
+    state = await cell.open(
+        ConversationInvocation(
+            purpose=_CALENDAR_PURPOSE, actor_id=actor.actor_id
+        )
+    )
+    title = focus.title or "(untitled meeting)"
+    state = await cell.turn(state, ConversationInput(text=f"show me {title}"))
+    return await _calendar_result_from_state(
+        meeting_reader=meeting_reader, actor=actor, state=state
+    )
+
+
+async def advance_calendar_conversation_with_reader(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    meeting_reader: MeetingReader,
+    refresh_port: object | None,
+    conversation_id: str,
+    purpose: str,
+    turn_count: int,
+    text: str,
+) -> ConversationTurnResult:
+    """Advance a calendar conversation given an injected reader (the testable core).
+
+    The calendar cell does not drill down, so no ``cell_payload`` is
+    threaded; the cell reads its own ``PendingClarification`` from the
+    user-scoped repo (D134/D139), exactly as on the messaging path.
+    """
+    cell = build_calendar_cell(
+        messaging=messaging,
+        audit_port=audit_port,
+        actor=actor,
+        meeting_reader=meeting_reader,
+        refresh_port=refresh_port,
+    )
+    state_in = ConversationState(
+        conversation_id=conversation_id,
+        purpose=purpose or _CALENDAR_PURPOSE,
+        turn_count=turn_count,
+        is_open=True,
+        payload={},
+    )
+    state = await cell.turn(state_in, ConversationInput(text=text))
+    return await _calendar_result_from_state(
+        meeting_reader=meeting_reader, actor=actor, state=state
+    )
+
+
+async def open_calendar_conversation(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    focus_id: UUID,
+) -> ConversationTurnResult | None:
+    """Infra wrapper: build the per-tenant calendar collaborators, then open.
+
+    Exercised at the live smoke (it builds real per-tenant infrastructure);
+    the reader-injected core above carries the unit-tested logic.
+    """
+    meeting_reader, resolve_connection_id = _build_calendar_collaborators(actor)
+    refresh_port = await _build_refresh_port(actor, resolve_connection_id)
+    return await open_calendar_conversation_with_reader(
+        messaging=messaging,
+        audit_port=audit_port,
+        actor=actor,
+        meeting_reader=meeting_reader,
+        refresh_port=refresh_port,
+        focus_id=focus_id,
+    )
+
+
+async def advance_calendar_conversation(
+    *,
+    messaging: MessagingComposition,
+    audit_port: AuditPort,
+    actor: ActorContext,
+    conversation_id: str,
+    purpose: str,
+    turn_count: int,
+    text: str,
+) -> ConversationTurnResult:
+    """Infra wrapper: build the per-tenant calendar collaborators, then advance."""
+    meeting_reader, resolve_connection_id = _build_calendar_collaborators(actor)
+    refresh_port = await _build_refresh_port(actor, resolve_connection_id)
+    return await advance_calendar_conversation_with_reader(
+        messaging=messaging,
+        audit_port=audit_port,
+        actor=actor,
+        meeting_reader=meeting_reader,
+        refresh_port=refresh_port,
+        conversation_id=conversation_id,
+        purpose=purpose,
+        turn_count=turn_count,
+        text=text,
+    )
+
+
+async def _build_refresh_port(actor: ActorContext, resolve_connection_id):
+    """Build the D150 refresh port when a google-calendar connection exists."""
+    from apps.cli._calendar import build_calendar_refresh_adapter
+
+    connection_id = await resolve_connection_id()
+    if connection_id is None:
+        return None
+    return build_calendar_refresh_adapter(
+        tenant_id=str(actor.tenant_context.tenant_id),
+        connection_id=connection_id,
+    )
+
+
 __all__ = [
+    "FOCUS_KIND_CALENDAR",
     "FOCUS_KIND_CASE",
     "ConversationTurnResult",
     "ResolvedCitation",
+    "advance_calendar_conversation",
+    "advance_calendar_conversation_with_reader",
     "advance_conversation",
+    "build_calendar_cell",
     "build_mirror_cell",
+    "open_calendar_conversation",
+    "open_calendar_conversation_with_reader",
     "open_conversation",
 ]

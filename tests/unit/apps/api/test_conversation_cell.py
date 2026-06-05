@@ -398,3 +398,161 @@ def test_ambiguous_reference_routes_to_clarification() -> None:
     assert "Which did you mean" in result.reply
     # The candidate cases are cited so the operator sees what they pick among.
     assert len([c for c in result.citations if c.type == "case"]) == 2
+
+
+# =================================================================
+# Calendar conversation — the second implementer on the same path (D159)
+# =================================================================
+
+from contexts.calendar.domain.meeting import Meeting, MeetingStatus
+
+
+def _meeting(title: str, *, hour: int = 15) -> Meeting:
+    start = datetime(2026, 6, 5, hour, 0, tzinfo=timezone.utc)
+    return Meeting(
+        id=uuid4(),
+        tenant_id=UUID(_TENANT_A),
+        jurisdiction="eu-west",
+        google_event_id=f"evt-{title.replace(' ', '-')}",
+        status=MeetingStatus.CONFIRMED,
+        title=title,
+        description=None,
+        location=None,
+        attendees=(),
+        organizer_email=None,
+        start_at=start,
+        end_at=start.replace(hour=hour + 1),
+        start_raw=start.isoformat(),
+        end_raw=None,
+        source_updated_at=None,
+        recurring_event_id=None,
+        html_link=None,
+        content_hash="abc",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+class _StubMeetingReader:
+    """Tenant-scoped Meeting reader stub: serves meetings only for its tenant."""
+
+    def __init__(self, *, tenant_id: str, meetings: tuple[Meeting, ...]) -> None:
+        self._tenant_id = tenant_id
+        self._meetings = meetings
+
+    def _scoped(self, tenant_context) -> bool:
+        return str(tenant_context.tenant_id) == self._tenant_id
+
+    async def list_meetings(self, *, tenant_context, include_cancelled=False):
+        return self._meetings if self._scoped(tenant_context) else ()
+
+    async def get_by_event_id(self, *, tenant_context, google_event_id):
+        if not self._scoped(tenant_context):
+            return None
+        return next(
+            (m for m in self._meetings if m.google_event_id == google_event_id),
+            None,
+        )
+
+
+def _calendar_messaging() -> _FakeMessaging:
+    # The calendar cell reads the shared ports off MessagingComposition; the
+    # mirror reader is unused on this path. Structured output returns a
+    # high-confidence find_by_title intent.
+    messaging = _FakeMessaging(
+        reader=_StubReader(tenant_id=_TENANT_A),
+        structured=_StubStructuredOutput(
+            {"intent_class": "find_by_title", "title_reference": "Board call"},
+            confidence=0.95,
+        ),
+    )
+    return messaging
+
+
+def test_open_calendar_grounds_on_focus_meeting_and_cites() -> None:
+    meeting = _meeting("Board call")
+    reader = _StubMeetingReader(tenant_id=_TENANT_A, meetings=(meeting,))
+    result = _run(
+        wiring.open_calendar_conversation_with_reader(
+            messaging=_calendar_messaging(),
+            audit_port=_StubAudit(),
+            actor=_actor(),
+            meeting_reader=reader,
+            refresh_port=None,
+            focus_id=meeting.id,
+        )
+    )
+    assert result is not None
+    assert result.purpose == "calendar_query"
+    assert result.turn_count == 1
+    assert result.cell_payload is None  # the calendar cell does not drill down
+    # The meeting citation resolves to its title — no raw UUID.
+    meeting_chips = [c for c in result.citations if c.type == "meeting"]
+    assert meeting_chips and meeting_chips[0].label == "Board call"
+    full_uuid = str(meeting.id)
+    for c in result.citations:
+        assert full_uuid not in c.label and full_uuid not in c.ref
+        assert len(c.ref) == 8
+
+
+def test_open_calendar_missing_meeting_returns_none() -> None:
+    reader = _StubMeetingReader(tenant_id=_TENANT_A, meetings=())
+    result = _run(
+        wiring.open_calendar_conversation_with_reader(
+            messaging=_calendar_messaging(),
+            audit_port=_StubAudit(),
+            actor=_actor(),
+            meeting_reader=reader,
+            refresh_port=None,
+            focus_id=uuid4(),
+        )
+    )
+    assert result is None
+
+
+def test_open_calendar_cannot_open_a_meeting_outside_the_actors_tenant() -> None:
+    """A tenant_b actor cannot open tenant_a's meeting (isolation invariant)."""
+    meeting = _meeting("Tenant A standup")
+    reader = _StubMeetingReader(tenant_id=_TENANT_A, meetings=(meeting,))
+    result = _run(
+        wiring.open_calendar_conversation_with_reader(
+            messaging=_calendar_messaging(),
+            audit_port=_StubAudit(),
+            actor=_actor(_TENANT_B),  # the foreign actor
+            meeting_reader=reader,
+            refresh_port=None,
+            focus_id=meeting.id,
+        )
+    )
+    assert result is None
+
+
+def test_advance_calendar_turn_answers_from_the_store() -> None:
+    meeting = _meeting("Board call")
+    reader = _StubMeetingReader(tenant_id=_TENANT_A, meetings=(meeting,))
+    messaging = _FakeMessaging(
+        reader=_StubReader(tenant_id=_TENANT_A),
+        structured=_StubStructuredOutput(
+            {"intent_class": "find_by_date_range", "range_keyword": "today"},
+            confidence=0.95,
+        ),
+    )
+    result = _run(
+        wiring.advance_calendar_conversation_with_reader(
+            messaging=messaging,
+            audit_port=_StubAudit(),
+            actor=_actor(),
+            meeting_reader=reader,
+            refresh_port=None,
+            conversation_id="conv-cal-1",
+            purpose="calendar_query",
+            turn_count=1,
+            text="what's on today",
+        )
+    )
+    assert result.conversation_id == "conv-cal-1"
+    assert result.turn_count == 2
+    assert result.purpose == "calendar_query"
+    # The board call is surfaced and cited.
+    assert "Board call" in result.reply
+    assert any(c.type == "meeting" for c in result.citations)

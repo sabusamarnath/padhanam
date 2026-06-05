@@ -25,8 +25,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from apps.api._conversation_cell_wiring import (
+    _CALENDAR_PURPOSE,
+    FOCUS_KIND_CALENDAR,
     FOCUS_KIND_CASE,
+    advance_calendar_conversation,
     advance_conversation,
+    open_calendar_conversation,
     open_conversation,
 )
 from apps.api._messaging_wiring import MessagingComposition
@@ -55,22 +59,35 @@ async def open_conversation_route(
     ],
     audit_port: Annotated[AuditPort, Depends(get_audit_port)],
 ) -> ConversationTurnDTO:
-    """Open a live conversation on a focus Case."""
-    if body.focus_kind != FOCUS_KIND_CASE:
-        # Phase 2-A wires only the Case cell; a Commitment-focus cell is
-        # named out (D158) until dogfooding shows a Commitment needs one.
+    """Open a live conversation on a focus Case or calendar item (D158, D159)."""
+    if body.focus_kind == FOCUS_KIND_CASE:
+        result = await open_conversation(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            focus_id=body.focus_id,
+        )
+        not_found = "case not found"
+    elif body.focus_kind == FOCUS_KIND_CALENDAR:
+        result = await open_calendar_conversation(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            focus_id=body.focus_id,
+        )
+        not_found = "meeting not found"
+    else:
+        # Phase 2-A wires the Case and calendar cells; a Commitment-focus
+        # cell is named out (D158) until dogfooding shows one is needed.
         raise HTTPException(
             status_code=422,
-            detail=f"unsupported focus_kind {body.focus_kind!r}; expected CASE",
+            detail=(
+                f"unsupported focus_kind {body.focus_kind!r}; "
+                "expected CASE or CALENDAR"
+            ),
         )
-    result = await open_conversation(
-        messaging=messaging,
-        audit_port=audit_port,
-        actor=actor,
-        focus_id=body.focus_id,
-    )
     if result is None:
-        raise HTTPException(status_code=404, detail="case not found")
+        raise HTTPException(status_code=404, detail=not_found)
     return result_to_dto(result)
 
 
@@ -83,17 +100,33 @@ async def turn_route(
     ],
     audit_port: Annotated[AuditPort, Depends(get_audit_port)],
 ) -> ConversationTurnDTO:
-    """Advance a live conversation by one operator turn."""
-    result = await advance_conversation(
-        messaging=messaging,
-        audit_port=audit_port,
-        actor=actor,
-        conversation_id=body.state.conversation_id,
-        purpose=body.state.purpose,
-        turn_count=body.state.turn_count,
-        cell_payload=body.state.cell_payload,
-        text=body.text,
-    )
+    """Advance a live conversation by one operator turn.
+
+    Dispatch is by the client-threaded ``purpose``: a ``calendar_query``
+    advances the calendar cell, anything else the mirror cell — the same
+    stateless path, two implementers (D159).
+    """
+    if body.state.purpose == _CALENDAR_PURPOSE:
+        result = await advance_calendar_conversation(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            conversation_id=body.state.conversation_id,
+            purpose=body.state.purpose,
+            turn_count=body.state.turn_count,
+            text=body.text,
+        )
+    else:
+        result = await advance_conversation(
+            messaging=messaging,
+            audit_port=audit_port,
+            actor=actor,
+            conversation_id=body.state.conversation_id,
+            purpose=body.state.purpose,
+            turn_count=body.state.turn_count,
+            cell_payload=body.state.cell_payload,
+            text=body.text,
+        )
     return result_to_dto(result)
 
 

@@ -199,6 +199,104 @@ def test_open_unsupported_focus_kind_returns_422() -> None:
     assert res.status_code == 422
 
 
+def test_open_routes_calendar_focus_to_the_calendar_path(monkeypatch) -> None:
+    """focus_kind=CALENDAR dispatches to the calendar cell path (D159).
+
+    The infra wrapper builds per-tenant infrastructure (DB), so the route's
+    dispatch is verified by stubbing the wiring function; the calendar
+    logic itself is unit-tested in test_conversation_cell.py.
+    """
+    from apps.api._conversation_cell_wiring import ConversationTurnResult
+
+    seen: dict = {}
+
+    async def _fake_open_calendar(*, messaging, audit_port, actor, focus_id):
+        seen["focus_id"] = focus_id
+        return ConversationTurnResult(
+            conversation_id="conv-cal",
+            purpose="calendar_query",
+            turn_count=1,
+            is_open=True,
+            cell_payload=None,
+            reply="Board call, today 15:00",
+            citations=[],
+        )
+
+    monkeypatch.setattr(
+        conversation_router, "open_calendar_conversation", _fake_open_calendar
+    )
+    messaging = _Messaging(_Reader(None), {"intent_class": "unclear_mirror"})
+    client = _client(messaging)
+    focus_id = uuid4()
+    res = client.post(
+        "/api/v1/daily-driver/conversation/open",
+        json={"focus_kind": "CALENDAR", "focus_id": str(focus_id)},
+    )
+    assert res.status_code == 200
+    assert res.json()["state"]["purpose"] == "calendar_query"
+    assert seen["focus_id"] == focus_id
+
+
+def test_open_calendar_missing_meeting_returns_404(monkeypatch) -> None:
+    async def _none(*, messaging, audit_port, actor, focus_id):
+        return None
+
+    monkeypatch.setattr(
+        conversation_router, "open_calendar_conversation", _none
+    )
+    messaging = _Messaging(_Reader(None), {"intent_class": "unclear_mirror"})
+    client = _client(messaging)
+    res = client.post(
+        "/api/v1/daily-driver/conversation/open",
+        json={"focus_kind": "CALENDAR", "focus_id": str(uuid4())},
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"] == "meeting not found"
+
+
+def test_turn_routes_calendar_purpose_to_the_calendar_path(monkeypatch) -> None:
+    from apps.api._conversation_cell_wiring import ConversationTurnResult
+
+    async def _fake_advance_calendar(
+        *, messaging, audit_port, actor, conversation_id, purpose, turn_count, text
+    ):
+        return ConversationTurnResult(
+            conversation_id=conversation_id,
+            purpose="calendar_query",
+            turn_count=turn_count + 1,
+            is_open=True,
+            cell_payload=None,
+            reply="2 meetings today",
+            citations=[],
+        )
+
+    monkeypatch.setattr(
+        conversation_router,
+        "advance_calendar_conversation",
+        _fake_advance_calendar,
+    )
+    messaging = _Messaging(_Reader(None), {"intent_class": "unclear_mirror"})
+    client = _client(messaging)
+    res = client.post(
+        "/api/v1/daily-driver/conversation/turn",
+        json={
+            "state": {
+                "conversation_id": "conv-cal",
+                "purpose": "calendar_query",
+                "turn_count": 1,
+                "is_open": True,
+                "cell_payload": None,
+            },
+            "text": "what's on today",
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["state"]["purpose"] == "calendar_query"
+    assert body["state"]["turn_count"] == 2
+    assert body["reply"] == "2 meetings today"
+
+
 def test_turn_advances_from_threaded_state() -> None:
     detail = _detail("Q3 portfolio review")
     messaging = _Messaging(
