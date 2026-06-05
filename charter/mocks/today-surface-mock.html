@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Today — design language preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'SF Mono', Consolas, 'Cascadia Code', monospace;
+
+    --ink-1: #1c1c1a;
+    --ink-2: #5f5e5a;
+    --ink-3: #888780;
+
+    --page: #eceef0;
+    --surface-work: #ffffff;
+    --surface-personal: #faf6ec;
+    --surface-hover-work: #f6f8fa;
+    --surface-hover-personal: #f4eee0;
+
+    --hairline: rgba(26, 26, 25, 0.12);
+    --hairline-strong: rgba(26, 26, 25, 0.18);
+
+    --navy: #2e3264;
+    --navy-hover: #262a55;
+    --teal: #1a8070;
+
+    /* status, brand semantic (light) */
+    --on-track-bg: #eaf3de;  --on-track-fg: #3b6d11;
+    --needs-bg:    #eeedfe;  --needs-fg:    #534ab7;
+    --behind-bg:   #faeeda;  --behind-fg:   #854f0b;
+    --risk-bg:     #fcebeb;  --risk-fg:     #a32d2d;
+    --done-bg:     #f0efec;  --done-fg:     #888780;
+
+    --backdrop: rgba(0, 0, 0, 0.2);
+    --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.18);
+
+    --radius-row: 6px;
+    --radius-card: 8px;
+    --radius-input: 4px;
+  }
+
+  [data-theme="dark"] {
+    --ink-1: #f0eeea;
+    --ink-2: #b4b2a9;
+    --ink-3: #888780;
+
+    --page: #161614;
+    --surface-work: #232321;
+    --surface-personal: #262320;
+    --surface-hover-work: #2a2a28;
+    --surface-hover-personal: #2d2924;
+
+    --hairline: rgba(240, 238, 234, 0.12);
+    --hairline-strong: rgba(240, 238, 234, 0.20);
+
+    --navy: #3b4080;
+    --navy-hover: #464c95;
+    --teal: #2ba692;
+
+    /* status, muted for dark so small chips read calm, not neon */
+    --on-track-bg: #1d2e0f;  --on-track-fg: #8ea868;
+    --needs-bg:    #211d44;  --needs-fg:    #9f9ad0;
+    --behind-bg:   #3a2409;  --behind-fg:   #d3a05a;
+    --risk-bg:     #421414;  --risk-fg:     #d68e8e;
+    --done-bg:     #242422;  --done-fg:     #8a8980;
+
+    --backdrop: rgba(0, 0, 0, 0.5);
+    --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink-1);
+    background: var(--page);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px;
+    background: var(--surface-work);
+    border-bottom: 1px solid var(--hairline);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar .brand { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .topbar .controls { display: flex; align-items: center; gap: 14px; }
+  .ctrl {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-3); display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  }
+  .ctrl input { accent-color: var(--teal); cursor: pointer; }
+  .ctrl button {
+    font: inherit; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2);
+    background: none; border: 1px solid var(--hairline-strong); border-radius: var(--radius-input);
+    padding: 3px 9px; cursor: pointer;
+  }
+  .ctrl button:hover { color: var(--ink-1); }
+
+  .wrap { max-width: 680px; margin: 0 auto; padding: 28px 20px 80px; }
+  .day-head { margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; }
+  .day-head h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .day-head .date { font-size: 13px; color: var(--ink-2); }
+
+  .legend { display: flex; gap: 16px; margin: 14px 0 8px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .swatch { width: 22px; height: 14px; border-radius: 3px; border: 1px solid var(--hairline); }
+  .legend .swatch.work { background: var(--surface-work); }
+  .legend .swatch.personal { background: var(--surface-personal); }
+
+  .ctx-key { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 18px; font-size: 12px; color: var(--ink-2); }
+  .ctx-key .ctx { display: inline-flex; align-items: center; gap: 7px; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 15px; border-radius: var(--radius-row);
+    border: 1px solid var(--hairline); cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease;
+  }
+  .row[data-tier="work"]     { background: var(--surface-work); }
+  .row[data-tier="personal"] { background: var(--surface-personal); }
+  .row[data-tier="work"]:hover     { background: var(--surface-hover-work); border-color: var(--hairline-strong); }
+  .row[data-tier="personal"]:hover { background: var(--surface-hover-personal); border-color: var(--hairline-strong); }
+
+  .cue {
+    flex-shrink: 0; height: 18px; color: var(--tint);
+    display: inline-flex; align-items: center; gap: 3px;
+    transition: opacity 0.14s ease;
+  }
+  .cue svg { width: 16px; height: 16px; display: block; }
+  .cue-init { font-size: 10px; font-weight: 700; letter-spacing: 0.02em; line-height: 1; }
+  body.cue-off .cue { display: none; }
+
+  .row .main { flex: 1; min-width: 0; }
+  .row .title { font-size: 14px; font-weight: 600; color: var(--ink-1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .meta { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+
+  .pill {
+    flex-shrink: 0; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: 9999px; white-space: nowrap;
+  }
+  .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
+  .pill.needs    { background: var(--needs-bg);    color: var(--needs-fg); }
+  .pill.behind   { background: var(--behind-bg);   color: var(--behind-fg); }
+  .pill.risk     { background: var(--risk-bg);     color: var(--risk-fg); }
+  .pill.done     { background: var(--done-bg);     color: var(--done-fg); }
+
+  .backdrop { position: fixed; inset: 0; background: var(--backdrop);
+    opacity: 0; pointer-events: none; transition: opacity 0.16s ease; z-index: 40; }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .panel {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 420px; max-width: 92vw;
+    background: var(--surface-work); border-left: 1px solid var(--hairline);
+    box-shadow: var(--shadow-panel); transform: translateX(100%);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 50; display: flex; flex-direction: column;
+  }
+  .panel.open { transform: translateX(0); }
+  .panel[data-tier="personal"] { background: var(--surface-personal); }
+
+  .panel-top { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 0 16px; border-bottom: 1px solid var(--hairline); }
+  .panel-top .ptitle { flex: 1; font-size: 13px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel-top .close { background: none; border: none; font-size: 18px; line-height: 1;
+    color: var(--ink-3); cursor: pointer; padding: 4px; }
+  .panel-top .close:hover { color: var(--ink-1); }
+
+  .panel-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+  .panel-body .pill-row { display: flex; gap: 8px; }
+  .field-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3); margin-bottom: 4px; }
+  .field-value { font-size: 14px; color: var(--ink-1); }
+  .desc { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+  .mono { font-family: var(--font-mono); font-size: 12px; background: var(--page);
+    border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 10px 12px;
+    color: var(--ink-1); white-space: pre-wrap; }
+  .panel-foot { flex-shrink: 0; padding: 14px 20px; border-top: 1px solid var(--hairline); display: flex; gap: 10px; }
+  .btn-primary { font: inherit; font-size: 13px; font-weight: 600; padding: 9px 16px; border: none;
+    border-radius: var(--radius-input); background: var(--navy); color: #fff; cursor: pointer;
+    transition: background 0.14s ease; }
+  .btn-primary:hover { background: var(--navy-hover); }
+  .btn-ghost { font: inherit; font-size: 13px; font-weight: 600; padding: 9px 16px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-input);
+    background: none; color: var(--teal); cursor: pointer; }
+
+  @media (prefers-reduced-motion: reduce) { .panel, .backdrop, .row { transition: none; } }
+</style>
+</head>
+<body class="cue-on">
+  <div class="topbar">
+    <div class="brand">Today</div>
+    <div class="controls">
+      <label class="ctrl"><input type="checkbox" id="cueToggle" checked /> Domain cue</label>
+      <span class="ctrl"><button id="themeToggle">Dark mode</button></span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="day-head">
+      <h1>Today</h1>
+      <span class="date">Thursday, 4 June</span>
+    </div>
+    <div class="legend">
+      <span><span class="swatch work"></span> Work surface</span>
+      <span><span class="swatch personal"></span> Personal surface</span>
+    </div>
+    <div class="ctx-key" id="ctxKey"></div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="panel" id="panel" data-tier="work">
+    <div class="panel-top" id="panelTop">
+      <span id="panelCue"></span>
+      <span class="ptitle" id="panelTitle"></span>
+      <button class="close" id="panelClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="panel-body">
+      <div class="pill-row"><span class="pill" id="panelPill"></span></div>
+      <div><div class="field-label">Context</div><div class="field-value" id="panelContext"></div></div>
+      <div><div class="field-label">When</div><div class="field-value" id="panelWhen"></div></div>
+      <div><div class="field-label">Notes</div><div class="desc" id="panelDesc"></div></div>
+      <div><div class="field-label">Linked</div><div class="mono" id="panelLinked"></div></div>
+    </div>
+    <div class="panel-foot">
+      <button class="btn-primary">Mark done</button>
+      <button class="btn-ghost">Open</button>
+    </div>
+  </aside>
+
+<script>
+  const ICON_WORK   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const ICON_HOME   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>';
+  const ICON_HEART  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z"/></svg>';
+  const ICON_FRIENDS= '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.6a3 3 0 0 1 0 5.4"/><path d="M17.5 14.6a5.5 5.5 0 0 1 3 5.4"/></svg>';
+
+  // Three channels, three meanings, no overload.
+  //   colour (tint) -> tier: warm = personal, cool = work. The only at-a-glance read. Held.
+  //   icon          -> category: family, health, friends, work. Always present.
+  //   initials      -> the specific named context inside a category (a contract,
+  //                    a project, an event). Optional, sits beside the icon.
+  //                    Scales without limit and breaks its own ties by extending
+  //                    (BM -> BRM), so colour never has to carry identity.
+  const WARM = '#b0997e';  // personal tier tint
+  const COOL = '#7a8190';  // work tier tint
+  const DOMAINS = {
+    family:  { tier:'personal', label:'Family',  tint:WARM, icon:ICON_HOME },
+    health:  { tier:'personal', label:'Health',  tint:WARM, icon:ICON_HEART },
+    friends: { tier:'personal', label:'Friends', tint:WARM, icon:ICON_FRIENDS },
+    work:    { tier:'work',     label:'Work',    tint:COOL, icon:ICON_WORK },
+  };
+
+  // Generic placeholder items. Nothing here is drawn from any source material.
+  const ITEMS = [
+    { dom:'work',   init:'H',  context:'Helios',           title:'Helios: SOW change request',      meta:'Contract · due 5pm',         status:'risk',    label:'At risk',   when:'Was due yesterday', desc:'Scope delta needs your sign-off before the next billing cycle.', linked:'task/helios-sow-12' },
+    { dom:'health',            context:'Health',           title:'Dentist, 4:30pm',                 meta:'Appointment · across town',  status:'needs',   label:'Needs you', when:'Today, 4:30pm', desc:'Leave by 4:00 to make it across town in time.',                linked:'cal/evt-4471' },
+    { dom:'work',   init:'N',  context:'Northwind',        title:'Northwind: monthly status pack',  meta:'Contract · slipping',        status:'behind',  label:'Behind',    when:'Due today',     desc:'Two sections still open. Owner is back online this afternoon.', linked:'doc/nw-status-06' },
+    { dom:'work',              context:'Internal',         title:'Approve revised security policy', meta:'Internal · overdue',         status:'risk',    label:'At risk',   when:'Was due yesterday', desc:'Blocking vendor onboarding downstream. Needs sign-off.',     linked:'task/sec-policy-v4' },
+    { dom:'health', init:'BM', context:'Wide World Marathon',title:'Wide World Marathon: long run',     meta:'Training · this morning',    status:'on_track',label:'On track',  when:'Today, 7:00am', desc:'18 miles, last long run before the taper.',                    linked:'note/bm-plan' },
+    { dom:'work',   init:'H',  context:'Helios',           title:'Helios: invoice sign-off',        meta:'Contract · on track',        status:'on_track',label:'On track',  when:'Due Friday',    desc:'Terms agreed, awaiting the countersigned copy.',              linked:'task/helios-inv-9' },
+    { dom:'friends',           context:'Friends',          title:'Call Sam back',                   meta:'Friends · owed a reply',     status:'needs',   label:'Needs you', when:'This week',     desc:'Left two messages last week.',                                linked:'note/sam' },
+    { dom:'work',              context:'Internal',         title:'Quarterly hiring plan',           meta:'Internal · complete',        status:'done',    label:'Done',      when:'Submitted',     desc:'Approved and circulated to leads.',                           linked:'doc/hiring-q3' },
+  ];
+
+  function cueHTML(domKey, init) {
+    const d = DOMAINS[domKey];
+    const initSpan = init ? '<span class="cue-init">' + init + '</span>' : '';
+    return '<span class="cue" style="--tint:' + d.tint + '">' + d.icon + initSpan + '</span>';
+  }
+
+  // context key: the four categories, then two examples where a named context
+  // refines a category by adding initials beside the icon (icon always stays).
+  const ctxKey = document.getElementById('ctxKey');
+  ['family','health','friends','work'].forEach(k => {
+    const el = document.createElement('span');
+    el.className = 'ctx';
+    el.innerHTML = cueHTML(k) + '<span>' + DOMAINS[k].label + '</span>';
+    ctxKey.appendChild(el);
+  });
+  [['work','H','Helios'], ['health','BM','Wide World Marathon']].forEach(ex => {
+    const el = document.createElement('span');
+    el.className = 'ctx';
+    el.innerHTML = cueHTML(ex[0], ex[1]) + '<span>' + ex[2] + '</span>';
+    ctxKey.appendChild(el);
+  });
+
+  const list = document.getElementById('list');
+  ITEMS.forEach((it, i) => {
+    const d = DOMAINS[it.dom];
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.tier = d.tier;
+    row.innerHTML = cueHTML(it.dom, it.init) +
+      '<div class="main"><div class="title">' + it.title + '</div>' +
+      '<div class="meta">' + it.meta + '</div></div>' +
+      '<span class="pill ' + it.status + '">' + it.label + '</span>';
+    row.addEventListener('click', () => openPanel(i));
+    list.appendChild(row);
+  });
+
+  const panel = document.getElementById('panel');
+  const backdrop = document.getElementById('backdrop');
+
+  function openPanel(i) {
+    const it = ITEMS[i];
+    const d = DOMAINS[it.dom];
+    panel.dataset.tier = d.tier;
+    document.getElementById('panelCue').innerHTML = cueHTML(it.dom, it.init);
+    document.getElementById('panelTitle').textContent = it.title;
+    const pill = document.getElementById('panelPill');
+    pill.className = 'pill ' + it.status;
+    pill.textContent = it.label;
+    document.getElementById('panelContext').textContent = it.context;
+    document.getElementById('panelWhen').textContent = it.when;
+    document.getElementById('panelDesc').textContent = it.desc;
+    document.getElementById('panelLinked').textContent = it.linked;
+    panel.classList.add('open');
+    backdrop.classList.add('open');
+  }
+  function closePanel() { panel.classList.remove('open'); backdrop.classList.remove('open'); }
+  backdrop.addEventListener('click', closePanel);
+  document.getElementById('panelClose').addEventListener('click', closePanel);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+  document.getElementById('cueToggle').addEventListener('change', e => {
+    document.body.classList.toggle('cue-off', !e.target.checked);
+  });
+  const themeBtn = document.getElementById('themeToggle');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? 'Dark mode' : 'Light mode';
+  });
+</script>
+</body>
+</html>

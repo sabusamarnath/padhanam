@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Workspace — map and flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:'Plus Jakarta Sans',system-ui,sans-serif;
+    --ink-1:#1c1c1a;--ink-2:#5f5e5a;--ink-3:#888780;
+    --page:#eceef0;--surface:#ffffff;--surface-2:#f5f5f3;
+    --hairline:rgba(26,26,25,0.12);--hairline-strong:rgba(26,26,25,0.20);
+    --navy:#2e3264;--navy-hover:#262a55;--teal:#1a8070;
+    --on_track:#3b6d11;--needs:#534ab7;--behind:#854f0b;--risk:#a32d2d;--done:#888780;
+    --field:#fff;--field-border:rgba(26,26,25,0.22);
+    --radius:9px;--radius-input:5px;
+  }
+  [data-theme="dark"]{
+    --ink-1:#f0eeea;--ink-2:#b4b2a9;--ink-3:#888780;
+    --page:#161614;--surface:#222220;--surface-2:#1c1c1a;
+    --hairline:rgba(240,238,234,0.12);--hairline-strong:rgba(240,238,234,0.22);
+    --navy:#3b4080;--navy-hover:#464c95;--teal:#2ba692;
+    --on_track:#8ea868;--needs:#9f9ad0;--behind:#d3a05a;--risk:#d68e8e;--done:#8a8980;
+    --field:#262624;--field-border:rgba(240,238,234,0.20);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);font-size:14px;color:var(--ink-1);background:var(--page);-webkit-font-smoothing:antialiased;}
+
+  .topbar{height:48px;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:30;}
+  .wm{display:flex;align-items:center;gap:8px;} .wm svg{width:22px;height:22px;color:var(--navy);} .wm .nm{font-size:13px;font-weight:600;}
+  .sep{color:var(--ink-3);}
+  .switcher{position:relative;}
+  .swbtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-1);background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:5px 11px;cursor:pointer;}
+  .swbtn .dot{width:8px;height:8px;border-radius:50%;} .swbtn .car{color:var(--ink-3);font-size:11px;}
+  .swmenu{position:absolute;top:38px;left:0;min-width:210px;background:var(--surface);border:1px solid var(--hairline-strong);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,0.14);padding:5px;display:none;z-index:40;}
+  .swmenu.open{display:block;}
+  .switem{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-input);cursor:pointer;font-size:13px;}
+  .switem:hover{background:var(--surface-2);} .switem .dot{width:8px;height:8px;border-radius:50%;} .switem .nm{flex:1;font-weight:500;} .switem.on .nm{font-weight:700;} .switem .tag{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-3);}
+  .spacer{flex:1;}
+  .tbtn{font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-2);background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:4px 10px;cursor:pointer;}
+
+  .wshead{padding:18px 22px 0;max-width:1080px;margin:0 auto;}
+  .wstitle{display:flex;align-items:center;gap:11px;} .wstitle h1{font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  .ws-pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:9999px;}
+  .wsread{font-size:13.5px;color:var(--ink-2);margin-top:7px;max-width:680px;line-height:1.5;}
+  .flip{display:inline-flex;margin-top:16px;background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:3px;gap:3px;}
+  .flip button{font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);background:none;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;}
+  .flip button.on{background:var(--surface);color:var(--ink-1);box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+
+  .canvas{max-width:1080px;margin:6px auto 0;padding:8px 22px 30px;}
+  /* MAP */
+  .collabels{display:flex;justify-content:space-between;max-width:760px;margin:14px auto 2px;padding:0 4px;}
+  .collabels span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:var(--ink-3);}
+  .mapscroll{overflow-x:auto;}
+  .map{position:relative;width:100%;min-width:720px;height:440px;margin:6px auto 0;}
+  svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .node{position:absolute;transform:translate(-50%,-50%);width:166px;padding:11px 13px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--hairline-strong);cursor:pointer;z-index:5;transition:opacity 0.16s,box-shadow 0.16s,border-color 0.16s;}
+  .node:hover{box-shadow:0 3px 12px rgba(0,0,0,0.10);}
+  .node.sel{border-color:var(--st);box-shadow:0 0 0 2px color-mix(in srgb,var(--st) 35%,transparent);}
+  .node.faded{opacity:0.16;}
+  .node .nlabel{font-size:13px;font-weight:600;line-height:1.3;}
+  .node .nmeta{font-size:11px;color:var(--ink-2);margin-top:4px;display:flex;align-items:center;gap:6px;}
+  .node .nstat{width:8px;height:8px;border-radius:50%;background:var(--st);flex-shrink:0;}
+  .node.lever{border-left:3px solid var(--st);}
+  .node.outcome{border-radius:14px;border-width:2px;}
+  .node.outcome::after{content:"";position:absolute;inset:-5px;border-radius:18px;border:1.5px solid color-mix(in srgb,var(--st) 45%,transparent);pointer-events:none;}
+  .node.linkref{border-style:dashed;}
+  .ext{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-3);border:1px solid var(--hairline-strong);border-radius:3px;padding:0 4px;}
+  .gatebadge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--behind);border:1px solid color-mix(in srgb,var(--behind) 45%,transparent);border-radius:3px;padding:0 4px;}
+
+  /* FLOW */
+  .flowscroll{overflow-x:auto;padding:18px 0 6px;}
+  .flow{display:flex;align-items:stretch;gap:0;min-width:760px;}
+  .fstep{display:flex;align-items:center;}
+  .stepcard{width:188px;background:var(--surface);border:1px solid var(--hairline-strong);border-radius:var(--radius);padding:13px 14px;cursor:pointer;transition:box-shadow 0.16s,border-color 0.16s;border-top:3px solid var(--st);}
+  .stepcard:hover{box-shadow:0 3px 12px rgba(0,0,0,0.10);}
+  .stepcard.focus{border-color:var(--teal);box-shadow:0 0 0 2px color-mix(in srgb,var(--teal) 30%,transparent);}
+  .stepstage{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--ink-3);}
+  .steptitle{font-size:13.5px;font-weight:600;margin-top:6px;line-height:1.3;}
+  .stepmeta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px;}
+  .stepwhen{font-size:11px;color:var(--ink-3);margin-top:8px;}
+  .seqarrow{color:var(--ink-3);padding:0 9px;flex-shrink:0;font-size:18px;}
+  .addstep{width:120px;border:1px dashed var(--hairline-strong);border-radius:var(--radius);background:none;color:var(--ink-3);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;align-self:stretch;}
+  .addstep:hover{color:var(--ink-1);border-color:var(--ink-3);}
+
+  .pill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;padding:2px 8px;border-radius:9999px;}
+  .pill.on_track{background:color-mix(in srgb,var(--on_track) 16%,transparent);color:var(--on_track);}
+  .pill.needs{background:color-mix(in srgb,var(--needs) 16%,transparent);color:var(--needs);}
+  .pill.behind{background:color-mix(in srgb,var(--behind) 16%,transparent);color:var(--behind);}
+  .pill.risk{background:color-mix(in srgb,var(--risk) 16%,transparent);color:var(--risk);}
+  .pill.done{background:color-mix(in srgb,var(--done) 18%,transparent);color:var(--done);}
+
+  /* PANEL */
+  .panel{max-width:1080px;margin:14px auto 0;padding:0 22px;}
+  .panel-inner{background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius);padding:16px 18px;}
+  .panel-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-3);margin-bottom:9px;}
+  .panel-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px;}
+  .panel-body{font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-top:9px;}
+  .panel-body b{color:var(--ink-1);font-weight:600;}
+  .panel-act{margin-top:13px;}
+  .btn-sm{font:inherit;font-size:12px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius-input);padding:7px 13px;cursor:pointer;}
+  .btn-sm:hover{background:var(--navy-hover);}
+  .hint{font-size:12px;color:var(--ink-3);margin-top:8px;}
+
+  /* DRAWER */
+  #backdrop{position:fixed;inset:0;background:rgba(20,20,18,0.34);opacity:0;pointer-events:none;transition:opacity 0.2s;z-index:50;}
+  #backdrop.open{opacity:1;pointer-events:auto;}
+  #drawer{position:fixed;top:0;right:0;width:392px;max-width:92vw;height:100vh;background:var(--surface);border-left:1px solid var(--hairline-strong);
+    transform:translateX(100%);transition:transform 0.22s cubic-bezier(0.16,1,0.3,1);z-index:60;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,0.14);}
+  #drawer.open{transform:translateX(0);}
+  .dh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--hairline);}
+  .dh .dlabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-3);}
+  .dh .dclose{background:none;border:none;font-size:20px;color:var(--ink-3);cursor:pointer;line-height:1;}
+  .db{padding:18px;overflow-y:auto;flex:1;}
+  .field-row{margin-bottom:15px;}
+  .field-row label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--ink-3);margin-bottom:6px;}
+  .field{width:100%;font:inherit;font-size:14px;color:var(--ink-1);background:var(--field);border:1px solid var(--field-border);border-radius:var(--radius-input);padding:9px 11px;outline:none;}
+  textarea.field{resize:vertical;min-height:74px;line-height:1.5;}
+  .field:focus{border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 16%,transparent);}
+  .causalnote{font-size:12px;color:var(--ink-2);background:var(--surface-2);border-radius:var(--radius-input);padding:10px 12px;line-height:1.5;}
+  .causalnote b{color:var(--ink-1);}
+  .df{display:flex;gap:9px;padding:15px 18px;border-top:1px solid var(--hairline);}
+  .btn{flex:1;font:inherit;font-size:13.5px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius-input);padding:10px;cursor:pointer;}
+  .btn:hover{background:var(--navy-hover);}
+  .btn-ghost{font:inherit;font-size:13.5px;font-weight:600;color:var(--ink-1);background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:10px 14px;cursor:pointer;}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wm"><svg viewBox="0 0 32 32" fill="none"><circle cx="11" cy="16" r="3.2" fill="currentColor"/><circle cx="21" cy="11" r="3.2" fill="currentColor"/><circle cx="21" cy="21" r="3.2" fill="currentColor"/><path d="M13.5 14.5 19 12 M13.5 17.5 19 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="nm">Padhanam</span></div>
+    <span class="sep">/</span>
+    <div class="switcher"><button class="swbtn" id="swbtn"><span class="dot" style="background:var(--risk)"></span><span id="swname">Helios</span><span class="car">&#9662;</span></button><div class="swmenu" id="swmenu"></div></div>
+    <div class="spacer"></div>
+    <button class="tbtn" id="themeToggle">Dark mode</button>
+  </div>
+
+  <div class="wshead">
+    <div class="wstitle"><h1 id="wsTitle">Helios</h1><span class="ws-pill pill risk" id="wsPill">At risk</span></div>
+    <div class="wsread" id="wsRead">Two views of one workspace. Map shows why the Friday submission is at risk; Flow shows the steps to clear it. Edits in one move the other.</div>
+    <div class="flip"><button id="vMap" class="on">Map</button><button id="vFlow">Flow</button></div>
+  </div>
+
+  <div class="canvas">
+    <div id="mapView">
+      <div class="collabels"><span>Levers</span><span>Factors</span><span>Outcomes</span></div>
+      <div class="mapscroll"><div class="map" id="map"><svg class="edges" id="edges"></svg></div></div>
+    </div>
+    <div id="flowView" style="display:none;"><div class="flowscroll"><div class="flow" id="flow"></div></div></div>
+  </div>
+
+  <div class="panel"><div class="panel-inner" id="panel"></div></div>
+
+  <div id="backdrop"></div>
+  <aside id="drawer">
+    <div class="dh"><span class="dlabel" id="dLabel">Edit task</span><button class="dclose" id="dClose">&times;</button></div>
+    <div class="db">
+      <div class="field-row"><label>Title</label><input class="field" id="fTitle" /></div>
+      <div class="field-row"><label>Status</label>
+        <select class="field" id="fStatus">
+          <option value="on_track">On track</option><option value="needs">Needs you</option>
+          <option value="behind">Behind</option><option value="risk">At risk</option><option value="done">Done</option>
+        </select>
+      </div>
+      <div class="field-row"><label>When</label><input class="field" id="fWhen" placeholder="e.g. Friday" /></div>
+      <div class="field-row"><label>Notes</label><textarea class="field" id="fNotes"></textarea></div>
+      <div class="causalnote" id="dCausal"></div>
+    </div>
+    <div class="df"><button class="btn" id="dSave">Save</button><button class="btn-ghost" id="dCancel">Cancel</button></div>
+  </aside>
+
+<script>
+  const WORKSPACES=[{id:'helios',name:'Helios',status:'risk'},{id:'northwind',name:'Northwind',status:'behind'},{id:'vertex',name:'Vertex',status:'needs'},{id:'aurora',name:'Aurora',status:'needs'},{id:'personal',name:'Personal',status:'needs'}];
+  const SL={on_track:'On track',needs:'Needs you',behind:'Behind',risk:'At risk',done:'Done'};
+  const RANK={done:1,on_track:2,needs:3,behind:4,risk:5};
+
+  // SHARED ITEMS (levers/tasks) — editable. feeds: which factor this lever drives (null = sequence-only step).
+  let ITEMS=[
+    {id:'sow',title:'SOW change request',status:'needs',feeds:'F_qual',seq:1,stage:'Draft changes',when:'Wed',notes:'Two open sections to close before review.'},
+    {id:'review',title:'Internal review',status:'on_track',feeds:null,seq:2,stage:'Internal review',when:'Wed',notes:'Legal and delivery sign-off.'},
+    {id:'sec',title:'Approve security policy',status:'risk',feeds:'F_appr',gate:true,ext:'Internal',seq:3,stage:'Security approval',when:'Overdue',notes:'Overdue. Blocks the Friday submission.'},
+    {id:'chk',title:'Weekly client check-in',status:'on_track',feeds:'F_rel',seq:4,stage:'Client review',when:'Thu',notes:'Standing call with the client lead.'},
+    {id:'submit',title:'Submit SOW',status:'needs',feeds:null,seq:5,stage:'Submit Friday',when:'Fri',notes:'Submission deadline.'},
+  ];
+  const FACTORS=[{id:'F_appr',label:'Approvals cleared',x:45,y:20},{id:'F_qual',label:'SOW quality',x:45,y:50},{id:'F_rel',label:'Client relationship',x:45,y:80}];
+  const OUTCOMES=[{id:'O_sub',label:'SOW submitted Friday',x:80,y:33},{id:'O_ren',label:'Q3 renewal secured',x:80,y:67}];
+  const LEVERPOS={sec:{x:11,y:20},sow:{x:11,y:50},chk:{x:11,y:80}};
+  const CAUSAL=[['F_appr','O_sub'],['F_qual','O_sub'],['F_qual','O_ren'],['F_rel','O_ren'],['O_sub','O_ren']];
+
+  function leverItems(){ return ITEMS.filter(i=>i.feeds); }
+  function mapEdges(){ return leverItems().map(i=>[i.id,i.feeds]).concat(CAUSAL); }
+  function labelOf(id){ const it=ITEMS.find(x=>x.id===id); if(it) return it.title; const f=FACTORS.find(x=>x.id===id); if(f) return f.label; const o=OUTCOMES.find(x=>x.id===id); return o?o.label:id; }
+  function typeOf(id){ if(ITEMS.find(x=>x.id===id)) return 'lever'; if(FACTORS.find(x=>x.id===id)) return 'factor'; return 'outcome'; }
+
+  // qualitative propagation: levers seed status; factors/outcomes take worst incoming
+  function computeStatus(){
+    const st={}; leverItems().forEach(i=>st[i.id]=i.status);
+    const edges=mapEdges(), ids=leverItems().map(i=>i.id).concat(FACTORS.map(f=>f.id),OUTCOMES.map(o=>o.id));
+    for(let p=0;p<ids.length;p++){ edges.forEach(([a,b])=>{ const ra=RANK[st[a]]||0; if(ra>(RANK[st[b]]||0)) st[b]=st[a]; }); }
+    FACTORS.concat(OUTCOMES).forEach(n=>{ if(!st[n.id]) st[n.id]='on_track'; });
+    return st;
+  }
+
+  let currentWs='helios', view='map', selection=null, editingId=null;
+  const map=document.getElementById('map'), edgesSvg=document.getElementById('edges'), flow=document.getElementById('flow');
+  function statusColor(s){ return getComputedStyle(document.documentElement).getPropertyValue('--'+s).trim(); }
+  function reach(start,adj){ const seen=new Set(),stk=[start]; while(stk.length){const c=stk.pop(); (adj[c]||[]).forEach(n=>{if(!seen.has(n)){seen.add(n);stk.push(n);}});} return seen; }
+  function adjacency(){ const out={},inc={}; const ids=leverItems().map(i=>i.id).concat(FACTORS.map(f=>f.id),OUTCOMES.map(o=>o.id)); ids.forEach(i=>{out[i]=[];inc[i]=[];}); mapEdges().forEach(([a,b])=>{out[a].push(b);inc[b].push(a);}); return {out,inc}; }
+
+  function activeSet(){
+    if(!selection) return null; const {out,inc}=adjacency(); const set=new Set([selection]); const t=typeOf(selection);
+    if(t==='lever') reach(selection,out).forEach(x=>set.add(x));
+    else if(t==='outcome') reach(selection,inc).forEach(x=>set.add(x));
+    else { reach(selection,out).forEach(x=>set.add(x)); reach(selection,inc).forEach(x=>set.add(x)); }
+    return set;
+  }
+
+  function renderMap(){
+    const st=computeStatus(), active=activeSet();
+    map.querySelectorAll('.node').forEach(n=>n.remove());
+    const place=(id,type,label,pos,extra)=>{
+      const status=st[id]; const el=document.createElement('div');
+      el.className='node '+type+(extra&&extra.ext?' linkref':'')+(selection===id?' sel':'')+(active&&!active.has(id)?' faded':'');
+      el.style.left=pos.x+'%'; el.style.top=pos.y+'%'; el.style.setProperty('--st','var(--'+status+')'); el.dataset.id=id;
+      el.innerHTML='<div class="nlabel">'+label+'</div><div class="nmeta"><span class="nstat"></span>'+SL[status]+
+        (extra&&extra.gate?'<span class="gatebadge">Gate</span>':'')+(extra&&extra.ext?'<span class="ext">'+extra.ext+'</span>':'')+'</div>';
+      el.addEventListener('click',e=>{ e.stopPropagation(); selection=selection===id?null:id; renderMap(); renderPanel(); });
+      map.appendChild(el);
+    };
+    leverItems().forEach(i=>place(i.id,'lever',i.title,LEVERPOS[i.id],{gate:i.gate,ext:i.ext}));
+    FACTORS.forEach(f=>place(f.id,'factor',f.label,f));
+    OUTCOMES.forEach(o=>place(o.id,'outcome',o.label,o));
+    drawEdges(st,active);
+  }
+
+  function drawEdges(st,active){
+    const cr=map.getBoundingClientRect();
+    edgesSvg.setAttribute('viewBox','0 0 '+cr.width+' '+cr.height);
+    while(edgesSvg.firstChild) edgesSvg.removeChild(edgesSvg.firstChild);
+    const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+    ['on_track','needs','behind','risk','done'].forEach(s=>{ const m=document.createElementNS('http://www.w3.org/2000/svg','marker');
+      m.setAttribute('id','arr-'+s);m.setAttribute('viewBox','0 0 10 10');m.setAttribute('refX','8');m.setAttribute('refY','5');m.setAttribute('markerWidth','7');m.setAttribute('markerHeight','7');m.setAttribute('orient','auto-start-reverse');
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M2 1L8 5L2 9');p.setAttribute('fill','none');p.setAttribute('stroke',statusColor(s));p.setAttribute('stroke-width','1.7');p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-linejoin','round');m.appendChild(p);defs.appendChild(m);});
+    edgesSvg.appendChild(defs);
+    const center=id=>{const el=map.querySelector('.node[data-id="'+id+'"]');if(!el)return null;const r=el.getBoundingClientRect();return {x:r.left+r.width/2-cr.left,y:r.top+r.height/2-cr.top,w:r.width};};
+    mapEdges().forEach(([a,b])=>{ const ca=center(a),cb=center(b); if(!ca||!cb) return; const src=st[a];
+      const x1=ca.x+ca.w/2-4,x2=cb.x-cb.w/2+4,y1=ca.y,y2=cb.y,dx=Math.max(40,(x2-x1)*0.45);
+      const inChain=active?(active.has(a)&&active.has(b)):(src==='risk');
+      const op=active?(inChain?0.95:0.10):(inChain?0.95:0.4),w=inChain?2.6:1.5;
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d','M '+x1+' '+y1+' C '+(x1+dx)+' '+y1+' '+(x2-dx)+' '+y2+' '+x2+' '+y2);
+      p.setAttribute('fill','none');p.setAttribute('stroke',statusColor(src));p.setAttribute('stroke-width',w);p.setAttribute('opacity',op);p.setAttribute('stroke-linecap','round');p.setAttribute('marker-end','url(#arr-'+src+')');
+      edgesSvg.appendChild(p);
+    });
+  }
+
+  function renderFlow(){
+    flow.innerHTML='';
+    const steps=[...ITEMS].sort((a,b)=>a.seq-b.seq);
+    steps.forEach((it,i)=>{
+      const fs=document.createElement('div'); fs.className='fstep';
+      const card=document.createElement('div'); card.className='stepcard'; card.style.setProperty('--st','var(--'+it.status+')'); card.dataset.id=it.id;
+      card.innerHTML='<div class="stepstage">Step '+it.seq+' · '+it.stage+'</div><div class="steptitle">'+it.title+'</div>'+
+        '<div class="stepmeta"><span class="pill '+it.status+'">'+SL[it.status]+'</span>'+(it.gate?'<span class="gatebadge">Gate</span>':'')+(it.ext?'<span class="ext">'+it.ext+'</span>':'')+'</div>'+
+        '<div class="stepwhen">'+(it.when||'')+'</div>';
+      card.addEventListener('click',()=>openDrawer(it.id));
+      fs.appendChild(card);
+      if(i<steps.length-1){ const a=document.createElement('span'); a.className='seqarrow'; a.innerHTML='&rarr;'; fs.appendChild(a); }
+      flow.appendChild(fs);
+    });
+    const addWrap=document.createElement('div'); addWrap.className='fstep';
+    const add=document.createElement('button'); add.className='addstep'; add.textContent='+ Add step';
+    add.addEventListener('click',addStep); addWrap.appendChild(document.createElement('span')).className='seqarrow';
+    addWrap.querySelector('.seqarrow').innerHTML='&rarr;'; addWrap.appendChild(add); flow.appendChild(addWrap);
+  }
+
+  function leversForOutcome(id){ const {inc}=adjacency(); return [...reach(id,inc)].filter(x=>typeOf(x)==='lever'); }
+  function outcomesFromLever(id){ const {out}=adjacency(); return [...reach(id,out)].filter(x=>typeOf(x)==='outcome'); }
+  function pill(s){ return '<span class="pill '+s+'">'+SL[s]+'</span>'; }
+
+  function renderPanel(){
+    const p=document.getElementById('panel'), st=computeStatus();
+    if(!selection){
+      p.innerHTML='<div class="panel-label">Reading</div><div class="panel-body">Helios&rsquo; <b>Friday SOW submission is at risk</b>, and the cause is upstream. The <b>security approval is overdue</b>, holding <b>Approvals cleared</b> at risk, which blocks the submission and feeds the <b>Q3 renewal</b>. Clear the security approval and nothing else on this map recovers the Friday outcome.</div><div class="hint">Tap a node to trace it. Tap a lever to open it in the Flow and edit it.</div>';
+      return;
+    }
+    const t=typeOf(selection), label=labelOf(selection), status=st[selection];
+    let body='', act='';
+    if(t==='lever'){ const outs=outcomesFromLever(selection).map(labelOf); const it=ITEMS.find(x=>x.id===selection);
+      body='Moves '+outs.join(', ')+'. '+(status==='risk'?'It is the highest-leverage lever for the at-risk outcome it feeds.':'');
+      act='<div class="panel-act"><button class="btn-sm" id="openFlow">Open in Flow to edit</button></div>'; }
+    else if(t==='outcome'){ const lv=leversForOutcome(selection).map(labelOf);
+      body='Driven by the levers '+lv.join(', ')+'. '+(status==='risk'?'At risk because of an unresolved lever upstream.':''); }
+    else { body='Sits between levers and outcomes; its status is the worst of what feeds it.'; }
+    p.innerHTML='<div class="panel-label">'+t+'</div><div class="panel-title">'+label+' '+pill(status)+'</div><div class="panel-body">'+body+'</div>'+act;
+    const of=document.getElementById('openFlow'); if(of) of.addEventListener('click',()=>openInFlow(selection));
+  }
+
+  // DRAWER (Flow owns editing)
+  const backdrop=document.getElementById('backdrop'), drawer=document.getElementById('drawer');
+  function openDrawer(id){ const it=ITEMS.find(x=>x.id===id); if(!it) return; editingId=id;
+    document.getElementById('dTitle'); document.getElementById('fTitle').value=it.title;
+    document.getElementById('fStatus').value=it.status; document.getElementById('fWhen').value=it.when||'';
+    document.getElementById('fNotes').value=it.notes||'';
+    const c=document.getElementById('dCausal');
+    if(it.feeds){ c.innerHTML='<b>Causal role:</b> lever feeding <b>'+labelOf(it.feeds)+'</b>. Changing its status ripples through the Map.'; }
+    else { c.innerHTML='<b>Sequence step.</b> Part of the execution order; no direct causal node on the Map.'; }
+    backdrop.classList.add('open'); drawer.classList.add('open');
+  }
+  function closeDrawer(){ backdrop.classList.remove('open'); drawer.classList.remove('open'); editingId=null; document.querySelectorAll('.stepcard.focus').forEach(c=>c.classList.remove('focus')); }
+  function saveDrawer(){ if(!editingId) return; const it=ITEMS.find(x=>x.id===editingId);
+    it.title=document.getElementById('fTitle').value.trim()||it.title; it.status=document.getElementById('fStatus').value;
+    it.when=document.getElementById('fWhen').value.trim(); it.notes=document.getElementById('fNotes').value.trim();
+    closeDrawer(); rerenderAll();
+  }
+  function addStep(){ const maxSeq=Math.max(...ITEMS.map(i=>i.seq)); const id='t'+Date.now();
+    ITEMS.push({id,title:'New task',status:'needs',feeds:null,seq:maxSeq+1,stage:'New step',when:'',notes:''}); renderFlow(); openDrawer(id); }
+  document.getElementById('dClose').addEventListener('click',closeDrawer);
+  document.getElementById('dCancel').addEventListener('click',closeDrawer);
+  document.getElementById('dSave').addEventListener('click',saveDrawer);
+  backdrop.addEventListener('click',closeDrawer);
+
+  function openInFlow(leverId){ setView('flow'); renderFlow();
+    requestAnimationFrame(()=>{ const card=flow.querySelector('.stepcard[data-id="'+leverId+'"]'); if(card){ card.classList.add('focus'); card.scrollIntoView({inline:'center',behavior:'smooth'}); } openDrawer(leverId); });
+  }
+
+  function setView(v){ view=v;
+    document.getElementById('vMap').classList.toggle('on',v==='map');
+    document.getElementById('vFlow').classList.toggle('on',v==='flow');
+    document.getElementById('mapView').style.display=v==='map'?'block':'none';
+    document.getElementById('flowView').style.display=v==='flow'?'block':'none';
+    if(v==='map'){ renderMap(); requestAnimationFrame(()=>requestAnimationFrame(()=>drawEdges(computeStatus(),activeSet()))); }
+    else renderFlow();
+  }
+  function rerenderAll(){ const st=computeStatus(); // reflect helios pill from O_sub-ish overall worst
+    if(view==='map'){ renderMap(); } else { renderFlow(); } renderPanel();
+  }
+  document.getElementById('vMap').addEventListener('click',()=>setView('map'));
+  document.getElementById('vFlow').addEventListener('click',()=>setView('flow'));
+
+  // switcher
+  const swmenu=document.getElementById('swmenu');
+  function buildMenu(){ swmenu.innerHTML=WORKSPACES.map(w=>'<div class="switem '+(w.id===currentWs?'on':'')+'" data-ws="'+w.id+'"><span class="dot" style="background:var(--'+w.status+')"></span><span class="nm">'+w.name+'</span><span class="tag">'+SL[w.status]+'</span></div>').join('');
+    swmenu.querySelectorAll('.switem').forEach(it=>it.addEventListener('click',()=>{ selectWs(it.dataset.ws); swmenu.classList.remove('open'); })); }
+  function selectWs(id){ currentWs=id; const w=WORKSPACES.find(x=>x.id===id);
+    document.getElementById('swname').textContent=w.name; document.querySelector('.swbtn .dot').style.background='var(--'+w.status+')';
+    document.getElementById('wsTitle').textContent=w.name; const wp=document.getElementById('wsPill'); wp.className='ws-pill pill '+w.status; wp.textContent=SL[w.status];
+    if(id==='helios'){ document.querySelector('.flip').style.display='inline-flex'; document.querySelector('.canvas').style.display='block'; document.querySelector('.panel').style.display='block';
+      document.getElementById('wsRead').textContent='Two views of one workspace. Map shows why the Friday submission is at risk; Flow shows the steps to clear it. Edits in one move the other.'; selection=null; setView(view); renderPanel(); }
+    else { document.querySelector('.flip').style.display='none'; document.querySelector('.canvas').style.display='none'; document.querySelector('.panel').style.display='block';
+      document.getElementById('panel').innerHTML='<div class="panel-label">Reading</div><div class="panel-body">The map and flow for <b>'+w.name+'</b> are not part of this preview. Helios is the worked example.</div>'; document.getElementById('wsRead').textContent=''; }
+    buildMenu();
+  }
+  document.getElementById('swbtn').addEventListener('click',e=>{ e.stopPropagation(); swmenu.classList.toggle('open'); });
+  document.addEventListener('click',()=>swmenu.classList.remove('open'));
+  map.addEventListener('click',()=>{ if(selection){ selection=null; renderMap(); renderPanel(); }});
+
+  const tb=document.getElementById('themeToggle');
+  tb.addEventListener('click',()=>{ const d=document.documentElement.getAttribute('data-theme')==='dark'; document.documentElement.setAttribute('data-theme',d?'light':'dark'); tb.textContent=d?'Dark mode':'Light mode'; if(view==='map') drawEdges(computeStatus(),activeSet()); });
+  window.addEventListener('resize',()=>{ if(view==='map') drawEdges(computeStatus(),activeSet()); });
+
+  buildMenu(); selectWs('helios');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>drawEdges(computeStatus(),activeSet())));
+</script>
+</body>
+</html>

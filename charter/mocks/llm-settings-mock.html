@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Settings — Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:'Plus Jakarta Sans',system-ui,sans-serif;
+    --ink-1:#1c1c1a;--ink-2:#5f5e5a;--ink-3:#888780;
+    --page:#eceef0;--surface:#ffffff;--surface-2:#f5f5f3;
+    --hairline:rgba(26,26,25,0.12);--hairline-strong:rgba(26,26,25,0.20);
+    --navy:#2e3264;--navy-hover:#262a55;--teal:#1a8070;
+    --on_track:#3b6d11;--needs:#534ab7;--behind:#854f0b;--risk:#a32d2d;
+    --field:#fff;--field-border:rgba(26,26,25,0.22);
+    --radius:10px;--radius-input:6px;
+  }
+  [data-theme="dark"]{
+    --ink-1:#f0eeea;--ink-2:#b4b2a9;--ink-3:#888780;
+    --page:#161614;--surface:#222220;--surface-2:#1c1c1a;
+    --hairline:rgba(240,238,234,0.12);--hairline-strong:rgba(240,238,234,0.22);
+    --navy:#3b4080;--navy-hover:#464c95;--teal:#2ba692;
+    --on_track:#8ea868;--needs:#9f9ad0;--behind:#d3a05a;--risk:#d68e8e;
+    --field:#262624;--field-border:rgba(240,238,234,0.20);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);font-size:14px;color:var(--ink-1);background:var(--page);-webkit-font-smoothing:antialiased;}
+  .topbar{height:48px;display:flex;align-items:center;gap:10px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:10;}
+  .brand{font-size:13px;font-weight:600;} .sep{color:var(--ink-3);} .crumb{font-size:13px;color:var(--ink-2);} .spacer{flex:1;}
+  .tbtn{padding:6px;display:grid;place-items:center;color:var(--ink-2);background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);cursor:pointer;} .tbtn:hover{color:var(--ink-1);} .tbtn svg{width:17px;height:17px;}
+
+  .wrap{max-width:680px;margin:0 auto;padding:26px 22px 60px;}
+  h1{font-size:21px;font-weight:600;letter-spacing:-0.01em;} .sub{font-size:13px;color:var(--ink-2);margin-top:3px;}
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius);padding:18px 20px;margin-top:16px;}
+  .card-h{font-size:14px;font-weight:600;} .card-sub{font-size:12.5px;color:var(--ink-2);margin-top:3px;margin-bottom:14px;line-height:1.5;}
+
+  .mrow{display:flex;align-items:flex-start;gap:12px;padding:13px;border:1px solid var(--hairline);border-radius:var(--radius);cursor:pointer;margin-bottom:9px;transition:border-color 0.14s,background 0.14s;}
+  .mrow:last-child{margin-bottom:0;}
+  .mrow.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 7%,transparent);}
+  .radio{width:17px;height:17px;border-radius:50%;border:2px solid var(--hairline-strong);flex-shrink:0;margin-top:2px;position:relative;}
+  .mrow.on .radio{border-color:var(--teal);} .mrow.on .radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--teal);}
+  .mbody{flex:1;min-width:0;}
+  .mtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;} .mname{font-size:14px;font-weight:600;} .msub{font-size:12px;color:var(--ink-3);}
+  .badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:9999px;}
+  .badge.private{background:color-mix(in srgb,var(--on_track) 16%,transparent);color:var(--on_track);}
+  .badge.hosted{background:color-mix(in srgb,var(--needs) 15%,transparent);color:var(--needs);}
+  .mdesc{font-size:12.5px;color:var(--ink-2);margin-top:4px;line-height:1.45;} .mhint{font-size:11px;color:var(--ink-3);margin-top:5px;}
+
+  .field-row{margin-top:14px;} .field-row label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--ink-3);margin-bottom:6px;}
+  .field{width:100%;font:inherit;font-size:14px;color:var(--ink-1);background:var(--field);border:1px solid var(--field-border);border-radius:var(--radius-input);padding:10px 12px;outline:none;}
+  .field:focus{border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 16%,transparent);}
+  .muted-note{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-radius:var(--radius-input);padding:11px 13px;line-height:1.5;}
+
+  .costctrl{display:flex;align-items:center;gap:9px;}
+  .costctrl .dollar{font-size:14px;color:var(--ink-2);} 
+  .costctrl input{width:110px;} .costctrl select{flex:1;}
+  select.field{appearance:auto;}
+  .seg2{display:inline-flex;background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:3px;gap:3px;}
+  .seg2 button{font:inherit;font-size:12px;font-weight:600;color:var(--ink-2);background:none;border:none;border-radius:4px;padding:6px 13px;cursor:pointer;}
+  .seg2 button.on{background:var(--surface);color:var(--ink-1);box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;font-size:13.5px;font-weight:500;cursor:pointer;}
+  .switch-row input{width:18px;height:18px;flex-shrink:0;}
+
+  .callout{display:flex;gap:11px;border-radius:var(--radius-input);padding:13px 15px;line-height:1.5;font-size:13px;margin-top:16px;}
+  .callout.priv{background:color-mix(in srgb,var(--on_track) 9%,transparent);} .callout.host{background:color-mix(in srgb,var(--behind) 10%,transparent);}
+  .callout .ci{flex:1;color:var(--ink-1);} .callout .ci b{font-weight:600;} .callout .ci a{color:var(--teal);text-decoration:none;font-weight:600;}
+  .callout .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+
+  .adv-toggle{font:inherit;font-size:12.5px;font-weight:600;color:var(--teal);background:none;border:none;cursor:pointer;padding:0;margin-top:4px;}
+  .adv{margin-top:14px;display:none;} .adv.open{display:block;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:520px){ .two{grid-template-columns:1fr;} }
+  .save{margin-top:18px;font:inherit;font-size:13.5px;font-weight:600;color:#fff;background:var(--navy);border:none;border-radius:var(--radius-input);padding:10px 20px;cursor:pointer;}
+  .save:hover{background:var(--navy-hover);}
+</style>
+</head>
+<body>
+  <div class="topbar"><span class="brand">Padhanam</span><span class="sep">/</span><span class="crumb">Settings · Model</span><div class="spacer"></div><button class="tbtn" id="themeToggle"></button></div>
+  <div class="wrap">
+    <h1>Language model</h1>
+    <div class="sub">Padhanam is model-agnostic. Pick the engine that powers your assistant. The default runs locally, so your data stays in your tenant.</div>
+
+    <div class="card">
+      <div class="card-h">Engine</div>
+      <div class="card-sub">Switching models is a setting, not a migration. Local keeps everything private; hosted models are stronger and faster but send prompts to the provider.</div>
+      <div id="models"></div>
+      <div id="keyRow"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Spending limit</div>
+      <div class="card-sub">A ceiling on model usage so the assistant never runs away with cost.</div>
+      <div id="costBlock"></div>
+    </div>
+
+    <div id="callout"></div>
+
+    <div class="card">
+      <div class="card-h">Model by task</div>
+      <div class="card-sub">Advanced. Padhanam can route routine work to a cheaper model and keep a stronger one for reasoning.</div>
+      <button class="adv-toggle" id="advToggle">Show advanced &rarr;</button>
+      <div class="adv" id="adv"></div>
+    </div>
+
+    <button class="save">Save model settings</button>
+  </div>
+
+<script>
+  const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>';
+  const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3a6 6 0 0 0 9.8 9.8z"/></svg>';
+
+  // Provider sets data-location + billing; the specific model sets capability + cost.
+  // Representative tiers; the live list is pulled from LiteLLM at build.
+  const PROVIDERS=[
+    {id:'ollama',name:'Local model',sub:'Ollama, your infrastructure',hosted:false,desc:'Runs inside your own tenant. Prompts and the context they carry never leave it.',models:[
+      {id:'llama70',name:'Llama 3.3 70B',hint:'Most capable local · needs a strong GPU'},
+      {id:'llama8',name:'Llama 3.1 8B',hint:'Light and fast · modest hardware'},
+      {id:'qwen',name:'Qwen 2.5 14B',hint:'Balanced for local'},
+    ]},
+    {id:'anthropic',name:'Claude',sub:'Anthropic',hosted:true,desc:'Strong reasoning and long context. Prompts sent to Anthropic.',models:[
+      {id:'opus',name:'Claude Opus',hint:'Most capable · highest cost'},
+      {id:'sonnet',name:'Claude Sonnet',hint:'Balanced cost and capability'},
+      {id:'haiku',name:'Claude Haiku',hint:'Fastest · lowest cost'},
+    ]},
+    {id:'openai',name:'GPT',sub:'OpenAI',hosted:true,desc:'Broad capability and tooling. Prompts sent to OpenAI.',models:[
+      {id:'gpt-flagship',name:'GPT flagship',hint:'Most capable · highest cost'},
+      {id:'gpt-mini',name:'GPT mini',hint:'Fast and cheap'},
+      {id:'o-reason',name:'o-series reasoning',hint:'Deep reasoning · slower and costly'},
+    ]},
+    {id:'google',name:'Gemini',sub:'Google',hosted:true,desc:'Large context and multimodal. Prompts sent to Google.',models:[
+      {id:'gem-pro',name:'Gemini Pro',hint:'Large context · capable'},
+      {id:'gem-flash',name:'Gemini Flash',hint:'Fast and cheap'},
+    ]},
+  ];
+  const prov=id=>PROVIDERS.find(p=>p.id===id);
+  function allModels(){ return PROVIDERS.flatMap(p=>p.models.map(m=>({key:p.id+':'+m.id,label:m.name+' · '+p.sub}))); }
+
+  let selectedProvider='ollama', selectedModel='auto', billingMode='managed', guardrailOn=false,
+      costLimit=200, costBehavior='warn', advancedOn=false, routineId='ollama:llama8', reasoningId='anthropic:opus';
+
+  function renderModels(){
+    document.getElementById('models').innerHTML=PROVIDERS.map(p=>
+      '<div class="mrow'+(selectedProvider===p.id?' on':'')+'" data-id="'+p.id+'"><div class="radio"></div><div class="mbody">'+
+      '<div class="mtop"><span class="mname">'+p.name+'</span><span class="msub">'+p.sub+'</span><span class="badge '+(p.hosted?'hosted':'private')+'">'+(p.hosted?'Hosted':'Private')+'</span></div>'+
+      '<div class="mdesc">'+p.desc+'</div></div></div>').join('');
+    document.querySelectorAll('.mrow').forEach(r=>r.addEventListener('click',()=>{ selectedProvider=r.dataset.id; selectedModel='auto'; render(); }));
+  }
+  function renderBilling(){
+    const p=prov(selectedProvider), el=document.getElementById('keyRow');
+    const isAuto=selectedModel==='auto';
+    const cm=isAuto?null:(p.models.find(m=>m.id===selectedModel)||p.models[0]);
+    const hint=isAuto?(p.hosted?'Let '+p.sub+' route each request to its best model. Providers optimise their own model use, so this is the recommended default.':'Let Padhanam pick the best of your local models for each request.'):cm.hint;
+    let h='<div class="field-row"><label>Model</label><select class="field" id="modelSel">'+
+      '<option value="auto"'+(isAuto?' selected':'')+'>Auto &middot; recommended</option>'+
+      p.models.map(m=>'<option value="'+m.id+'"'+(m.id===selectedModel?' selected':'')+'>'+m.name+'</option>').join('')+
+      '</select><div class="mhint" style="margin-top:7px">'+hint+'</div></div>';
+    if(p.hosted){
+      h+='<div class="field-row"><label>How it is billed</label><div class="seg2">'+
+        '<button data-b="managed" class="'+(billingMode==='managed'?'on':'')+'">Padhanam-managed</button>'+
+        '<button data-b="byok" class="'+(billingMode==='byok'?'on':'')+'">Bring your own key</button></div></div>';
+      if(billingMode==='byok') h+='<div class="field-row"><label>'+p.sub+' API key</label><input class="field" type="password" placeholder="sk-&hellip;" /><div class="mhint" style="margin-top:7px">Usage bills to your '+p.sub+' account and stays under your agreement with them. '+p.sub+' meters and caps it, so Padhanam does not.</div></div>';
+      else h+='<div class="mhint" style="margin-top:10px">Padhanam provides access and meters your tenant&rsquo;s usage. That is what the spending limit below caps.</div>';
+    }
+    el.innerHTML=h;
+    document.getElementById('modelSel').addEventListener('change',e=>{ selectedModel=e.target.value; render(); });
+    el.querySelectorAll('.seg2 button').forEach(b=>b.addEventListener('click',()=>{ billingMode=b.dataset.b; render(); }));
+  }
+  function costCtrlHTML(note,fb){
+    return '<div class="costctrl"><span class="dollar">$</span><input class="field" id="cl" type="number" value="'+costLimit+'" /> <select class="field" id="cb">'+
+      '<option value="warn"'+(costBehavior==='warn'?' selected':'')+'>Warn me at the limit</option>'+
+      '<option value="pause"'+(costBehavior==='pause'?' selected':'')+'>Pause the assistant at the limit</option>'+
+      (fb?'<option value="fallback"'+(costBehavior==='fallback'?' selected':'')+'>Fall back to the local model</option>':'')+
+      '</select></div><div class="mhint" style="margin-top:8px">'+note+'</div>';
+  }
+  function renderCost(){
+    const p=prov(selectedProvider), el=document.getElementById('costBlock');
+    if(!p.hosted){ el.innerHTML='<div class="muted-note">A local model has no per-token cost, so there is nothing to cap.</div>'; }
+    else if(billingMode==='managed'){ el.innerHTML=costCtrlHTML('Per calendar month. Padhanam meters your tenant&rsquo;s usage against this and acts at the limit.'); }
+    else { el.innerHTML='<div class="muted-note">Your '+p.sub+' account already meters and caps this key, so Padhanam does not bill or limit it. Add a guardrail only if you want Padhanam to step in before your provider&rsquo;s own limit.</div>'+
+        '<label class="switch-row"><span>Let Padhanam cap its usage on this key</span><input type="checkbox" id="grd"'+(guardrailOn?' checked':'')+' /></label>'+
+        (guardrailOn?'<div style="margin-top:12px">'+costCtrlHTML('Governs only what Padhanam runs on your key, and what it does at the limit, including falling back to the local model.',true)+'</div>':''); }
+    const cl=document.getElementById('cl'), cb=document.getElementById('cb'), grd=document.getElementById('grd');
+    if(cl) cl.addEventListener('input',e=>costLimit=+e.target.value);
+    if(cb) cb.addEventListener('change',e=>costBehavior=e.target.value);
+    if(grd) grd.addEventListener('change',e=>{ guardrailOn=e.target.checked; renderCost(); });
+  }
+  function renderCallout(){
+    const p=prov(selectedProvider), el=document.getElementById('callout');
+    el.className='callout '+(p.hosted?'host':'priv');
+    el.innerHTML='<span class="dot" style="background:var(--'+(p.hosted?'behind':'on_track')+')"></span><div class="ci">'+
+      (p.hosted
+        ? '<b>Where your data goes:</b> with '+p.sub+' selected, prompts and the personal and work context they carry are sent to '+p.sub+' under your agreement with them. For your most sensitive journal and personal entries, the local model keeps everything in your tenant. <a href="#">Privacy settings &rarr;</a>'
+        : '<b>Where your data goes:</b> nowhere. The local model runs in your tenant, so prompts and your causal graph never leave it. This is the most private option. <a href="#">Privacy settings &rarr;</a>')+'</div>';
+  }
+  function renderAdv(){
+    const adv=document.getElementById('adv'); adv.classList.toggle('open',advancedOn);
+    document.getElementById('advToggle').innerHTML=advancedOn?'Hide advanced &larr;':'Show advanced &rarr;';
+    if(!advancedOn){ adv.innerHTML=''; return; }
+    const opts=sel=>allModels().map(m=>'<option value="'+m.key+'"'+(sel===m.key?' selected':'')+'>'+m.label+'</option>').join('');
+    adv.innerHTML='<div class="two"><div class="field-row" style="margin-top:0"><label>Routine tasks</label><select class="field" id="routine">'+opts(routineId)+'</select></div>'+
+      '<div class="field-row" style="margin-top:0"><label>Deep reasoning</label><select class="field" id="reasoning">'+opts(reasoningId)+'</select></div></div>'+
+      '<div class="mhint" style="margin-top:10px">Padhanam sends classification and short reads to the routine model, and saves the reasoning model for causal analysis and recommendations. Setting these overrides Auto for those task types.</div>';
+    document.getElementById('routine').addEventListener('change',e=>routineId=e.target.value);
+    document.getElementById('reasoning').addEventListener('change',e=>reasoningId=e.target.value);
+  }
+  function render(){ renderModels(); renderBilling(); renderCost(); renderCallout(); renderAdv(); }
+
+  document.getElementById('advToggle').addEventListener('click',()=>{ advancedOn=!advancedOn; renderAdv(); });
+  function updateThemeBtn(){ const tb=document.getElementById('themeToggle'); const dark=document.documentElement.getAttribute('data-theme')==='dark'; tb.innerHTML=dark?SUN:MOON; tb.title=dark?'Switch to light mode':'Switch to dark mode'; }
+  document.getElementById('themeToggle').addEventListener('click',()=>{ const d=document.documentElement.getAttribute('data-theme')==='dark'; document.documentElement.setAttribute('data-theme',d?'light':'dark'); updateThemeBtn(); });
+
+  updateThemeBtn(); render();
+
+</script>
+</body>
+</html>

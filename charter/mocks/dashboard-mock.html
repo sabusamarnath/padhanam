@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How am I doing — design language preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:'Plus Jakarta Sans',system-ui,sans-serif;
+    --ink-1:#1c1c1a;--ink-2:#5f5e5a;--ink-3:#888780;
+    --page:#eceef0;--surface:#ffffff;--surface-personal:#faf6ec;
+    --hairline:rgba(26,26,25,0.12);--hairline-strong:rgba(26,26,25,0.18);
+    --navy:#2e3264;--navy-hover:#262a55;--teal:#1a8070;
+    --on_track:#3b6d11;--needs:#534ab7;--behind:#854f0b;--risk:#a32d2d;--done:#888780;
+    --warm:#b0997e;--cool:#7a8190;
+    --shadow:0 1px 3px rgba(0,0,0,0.06);
+    --radius-card:10px;--radius-input:4px;
+  }
+  [data-theme="dark"]{
+    --ink-1:#f0eeea;--ink-2:#b4b2a9;--ink-3:#888780;
+    --page:#161614;--surface:#222220;--surface-personal:#262320;
+    --hairline:rgba(240,238,234,0.12);--hairline-strong:rgba(240,238,234,0.20);
+    --navy:#3b4080;--navy-hover:#464c95;--teal:#2ba692;
+    --on_track:#8ea868;--needs:#9f9ad0;--behind:#d3a05a;--risk:#d68e8e;--done:#8a8980;
+    --shadow:0 1px 3px rgba(0,0,0,0.3);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);font-size:14px;line-height:1.5;color:var(--ink-1);
+    background:var(--page);-webkit-font-smoothing:antialiased;min-height:100vh;}
+  .topbar{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    background:var(--surface);border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:10;}
+  .topbar .brand{font-size:13px;font-weight:600;letter-spacing:0.02em;}
+  .topbar .controls{display:flex;align-items:center;gap:14px;}
+  .ctrl button{font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--ink-2);background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:3px 9px;cursor:pointer;}
+  .ctrl .range{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-3);}
+
+  .wrap{max-width:760px;margin:0 auto;padding:24px 20px 90px;display:flex;flex-direction:column;gap:16px;}
+  .h1{font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  .sub{font-size:13px;color:var(--ink-2);margin-top:1px;}
+
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius-card);padding:18px 18px;box-shadow:var(--shadow);}
+  .card-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-3);margin-bottom:12px;}
+
+  /* verdict */
+  .verdict{display:flex;gap:16px;align-items:flex-start;border-left:3px solid var(--behind);}
+  .verdict .vmain{flex:1;}
+  .verdict .vline{font-size:17px;font-weight:600;line-height:1.4;letter-spacing:-0.01em;}
+  .verdict .vsince{font-size:12px;color:var(--ink-2);margin-top:6px;}
+  .verdict .vtrend{flex-shrink:0;text-align:right;}
+  .trendchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;}
+  .arrow{font-weight:700;}
+  .up{color:var(--on_track);} .down{color:var(--risk);} .flat{color:var(--ink-3);}
+  .vtrend .vt-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--ink-3);margin-top:5px;}
+
+  /* guidance */
+  .guide{display:flex;flex-direction:column;gap:2px;}
+  .grow{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--hairline);}
+  .grow:first-of-type{border-top:none;}
+  .gmark{flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:6px;}
+  .grow .gbody{flex:1;}
+  .grow .gact{font-size:14px;font-weight:600;}
+  .grow .gwhy{font-size:13px;color:var(--ink-2);margin-top:3px;}
+  .grow .gtag{flex-shrink:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+    padding:2px 8px;border-radius:9999px;align-self:flex-start;margin-top:3px;}
+
+  /* projects */
+  .proj-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .proj{border:1px solid var(--hairline);border-radius:var(--radius-card);padding:13px 14px;}
+  .proj .ptop{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .cue{display:inline-flex;align-items:center;gap:2px;color:var(--st,var(--cool));}
+  .cue svg{width:15px;height:15px;}
+  .cue .ci{font-size:9px;font-weight:700;}
+  .proj .pname{font-size:13px;font-weight:600;flex:1;}
+  .proj .ppill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;padding:2px 7px;border-radius:9999px;}
+  .proj .pmid{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;}
+  .proj .popen{font-size:12px;color:var(--ink-2);}
+  .proj .pread{font-size:12px;color:var(--ink-2);line-height:1.4;}
+  .spark{display:block;}
+
+  .pill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;padding:2px 7px;border-radius:9999px;}
+  .pill.on_track{background:color-mix(in srgb,var(--on_track) 16%,transparent);color:var(--on_track);}
+  .pill.needs{background:color-mix(in srgb,var(--needs) 16%,transparent);color:var(--needs);}
+  .pill.behind{background:color-mix(in srgb,var(--behind) 16%,transparent);color:var(--behind);}
+  .pill.risk{background:color-mix(in srgb,var(--risk) 16%,transparent);color:var(--risk);}
+
+  /* balance */
+  .bal-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:4px 0 10px;}
+  .bal-work{background:var(--cool);} .bal-personal{background:var(--warm);}
+  .bal-legend{display:flex;gap:18px;font-size:12px;color:var(--ink-2);}
+  .bal-legend b{color:var(--ink-1);font-weight:600;}
+  .bal-read{font-size:13px;color:var(--ink-2);margin-top:10px;}
+
+  /* needs list */
+  .nrow{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--hairline);}
+  .nrow:first-of-type{border-top:none;}
+  .nrow .ntitle{flex:1;min-width:0;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .nrow .ndate{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-3);}
+
+  @media (max-width:560px){ .proj-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">How am I doing</div>
+    <div class="controls"><span class="ctrl range">Last 7 days</span><span class="ctrl"><button id="themeToggle">Dark mode</button></span></div>
+  </div>
+
+  <div class="wrap">
+    <div>
+      <div class="h1">How am I doing</div>
+      <div class="sub">Rolling 7 days to Wednesday 4 June</div>
+    </div>
+
+    <div class="card verdict" id="verdict"></div>
+
+    <div class="card">
+      <div class="card-label">What gets you back on track</div>
+      <div class="guide" id="guide"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">By project</div>
+      <div class="proj-grid" id="projects"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Work and personal balance</div>
+      <div id="balance"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Needs you now</div>
+      <div id="needs"></div>
+    </div>
+  </div>
+
+<script>
+  const ICON_WORK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const ICON_HEART='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z"/></svg>';
+  const COOL='#7a8190', WARM='#b0997e';
+  const SL={on_track:'On track',needs:'Needs you',behind:'Behind',risk:'At risk'};
+
+  function cue(icon,init,color){ return '<span class="cue" style="--st:'+color+'">'+icon+(init?'<span class="ci">'+init+'</span>':'')+'</span>'; }
+  function spark(vals,color){
+    const w=66,h=20,max=Math.max(...vals),min=Math.min(...vals),rng=(max-min)||1;
+    const pts=vals.map((v,i)=>{const x=(i/(vals.length-1))*w;const y=h-2-((v-min)/rng)*(h-4);return x.toFixed(1)+','+y.toFixed(1);}).join(' ');
+    return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  function arrowHTML(dir){
+    const g=getComputedStyle(document.documentElement);
+    if(dir==='up') return '<span class="trendchip up"><span class="arrow">&#8593;</span> improving</span>';
+    if(dir==='down') return '<span class="trendchip down"><span class="arrow">&#8595;</span> slipping</span>';
+    return '<span class="trendchip flat"><span class="arrow">&#8594;</span> steady</span>';
+  }
+  function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+  const VERDICT={
+    line:'Slipping this week. Two items are at risk, both on Helios, and your week has tilted hard to work.',
+    since:'Down from "mostly on track" a week ago. The slope is the security approval dragging Helios.',
+    dir:'down', trendVals:[0.82,0.8,0.78,0.7,0.64,0.58]
+  };
+  const GUIDE=[
+    {status:'risk',act:'Clear the security approval today.',why:"It is at risk and it blocks the Helios submission on Friday. Pull this one lever and Helios stops slipping.",tag:'highest leverage'},
+    {status:'behind',act:'Protect 30 minutes for the Northwind status pack.',why:'Behind two weeks running. One focused block stops it sliding into at-risk.',tag:'before it tips'},
+    {status:'needs',act:'Put something personal back in the week.',why:'You are at 84% work. Only the recital and the marathon run are personal, and the trend is widening.',tag:'balance'},
+  ];
+  const PROJECTS=[
+    {name:'Helios',icon:ICON_WORK,init:'H',color:COOL,status:'risk',open:3,dir:'down',read:'Security approval blocks Friday. Highest risk this week.',vals:[0.8,0.78,0.7,0.6,0.5,0.42]},
+    {name:'Northwind',icon:ICON_WORK,init:'N',color:COOL,status:'behind',open:2,dir:'down',read:'Status pack behind two weeks running.',vals:[0.7,0.68,0.6,0.58,0.5,0.48]},
+    {name:'Vertex',icon:ICON_WORK,init:'V',color:COOL,status:'needs',open:2,dir:'up',read:'Deliverable sign-off pending, but moving.',vals:[0.5,0.55,0.6,0.62,0.7,0.74]},
+    {name:'Aurora',icon:ICON_WORK,init:'A',color:COOL,status:'needs',open:1,dir:'flat',read:'Kickoff this week, on schedule.',vals:[0.6,0.62,0.6,0.63,0.61,0.62]},
+    {name:'Personal',icon:ICON_HEART,init:'',color:WARM,status:'needs',open:4,dir:'down',read:'Thin this week, and shrinking against work.',vals:[0.6,0.55,0.5,0.42,0.36,0.3]},
+  ];
+  const BALANCE={work:84,personal:16,read:'Work has climbed from 70% to 84% over the last two weeks. Personal is being crowded out, not chosen against. The recital on Friday and the marathon long run are the two things to protect.'};
+  const NEEDS=[
+    {icon:ICON_WORK,init:'H',color:COOL,title:'Helios: SOW change request',status:'needs',date:'Wed 4'},
+    {icon:ICON_WORK,init:'',color:COOL,title:'Approve security policy',status:'risk',date:'Wed 4'},
+    {icon:ICON_WORK,init:'V',color:COOL,title:'Vertex: deliverable sign-off',status:'needs',date:'Fri 6'},
+    {icon:ICON_HEART,init:'',color:WARM,title:"Aanya's recital",status:'needs',date:'Fri 6'},
+  ];
+
+  function render(){
+    const v=document.getElementById('verdict');
+    v.style.borderLeftColor='var(--'+(VERDICT.dir==='down'?'behind':'on_track')+')';
+    v.innerHTML='<div class="vmain"><div class="vline">'+VERDICT.line+'</div><div class="vsince">'+VERDICT.since+'</div></div>'+
+      '<div class="vtrend">'+arrowHTML(VERDICT.dir)+'<div>'+spark(VERDICT.trendVals,cssv('--behind'))+'</div><div class="vt-label">6 weeks</div></div>';
+
+    document.getElementById('guide').innerHTML=GUIDE.map(g=>
+      '<div class="grow"><span class="gmark" style="background:var(--'+g.status+')"></span>'+
+      '<div class="gbody"><div class="gact">'+g.act+'</div><div class="gwhy">'+g.why+'</div></div>'+
+      '<span class="gtag" style="background:color-mix(in srgb,var(--'+g.status+') 15%,transparent);color:var(--'+g.status+')">'+g.tag+'</span></div>'
+    ).join('');
+
+    document.getElementById('projects').innerHTML=PROJECTS.map(p=>
+      '<div class="proj"><div class="ptop">'+cue(p.icon,p.init,p.color)+'<span class="pname">'+p.name+'</span>'+
+      '<span class="pill '+p.status+'">'+SL[p.status]+'</span></div>'+
+      '<div class="pmid"><span class="popen">'+p.open+' open</span>'+arrowHTML(p.dir)+spark(p.vals,cssv('--'+p.status))+'</div>'+
+      '<div class="pread">'+p.read+'</div></div>'
+    ).join('');
+
+    document.getElementById('balance').innerHTML=
+      '<div class="bal-bar"><div class="bal-work" style="width:'+BALANCE.work+'%"></div><div class="bal-personal" style="width:'+BALANCE.personal+'%"></div></div>'+
+      '<div class="bal-legend"><span><b>'+BALANCE.work+'%</b> work</span><span><b>'+BALANCE.personal+'%</b> personal</span></div>'+
+      '<div class="bal-read">'+BALANCE.read+'</div>';
+
+    document.getElementById('needs').innerHTML=NEEDS.map(n=>
+      '<div class="nrow">'+cue(n.icon,n.init,n.color)+'<span class="ntitle">'+n.title+'</span>'+
+      '<span class="ndate">'+n.date+'</span><span class="pill '+n.status+'">'+SL[n.status]+'</span></div>'
+    ).join('');
+  }
+  render();
+  document.getElementById('themeToggle').addEventListener('click',()=>{
+    const d=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme',d?'light':'dark');
+    document.getElementById('themeToggle').textContent=d?'Dark mode':'Light mode';
+    render();
+  });
+</script>
+</body>
+</html>

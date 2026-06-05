@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Workspace — causal map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:'Plus Jakarta Sans',system-ui,sans-serif;
+    --ink-1:#1c1c1a;--ink-2:#5f5e5a;--ink-3:#888780;
+    --page:#eceef0;--surface:#ffffff;--surface-2:#f5f5f3;
+    --hairline:rgba(26,26,25,0.12);--hairline-strong:rgba(26,26,25,0.20);
+    --navy:#2e3264;--teal:#1a8070;
+    --on_track:#3b6d11;--needs:#534ab7;--behind:#854f0b;--risk:#a32d2d;--done:#888780;
+    --cool:#7a8190;--warm:#b0997e;
+    --radius:9px;--radius-input:5px;
+  }
+  [data-theme="dark"]{
+    --ink-1:#f0eeea;--ink-2:#b4b2a9;--ink-3:#888780;
+    --page:#161614;--surface:#222220;--surface-2:#1c1c1a;
+    --hairline:rgba(240,238,234,0.12);--hairline-strong:rgba(240,238,234,0.22);
+    --navy:#3b4080;--teal:#2ba692;
+    --on_track:#8ea868;--needs:#9f9ad0;--behind:#d3a05a;--risk:#d68e8e;--done:#8a8980;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);font-size:14px;color:var(--ink-1);background:var(--page);-webkit-font-smoothing:antialiased;}
+
+  .topbar{height:48px;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:30;}
+  .wm{display:flex;align-items:center;gap:8px;}
+  .wm svg{width:22px;height:22px;color:var(--navy);} .wm .nm{font-size:13px;font-weight:600;}
+  .sep{color:var(--ink-3);}
+  .switcher{position:relative;}
+  .swbtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-1);
+    background:var(--surface-2);border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:5px 11px;cursor:pointer;}
+  .swbtn .dot{width:8px;height:8px;border-radius:50%;}
+  .swbtn .car{color:var(--ink-3);font-size:11px;}
+  .swmenu{position:absolute;top:38px;left:0;min-width:210px;background:var(--surface);border:1px solid var(--hairline-strong);
+    border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,0.14);padding:5px;display:none;z-index:40;}
+  .swmenu.open{display:block;}
+  .switem{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-input);cursor:pointer;font-size:13px;}
+  .switem:hover{background:var(--surface-2);}
+  .switem .dot{width:8px;height:8px;border-radius:50%;}
+  .switem .nm{flex:1;font-weight:500;} .switem.on .nm{font-weight:700;}
+  .switem .tag{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-3);}
+  .spacer{flex:1;}
+  .tbtn{font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-2);
+    background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:4px 10px;cursor:pointer;}
+
+  .wshead{padding:18px 22px 0;max-width:1080px;margin:0 auto;}
+  .wstitle{display:flex;align-items:center;gap:11px;}
+  .wstitle h1{font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  .wstitle .ws-pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:9999px;}
+  .wsread{font-size:13.5px;color:var(--ink-2);margin-top:7px;max-width:680px;line-height:1.5;}
+  .tabs{display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--hairline);}
+  .tab{font-size:12.5px;font-weight:600;color:var(--ink-3);padding:9px 13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab.on{color:var(--ink-1);border-bottom-color:var(--teal);}
+
+  .canvas{max-width:1080px;margin:6px auto 0;padding:8px 22px 30px;}
+  .collabels{display:flex;justify-content:space-between;max-width:760px;margin:14px auto 0;padding:0 4px;}
+  .collabels span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:var(--ink-3);}
+  .mapscroll{overflow-x:auto;}
+  .map{position:relative;width:100%;min-width:720px;height:440px;margin:6px auto 0;}
+  svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+
+  .node{position:absolute;transform:translate(-50%,-50%);width:168px;padding:11px 13px;border-radius:var(--radius);
+    background:var(--surface);border:1px solid var(--hairline-strong);cursor:pointer;z-index:5;
+    transition:opacity 0.16s ease,box-shadow 0.16s ease,border-color 0.16s ease;}
+  .node:hover{box-shadow:0 3px 12px rgba(0,0,0,0.10);}
+  .node.sel{border-color:var(--st);box-shadow:0 0 0 2px color-mix(in srgb,var(--st) 35%,transparent);}
+  .node.faded{opacity:0.16;}
+  .node .nlabel{font-size:13px;font-weight:600;line-height:1.3;}
+  .node .nmeta{font-size:11px;color:var(--ink-2);margin-top:4px;display:flex;align-items:center;gap:6px;}
+  .node .nstat{width:8px;height:8px;border-radius:50%;background:var(--st);flex-shrink:0;}
+  .node.lever{border-left:3px solid var(--st);}
+  .node.outcome{border-radius:14px;border-width:2px;}
+  .node.outcome::after{content:"";position:absolute;inset:-5px;border-radius:18px;border:1.5px solid color-mix(in srgb,var(--st) 45%,transparent);pointer-events:none;}
+  .node.linkref{border-style:dashed;}
+  .node .ext{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-3);
+    border:1px solid var(--hairline-strong);border-radius:3px;padding:0 4px;}
+
+  .panel{max-width:1080px;margin:14px auto 0;padding:0 22px;}
+  .panel-inner{background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius);padding:16px 18px;}
+  .panel-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-3);margin-bottom:9px;}
+  .panel-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px;}
+  .panel-body{font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-top:9px;}
+  .panel-body b{color:var(--ink-1);font-weight:600;}
+  .pill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;padding:2px 8px;border-radius:9999px;}
+  .pill.on_track{background:color-mix(in srgb,var(--on_track) 16%,transparent);color:var(--on_track);}
+  .pill.needs{background:color-mix(in srgb,var(--needs) 16%,transparent);color:var(--needs);}
+  .pill.behind{background:color-mix(in srgb,var(--behind) 16%,transparent);color:var(--behind);}
+  .pill.risk{background:color-mix(in srgb,var(--risk) 16%,transparent);color:var(--risk);}
+  .pill.on_track,.pill.needs,.pill.behind,.pill.risk{} 
+  .hint{font-size:12px;color:var(--ink-3);margin-top:8px;}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wm"><svg viewBox="0 0 32 32" fill="none"><circle cx="11" cy="16" r="3.2" fill="currentColor"/><circle cx="21" cy="11" r="3.2" fill="currentColor"/><circle cx="21" cy="21" r="3.2" fill="currentColor"/><path d="M13.5 14.5 19 12 M13.5 17.5 19 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="nm">Padhanam</span></div>
+    <span class="sep">/</span>
+    <div class="switcher">
+      <button class="swbtn" id="swbtn"><span class="dot" style="background:var(--risk)"></span><span id="swname">Helios</span><span class="car">&#9662;</span></button>
+      <div class="swmenu" id="swmenu"></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="tbtn" id="themeToggle">Dark mode</button>
+  </div>
+
+  <div class="wshead">
+    <div class="wstitle"><h1 id="wsTitle">Helios</h1><span class="ws-pill pill risk" id="wsPill">At risk</span></div>
+    <div class="wsread" id="wsRead"></div>
+    <div class="tabs"><span class="tab on">Map</span><span class="tab">Items</span><span class="tab">People</span></div>
+  </div>
+
+  <div class="canvas" id="canvas">
+    <div class="collabels"><span>Levers</span><span>Factors</span><span>Outcomes</span></div>
+    <div class="mapscroll"><div class="map" id="map"><svg class="edges" id="edges"></svg></div></div>
+  </div>
+
+  <div class="panel"><div class="panel-inner" id="panel"></div></div>
+
+<script>
+  const WORKSPACES=[
+    {id:'helios',name:'Helios',status:'risk'},
+    {id:'northwind',name:'Northwind',status:'behind'},
+    {id:'vertex',name:'Vertex',status:'needs'},
+    {id:'aurora',name:'Aurora',status:'needs'},
+    {id:'personal',name:'Personal',status:'needs'},
+  ];
+  const SL={on_track:'On track',needs:'Needs you',behind:'Behind',risk:'At risk'};
+
+  // Helios CDD: levers -> factors -> outcomes
+  const NODES=[
+    {id:'L_sec',type:'lever',status:'risk',label:'Approve security policy',ext:'Internal',x:11,y:20},
+    {id:'L_sow',type:'lever',status:'needs',label:'SOW change request',x:11,y:50},
+    {id:'L_chk',type:'lever',status:'on_track',label:'Weekly client check-in',x:11,y:80},
+    {id:'F_appr',type:'factor',status:'risk',label:'Approvals cleared',x:45,y:20},
+    {id:'F_qual',type:'factor',status:'needs',label:'SOW quality',x:45,y:50},
+    {id:'F_rel',type:'factor',status:'on_track',label:'Client relationship',x:45,y:80},
+    {id:'O_sub',type:'outcome',status:'risk',label:'SOW submitted Friday',x:80,y:33},
+    {id:'O_ren',type:'outcome',status:'needs',label:'Q3 renewal secured',x:80,y:67},
+  ];
+  const EDGES=[
+    ['L_sec','F_appr'],['L_sow','F_qual'],['L_chk','F_rel'],
+    ['F_appr','O_sub'],['F_qual','O_sub'],['F_qual','O_ren'],['F_rel','O_ren'],['O_sub','O_ren'],
+  ];
+  const byId={}; NODES.forEach(n=>byId[n.id]=n);
+  const out={}, inc={}; NODES.forEach(n=>{out[n.id]=[];inc[n.id]=[];});
+  EDGES.forEach(([a,b])=>{ out[a].push(b); inc[b].push(a); });
+  function reach(start,adj){ const seen=new Set(),st=[start]; while(st.length){const c=st.pop(); adj[c].forEach(n=>{if(!seen.has(n)){seen.add(n);st.push(n);}});} return seen; }
+
+  const map=document.getElementById('map'), edgesSvg=document.getElementById('edges');
+  let currentWs='helios', selection=null;
+
+  function statusColor(s){ return getComputedStyle(document.documentElement).getPropertyValue('--'+s).trim(); }
+
+  function activeSet(){
+    if(!selection) return null;
+    const n=byId[selection]; const set=new Set([selection]);
+    if(n.type==='lever') reach(selection,out).forEach(x=>set.add(x));
+    else if(n.type==='outcome') reach(selection,inc).forEach(x=>set.add(x));
+    else { reach(selection,out).forEach(x=>set.add(x)); reach(selection,inc).forEach(x=>set.add(x)); }
+    return set;
+  }
+
+  function renderNodes(){
+    map.querySelectorAll('.node').forEach(n=>n.remove());
+    const active=activeSet();
+    NODES.forEach(n=>{
+      const el=document.createElement('div');
+      el.className='node '+n.type+(n.ext?' linkref':'')+(selection===n.id?' sel':'')+(active&&!active.has(n.id)?' faded':'');
+      el.style.left=n.x+'%'; el.style.top=n.y+'%'; el.style.setProperty('--st','var(--'+n.status+')');
+      el.dataset.id=n.id;
+      el.innerHTML='<div class="nlabel">'+n.label+'</div><div class="nmeta"><span class="nstat"></span>'+SL[n.status]+
+        (n.ext?'<span class="ext">'+n.ext+'</span>':'')+'</div>';
+      el.addEventListener('click',e=>{ e.stopPropagation(); selection = selection===n.id?null:n.id; renderNodes(); drawEdges(); renderPanel(); });
+      map.appendChild(el);
+    });
+  }
+
+  function drawEdges(){
+    const cr=map.getBoundingClientRect();
+    edgesSvg.setAttribute('viewBox','0 0 '+cr.width+' '+cr.height);
+    while(edgesSvg.firstChild) edgesSvg.removeChild(edgesSvg.firstChild);
+    const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+    ['on_track','needs','behind','risk'].forEach(s=>{
+      const m=document.createElementNS('http://www.w3.org/2000/svg','marker');
+      m.setAttribute('id','arr-'+s); m.setAttribute('viewBox','0 0 10 10'); m.setAttribute('refX','8'); m.setAttribute('refY','5');
+      m.setAttribute('markerWidth','7'); m.setAttribute('markerHeight','7'); m.setAttribute('orient','auto-start-reverse');
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d','M2 1L8 5L2 9'); p.setAttribute('fill','none'); p.setAttribute('stroke',statusColor(s));
+      p.setAttribute('stroke-width','1.7'); p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');
+      m.appendChild(p); defs.appendChild(m);
+    });
+    edgesSvg.appendChild(defs);
+    const active=activeSet();
+    const center=id=>{ const el=map.querySelector('.node[data-id="'+id+'"]'); const r=el.getBoundingClientRect();
+      return {x:r.left+r.width/2-cr.left, y:r.top+r.height/2-cr.top, w:r.width}; };
+    EDGES.forEach(([a,b])=>{
+      const ca=center(a), cb=center(b), src=byId[a];
+      const x1=ca.x+ca.w/2-4, x2=cb.x-cb.w/2+4, y1=ca.y, y2=cb.y;
+      const dx=Math.max(40,(x2-x1)*0.45);
+      const inChain = active ? (active.has(a)&&active.has(b)) : (src.status==='risk');
+      const op = active ? (inChain?0.95:0.10) : (inChain?0.95:0.4);
+      const w = inChain?2.6:1.5;
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d','M '+x1+' '+y1+' C '+(x1+dx)+' '+y1+' '+(x2-dx)+' '+y2+' '+x2+' '+y2);
+      p.setAttribute('fill','none'); p.setAttribute('stroke',statusColor(src.status));
+      p.setAttribute('stroke-width',w); p.setAttribute('opacity',op); p.setAttribute('stroke-linecap','round');
+      p.setAttribute('marker-end','url(#arr-'+src.status+')');
+      edgesSvg.appendChild(p);
+    });
+  }
+
+  function leversFor(id){ return [...reach(id,inc)].filter(x=>byId[x].type==='lever'); }
+  function outcomesFrom(id){ return [...reach(id,out)].filter(x=>byId[x].type==='outcome'); }
+  function names(ids){ return ids.map(i=>byId[i].label); }
+  function pill(s){ return '<span class="pill '+s+'">'+SL[s]+'</span>'; }
+
+  function renderPanel(){
+    const p=document.getElementById('panel');
+    if(!selection){
+      p.innerHTML='<div class="panel-label">Reading</div>'+
+        '<div class="panel-body">Helios&rsquo; <b>Friday SOW submission is at risk</b>, and the cause is upstream rather than in the submission itself. '+
+        'The <b>security approval is overdue</b>, which holds <b>Approvals cleared</b> at risk, which is the only thing blocking the submission, which in turn feeds the <b>Q3 renewal</b>. '+
+        'The highest-leverage move is to clear the security approval; nothing else on this map recovers the Friday outcome.</div>'+
+        '<div class="hint">Tap an outcome to trace what feeds it, or a lever to see what it moves. Tap again to clear.</div>';
+      return;
+    }
+    const n=byId[selection];
+    let body='';
+    if(n.type==='lever'){
+      const outs=outcomesFrom(selection);
+      const risky=outs.filter(o=>byId[o].status==='risk');
+      body='Moves '+names(outcomesFrom(selection).filter(o=>true)).join(', ')+' through '+
+        names([...reach(selection,out)].filter(x=>byId[x].type==='factor')).join(', ')+'. ';
+      if(risky.length) body+='It is the highest-leverage lever for <b>'+names(risky).join(', ')+'</b>, currently at risk.';
+    } else if(n.type==='outcome'){
+      const lv=leversFor(selection);
+      const facs=[...reach(selection,inc)].filter(x=>byId[x].type==='factor');
+      body='Fed by '+names(facs).join(', ')+', driven by the levers '+names(lv).join(', ')+'. ';
+      const riskLv=lv.filter(l=>byId[l].status==='risk');
+      if(byId[selection].status==='risk' && riskLv.length) body+='At risk because <b>'+names(riskLv).join(', ')+'</b> is unresolved upstream.';
+    } else {
+      body='Sits between the levers '+names(leversFor(selection)).join(', ')+' and the outcomes '+names(outcomesFrom(selection)).join(', ')+'.';
+    }
+    p.innerHTML='<div class="panel-label">'+n.type+'</div>'+
+      '<div class="panel-title">'+n.label+' '+pill(n.status)+'</div>'+
+      '<div class="panel-body">'+body+'</div>';
+  }
+
+  // workspace switcher
+  const swmenu=document.getElementById('swmenu');
+  function buildMenu(){ swmenu.innerHTML=WORKSPACES.map(w=>
+    '<div class="switem '+(w.id===currentWs?'on':'')+'" data-ws="'+w.id+'"><span class="dot" style="background:var(--'+w.status+')"></span>'+
+    '<span class="nm">'+w.name+'</span><span class="tag">'+SL[w.status]+'</span></div>').join('');
+    swmenu.querySelectorAll('.switem').forEach(it=>it.addEventListener('click',()=>{ selectWs(it.dataset.ws); swmenu.classList.remove('open'); }));
+  }
+  function selectWs(id){
+    currentWs=id; const w=WORKSPACES.find(x=>x.id===id);
+    document.getElementById('swname').textContent=w.name;
+    document.querySelector('.swbtn .dot').style.background='var(--'+w.status+')';
+    document.getElementById('wsTitle').textContent=w.name;
+    const wp=document.getElementById('wsPill'); wp.className='ws-pill pill '+w.status; wp.textContent=SL[w.status];
+    if(id==='helios'){
+      document.getElementById('canvas').style.display='block'; document.querySelector('.panel').style.display='block';
+      document.getElementById('wsRead').textContent='Three levers feed three factors into two outcomes. The Friday submission is at risk; the map shows why and which lever recovers it.';
+      selection=null; renderNodes(); drawEdges(); renderPanel();
+    } else {
+      document.getElementById('canvas').style.display='none'; 
+      const pn=document.querySelector('.panel'); pn.style.display='block';
+      document.getElementById('panel').innerHTML='<div class="panel-label">Reading</div><div class="panel-body">The causal map for <b>'+w.name+'</b> is not part of this preview. Helios is the worked example.</div>';
+      document.getElementById('wsRead').textContent='';
+    }
+    buildMenu();
+  }
+  document.getElementById('swbtn').addEventListener('click',e=>{ e.stopPropagation(); swmenu.classList.toggle('open'); });
+  document.addEventListener('click',()=>swmenu.classList.remove('open'));
+  map.addEventListener('click',()=>{ if(selection){ selection=null; renderNodes(); drawEdges(); renderPanel(); }});
+
+  const tb=document.getElementById('themeToggle');
+  tb.addEventListener('click',()=>{ const d=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme',d?'light':'dark'); tb.textContent=d?'Dark mode':'Light mode'; drawEdges(); });
+  window.addEventListener('resize',drawEdges);
+
+  buildMenu(); selectWs('helios');
+  requestAnimationFrame(()=>requestAnimationFrame(drawEdges));
+</script>
+</body>
+</html>

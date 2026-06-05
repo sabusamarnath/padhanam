@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Today, reprioritise on the fly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font-sans:'Plus Jakarta Sans',system-ui,sans-serif;
+    --ink-1:#1c1c1a;--ink-2:#5f5e5a;--ink-3:#888780;
+    --page:#eceef0;--surface-work:#ffffff;--surface-personal:#faf6ec;
+    --surface-hover-work:#f6f8fa;--surface-hover-personal:#f4eee0;
+    --hairline:rgba(26,26,25,0.12);--hairline-strong:rgba(26,26,25,0.18);
+    --navy:#2e3264;--navy-hover:#262a55;--teal:#1a8070;
+    --on_track:#3b6d11;--needs:#534ab7;--behind:#854f0b;--risk:#a32d2d;--done:#888780;
+    --warm:#b0997e;--cool:#7a8190;
+    --radius-row:6px;--radius-input:4px;
+  }
+  [data-theme="dark"]{
+    --ink-1:#f0eeea;--ink-2:#b4b2a9;--ink-3:#888780;
+    --page:#161614;--surface-work:#232321;--surface-personal:#262320;
+    --surface-hover-work:#2a2a28;--surface-hover-personal:#2d2924;
+    --hairline:rgba(240,238,234,0.12);--hairline-strong:rgba(240,238,234,0.20);
+    --navy:#3b4080;--navy-hover:#464c95;--teal:#2ba692;
+    --on_track:#8ea868;--needs:#9f9ad0;--behind:#d3a05a;--risk:#d68e8e;--done:#8a8980;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);font-size:14px;line-height:1.5;color:var(--ink-1);
+    background:var(--page);-webkit-font-smoothing:antialiased;min-height:100vh;}
+  .topbar{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    background:var(--surface-work);border-bottom:1px solid var(--hairline);position:sticky;top:0;z-index:10;}
+  .topbar .brand{font-size:13px;font-weight:600;letter-spacing:0.02em;}
+  .ctrl button{font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--ink-2);background:none;border:1px solid var(--hairline-strong);border-radius:var(--radius-input);padding:3px 9px;cursor:pointer;}
+
+  .wrap{max-width:660px;margin:0 auto;padding:26px 20px 90px;}
+  .day-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;}
+  .day-head h1{font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+  .day-head .date{font-size:13px;color:var(--ink-2);}
+
+  .orderbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-3);}
+  .orderbar .mode{display:inline-flex;align-items:center;gap:6px;}
+  .orderbar .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);}
+  .orderbar.custom .dot{background:var(--teal);}
+  .orderbar .rerank{margin-left:auto;color:var(--ink-2);cursor:pointer;border:1px solid var(--hairline-strong);
+    background:none;font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
+    padding:3px 9px;border-radius:var(--radius-input);}
+  .orderbar .reset{margin-left:10px;color:var(--teal);cursor:pointer;border:none;background:none;
+    font:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;display:none;}
+  .orderbar.custom .reset{display:inline;}
+  .pin-mark{cursor:default;}
+
+  .list{display:flex;flex-direction:column;gap:8px;}
+  .item{}
+  .row{display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:var(--radius-row);
+    border:1px solid var(--hairline);transition:background 0.14s ease,border-color 0.14s ease,box-shadow 0.14s ease;}
+  .row[data-tier="work"]{background:var(--surface-work);}
+  .row[data-tier="personal"]{background:var(--surface-personal);}
+  .row[data-tier="work"]:hover{background:var(--surface-hover-work);}
+  .row[data-tier="personal"]:hover{background:var(--surface-hover-personal);}
+  .row.dragging{opacity:0.5;}
+  .row.drop-before{box-shadow:inset 0 2px 0 var(--teal);}
+  .row.drop-after{box-shadow:inset 0 -2px 0 var(--teal);}
+
+  .grip{flex-shrink:0;cursor:grab;color:var(--ink-3);display:grid;place-items:center;width:16px;height:18px;}
+  .grip:active{cursor:grabbing;}
+  .grip svg{width:10px;height:16px;}
+  .cue{flex-shrink:0;display:inline-flex;align-items:center;gap:2px;color:var(--tint);}
+  .cue svg{width:16px;height:16px;}
+  .cue .ci{font-size:9px;font-weight:700;}
+  .main{flex:1;min-width:0;}
+  .title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .title .pin-mark{color:var(--teal);margin-right:5px;}
+  .title .park-mark{display:inline-grid;place-items:center;width:15px;height:15px;border:1.4px solid var(--ink-3);
+    border-radius:3px;font-size:9px;font-weight:700;color:var(--ink-3);margin-right:6px;vertical-align:-2px;}
+  .meta{font-size:12px;color:var(--ink-2);margin-top:2px;}
+  .pill{flex-shrink:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;
+    padding:3px 9px;border-radius:9999px;white-space:nowrap;}
+  .pill.on_track{background:color-mix(in srgb,var(--on_track) 16%,transparent);color:var(--on_track);}
+  .pill.needs{background:color-mix(in srgb,var(--needs) 16%,transparent);color:var(--needs);}
+  .pill.behind{background:color-mix(in srgb,var(--behind) 16%,transparent);color:var(--behind);}
+  .pill.risk{background:color-mix(in srgb,var(--risk) 16%,transparent);color:var(--risk);}
+  .pill.done{background:color-mix(in srgb,var(--done) 18%,transparent);color:var(--done);}
+
+  .acts{flex-shrink:0;display:flex;align-items:center;gap:2px;}
+  .acts button{background:none;border:none;color:var(--ink-3);cursor:pointer;padding:4px;border-radius:var(--radius-input);
+    display:grid;place-items:center;}
+  .acts button:hover{color:var(--ink-1);background:color-mix(in srgb,var(--ink-3) 12%,transparent);}
+  .acts button.on{color:var(--teal);}
+  .acts svg{width:15px;height:15px;}
+
+  .flag{margin-top:4px;margin-left:26px;display:flex;align-items:center;gap:10px;padding:8px 11px;
+    border-left:3px solid var(--risk);background:color-mix(in srgb,var(--risk) 8%,transparent);
+    border-radius:0 var(--radius-input) var(--radius-input) 0;}
+  .flag .ftxt{flex:1;font-size:12.5px;color:var(--ink-1);}
+  .flag .ftxt b{font-weight:600;}
+  .flag .fbtn{flex-shrink:0;font:inherit;font-size:11px;font-weight:600;color:var(--risk);background:none;
+    border:1px solid color-mix(in srgb,var(--risk) 40%,transparent);border-radius:var(--radius-input);padding:3px 9px;cursor:pointer;}
+  .flag.seq{border-left-color:var(--behind);background:color-mix(in srgb,var(--behind) 8%,transparent);}
+  .flag.seq .fbtn{color:var(--behind);border-color:color-mix(in srgb,var(--behind) 40%,transparent);}
+  @media (prefers-reduced-motion:reduce){.row{transition:none;}}
+</style>
+</head>
+<body>
+  <div class="topbar"><div class="brand">Today</div>
+    <span class="ctrl"><button id="themeToggle">Dark mode</button></span></div>
+  <div class="wrap">
+    <div class="day-head"><h1>Today</h1><span class="date">Wednesday, 4 June</span></div>
+    <div class="orderbar" id="orderbar">
+      <span class="mode"><span class="dot"></span><span id="modeText">Suggested order</span></span>
+      <button class="rerank" id="rerank">Re-rank</button>
+      <button class="reset" id="reset">Reset to suggested</button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+
+<script>
+  const I_WORK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const I_HOME='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>';
+  const I_HEART='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z"/></svg>';
+  const I_FRIENDS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.6a3 3 0 0 1 0 5.4"/><path d="M17.5 14.6a5.5 5.5 0 0 1 3 5.4"/></svg>';
+  const GRIP='<svg viewBox="0 0 10 16"><g fill="currentColor"><circle cx="2" cy="3" r="1.3"/><circle cx="8" cy="3" r="1.3"/><circle cx="2" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="2" cy="13" r="1.3"/><circle cx="8" cy="13" r="1.3"/></g></svg>';
+  const CHEV_UP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
+  const CHEV_DN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+  const PARK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9.5 17V8h3a2.3 2.3 0 0 1 0 4.6h-3" stroke-linecap="round"/></svg>';
+  const PIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3H7l3-3-1-6z"/></svg>';
+  const CAT={work:{icon:I_WORK,tint:'var(--cool)',tier:'work'},health:{icon:I_HEART,tint:'var(--warm)',tier:'personal'},
+    family:{icon:I_HOME,tint:'var(--warm)',tier:'personal'},friends:{icon:I_FRIENDS,tint:'var(--warm)',tier:'personal'}};
+  const SL={on_track:'On track',needs:'Needs you',behind:'Behind',risk:'At risk',done:'Done'};
+
+  // SUGGESTED ORDER = the system's ranking, levers first.
+  const ITEMS=[
+    {id:'sec',cat:'work',title:'Approve security policy',meta:'Internal · overdue',status:'risk',
+      blocks:['sow'], lever:'It blocks the Helios SOW submission on Friday.'},
+    {id:'sow',cat:'work',init:'H',title:'Helios: SOW change request',meta:'Contract · submit Friday',status:'needs'},
+    {id:'priya',cat:'work',title:'1:1 with Priya',meta:'Team · 2:00pm',status:'needs'},
+    {id:'dentist',cat:'health',title:'Dentist, 4:30pm',meta:'Health · across town',status:'needs'},
+    {id:'nw',cat:'work',init:'N',title:'Northwind: monthly status pack',meta:'Contract · slipping',status:'behind'},
+    {id:'recital',cat:'family',title:"Aanya's recital, leave by 6",meta:'Family · this evening',status:'needs'},
+    {id:'sam',cat:'friends',title:'Call Sam back',meta:'Friends · owed a reply',status:'needs'},
+    {id:'hiring',cat:'work',title:'Quarterly hiring plan',meta:'Internal · complete',status:'done'},
+  ];
+  const byId={}; ITEMS.forEach(it=>byId[it.id]=it);
+  const SUGGESTED=ITEMS.map(it=>it.id);
+  const suggIx={}; SUGGESTED.forEach((id,i)=>suggIx[id]=i);
+  let order=[...SUGGESTED];
+  const pinned=new Set(), parkedSet=new Set();
+
+  const list=document.getElementById('list');
+  function cueHTML(it){ const c=CAT[it.cat]; return '<span class="cue" style="--tint:'+c.tint+'">'+c.icon+(it.init?'<span class="ci">'+it.init+'</span>':'')+'</span>'; }
+
+  function isCustom(){ return JSON.stringify(order)!==JSON.stringify(SUGGESTED) || pinned.size>0 || parkedSet.size>0; }
+
+  function render(){
+    list.innerHTML='';
+    order.forEach((id,idx)=>{
+      const it=byId[id], c=CAT[it.cat];
+      const wrap=document.createElement('div'); wrap.className='item';
+      const row=document.createElement('div');
+      row.className='row'; row.dataset.tier=c.tier; row.dataset.id=id; row.draggable=true;
+      const pinMark = pinned.has(id) ? '<span class="pin-mark">&#9679;</span>' : '';
+      const parkMark = parkedSet.has(id) ? '<span class="park-mark">P</span>' : '';
+      row.innerHTML=
+        '<span class="grip" title="Drag to reorder">'+GRIP+'</span>'+
+        cueHTML(it)+
+        '<div class="main"><div class="title">'+pinMark+parkMark+it.title+'</div><div class="meta">'+it.meta+'</div></div>'+
+        '<span class="pill '+it.status+'">'+SL[it.status]+'</span>'+
+        '<span class="acts">'+
+          '<button data-act="up" aria-label="Move up">'+CHEV_UP+'</button>'+
+          '<button data-act="down" aria-label="Move down">'+CHEV_DN+'</button>'+
+          '<button data-act="pin" class="'+(pinned.has(id)?'on':'')+'" title="Pin in place" aria-label="Pin in place">'+PIN+'</button>'+
+          '<button data-act="park" class="'+(parkedSet.has(id)?'on':'')+'" aria-label="Park">'+PARK+'</button>'+
+        '</span>';
+      wrap.appendChild(row);
+
+      const warn=warnFor(id,idx);
+      if(warn){
+        const flag=document.createElement('div'); flag.className='flag '+warn.kind;
+        flag.innerHTML='<span class="ftxt">'+warn.text+'</span><button class="fbtn" data-up="'+id+'">Move up</button>';
+        wrap.appendChild(flag);
+      }
+      list.appendChild(wrap);
+    });
+    document.getElementById('orderbar').classList.toggle('custom', !!isCustom());
+    document.getElementById('modeText').textContent = isCustom() ? 'Your order' : 'Suggested order';
+    wire();
+  }
+
+  function warnFor(id,idx){
+    const it=byId[id]; if(!it.lever) return null;
+    if(parkedSet.has(id) || isParked(id,idx)) return {kind:'park', text:'You have parked <b>'+it.title+'</b> down the list. '+it.lever};
+    const blockedAbove=(it.blocks||[]).some(bid=>{ const bi=order.indexOf(bid); return bi>=0 && bi<idx; });
+    if(blockedAbove) return {kind:'seq', text:'<b>'+it.title+'</b> now sits after the Helios work it blocks. '+it.lever};
+    return null;
+  }
+  function isParked(id,idx){
+    const it=byId[id]; if(!it.lever) return false;
+    if(idx >= Math.ceil(order.length/2)) return true;            // sunk into the bottom half
+    for(let k=0;k<idx;k++){ const st=byId[order[k]].status; if(st==='done'||st==='on_track') return true; } // lower-priority work jumped ahead of it
+    return false;
+  }
+  function move(id,dir){ const i=order.indexOf(id), j=i+dir; if(j<0||j>=order.length) return;
+    order.splice(i,1); order.splice(j,0,id); render(); }
+  function pin(id){ if(pinned.has(id)){ pinned.delete(id); } else { pinned.add(id); parkedSet.delete(id); } render(); }
+  function rerank(){
+    const n=order.length, slot={}; order.forEach((id,i)=>{ if(pinned.has(id)) slot[id]=i; });
+    const parked=SUGGESTED.filter(id=>parkedSet.has(id)&&!pinned.has(id));
+    const flowing=SUGGESTED.filter(id=>!pinned.has(id)&&!parkedSet.has(id));
+    const seq=flowing.concat(parked);
+    const res=new Array(n).fill(null);
+    Object.keys(slot).forEach(id=>{ res[slot[id]]=id; });
+    let k=0; for(let i=0;i<n;i++){ if(res[i]===null) res[i]=seq[k++]; }
+    order=res; render();
+  }
+  function park(id){ if(parkedSet.has(id)){ parkedSet.delete(id); } else { parkedSet.add(id); pinned.delete(id);
+    order.splice(order.indexOf(id),1); order.push(id); } render(); }
+  function moveTop(id){ order.splice(order.indexOf(id),1); order.unshift(id); parkedSet.delete(id); render(); }
+
+  function wire(){
+    list.querySelectorAll('.acts button').forEach(b=>{
+      const id=b.closest('.row').dataset.id, act=b.dataset.act;
+      b.addEventListener('click',()=>{ if(act==='up')move(id,-1); else if(act==='down')move(id,1); else if(act==='pin')pin(id); else if(act==='park')park(id); });
+    });
+    list.querySelectorAll('.fbtn').forEach(b=>b.addEventListener('click',()=>moveTop(b.dataset.up)));
+    list.querySelectorAll('.row').forEach(row=>{
+      row.addEventListener('dragstart',e=>{ dragId=row.dataset.id; row.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+      row.addEventListener('dragend',()=>{ row.classList.remove('dragging'); clearDrop(); });
+      row.addEventListener('dragover',e=>{ e.preventDefault(); clearDrop();
+        const r=row.getBoundingClientRect(); const after=e.clientY>r.top+r.height/2;
+        row.classList.add(after?'drop-after':'drop-before'); });
+      row.addEventListener('drop',e=>{ e.preventDefault();
+        const r=row.getBoundingClientRect(); const after=e.clientY>r.top+r.height/2;
+        const targetId=row.dataset.id; if(targetId===dragId){ clearDrop(); return; }
+        order.splice(order.indexOf(dragId),1);
+        let t=order.indexOf(targetId); if(after)t++; order.splice(t,0,dragId);
+        render(); });
+    });
+  }
+  let dragId=null;
+  function clearDrop(){ list.querySelectorAll('.drop-before,.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after')); }
+
+  document.getElementById('rerank').addEventListener('click',rerank);
+  document.getElementById('reset').addEventListener('click',()=>{ order=[...SUGGESTED]; pinned.clear(); parkedSet.clear(); render(); });
+  document.getElementById('themeToggle').addEventListener('click',e=>{ const d=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme',d?'light':'dark'); e.target.textContent=d?'Dark mode':'Light mode'; });
+
+  render();
+</script>
+</body>
+</html>
