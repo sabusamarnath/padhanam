@@ -190,6 +190,32 @@ Activates at Phase 2 framing.
 
 **The specific D-entry lands when ceiling enforcement enters the codebase.** Premature commitment to specific threshold percentages, throttling mechanisms, or routing tiers ahead of integration is paper architecture.
 
+### Per-tenant tier-model endpoint override in the tenant registry
+
+Activates at the second-tenant threshold (a tenant needing a different tier model than the
+global default), per the two-threshold rule.
+
+**The latency-tier model selection (D122) is global env, not a per-tenant registry value.**
+`InferenceSettings` at `padhanam/config/inference.py` pins `real_time_required_model`
+(`gpt-4o-mini`, S48a) and `async_tolerant_model` as process-global configuration, overridable only
+by the `INFERENCE_*` env vars. The D13 principle names model endpoints as a per-tenant decision
+that lives in the tenant registry; the as-built wiring carries the tier model globally with no
+per-tenant override. For single-operator Phase 2-A dogfooding (one real tenant + the deterministic
+a/b test tenants, all sharing one stack) this is operationally correct and pre-building a per-tenant
+override would be paper architecture against the two-threshold rule.
+
+**What defers.** A per-tenant tier-model endpoint override resolved from the tenant registry (so
+tenant X's `REAL_TIME_REQUIRED` can route to a different model than tenant Y's), mirroring the
+per-tenant jurisdiction/identity/classification values the registry already carries.
+
+**Activation trigger.** The first second tenant that needs a different tier model than the global
+default (a different jurisdiction's hosted-model constraint, a cost-tier difference, or a
+data-residency model-endpoint requirement), or Phase 2 production framing — whichever is first.
+Surfaced at P16/S59 (the conversational surface's REAL_TIME call made the global-vs-per-tenant gap
+visible). References D13 (per-tenant model endpoints in the registry), D122 (latency-tier routing),
+the two-threshold rule, and the cost-ceilings/multi-tier-routing deferral above (the enforcement
+architecture that the per-tenant override composes with).
+
 ### Multi-currency cost reporting
 
 Activates at Phase 2 framing when the first non-USD-jurisdiction tenant enters scope.

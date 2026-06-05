@@ -2925,6 +2925,8 @@ S59 turned the daily driver's open-into-cell from the S58 read-only context pane
 
 - Close state: **clean at code+test level; live browser verification (AC2/AC3/AC4/AC6-live) operator-gated** per the no-docker procedural-then-executed precedent. If the operator's Stage-3 run surfaces a gap (a sketch-built dead path, a title-resolution miss, a felt-quality issue), that is recorded as a forward correction the way the S58 open-into-cell bug was.
 
+- Selection note (D158 correction, 2026-06-05): S59 was selected on the structural read-only dead-end (the D157 tiebreaker), not by dogfooding evidence, and lands ahead of the pending Phase 2-A week-of-use gate (D156). D158's reasoning clause was amended same-day to drop a "dogfooding confirmed the frustration" over-claim the timeline does not support (dogfood-setup provisioned and verified the personal tenant but never used the BEHIND surface; one day separated it from the S59 brief). The next move after Stage-3 is the dogfooding week, not S60 — building a third unproven surface ahead of the gate is the drift to watch.
+
 methodology: Reconciliation-shapes-the-build held again — reading the *real* `_run_mirror_conversation_cell` (not the brief's framing) is what settled F2 cleanly: the messaging path persists `cell_payload` only because WhatsApp has no client state-holder, which is exactly the asymmetry that makes the web path's client-threading the honest minimal choice rather than a shortcut. No new methodology candidate; the live-substrate-verification-gate candidate gains a live-model-call face (above), still held for the Phase 2-A close audit.
 
 ```
