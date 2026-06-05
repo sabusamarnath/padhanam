@@ -44,6 +44,7 @@ from apps.api._messaging_wiring import MessagingComposition
 from apps.api.middleware import AuthenticationMiddleware, CorrelationIdMiddleware
 from apps.api.routers import agent as agent_router
 from apps.api.routers import audit as audit_router
+from apps.api.routers import conversation as conversation_router
 from apps.api.routers import daily_driver as daily_driver_router
 from apps.api.routers import health as health_router
 from apps.api.routers import inference as inference_router
@@ -778,6 +779,13 @@ def create_app(
     # served operator surface GET /app (auth-exempt per _PUBLIC_PATHS).
     app.include_router(daily_driver_router.router)
     app.include_router(daily_driver_router.ui_router)
+
+    # S59 (D158): the live conversational-turn-over-HTTP surface — POST
+    # /api/v1/daily-driver/conversation/open and /turn run the existing
+    # portfolio mirror-conversation cell over HTTP (principal-derived
+    # actor context; stateless per turn, the cell threaded via the shared
+    # messaging composition). Replaces the S58 read-only open-into-context.
+    app.include_router(conversation_router.router)
 
     # Composition exposure: routers fetch dependencies from app.state.
     app.state.inference_port = compositions.inference_port
