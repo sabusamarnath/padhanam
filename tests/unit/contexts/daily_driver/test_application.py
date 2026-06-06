@@ -18,12 +18,14 @@ from contexts.daily_driver.application import (
     list_today,
     log_commitment_completion,
     mark_item_done,
+    record_observed_outcome,
     set_today_order,
 )
 from contexts.daily_driver.domain.commitment import (
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
+    OutcomeStatus,
 )
 from contexts.daily_driver.domain.day import DayItemState, item_key
 from contexts.daily_driver.domain.today_item import (
@@ -70,6 +72,29 @@ class FakeCommitmentRepository:
 
     async def get_commitment(self, *, tenant_context, commitment_id):
         return self.commitments.get(commitment_id)
+
+    async def record_observed_outcome(
+        self,
+        *,
+        tenant_context,
+        commitment_id,
+        observed_outcome,
+        outcome_status,
+        observed_at,
+    ):
+        existing = self.commitments.get(commitment_id)
+        if existing is None:
+            return None
+        from dataclasses import replace
+
+        updated = replace(
+            existing,
+            observed_outcome=observed_outcome,
+            outcome_status=outcome_status,
+            observed_at=observed_at,
+        )
+        self.commitments[commitment_id] = updated
+        return updated
 
     async def list_with_activity(self, *, tenant_context):
         out = []
@@ -143,6 +168,110 @@ def test_create_commitment_persists_and_returns() -> None:
     assert commitment.id in repo.commitments
     assert commitment.tenant_id == UUID(_TENANT)
     assert commitment.authored_by_user_id == "operator-001"
+
+
+def test_create_commitment_captures_expected_outcome() -> None:
+    repo = FakeCommitmentRepository()
+    commitment = asyncio.run(
+        create_commitment(
+            repository=repo,
+            actor=_actor(),
+            name="Weekly 1:1",
+            expected_interval_days=7,
+            expected_outcome="reports feel supported",
+        )
+    )
+    assert commitment.expected_outcome == "reports feel supported"
+    assert repo.commitments[commitment.id].expected_outcome == (
+        "reports feel supported"
+    )
+
+
+def test_record_observed_outcome_sets_status_and_returns_updated() -> None:
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    updated = asyncio.run(
+        record_observed_outcome(
+            repository=repo,
+            actor=_actor(),
+            commitment_id=c.id,
+            observed_outcome="only partly happened",
+            outcome_status=OutcomeStatus.PARTIAL,
+        )
+    )
+    assert updated is not None
+    assert updated.observed_outcome == "only partly happened"
+    assert updated.outcome_status is OutcomeStatus.PARTIAL
+    assert updated.observed_at is not None
+
+
+def test_record_observed_outcome_requires_authorisation() -> None:
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    with pytest.raises(AuthorisationDenied):
+        asyncio.run(
+            record_observed_outcome(
+                repository=repo,
+                actor=_actor(authorised=False),
+                commitment_id=c.id,
+                observed_outcome="x",
+                outcome_status=OutcomeStatus.MET,
+            )
+        )
+
+
+def test_record_observed_outcome_unknown_returns_none() -> None:
+    repo = FakeCommitmentRepository()
+    result = asyncio.run(
+        record_observed_outcome(
+            repository=repo,
+            actor=_actor(),
+            commitment_id=uuid4(),
+            observed_outcome=None,
+            outcome_status=OutcomeStatus.DROPPED,
+        )
+    )
+    assert result is None
+
+
+def test_list_today_flags_quiet_commitment_as_drop_candidate() -> None:
+    repo = FakeCommitmentRepository()
+    _seed_overdue(repo)  # created 2026-05-01 → quiet well past 21 days
+    view = asyncio.run(
+        list_today(
+            open_cases_reader=FakeOpenCasesReader(()),
+            commitment_repository=repo,
+            day_repository=FakeDayRepository(),
+            actor=_actor(),
+            drop_candidate_quiet_days=21,
+        )
+    )
+    assert view.items[0].drop_candidate is True
+
+
+def test_dropping_clears_the_drop_candidate_flag() -> None:
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    asyncio.run(
+        record_observed_outcome(
+            repository=repo,
+            actor=_actor(),
+            commitment_id=c.id,
+            observed_outcome=None,
+            outcome_status=OutcomeStatus.DROPPED,
+        )
+    )
+    view = asyncio.run(
+        list_today(
+            open_cases_reader=FakeOpenCasesReader(()),
+            commitment_repository=repo,
+            day_repository=FakeDayRepository(),
+            actor=_actor(),
+            drop_candidate_quiet_days=21,
+        )
+    )
+    assert view.items[0].drop_candidate is False
+    assert view.items[0].outcome_status == "dropped"
 
 
 def test_create_commitment_requires_authorisation() -> None:

@@ -20,6 +20,7 @@ from shared_kernel import ActorContext, TenantId
 from shared_kernel.authorisation import (
     DAILY_DRIVER_COMMITMENT_COMPLETE,
     DAILY_DRIVER_COMMITMENT_CREATE,
+    DAILY_DRIVER_COMMITMENT_OBSERVE,
     DAILY_DRIVER_TODAY_READ,
     DAILY_DRIVER_TODAY_WRITE,
     INTAKE_RECORD_CREATE,
@@ -179,6 +180,7 @@ def test_get_actor_context_resolves_the_phase_2a_permissions() -> None:
             DAILY_DRIVER_TODAY_WRITE,
             DAILY_DRIVER_COMMITMENT_CREATE,
             DAILY_DRIVER_COMMITMENT_COMPLETE,
+            DAILY_DRIVER_COMMITMENT_OBSERVE,
         }
     )
 

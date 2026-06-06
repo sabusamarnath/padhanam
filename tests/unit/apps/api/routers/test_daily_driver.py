@@ -56,6 +56,29 @@ class _FakeCommitmentRepo:
     async def get_commitment(self, *, tenant_context, commitment_id):
         return self.commitments.get(commitment_id)
 
+    async def record_observed_outcome(
+        self,
+        *,
+        tenant_context,
+        commitment_id,
+        observed_outcome,
+        outcome_status,
+        observed_at,
+    ):
+        from dataclasses import replace
+
+        existing = self.commitments.get(commitment_id)
+        if existing is None:
+            return None
+        updated = replace(
+            existing,
+            observed_outcome=observed_outcome,
+            outcome_status=outcome_status,
+            observed_at=observed_at,
+        )
+        self.commitments[commitment_id] = updated
+        return updated
+
     async def list_with_activity(self, *, tenant_context):
         out = []
         for c in self.commitments.values():
@@ -91,12 +114,13 @@ class _FakeOpenCases:
         return self._cases
 
 
-def _client(commit_repo, day_repo, open_cases) -> TestClient:
+def _client(commit_repo, day_repo, open_cases, *, quiet_days=None) -> TestClient:
     app = FastAPI()
     app.include_router(daily_driver_router.router)
     app.state.daily_driver_commitment_repository = commit_repo
     app.state.daily_driver_day_repository = day_repo
     app.state.daily_driver_open_cases_reader = open_cases
+    app.state.daily_driver_drop_candidate_quiet_days = quiet_days
     app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
@@ -147,6 +171,101 @@ def test_complete_unknown_commitment_404() -> None:
     client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
     res = client.post(f"/api/v1/daily-driver/commitments/{uuid4()}/completions")
     assert res.status_code == 404
+
+
+# --- S61 (D162): the expected-versus-observed loop over HTTP --------
+
+
+def test_create_with_expected_outcome_round_trips() -> None:
+    repo = _FakeCommitmentRepo()
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.post(
+        "/api/v1/daily-driver/commitments",
+        json={
+            "name": "Mentor Priya",
+            "expected_interval_days": 7,
+            "expected_outcome": "she leads the migration",
+        },
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["expected_outcome"] == "she leads the migration"
+
+
+def test_record_observed_outcome_route() -> None:
+    repo = _FakeCommitmentRepo()
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
+    created = client.post(
+        "/api/v1/daily-driver/commitments",
+        json={"name": "Mentor Priya", "expected_interval_days": 7},
+    )
+    cid = created.json()["id"]
+    res = client.post(
+        f"/api/v1/daily-driver/commitments/{cid}/observed-outcome",
+        json={"observed_outcome": "she led it", "outcome_status": "met"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["observed_outcome"] == "she led it"
+    assert body["outcome_status"] == "met"
+    assert body["observed_at"] is not None
+
+
+def test_record_observed_outcome_unknown_404() -> None:
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.post(
+        f"/api/v1/daily-driver/commitments/{uuid4()}/observed-outcome",
+        json={"outcome_status": "dropped"},
+    )
+    assert res.status_code == 404
+
+
+def test_record_observed_outcome_rejects_unknown_status() -> None:
+    repo = _FakeCommitmentRepo()
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
+    created = client.post(
+        "/api/v1/daily-driver/commitments",
+        json={"name": "X", "expected_interval_days": 7},
+    )
+    cid = created.json()["id"]
+    res = client.post(
+        f"/api/v1/daily-driver/commitments/{cid}/observed-outcome",
+        json={"outcome_status": "abandoned"},
+    )
+    assert res.status_code == 422
+
+
+def test_today_flags_drop_candidate_when_configured() -> None:
+    repo = _FakeCommitmentRepo()
+    quiet = Commitment(
+        id=uuid4(),
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        name="Old habit",
+        expected_interval_days=7,
+        authored_by_user_id="operator-001",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    repo.commitments[quiet.id] = quiet
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()), quiet_days=21)
+    items = client.get("/api/v1/daily-driver/today").json()["items"]
+    assert items[0]["drop_candidate"] is True
+
+
+def test_today_no_drop_candidate_when_threshold_unset() -> None:
+    repo = _FakeCommitmentRepo()
+    quiet = Commitment(
+        id=uuid4(),
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        name="Old habit",
+        expected_interval_days=7,
+        authored_by_user_id="operator-001",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    repo.commitments[quiet.id] = quiet
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
+    items = client.get("/api/v1/daily-driver/today").json()["items"]
+    assert items[0]["drop_candidate"] is False
 
 
 def test_mark_done_and_reorder_persist() -> None:

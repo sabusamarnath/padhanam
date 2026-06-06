@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 
 from contexts.daily_driver.domain.staleness import (
     days_elapsed,
+    is_drop_candidate,
     is_overdue,
     overdue_by_days,
+    quiet_for_days,
 )
 
 
@@ -30,3 +32,27 @@ def test_is_overdue_at_boundary() -> None:
 def test_overdue_by_days_zero_when_on_track() -> None:
     assert overdue_by_days(last_activity_at=_dt(1), expected_interval_days=7, now=_dt(8)) == 0
     assert overdue_by_days(last_activity_at=_dt(1), expected_interval_days=7, now=_dt(11)) == 3
+
+
+# --- S61 (D162): the drop-candidate quiet window -------------------
+
+
+def test_quiet_for_days_counts_from_last_progress() -> None:
+    assert quiet_for_days(last_progress_at=_dt(1), now=_dt(11)) == 10
+
+
+def test_is_drop_candidate_inclusive_boundary() -> None:
+    # threshold N=10: quiet for exactly 10 days is a candidate (>=);
+    # 9 days is just inside, not a candidate.
+    assert (
+        is_drop_candidate(
+            last_progress_at=_dt(1), quiet_days_threshold=10, now=_dt(11)
+        )
+        is True
+    )
+    assert (
+        is_drop_candidate(
+            last_progress_at=_dt(1), quiet_days_threshold=10, now=_dt(10)
+        )
+        is False
+    )

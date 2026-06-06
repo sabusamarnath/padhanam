@@ -72,6 +72,30 @@ def test_commitment_adapter_rejects_cross_tenant_list() -> None:
         asyncio.run(adapter.list_with_activity(tenant_context=_ctx("tenant-b")))
 
 
+def test_commitment_adapter_rejects_cross_tenant_observed_outcome() -> None:
+    # S61 (D162): the observed-outcome write is bound-tenant too.
+    import datetime as _dt
+
+    from contexts.daily_driver.domain.commitment import OutcomeStatus
+
+    adapter = PostgresCommitmentRepository(
+        per_tenant_sessionmaker_resolver=_unreachable_resolver,
+        bound_tenant_id=TenantId("tenant-a"),
+    )
+    with pytest.raises(ValueError, match="does not match adapter's bound tenant"):
+        asyncio.run(
+            adapter.record_observed_outcome(
+                tenant_context=_ctx("tenant-b"),
+                commitment_id=uuid4(),
+                observed_outcome="x",
+                outcome_status=OutcomeStatus.MET,
+                observed_at=_dt.datetime(
+                    2026, 6, 6, tzinfo=_dt.timezone.utc
+                ),
+            )
+        )
+
+
 def test_day_adapter_rejects_cross_tenant_get() -> None:
     adapter = PostgresDayRepository(
         per_tenant_sessionmaker_resolver=_unreachable_resolver,
