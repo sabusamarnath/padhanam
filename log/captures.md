@@ -1341,3 +1341,13 @@ Source: the S58 daily-driver first-slice live run against the running stack. The
 
   - triaged: 2026-06-04
   - resolution: bug fixed and live-re-verified in-build (`apps/api/static/daily_driver.html`, `50ac356`); the smoke doc's `psql` role corrected (`padhanam`→`tenant_a`) under the same green-signal-integrity theme. The **live-substrate-verification-gate** candidate (now carrying the browser-boundary clause) remains pending for the Phase 2-A close audit (strategic mode).
+
+## 2026-06-06 — [S60c] Pre-existing wall-clock-dependent test failure in the calendar conversation cell
+
+Source: the S60c full-suite run. `tests/unit/apps/api/test_conversation_cell.py::test_advance_calendar_turn_answers_from_the_store` fails (`'Board call' not in 'No meetings in the today window.'`). Confirmed **pre-existing and unrelated to S60c**: it reproduces on a clean tree with the S60c working changes stashed. The fixture pins `_NOW = datetime(2026,6,5,...)` and the meeting `start_at = datetime(2026,6,5,15,...)`, but the calendar cell's today-window filter reads the **real wall clock** (now 2026-06-06), so the fixture meeting falls outside "today" and the cell answers empty. The test was green on 2026-06-05 (when S60/S60b were built) and broke at the next midnight UTC — a date-coupled test with no injected clock.
+
+- This is the **wall-clock-coupled-test** shape: a green that depends on the run date rather than on the behaviour under test. Sibling to the dead-or-defensive-path latent-bug shape (a green that does not exercise the live path) — both are green-signal-integrity failures. The proper fix is an injected clock / frozen-time seam into the calendar cell's today-window (a calendar-context change, out of S60c's scope — S60c is auth/login only and touches no calendar code).
+- Recorded so the close marker's test line is honest: S60c adds **0 new failures** (2278 passed incl. 34 new S60c tests; the 1 failure is this pre-existing date-coupled test). Candidate held only if a second wall-clock-coupled test surfaces (recurrence) — a single instance does not meet the promotion bar.
+
+  - triaged: 2026-06-06
+  - resolution: not fixed in S60c (different context, needs a clock seam into the calendar cell); logged here so the next calendar-context session (or the dogfooding-week date-sensitivity sweep) picks it up. No S60c regression.
