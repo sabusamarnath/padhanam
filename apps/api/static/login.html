@@ -114,9 +114,17 @@
 
     document.getElementById("continueBtn").onclick = login;
     document.getElementById("cred").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+    // D161, S60c: start the server-side Google OIDC flow. The initiate route
+    // redirects to Google; the callback mints the same `dd_token` and lands
+    // in /app. If google is operator-gated (not configured), the initiate
+    // route returns 503 and the redirect lands back here showing the reason.
     document.getElementById("googleBtn").onclick = () => {
-      err.textContent = "Google sign-in is operator-gated for this stack — use the passphrase.";
+      err.textContent = "";
+      window.location.href = API + "/auth/google/initiate";
     };
+    // Surface a failure carried back from the OIDC callback bridge.
+    const loginErr = sessionStorage.getItem("dd_login_error");
+    if (loginErr) { err.textContent = loginErr; sessionStorage.removeItem("dd_login_error"); }
     const tb = document.getElementById("themeToggle");
     tb.onclick = () => {
       const dark = document.documentElement.getAttribute("data-theme") === "dark";

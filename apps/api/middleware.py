@@ -80,6 +80,13 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
         "/",
         "/login",
         "/api/v1/auth/login",
+        # D161, S60c: the Google OIDC login routes. The initiate redirect and
+        # the callback are pre-auth browser GETs (a browser GET cannot carry a
+        # bearer); the OAuth state token + the email→tenant allowlist are the
+        # gate, and the callback mints the same bearer JWT the data routes
+        # require. The data routes stay bearer-authed.
+        "/api/v1/auth/google/initiate",
+        "/api/v1/auth/google/callback",
     }
 )
 

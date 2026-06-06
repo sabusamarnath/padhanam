@@ -226,6 +226,11 @@ class AppCompositions:
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
     # google operator-gated).
     login_verifier: object | None = None
+    # S60c (D161): the Google OIDC client (initiate/callback mechanics) and
+    # the Google login verifier (callback resolves the code → identity →
+    # tenant through it). Both None until the OAuth client is configured.
+    google_oidc: object | None = None
+    google_login_verifier: object | None = None
     # S60b (D160): the calendar connect initiator (Nango, operator-gated)
     # and the connect-callback connection store (writes the per-tenant
     # connection + triggers the first sync).
@@ -607,9 +612,23 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         domain_tag=_calendar_domain_tag,
     )
-    from apps.api._auth_login_wiring import build_login_verifier
+    from apps.api._auth_login_wiring import (
+        build_google_login_verifier,
+        build_login_verifier,
+    )
+    from apps.api._google_oidc import build_google_oidc
 
-    login_verifier = build_login_verifier()
+    # S60c (D161): the Google OIDC login. build_google_oidc returns None until
+    # the OAuth client is configured (operator-gated); the verifier then raises
+    # and the initiate/callback routes 503. login_verifier still selects the
+    # passphrase route's backend (dev wired by default).
+    google_oidc = build_google_oidc()
+    google_login_verifier = (
+        build_google_login_verifier(oidc=google_oidc)
+        if google_oidc is not None
+        else None
+    )
+    login_verifier = build_login_verifier(oidc=google_oidc)
     from apps.api._calendar_connect_wiring import (
         build_calendar_connect_initiator,
         build_connection_store,
@@ -655,6 +674,8 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_calendar_reader=daily_driver_calendar_reader,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
+        google_oidc=google_oidc,
+        google_login_verifier=google_login_verifier,
         calendar_connect_initiator=calendar_connect_initiator,
         connection_store=connection_store,
     )
@@ -901,6 +922,8 @@ def create_app(
         compositions.connections_status_reader
     )
     app.state.login_verifier = compositions.login_verifier
+    app.state.google_oidc = compositions.google_oidc
+    app.state.google_login_verifier = compositions.google_login_verifier
     app.state.calendar_connect_initiator = (
         compositions.calendar_connect_initiator
     )

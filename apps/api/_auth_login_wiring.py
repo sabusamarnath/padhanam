@@ -22,9 +22,12 @@ anti-pattern; the seam is real, the vendor call is operator-provided.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from padhanam.config import SecuritySettings
+from padhanam.config import GoogleOAuthSettings, SecuritySettings
+
+if TYPE_CHECKING:
+    from apps.api._google_oidc import GoogleOidcClient
 
 
 class LoginError(Exception):
@@ -87,67 +90,107 @@ class DevPassphraseLoginVerifier:
         )
 
 
-# An operator-provided verifier: given a Google ID token, return the
-# (subject, email) it attests, or raise. The operator wires the real
-# google-auth verification + audience check at deploy; the seam never
-# assumes Google's token contract.
-GoogleIdTokenVerifier = Callable[[str], Awaitable[tuple[str, str]]]
+class OperatorEmailTenantResolver:
+    """Maps a verified Google email to a tenant from the configured map (D161).
+
+    The map is operator-set in ``.env``
+    (``GOOGLE_OAUTH_EMAIL_TO_TENANT``); an email not in the map resolves to
+    ``None`` so the verifier rejects it (no tenant fabricated, no session
+    minted). Lookup is case-insensitive on the email.
+    """
+
+    def __init__(self, *, settings: GoogleOAuthSettings | None = None) -> None:
+        cfg = settings or GoogleOAuthSettings()
+        self._map = {
+            email.lower(): tenant
+            for email, tenant in cfg.google_oauth_email_to_tenant.items()
+        }
+
+    def resolve(self, email: str) -> str | None:
+        return self._map.get(email.lower())
 
 
 class GoogleLoginVerifier:
-    """Google one-tap login (design-language §9) — operator-gated (D160).
+    """Google OIDC login behind the ``LoginVerifier`` port (D161).
 
-    Verifies a Google ID token through an injected verifier and maps the
-    attested email to a tenant through an injected resolver. Both are
-    operator-provided at deploy (the live Google contract + the email→tenant
-    mapping are external steps the build environment cannot reach). With
-    neither wired, ``verify`` raises a descriptive ``LoginError`` rather
-    than asserting Google's contract from memory.
+    The Step 0 reconciliation reshaped the S60b seam: the ``credential`` is the
+    OAuth **authorization code** (the server-side code flow), not a
+    client-obtained ID token. ``verify`` exchanges the code and verifies the
+    ID token through the OIDC adapter (``GoogleOidcClient``), then resolves the
+    attested email to a tenant. The port method is unchanged — this is one
+    adapter behind the existing port, not a parallel auth path.
+
+    Operator-gated: with no OIDC client wired (no OAuth client configured in
+    ``.env``), ``verify`` raises a descriptive ``LoginError`` rather than
+    asserting Google's contract from memory (the S4/S55a-fix discipline). The
+    live token contract is reconciled at the operator smoke.
     """
 
     def __init__(
         self,
         *,
-        id_token_verifier: GoogleIdTokenVerifier | None = None,
-        tenant_for_email: Callable[[str], Awaitable[str | None]] | None = None,
+        oidc: GoogleOidcClient | None = None,
+        tenant_resolver: OperatorEmailTenantResolver | None = None,
     ) -> None:
-        self._verify_token = id_token_verifier
-        self._tenant_for_email = tenant_for_email
+        self._oidc = oidc
+        self._resolver = tenant_resolver
 
     async def verify(
         self, *, credential: str, tenant_id: str | None = None
     ) -> VerifiedIdentity:
-        if self._verify_token is None or self._tenant_for_email is None:
+        if (
+            self._oidc is None
+            or not self._oidc.is_configured
+            or self._resolver is None
+        ):
             raise LoginError(
-                "google login is operator-gated: wire the Google ID-token "
-                "verifier and the email→tenant resolver at deploy and "
-                "reconcile the contract at the live smoke (D160)"
+                "google login is operator-gated: wire the Google OAuth client "
+                "(GOOGLE_OAUTH_CLIENT_ID / _SECRET) and the email→tenant map in "
+                ".env and reconcile the contract at the live smoke (D161)"
             )
-        subject, email = await self._verify_token(credential)
-        resolved = await self._tenant_for_email(email)
+        subject, email = await self._oidc.exchange_code_for_identity(credential)
+        resolved = self._resolver.resolve(email)
         if resolved is None:
-            raise LoginError(f"no tenant for {email!r}")
+            raise LoginError(f"no tenant mapped for {email!r}")
         return VerifiedIdentity(
             subject=subject, email=email, tenant_id=resolved, roles=("operator",)
         )
 
 
 def build_login_verifier(
-    *, settings: SecuritySettings | None = None
+    *,
+    settings: SecuritySettings | None = None,
+    oidc: GoogleOidcClient | None = None,
 ) -> LoginVerifier:
-    """Select the login verifier from config (dev wired; google operator-gated)."""
+    """Select the login verifier from config (dev wired; google needs an OIDC client).
+
+    The dev passphrase verifier is the wired default for the dogfooding/test
+    stack. With ``login_backend=google`` the Google OIDC verifier is returned;
+    it is operator-gated until the OAuth client is configured (``oidc`` built
+    by ``build_google_oidc``).
+    """
     cfg = settings or SecuritySettings()
     if cfg.login_backend == "google":
-        return GoogleLoginVerifier()
+        return build_google_login_verifier(oidc=oidc)
     return DevPassphraseLoginVerifier(settings=cfg)
+
+
+def build_google_login_verifier(
+    *, oidc: GoogleOidcClient | None
+) -> GoogleLoginVerifier:
+    """The Google OIDC verifier composed with the operator email→tenant resolver."""
+    return GoogleLoginVerifier(
+        oidc=oidc, tenant_resolver=OperatorEmailTenantResolver()
+    )
 
 
 __all__ = [
     "DevPassphraseLoginVerifier",
-    "GoogleIdTokenVerifier",
     "GoogleLoginVerifier",
     "LoginError",
     "LoginVerifier",
+    "OperatorEmailTenantResolver",
     "VerifiedIdentity",
+    "build_google_login_verifier",
     "build_login_verifier",
 ]
