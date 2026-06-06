@@ -9,6 +9,7 @@ commitments in Python.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -25,6 +26,7 @@ from contexts.daily_driver.domain.commitment import (
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
+    OutcomeStatus,
 )
 from shared_kernel import TenantContext, TenantId
 
@@ -57,6 +59,7 @@ class PostgresCommitmentRepository:
 
     @staticmethod
     def _row_to_commitment(row: sa.engine.Row) -> Commitment:
+        status = row.outcome_status
         return Commitment(
             id=UUID(row.id),
             tenant_id=UUID(row.tenant_id),
@@ -65,6 +68,12 @@ class PostgresCommitmentRepository:
             expected_interval_days=row.expected_interval_days,
             authored_by_user_id=row.authored_by_user_id,
             created_at=row.created_at,
+            expected_outcome=row.expected_outcome,
+            observed_outcome=row.observed_outcome,
+            outcome_status=(
+                OutcomeStatus(status) if status is not None else None
+            ),
+            observed_at=row.observed_at,
         )
 
     async def add_commitment(
@@ -85,6 +94,7 @@ class PostgresCommitmentRepository:
                         ),
                         authored_by_user_id=commitment.authored_by_user_id,
                         created_at=commitment.created_at,
+                        expected_outcome=commitment.expected_outcome,
                     )
                 )
 
@@ -125,6 +135,38 @@ class PostgresCommitmentRepository:
                     )
                 )
             ).one_or_none()
+        return None if row is None else self._row_to_commitment(row)
+
+    async def record_observed_outcome(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        observed_outcome: str | None,
+        outcome_status: OutcomeStatus,
+        observed_at: datetime,
+    ) -> Commitment | None:
+        self._assert_bound(tenant_context)
+        sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
+        async with sessionmaker() as session:
+            async with session.begin():
+                result = await session.execute(
+                    sa.update(commitments_table)
+                    .where(
+                        sa.and_(
+                            commitments_table.c.id == str(commitment_id),
+                            commitments_table.c.tenant_id
+                            == str(self._bound_tenant_id),
+                        )
+                    )
+                    .values(
+                        observed_outcome=observed_outcome,
+                        outcome_status=outcome_status.value,
+                        observed_at=observed_at,
+                    )
+                    .returning(commitments_table)
+                )
+                row = result.one_or_none()
         return None if row is None else self._row_to_commitment(row)
 
     async def list_with_activity(

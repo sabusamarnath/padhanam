@@ -28,8 +28,14 @@ async def create_commitment(
     actor: ActorContext,
     name: str,
     expected_interval_days: int,
+    expected_outcome: str | None = None,
 ) -> Commitment:
-    """Create and persist a Commitment for the actor's tenant."""
+    """Create and persist a Commitment for the actor's tenant.
+
+    ``expected_outcome`` is the free-text expectation captured forward at
+    creation (D162) — the front half of the expected-versus-observed loop.
+    Optional so the S58 create-flow stays valid; the surface captures it.
+    """
     tenant_context = actor.tenant_context
     commitment = Commitment(
         id=uuid4(),
@@ -39,6 +45,7 @@ async def create_commitment(
         expected_interval_days=expected_interval_days,
         authored_by_user_id=actor.actor_id,
         created_at=datetime.now(timezone.utc),
+        expected_outcome=expected_outcome,
     )
     await repository.add_commitment(
         tenant_context=tenant_context, commitment=commitment

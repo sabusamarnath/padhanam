@@ -1,4 +1,4 @@
-"""Commitment — the minimal user-authored cadence (D157).
+"""Commitment — the minimal user-authored cadence (D157, D162).
 
 A ``Commitment`` is a name plus an expected interval in days; its
 ``CommitmentCompletion`` log records each time the user marks it done.
@@ -9,6 +9,16 @@ multiple cadence types, richer completion semantics) defers to Phase
 2-B per the deferred-decisions "Cadence-with-staleness primitive (full)"
 entry.
 
+S61 (D162) extends the record with the minimal expected-versus-observed
+loop: a free-text ``expected_outcome`` captured forward at creation, a
+free-text ``observed_outcome`` captured after with a coarse
+``outcome_status``, and the ``observed_at`` timestamp of that capture.
+These are fields on the Commitment record (D162), not extensions of the
+completion log: the completion log is the cadence-tick history, while the
+expected/observed pair is about the commitment as a whole. The gap is a
+view-time comparison; the LLM-computed gap, the graph causal edges, and
+the longitudinal optimisation are deferred behind the dogfooding verdict.
+
 Domain code is framework-free per D16 — stdlib only.
 """
 
@@ -16,12 +26,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from uuid import UUID
+
+
+class OutcomeStatus(str, Enum):
+    """Coarse human-set status of the expected-versus-observed gap (D162).
+
+    Set when the user records an observation; ``None`` on the Commitment
+    until then (no "pending" value — absence is the not-yet-observed
+    state). ``DROPPED`` is how the operator acts on a drop-candidate
+    recommendation (the no-auto-deletion path).
+    """
+
+    MET = "met"
+    PARTIAL = "partial"
+    MISSED = "missed"
+    CHANGED = "changed"
+    DROPPED = "dropped"
 
 
 @dataclass(frozen=True)
 class Commitment:
-    """A user-authored recurring commitment (D157)."""
+    """A user-authored recurring commitment (D157, D162)."""
 
     id: UUID
     tenant_id: UUID
@@ -30,6 +57,10 @@ class Commitment:
     expected_interval_days: int
     authored_by_user_id: str
     created_at: datetime
+    expected_outcome: str | None = None
+    observed_outcome: str | None = None
+    outcome_status: OutcomeStatus | None = None
+    observed_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():
@@ -40,6 +71,10 @@ class Commitment:
             raise ValueError("authored_by_user_id must be non-empty")
         if self.expected_interval_days <= 0:
             raise ValueError("expected_interval_days must be positive")
+        if self.observed_outcome is not None and self.outcome_status is None:
+            raise ValueError(
+                "outcome_status must be set when observed_outcome is recorded"
+            )
 
 
 @dataclass(frozen=True)
@@ -70,4 +105,9 @@ class CommitmentActivity:
     last_completed_at: datetime | None
 
 
-__all__ = ["Commitment", "CommitmentActivity", "CommitmentCompletion"]
+__all__ = [
+    "Commitment",
+    "CommitmentActivity",
+    "CommitmentCompletion",
+    "OutcomeStatus",
+]

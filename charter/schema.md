@@ -1598,12 +1598,30 @@ carryover if procurement review demands it.
 | `expected_interval_days` | `integer`     | not null; CHECK `expected_interval_days > 0`         |
 | `authored_by_user_id`    | `text`        | not null; the user-authored cadence's author         |
 | `created_at`             | `timestamptz` | not null; default `now()`                            |
+| `expected_outcome`       | `text`        | nullable; free-text expectation captured at creation (D162) |
+| `observed_outcome`       | `text`        | nullable; free-text observation captured after (D162)       |
+| `outcome_status`         | `text`        | nullable; CHECK `outcome_status IS NULL OR outcome_status IN ('met','partial','missed','changed','dropped')` (D162) |
+| `observed_at`            | `timestamptz` | nullable; timestamp of the observation capture (D162)       |
 
 The minimal user-authored cadence: a name plus an expected interval in
-days. The full cadence-with-staleness primitive (threshold-engine
-integration per D153, multiple cadence types, richer completion
-semantics) defers to Phase 2-B per the deferred-decisions
-"Cadence-with-staleness primitive (full)" entry. Index
+days. S61 (D162) adds the minimal expected-versus-observed loop as
+record-level fields (not completion-log rows, which are the cadence-tick
+history): a free-text `expected_outcome` captured forward at creation, a
+free-text `observed_outcome` + coarse `outcome_status` captured after, and
+the `observed_at` timestamp of that capture. `observed_at` is the only new
+progress signal — the drop-candidate query's `last_progress_at` is
+otherwise derived from the completion log at render, so no progress column
+exists. `outcome_status` is nullable (absence is the not-yet-observed
+state); `dropped` is the user-initiated status the operator sets to act on
+a drop-candidate recommendation (no auto-delete). Outcomes are plaintext,
+consistent with the store's existing posture (the context is not
+D21-classified). Migration `0029_commitment_outcome` ALTERs this table to
+add these columns and the `commitments_outcome_status_check` constraint.
+The full cadence-with-staleness primitive (threshold-engine integration
+per D153, multiple cadence types, richer completion semantics) defers to
+Phase 2-B per the deferred-decisions "Cadence-with-staleness primitive
+(full)" entry; the LLM-computed gap, graph causal edges, and longitudinal
+optimisation defer with D162 behind the dogfooding verdict. Index
 `ix_commitments_tenant_id` on `(tenant_id)`.
 
 ### `commitment_completions`

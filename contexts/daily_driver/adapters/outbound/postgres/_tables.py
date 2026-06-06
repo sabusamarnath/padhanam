@@ -37,6 +37,14 @@ commitments = sa.Table(
         nullable=False,
         server_default=sa.text("now()"),
     ),
+    # S61 (D162): the minimal expected-versus-observed loop. Free text to
+    # keep capture near-frictionless; outcome_status nullable until an
+    # observation is recorded. These are record-level fields, not
+    # completion-log rows. Migration 0029 ALTERs this table to add them.
+    sa.Column("expected_outcome", sa.Text, nullable=True),
+    sa.Column("observed_outcome", sa.Text, nullable=True),
+    sa.Column("outcome_status", sa.Text, nullable=True),
+    sa.Column("observed_at", sa.TIMESTAMP(timezone=True), nullable=True),
 )
 
 

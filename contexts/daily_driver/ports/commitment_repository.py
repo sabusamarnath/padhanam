@@ -7,6 +7,7 @@ is pure per D16 — no SQLAlchemy, no asyncpg.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -14,6 +15,7 @@ from contexts.daily_driver.domain.commitment import (
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
+    OutcomeStatus,
 )
 from shared_kernel import TenantContext
 
@@ -40,6 +42,22 @@ class CommitmentRepository(Protocol):
         self, *, tenant_context: TenantContext, commitment_id: UUID
     ) -> Commitment | None:
         """Return the Commitment, or None when absent or cross-tenant."""
+        ...
+
+    async def record_observed_outcome(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        observed_outcome: str | None,
+        outcome_status: OutcomeStatus,
+        observed_at: datetime,
+    ) -> Commitment | None:
+        """Set the observed outcome + status on a Commitment (D162).
+
+        Returns the updated Commitment, or None when absent or
+        cross-tenant. ``observed_at`` is the new progress signal.
+        """
         ...
 
     async def list_with_activity(

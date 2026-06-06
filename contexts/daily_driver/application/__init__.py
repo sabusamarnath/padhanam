@@ -10,6 +10,9 @@ from contexts.daily_driver.application.log_completion import (
     log_commitment_completion,
 )
 from contexts.daily_driver.application.mark_item_done import mark_item_done
+from contexts.daily_driver.application.record_observed_outcome import (
+    record_observed_outcome,
+)
 from contexts.daily_driver.application.reorder_today import set_today_order
 
 __all__ = [
@@ -17,5 +20,6 @@ __all__ = [
     "list_today",
     "log_commitment_completion",
     "mark_item_done",
+    "record_observed_outcome",
     "set_today_order",
 ]
