@@ -39,6 +39,7 @@ async def list_today(
     day_repository: DayRepository,
     actor: ActorContext,
     calendar_events_reader: CalendarEventsReader | None = None,
+    drop_candidate_quiet_days: int | None = None,
 ) -> TodayView:
     """Build the actor's prioritised-today list for the current UTC day.
 
@@ -46,6 +47,10 @@ async def list_today(
     no calendar is connected for the tenant — the list is the S58/S59
     Cases-plus-Commitments view, so the surface degrades cleanly rather
     than failing for an unconnected operator.
+
+    ``drop_candidate_quiet_days`` (D162) is the configured quiet-window
+    threshold for the drop-candidate recommendation; ``None`` disables the
+    flag (the S60 view).
     """
     now = datetime.now(timezone.utc)
     day_date = now.date()
@@ -70,6 +75,7 @@ async def list_today(
         now=now,
         day_date=day_date,
         calendar_events=calendar_events,
+        drop_candidate_quiet_days=drop_candidate_quiet_days,
     )
 
 

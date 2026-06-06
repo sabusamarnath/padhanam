@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from contexts.daily_driver.domain.commitment import OutcomeStatus
 from contexts.daily_driver.domain.today_item import (
     ItemKind,
     TodayItem,
@@ -34,6 +35,11 @@ class TodayItemDTO(BaseModel):
     overdue_by_days: int | None
     domain: str
     start_at: datetime | None
+    # S61 (D162) — the expected-versus-observed loop on the row.
+    expected_outcome: str | None
+    observed_outcome: str | None
+    outcome_status: str | None
+    drop_candidate: bool
 
 
 class TodayDTO(BaseModel):
@@ -50,6 +56,10 @@ class CommitmentDTO(BaseModel):
     name: str
     expected_interval_days: int
     created_at: datetime
+    expected_outcome: str | None = None
+    observed_outcome: str | None = None
+    outcome_status: str | None = None
+    observed_at: datetime | None = None
 
 
 class CompletionDTO(BaseModel):
@@ -65,6 +75,20 @@ class CreateCommitmentRequest(BaseModel):
 
     name: str = Field(min_length=1)
     expected_interval_days: int = Field(gt=0)
+    # S61 (D162): the free-text expectation captured forward at creation.
+    expected_outcome: str | None = None
+
+
+class RecordObservedOutcomeRequest(BaseModel):
+    """Record what transpired for a Commitment (D162).
+
+    ``observed_outcome`` is free text (optional — a drop can carry no
+    note); ``outcome_status`` is the coarse human-set status. Setting
+    ``dropped`` is how the operator acts on a drop-candidate nudge.
+    """
+
+    observed_outcome: str | None = None
+    outcome_status: OutcomeStatus
 
 
 class ItemRef(BaseModel):
@@ -110,6 +134,10 @@ def _item_to_dto(item: TodayItem) -> TodayItemDTO:
         overdue_by_days=item.overdue_by_days,
         domain=item.domain,
         start_at=item.start_at,
+        expected_outcome=item.expected_outcome,
+        observed_outcome=item.observed_outcome,
+        outcome_status=item.outcome_status,
+        drop_candidate=item.drop_candidate,
     )
 
 
@@ -119,6 +147,7 @@ __all__ = [
     "CreateCommitmentRequest",
     "ItemRef",
     "MarkDoneRequest",
+    "RecordObservedOutcomeRequest",
     "SetOrderRequest",
     "TodayDTO",
     "TodayItemDTO",

@@ -1,5 +1,6 @@
 from padhanam.config.base import PadhanamSettings, SecretManagerSource
 from padhanam.config.calendar import CalendarSettings
+from padhanam.config.daily_driver import DailyDriverSettings
 from padhanam.config.email import EmailSettings
 from padhanam.config.google_oauth import GoogleOAuthSettings
 from padhanam.config.graph import Neo4jSettings
@@ -23,6 +24,7 @@ __all__ = [
     "AuthBackend",
     "CalendarSettings",
     "ControlPlaneSettings",
+    "DailyDriverSettings",
     "CostBreakdown",
     "EmailSettings",
     "GoogleOAuthSettings",

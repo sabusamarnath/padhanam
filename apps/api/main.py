@@ -221,6 +221,9 @@ class AppCompositions:
     # MeetingReader, filtered to today. None when unwired (the list
     # degrades to Cases + Commitments).
     daily_driver_calendar_reader: object | None = None
+    # S61 (D162): the configured drop-candidate quiet-window threshold N.
+    # None when unconfigured (the list degrades to the S60 view, no nudge).
+    daily_driver_drop_candidate_quiet_days: int | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
@@ -603,6 +606,12 @@ def _build_default_compositions() -> AppCompositions:
         security_events=sec,
         domain_tag=_calendar_domain_tag,
     )
+    # S61 (D162): the drop-candidate quiet-window threshold, config-driven.
+    from padhanam.config.daily_driver import DailyDriverSettings
+
+    daily_driver_drop_candidate_quiet_days = (
+        DailyDriverSettings().drop_candidate_quiet_days
+    )
     from apps.api._connections_wiring import build_connections_status_reader
 
     connections_status_reader = build_connections_status_reader(
@@ -672,6 +681,9 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_day_repository=daily_driver_day_repository,
         daily_driver_open_cases_reader=daily_driver_open_cases_reader,
         daily_driver_calendar_reader=daily_driver_calendar_reader,
+        daily_driver_drop_candidate_quiet_days=(
+            daily_driver_drop_candidate_quiet_days
+        ),
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
         google_oidc=google_oidc,
@@ -917,6 +929,10 @@ def create_app(
     )
     app.state.daily_driver_calendar_reader = (
         compositions.daily_driver_calendar_reader
+    )
+    # S61 (D162): the drop-candidate quiet-window threshold.
+    app.state.daily_driver_drop_candidate_quiet_days = (
+        compositions.daily_driver_drop_candidate_quiet_days
     )
     app.state.connections_status_reader = (
         compositions.connections_status_reader

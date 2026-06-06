@@ -97,6 +97,17 @@ class TodayItem:
     overdue_by_days: int | None = None
     domain: str = "work"
     start_at: datetime | None = None
+    # S61 (D162) — the minimal expected-versus-observed loop, surfaced on
+    # the row so the drawer renders the gap without a second fetch. Set on
+    # Commitments; ``None`` for Cases and calendar items. ``outcome_status``
+    # carries the enum *value* (a plain str) for the wire/render layer.
+    # ``drop_candidate`` is the recommendation flag (open + quiet past N +
+    # not already dropped); the operator acts on it, the platform never
+    # auto-drops.
+    expected_outcome: str | None = None
+    observed_outcome: str | None = None
+    outcome_status: str | None = None
+    drop_candidate: bool = False
 
 
 @dataclass(frozen=True)

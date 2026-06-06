@@ -168,6 +168,22 @@
     .chips { display: flex; flex-wrap: wrap; gap: 5px; align-self: flex-start; max-width: 92%; margin-top: -6px; }
     .chip { font-size: 10px; color: var(--ink-2); background: var(--page); border: 1px solid var(--hairline); border-radius: 9999px; padding: 2px 8px; }
     .chip .ct { color: var(--teal); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; margin-right: 4px; }
+    /* S61 (D162): expected-versus-observed gap + drop nudge + outcome form */
+    .gap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .gap-cell { background: var(--page); border: 1px solid var(--hairline); border-radius: var(--radius-card); padding: 10px 12px; }
+    .gap-cell .field-value { white-space: pre-wrap; word-wrap: break-word; }
+    .gap-cell.empty-cell .field-value { color: var(--ink-3); font-style: italic; }
+    .drop-nudge { font-size: 12px; color: var(--ink-2); background: var(--behind-bg); border: 1px solid var(--hairline);
+      border-radius: 9999px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 6px; }
+    .drop-nudge .dn-why { color: var(--behind-fg); font-weight: 600; }
+    .row .drop-nudge { margin-top: 4px; }
+    .outcome-form { display: flex; flex-direction: column; gap: 8px; background: var(--page);
+      border: 1px solid var(--hairline); border-radius: var(--radius-card); padding: 12px; }
+    .outcome-form textarea { font-family: var(--font-sans); font-size: 13px; color: var(--ink-1); background: var(--surface-work);
+      border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 8px 10px; resize: vertical; min-height: 56px; }
+    .outcome-form select { font-family: var(--font-sans); font-size: 13px; color: var(--ink-1); background: var(--surface-work);
+      border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 7px 9px; }
+    .outcome-form .of-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
     .composer { display: flex; gap: 8px; }
     .composer input { flex: 1; font-family: var(--font-sans); font-size: 13px; color: var(--ink-1); background: var(--page);
       border: 1px solid var(--hairline); border-radius: var(--radius-input); padding: 8px 10px; }
@@ -305,6 +321,7 @@
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
             <span class="lbl">every</span><input class="days" id="c-days" type="number" min="1" value="7" /><span class="lbl">days</span>
+            <input class="name" id="c-expected" placeholder="What do you expect to come of it? (optional)" />
             <button class="btn-primary" id="c-add">Add commitment</button>
           </div>`;
         document.getElementById("c-add").onclick = addCommitment;
@@ -338,8 +355,9 @@
         const reorder = it.kind === "CALENDAR" ? "" : `<div class="reorder">
           <button data-up="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
           <button data-down="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>▼</button></div>`;
+        const nudge = it.drop_candidate ? `<div class="drop-nudge"><span class="dn-why">gone quiet</span> drop it?</div>` : "";
         row.innerHTML = `${reorder}${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
-          <div class="meta">${escapeHtml(it.detail)}</div></div>
+          <div class="meta">${escapeHtml(it.detail)}</div>${nudge}</div>
           <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
         row.addEventListener("click", (e) => { if (e.target.closest(".reorder")) return; openItem(keyOf(it)); });
         list.appendChild(row);
@@ -380,12 +398,51 @@
         } else { foot.style.display = "none"; }
       } else {
         convState = null;
-        document.getElementById("panel-body").innerHTML = `<div class="pill-row"><span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span></div>
-          <div><div class="field-label">Cadence</div><div class="field-value">${escapeHtml(it.detail)}</div></div>
-          <p class="sub">A user-authored commitment. “Did it” logs a completion and clears the staleness signal.</p>`;
+        document.getElementById("panel-body").innerHTML = commitmentDetailHTML(it);
+        wireOutcomeForm(key, it);
         foot.style.display = "flex"; foot.innerHTML = `<button class="btn-primary" id="foot-done">Did it</button>`;
         document.getElementById("foot-done").onclick = () => onDone(key);
       }
+    }
+    const OUTCOME_STATUSES = [["met","Met"],["partial","Partial"],["missed","Missed"],["changed","Changed"],["dropped","Dropped — let it go"]];
+    function statusLabel(s) { const m = OUTCOME_STATUSES.find((o) => o[0] === s); return m ? m[1] : s; }
+    function commitmentDetailHTML(it) {
+      const statusBadge = it.outcome_status ? `<span class="chip"><span class="ct">outcome</span>${escapeHtml(statusLabel(it.outcome_status))}</span>` : "";
+      const nudge = it.drop_candidate ? `<span class="drop-nudge"><span class="dn-why">gone quiet — no recent progress</span> drop it?</span>` : "";
+      const expected = it.expected_outcome
+        ? `<div class="gap-cell"><div class="field-label">Expected</div><div class="field-value">${escapeHtml(it.expected_outcome)}</div></div>`
+        : `<div class="gap-cell empty-cell"><div class="field-label">Expected</div><div class="field-value">none captured</div></div>`;
+      const observed = it.observed_outcome
+        ? `<div class="gap-cell"><div class="field-label">Observed</div><div class="field-value">${escapeHtml(it.observed_outcome)}</div></div>`
+        : `<div class="gap-cell empty-cell"><div class="field-label">Observed</div><div class="field-value">not yet recorded</div></div>`;
+      const options = OUTCOME_STATUSES.map((o) => `<option value="${o[0]}" ${it.outcome_status === o[0] ? "selected" : ""}>${escapeHtml(o[1])}</option>`).join("");
+      return `<div class="pill-row"><span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>${statusBadge}${nudge}</div>
+        <div><div class="field-label">Cadence</div><div class="field-value">${escapeHtml(it.detail)}</div></div>
+        <div class="gap-grid">${expected}${observed}</div>
+        <div class="outcome-form">
+          <div class="field-label">Record what transpired</div>
+          <textarea id="o-text" placeholder="What actually happened? (optional)">${it.observed_outcome ? escapeHtml(it.observed_outcome) : ""}</textarea>
+          <div class="of-row"><select id="o-status">${options}</select><button class="btn-ghost" id="o-save">Save outcome</button></div>
+        </div>
+        <p class="sub">“Did it” logs a completion (clears the staleness signal). “Save outcome” records what came of it against what you expected — the gap, not just the tick.</p>`;
+    }
+    function wireOutcomeForm(key, it) {
+      const save = document.getElementById("o-save"); if (!save) return;
+      save.onclick = () => recordObserved(key);
+    }
+    async function recordObserved(key) {
+      const it = itemsByKey[key];
+      const text = document.getElementById("o-text").value.trim();
+      const status = document.getElementById("o-status").value;
+      const body = { outcome_status: status }; if (text) body.observed_outcome = text;
+      try {
+        await api(`/daily-driver/commitments/${it.item_id}/observed-outcome`, { method: "POST", body: JSON.stringify(body) });
+        toast(status === "dropped" ? "Dropped — off your plate" : "Outcome recorded");
+        await loadToday();
+        const fresh = itemsByKey[key];
+        if (fresh) { document.getElementById("panel-body").innerHTML = commitmentDetailHTML(fresh); wireOutcomeForm(key, fresh); }
+        else closePanel();
+      } catch {}
     }
     async function openConversation(it) {
       convState = null; convThread = [];
@@ -433,9 +490,13 @@
     }
     async function addCommitment() {
       const name = document.getElementById("c-name").value.trim(); const days = parseInt(document.getElementById("c-days").value, 10);
+      const expected = document.getElementById("c-expected").value.trim();
       if (!name || !days || days < 1) { toast("Name and a positive interval needed", true); return; }
-      try { await api("/daily-driver/commitments", { method: "POST", body: JSON.stringify({ name, expected_interval_days: days }) });
-        document.getElementById("c-name").value = ""; toast("Commitment added"); await loadToday(); } catch {}
+      const body = { name, expected_interval_days: days };
+      if (expected) body.expected_outcome = expected;
+      try { await api("/daily-driver/commitments", { method: "POST", body: JSON.stringify(body) });
+        document.getElementById("c-name").value = ""; document.getElementById("c-expected").value = "";
+        toast("Commitment added"); await loadToday(); } catch {}
     }
     function closePanel() { document.getElementById("panel").classList.remove("open"); document.getElementById("backdrop").classList.remove("open"); }
 

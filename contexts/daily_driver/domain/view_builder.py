@@ -19,9 +19,16 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from contexts.daily_driver.domain.commitment import CommitmentActivity
+from contexts.daily_driver.domain.commitment import (
+    CommitmentActivity,
+    OutcomeStatus,
+)
 from contexts.daily_driver.domain.day import DayItemState, item_key
-from contexts.daily_driver.domain.staleness import is_overdue, overdue_by_days
+from contexts.daily_driver.domain.staleness import (
+    is_drop_candidate,
+    is_overdue,
+    overdue_by_days,
+)
 from contexts.daily_driver.domain.today_item import (
     CalendarToday,
     ItemKind,
@@ -115,11 +122,28 @@ def _calendar_detail(
     return f"today · {when}"
 
 
+def _last_progress_at(activity: CommitmentActivity) -> datetime:
+    """The most recent real update point for a Commitment (D162).
+
+    Composed at render from creation, last completion, and the
+    observation-capture timestamp — no persisted ``last_progress_at``
+    column. This is the signal the drop-candidate query reads.
+    """
+    commitment = activity.commitment
+    candidates = [commitment.created_at]
+    if activity.last_completed_at is not None:
+        candidates.append(activity.last_completed_at)
+    if commitment.observed_at is not None:
+        candidates.append(commitment.observed_at)
+    return max(candidates)
+
+
 def _commitment_item(
     activity: CommitmentActivity,
     state: DayItemState | None,
     *,
     now: datetime,
+    drop_candidate_quiet_days: int | None,
 ) -> TodayItem:
     commitment = activity.commitment
     last_activity = activity.last_completed_at or commitment.created_at
@@ -149,6 +173,25 @@ def _commitment_item(
     else:
         status = ItemStatus.ON_TRACK
         detail = f"every {commitment.expected_interval_days} days"
+    # Drop candidacy is independent of (and a longer window than) BEHIND:
+    # open, not already dropped, and quiet past the configured threshold.
+    # A recommendation only — the operator acts, the platform never drops.
+    dropped = commitment.outcome_status is OutcomeStatus.DROPPED
+    drop_candidate = (
+        drop_candidate_quiet_days is not None
+        and not done
+        and not dropped
+        and is_drop_candidate(
+            last_progress_at=_last_progress_at(activity),
+            quiet_days_threshold=drop_candidate_quiet_days,
+            now=now,
+        )
+    )
+    outcome_status = (
+        commitment.outcome_status.value
+        if commitment.outcome_status is not None
+        else None
+    )
     return TodayItem(
         kind=ItemKind.COMMITMENT,
         item_id=commitment.id,
@@ -161,6 +204,10 @@ def _commitment_item(
         done=done,
         overdue_by_days=overshoot,
         domain=_WORK_DOMAIN,
+        expected_outcome=commitment.expected_outcome,
+        observed_outcome=commitment.observed_outcome,
+        outcome_status=outcome_status,
+        drop_candidate=drop_candidate,
     )
 
 
@@ -206,13 +253,20 @@ def build_today_view(
     now: datetime,
     day_date: date,
     calendar_events: tuple[CalendarToday, ...] = (),
+    drop_candidate_quiet_days: int | None = None,
 ) -> TodayView:
-    """Compose the ordered prioritised-today list (D157, D159).
+    """Compose the ordered prioritised-today list (D157, D159, D162).
 
     Three item sources render in one list typed by domain: OPEN Cases,
     Commitments-with-activity, and today's calendar events. Calendar items
     are read-through (no ``DayItemState``); Cases and Commitments carry the
     user's persisted ordering and done marks.
+
+    ``drop_candidate_quiet_days`` (D162) is the configured quiet-window
+    threshold: an open, not-yet-dropped Commitment with no progress for at
+    least that many days is flagged ``drop_candidate`` (a recommendation,
+    never an auto-drop). ``None`` disables flagging — the surface degrades
+    to the S60 view rather than guessing a threshold.
     """
     states_by_key = {
         item_key(state.kind, state.item_id): state for state in day_states
@@ -225,7 +279,14 @@ def build_today_view(
         state = states_by_key.get(
             item_key(ItemKind.COMMITMENT, activity.commitment.id)
         )
-        items.append(_commitment_item(activity, state, now=now))
+        items.append(
+            _commitment_item(
+                activity,
+                state,
+                now=now,
+                drop_candidate_quiet_days=drop_candidate_quiet_days,
+            )
+        )
     for event in calendar_events:
         items.append(_calendar_item(event, now=now))
     items.sort(key=_sort_key)

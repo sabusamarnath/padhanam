@@ -41,6 +41,7 @@ from apps.api.routers._daily_driver_dto import (
     CompletionDTO,
     CreateCommitmentRequest,
     MarkDoneRequest,
+    RecordObservedOutcomeRequest,
     SetOrderRequest,
     TodayDTO,
     today_view_to_dto,
@@ -50,8 +51,10 @@ from contexts.daily_driver.application import (
     list_today,
     log_commitment_completion,
     mark_item_done,
+    record_observed_outcome,
     set_today_order,
 )
+from contexts.daily_driver.domain.commitment import Commitment
 from contexts.daily_driver.ports import (
     CalendarEventsReader,
     CommitmentRepository,
@@ -101,6 +104,34 @@ def get_calendar_events_reader(request: Request) -> CalendarEventsReader | None:
     return getattr(request.app.state, "daily_driver_calendar_reader", None)
 
 
+def get_drop_candidate_quiet_days(request: Request) -> int | None:
+    """FastAPI dependency: the configured drop-candidate quiet window (D162).
+
+    Returns ``None`` when unconfigured so the today list degrades to the
+    S60 view (no drop-candidate flagging) rather than guessing a threshold.
+    """
+    return getattr(
+        request.app.state, "daily_driver_drop_candidate_quiet_days", None
+    )
+
+
+def _commitment_to_dto(commitment: Commitment) -> CommitmentDTO:
+    return CommitmentDTO(
+        id=commitment.id,
+        name=commitment.name,
+        expected_interval_days=commitment.expected_interval_days,
+        created_at=commitment.created_at,
+        expected_outcome=commitment.expected_outcome,
+        observed_outcome=commitment.observed_outcome,
+        outcome_status=(
+            commitment.outcome_status.value
+            if commitment.outcome_status is not None
+            else None
+        ),
+        observed_at=commitment.observed_at,
+    )
+
+
 @router.get("/today", response_model=TodayDTO)
 async def get_today(
     actor: Annotated[ActorContext, Depends(get_actor_context)],
@@ -114,6 +145,9 @@ async def get_today(
     calendar_events_reader: Annotated[
         CalendarEventsReader | None, Depends(get_calendar_events_reader)
     ],
+    drop_candidate_quiet_days: Annotated[
+        int | None, Depends(get_drop_candidate_quiet_days)
+    ],
 ) -> TodayDTO:
     """Return the actor's prioritised-today list (Cases + Commitments + calendar)."""
     view = await list_today(
@@ -122,6 +156,7 @@ async def get_today(
         day_repository=day_repository,
         actor=actor,
         calendar_events_reader=calendar_events_reader,
+        drop_candidate_quiet_days=drop_candidate_quiet_days,
     )
     return today_view_to_dto(view)
 
@@ -140,13 +175,9 @@ async def post_commitment(
         actor=actor,
         name=body.name,
         expected_interval_days=body.expected_interval_days,
+        expected_outcome=body.expected_outcome,
     )
-    return CommitmentDTO(
-        id=commitment.id,
-        name=commitment.name,
-        expected_interval_days=commitment.expected_interval_days,
-        created_at=commitment.created_at,
-    )
+    return _commitment_to_dto(commitment)
 
 
 @router.post(
@@ -174,6 +205,31 @@ async def post_completion(
         commitment_id=completion.commitment_id,
         completed_at=completion.completed_at,
     )
+
+
+@router.post(
+    "/commitments/{commitment_id}/observed-outcome",
+    response_model=CommitmentDTO,
+)
+async def post_observed_outcome(
+    commitment_id: UUID,
+    body: RecordObservedOutcomeRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> CommitmentDTO:
+    """Record what transpired for a Commitment (D162) — the back half of the loop."""
+    commitment = await record_observed_outcome(
+        repository=commitment_repository,
+        actor=actor,
+        commitment_id=commitment_id,
+        observed_outcome=body.observed_outcome,
+        outcome_status=body.outcome_status,
+    )
+    if commitment is None:
+        raise HTTPException(status_code=404, detail="commitment not found")
+    return _commitment_to_dto(commitment)
 
 
 @router.put("/today/order", status_code=204)
