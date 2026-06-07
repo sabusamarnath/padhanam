@@ -490,6 +490,20 @@ services:
       # used as the Proxy bearer token. Values resolve from .env.
       NANGO_BASE_URL: ${NANGO_BASE_URL}
       NANGO_SECRET_KEY: ${NANGO_SECRET_KEY}
+      # Google OIDC login (P16/S60c, D161). Read by GoogleOAuthSettings in
+      # padhanam/config/google_oauth.py for the OIDC login adapter, and
+      # SecuritySettings for the login-backend select. Identity scopes only
+      # (openid email profile); calendar/mail data stay on the Nango path.
+      # Empty/dev-safe defaults: absent vars => is_configured False =>
+      # the dev passphrase login stays wired (no break when unconfigured).
+      LOGIN_BACKEND: ${LOGIN_BACKEND:-dev}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:8000/api/v1/auth/google/callback}
+      GOOGLE_OAUTH_EMAIL_TO_TENANT: ${GOOGLE_OAUTH_EMAIL_TO_TENANT:-}
+      # Daily-driver drop-candidate quiet window N (P16/S61, D162). Read by
+      # DailyDriverSettings; default 21 when absent. Tunable at dogfooding.
+      DROP_CANDIDATE_QUIET_DAYS: ${DROP_CANDIDATE_QUIET_DAYS:-21}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/health'); sys.exit(0)"]
       interval: 10s
