@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -213,6 +213,14 @@ dogfood-token: derive-env
 # tenant-a/tenant-b/control-plane). See docs/ops/dogfood-runbook.md.
 dogfood-wipe: derive-env
 	COMPOSE="$(COMPOSE)" ./ops/dogfood_wipe.sh
+
+# Seed German as the first progressive-cadence goal (S62, D163): a
+# German-practice commitment (lever) in the personal tenant's Postgres
+# plus the Outcome node + lever-to-outcome edge in the shared graph.
+# Idempotent. Run after `make dogfood-provision` and `make migrate`
+# (the latter applies migrations/neo4j/0002_outcome_goal.cypher).
+seed-german: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.seed_german_goal
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,
