@@ -174,3 +174,38 @@ def test_domain_tag_applied_and_unknown_falls_back(monkeypatch) -> None:
         adapter2.list_today_events(actor=_actor(_TENANT_A), day_date=_DAY)
     )
     assert events2[0].domain == "work"  # resolve_calendar_domain default
+
+
+# --- S61 (D162): the per-request-tenant router wrappers must implement
+# the full repository port. A method added to the port + Postgres adapter
+# but forgotten on the delegating router is invisible to fakes-based unit
+# tests and only surfaces as a 500 at runtime (the S61 live-smoke bug). ---
+
+
+def _port_methods(protocol_cls: type) -> set[str]:
+    return {
+        name
+        for name in dir(protocol_cls)
+        if not name.startswith("_")
+        and callable(getattr(protocol_cls, name, None))
+    }
+
+
+def test_commitment_router_implements_the_repository_port() -> None:
+    from contexts.daily_driver.ports.commitment_repository import (
+        CommitmentRepository,
+    )
+
+    missing = _port_methods(CommitmentRepository) - _port_methods(
+        wiring.CommitmentRepositoryRouter
+    )
+    assert not missing, f"router missing port methods: {sorted(missing)}"
+
+
+def test_day_router_implements_the_day_repository_port() -> None:
+    from contexts.daily_driver.ports.day_repository import DayRepository
+
+    missing = _port_methods(DayRepository) - _port_methods(
+        wiring.DayRepositoryRouter
+    )
+    assert not missing, f"router missing port methods: {sorted(missing)}"

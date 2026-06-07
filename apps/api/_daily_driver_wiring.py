@@ -38,6 +38,7 @@ from contexts.daily_driver.domain.commitment import (
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
+    OutcomeStatus,
 )
 from contexts.daily_driver.domain.day import DayItemState
 from contexts.daily_driver.domain.today_item import (
@@ -142,6 +143,24 @@ class CommitmentRepositoryRouter:
     ) -> tuple[CommitmentActivity, ...]:
         repo = await self._build(tenant_context)
         return await repo.list_with_activity(tenant_context=tenant_context)
+
+    async def record_observed_outcome(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        observed_outcome: str | None,
+        outcome_status: OutcomeStatus,
+        observed_at: datetime,
+    ) -> Commitment | None:
+        repo = await self._build(tenant_context)
+        return await repo.record_observed_outcome(
+            tenant_context=tenant_context,
+            commitment_id=commitment_id,
+            observed_outcome=observed_outcome,
+            outcome_status=outcome_status,
+            observed_at=observed_at,
+        )
 
 
 class DayRepositoryRouter:
