@@ -160,25 +160,29 @@ class ConnectionStore:
             created_at=now,
             updated_at=now,
         )
-        await repo.save_connection(
+        # Use the canonical persisted id, not connection.id: on a re-connect
+        # the upsert keeps the existing row's id, so first-sync must reference
+        # the stored row (else sync_calendar's get-by-id misses and raises
+        # NoSuchConnectionError on the transient id).
+        connection_id = await repo.save_connection(
             tenant_context=actor.tenant_context, connection=connection
         )
 
         if self._first_sync is None:
-            return StoredConnection(connection_id=connection.id, synced=False)
+            return StoredConnection(connection_id=connection_id, synced=False)
         try:
             await self._first_sync(
                 str(actor.tenant_context.tenant_id),
-                connection.id,
+                connection_id,
                 actor.tenant_context,
             )
         except (ConnectError, OSError, RuntimeError, ValueError) as exc:
             # The live pull is operator-gated; the connection is stored
             # regardless, and the next calendar turn / a manual sync pulls.
             return StoredConnection(
-                connection_id=connection.id, synced=False, sync_error=str(exc)
+                connection_id=connection_id, synced=False, sync_error=str(exc)
             )
-        return StoredConnection(connection_id=connection.id, synced=True)
+        return StoredConnection(connection_id=connection_id, synced=True)
 
 
 async def _default_first_sync(

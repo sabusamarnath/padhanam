@@ -19,8 +19,14 @@ from shared_kernel.tenant_context import TenantContext
 class ConnectionRepository(Protocol):
     async def save_connection(
         self, *, tenant_context: TenantContext, connection: Connection
-    ) -> None:
-        """Insert or update a connection on (tenant_id, provider, config key)."""
+    ) -> UUID:
+        """Insert or update a connection on (tenant_id, provider, config key).
+
+        Returns the canonical persisted connection id — the existing row's id
+        on conflict (a re-connect), the new id on first insert. Callers must
+        use the returned id, not ``connection.id``, since an upsert keeps the
+        original row's id.
+        """
         ...
 
     async def get_connection(

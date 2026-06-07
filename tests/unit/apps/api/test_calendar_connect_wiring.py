@@ -45,6 +45,10 @@ class _RecordingConnectionRepo:
     """Stub mirroring PostgresConnectionRepository's bound-tenant guard (D24)."""
 
     saved: list = []
+    # Mirrors the real upsert: first insert pins the row id; a re-connect
+    # returns the existing row's id (the canonical RETURNING id), not the new
+    # transient connection.id.
+    persisted_id_by_key: dict = {}
 
     def __init__(self, *, per_tenant_sessionmaker_resolver, bound_tenant_id):
         self.bound = str(bound_tenant_id)
@@ -56,12 +60,21 @@ class _RecordingConnectionRepo:
         if str(tenant_context.tenant_id) != self.bound:
             raise ValueError("context tenant does not match bound tenant")
         _RecordingConnectionRepo.saved.append(connection)
+        key = (
+            str(connection.tenant_id),
+            connection.provider,
+            connection.provider_config_key,
+        )
+        return _RecordingConnectionRepo.persisted_id_by_key.setdefault(
+            key, connection.id
+        )
 
 
 def _store(monkeypatch, *, first_sync=None):
     monkeypatch.setattr(
         conn_repo_mod, "PostgresConnectionRepository", _RecordingConnectionRepo
     )
+    _RecordingConnectionRepo.persisted_id_by_key = {}
 
     async def _sf(_tenant_context):
         return object()
@@ -91,6 +104,36 @@ def test_callback_stores_a_bound_tenant_connection(monkeypatch) -> None:
     assert saved[0].provider_connection_ref == "nango-conn-123"
     assert isinstance(result.connection_id, UUID)
     assert synced and synced[0][0] == _TENANT_A
+
+
+def test_reconnect_reuses_the_canonical_id_for_first_sync(monkeypatch) -> None:
+    """A re-connect must first-sync against the stored row's id, not a fresh
+    transient one — the live-smoke bug where a second callback handed a new
+    uuid to sync_calendar's get-by-id and it raised NoSuchConnectionError."""
+    _RecordingConnectionRepo.saved = []
+    synced_ids = []
+
+    async def _first_sync(tenant_id, connection_id, tenant_context):
+        synced_ids.append(connection_id)
+
+    store = _store(monkeypatch, first_sync=_first_sync)
+    first = asyncio.run(
+        store.store_connection(
+            actor=_actor(_TENANT_A), provider_connection_ref="nango-conn-123"
+        )
+    )
+    second = asyncio.run(
+        store.store_connection(
+            actor=_actor(_TENANT_A), provider_connection_ref="nango-conn-123"
+        )
+    )
+    # Both registrations resolve to the same canonical id, and first-sync was
+    # handed that id both times (never the second call's transient connection.id).
+    assert first.connection_id == second.connection_id
+    assert synced_ids == [first.connection_id, first.connection_id]
+    # The two save attempts carried different transient ids, proving the
+    # canonical id came from the store, not the in-memory connection.
+    assert _RecordingConnectionRepo.saved[0].id != _RecordingConnectionRepo.saved[1].id
 
 
 def test_two_tenants_each_store_their_own_connection(monkeypatch) -> None:

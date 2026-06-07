@@ -66,7 +66,7 @@ class PostgresConnectionRepository:
 
     async def save_connection(
         self, *, tenant_context: TenantContext, connection: Connection
-    ) -> None:
+    ) -> UUID:
         self._assert_bound(tenant_context)
         if str(connection.tenant_id) != str(self._bound_tenant_id):
             raise ValueError(
@@ -84,6 +84,11 @@ class PostgresConnectionRepository:
             "updated_at": connection.updated_at,
         }
         stmt = pg_insert(connections_table).values(**values)
+        # On conflict the unique key is (tenant_id, provider, config key), so a
+        # re-connect updates the existing row WITHOUT changing its id. RETURNING
+        # yields the canonical persisted id — the existing row's id on conflict,
+        # the new id on insert — so the caller always references the stored row
+        # (otherwise a re-register would hand a transient id to the first sync).
         stmt = stmt.on_conflict_do_update(
             index_elements=["tenant_id", "provider", "provider_config_key"],
             set_={
@@ -91,11 +96,13 @@ class PostgresConnectionRepository:
                 "jurisdiction": stmt.excluded.jurisdiction,
                 "updated_at": stmt.excluded.updated_at,
             },
-        )
+        ).returning(connections_table.c.id)
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
         async with sessionmaker() as session:
             async with session.begin():
-                await session.execute(stmt)
+                result = await session.execute(stmt)
+                persisted_id = result.scalar_one()
+        return UUID(str(persisted_id))
 
     async def get_connection(
         self, *, tenant_context: TenantContext, connection_id: UUID
