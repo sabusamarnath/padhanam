@@ -490,6 +490,9 @@ services:
       # used as the Proxy bearer token. Values resolve from .env.
       NANGO_BASE_URL: ${NANGO_BASE_URL}
       NANGO_SECRET_KEY: ${NANGO_SECRET_KEY}
+      # Calendar-to-domain default tag (P16/S60, D159). Resolved at the read
+      # seam; default 'work'. A personal dogfood calendar wants 'personal'.
+      CALENDAR_DOMAIN_TAG: ${CALENDAR_DOMAIN_TAG:-work}
       # Google OIDC login (P16/S60c, D161). Read by GoogleOAuthSettings in
       # padhanam/config/google_oauth.py for the OIDC login adapter, and
       # SecuritySettings for the login-backend select. Identity scopes only
