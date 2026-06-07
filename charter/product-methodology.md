@@ -73,3 +73,19 @@ The methodologies in the lists above are not all the same architectural shape, a
 ## Selection discipline
 
 Methodology selection within each domain stays as a selection space at this stage. Pre-committing to specific methodologies before consumer evidence drives the choice is the same shape of overreach the architecture rejected for the within-tenant segmentation primitive. Per-domain methodology decisions land as each domain enters package scope, with the consumer-evidence-needed posture per the methodology document. The selection space documented above is the candidate set; the active set is whatever the package-scoped framing settles on.
+
+## The goal taxonomy
+
+Any goal the daily driver holds is placed on three axes before it is modelled: engine, target, and control. The placement decides how progress is read and which remedy applies when the goal falls behind. The shapes, boundaries, variant, higher layer, and mechanics are as recorded in D163. The taxonomy exists to do one thing a tracker cannot: tell the system where to switch its machinery off (the atomic one-off), where it cannot yet engage (the exploratory phase), and which of three different remedies a falling-behind goal actually needs.
+
+**The three axes.** The *engine* is cadence (repetition) or sequence (a dependency chain). The *target* either maintains a level (homeostatic), advances a level (progressive, with a ratcheting target), or reaches a point once (terminal). *Control* says whether the actor's own levers determine the outcome, or the actor only influences it while another party determines it.
+
+**The three core shapes** follow from engine crossed with target, and each carries its own reading of "behind" and its own remedy. Homeostatic cadence repeats to hold a level — behind is drift, the remedy is to re-establish the rhythm. Progressive cadence repeats to raise a level — behind is not advancing, the remedy is to adjust the target. Sequence releases tasks toward a terminal — behind is blocked, the remedy is to unblock or drop. Real goals are hybrids; the placement names the dominant shape so the right remedy fires.
+
+**The two boundaries** bound where the machinery applies. Below the model, the atomic one-off is too small for an outcome — it is a tick with no machinery; a multi-step errand stays a tick unless a seam between its steps can stall, and is promoted to a tracked chain on the stall, not on the decomposition. Before the model, the exploratory phase has no defined outcome yet — the work is to converge on the outcome, not advance toward it, and the causal graph begins only once the outcome is named.
+
+**The variant and the higher layer.** Avoidance is a variant of homeostatic, maintained by not acting and measured in streaks and lapses, where behind is a discrete lapse rather than drift. Balance is the one higher layer above all goals: the allocation across competing outcomes — a property of the whole set and the morning decision, not a goal-shape.
+
+**The three mechanics.** The adjustable target makes progressive cadence a live expected-versus-observed loop — the target is the expectation, progress is the observed, the gap moves the target; it is qualitative, not numeric (quantitative inference stays deferred per D156). Remedies must read the shape, because the wrong remedy deletes the wrong things — the S61 drop-if-quiet nudge is a sequence remedy and must not fire on a cadence goal. The subject, self or other, usually decides the control axis.
+
+**The model is a graph, not a list.** A goal can be a lever toward a higher goal, so the higher layer has two faces: the vertical (goals laddering to life aims, held natively by the graph) and the horizontal (balance across the top nodes). S62 instances only the progressive-cadence / self-control / self-subject shape, through German; every other value is schema-present and uninstanced, awaiting the session that instances a goal of that shape.
