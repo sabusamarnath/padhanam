@@ -37,6 +37,7 @@ from neo4j import AsyncDriver, AsyncSession
 
 from contexts.ingestion.domain.entity import Entity
 from contexts.ingestion.domain.relationship import EntityRef, Relationship
+from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
 from shared_kernel import TenantContext
 
 
@@ -122,6 +123,63 @@ RETURN r.tenant_id AS tenant_id,
        type(r) AS relationship_type,
        r.source_chunk_id AS source_chunk_id,
        r.created_at AS created_at
+"""
+
+
+# --- Goal-graph templates (D163) ------------------------------------------
+# The whole-life goal taxonomy's typed shape: an :Outcome node, a thin :Lever
+# reference node (the Postgres commitment by id, never a copy), and a
+# LEVER_FOR edge carrying the mode + (for progressive) the level ladder and the
+# current target. The LEVER_FOR type is a literal in the template (not dynamic),
+# so Community-without-APOC composes it directly with no backtick substitution.
+_MERGE_OUTCOME = """
+MERGE (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+ON CREATE SET
+    o.jurisdiction = $jurisdiction,
+    o.created_at = $created_at
+SET
+    o.name = $name,
+    o.control = $control,
+    o.subject = $subject
+"""
+
+_MERGE_LEVER_FOR_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+MERGE (l:Lever {tenant_id: $tenant_id, commitment_id: $commitment_id})
+ON CREATE SET
+    l.jurisdiction = $jurisdiction,
+    l.created_at = $created_at
+MERGE (l)-[r:LEVER_FOR {tenant_id: $tenant_id}]->(o)
+ON CREATE SET
+    r.jurisdiction = $jurisdiction,
+    r.created_at = $created_at
+SET
+    r.mode = $mode,
+    r.ladder = $ladder,
+    r.current_target_level = $current_target_level
+"""
+
+_SET_LEVER_TARGET = """
+MATCH (l:Lever {tenant_id: $tenant_id, commitment_id: $commitment_id})
+      -[r:LEVER_FOR {tenant_id: $tenant_id}]->
+      (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET r.current_target_level = $current_target_level
+RETURN r.current_target_level AS current_target_level
+"""
+
+_LIST_OUTCOMES = """
+MATCH (l:Lever {tenant_id: $tenant_id})
+      -[r:LEVER_FOR {tenant_id: $tenant_id}]->
+      (o:Outcome {tenant_id: $tenant_id})
+RETURN o.outcome_id AS outcome_id,
+       o.name AS name,
+       o.control AS control,
+       o.subject AS subject,
+       l.commitment_id AS commitment_id,
+       r.mode AS mode,
+       r.ladder AS ladder,
+       r.current_target_level AS current_target_level
+ORDER BY o.name ASC
 """
 
 
@@ -346,6 +404,91 @@ class TenantScopedNeo4jSession:
                 relationship_type=row["relationship_type"],
                 source_chunk_id=UUID(row["source_chunk_id"]),
                 created_at=_to_python_datetime(row["created_at"]),
+            )
+            for row in records
+        ]
+
+
+    async def merge_outcome(
+        self,
+        *,
+        outcome_id: UUID,
+        name: str,
+        control: str,
+        subject: str,
+    ) -> None:
+        """MERGE an :Outcome node bound to the session's tenant (D163)."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "outcome_id": str(outcome_id),
+            "name": name,
+            "control": control,
+            "subject": subject,
+            "created_at": _now_utc(),
+        }
+        await session.run(_MERGE_OUTCOME, params)
+
+    async def merge_lever_for_outcome(
+        self,
+        *,
+        outcome_id: UUID,
+        commitment_id: UUID,
+        mode: str,
+        ladder: Sequence[str],
+        current_target_level: str | None,
+    ) -> None:
+        """MERGE the :Lever node + the LEVER_FOR edge to the Outcome (D163)."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "outcome_id": str(outcome_id),
+            "commitment_id": str(commitment_id),
+            "mode": mode,
+            "ladder": list(ladder),
+            "current_target_level": current_target_level,
+        }
+        await session.run(_MERGE_LEVER_FOR_OUTCOME, params)
+
+    async def set_lever_target(
+        self,
+        *,
+        outcome_id: UUID,
+        commitment_id: UUID,
+        current_target_level: str,
+    ) -> str | None:
+        """Set the LEVER_FOR edge's current_target_level (the explicit raise)."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "outcome_id": str(outcome_id),
+            "commitment_id": str(commitment_id),
+            "current_target_level": current_target_level,
+        }
+        result = await session.run(_SET_LEVER_TARGET, params)
+        record = await result.single()
+        if record is None:
+            return None
+        return record["current_target_level"]
+
+    async def list_outcomes(self) -> Sequence[OutcomeGraphRecord]:
+        """Return every Outcome with its lever edge for the bound tenant (D163)."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id}
+        result = await session.run(_LIST_OUTCOMES, params)
+        records = await result.data()
+        return [
+            OutcomeGraphRecord(
+                outcome_id=UUID(row["outcome_id"]),
+                name=row["name"],
+                control=row["control"],
+                subject=row["subject"],
+                commitment_id=UUID(row["commitment_id"]),
+                mode=row["mode"],
+                ladder=tuple(row["ladder"] or ()),
+                current_target_level=row["current_target_level"],
             )
             for row in records
         ]

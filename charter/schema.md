@@ -644,6 +644,61 @@ produces no duplicate edges; different chunks producing the same
 endpoint pair and relationship type produce distinct edges keyed
 on `source_chunk_id`, preserving provenance.
 
+### `:Outcome` nodes (S62, D163)
+
+The typed goal layer of the whole-life goal taxonomy (D163). An Outcome is a
+goal the daily driver holds; its lever is a Commitment (per-tenant Postgres
+`commitments` table), connected by a `LEVER_FOR` edge. Reached only through the
+`TenantScopedNeo4jSession` wrapper (the `OutcomeGraphPort` methods); no Alembic
+migration — the goal is a graph node and the lever reuses the existing
+`commitments` row. Lands via `migrations/neo4j/0002_outcome_goal.cypher`.
+
+| Property      | Type       | Notes                                                                  |
+|---------------|------------|-----------------------------------------------------------------------|
+| `tenant_id`   | `String`   | not empty; tenant-isolation predicate at every Cypher query           |
+| `jurisdiction`| `String`   | first-class per D12                                                    |
+| `outcome_id`  | `String`   | the goal's UUID                                                        |
+| `name`        | `String`   | the goal's human-readable label (e.g. "German")                       |
+| `control`     | `String`   | `self` (actor's levers determine) or `other` (actor only influences)  |
+| `subject`     | `String`   | `self` or `other` (whose goal it is)                                   |
+| `created_at`  | `DateTime` | set on initial MERGE                                                   |
+
+Uniqueness constraint: `outcome_unique_per_tenant` on `(tenant_id, outcome_id)`.
+
+### `:Lever` nodes (S62, D163)
+
+A thin *reference* to the Commitment that serves as a goal's lever — it carries
+only the `commitment_id`, never a copy of the Postgres row (D163 Step 0 F3,
+no-duplication).
+
+| Property        | Type       | Notes                                                       |
+|-----------------|------------|-------------------------------------------------------------|
+| `tenant_id`     | `String`   | not empty; matches the Outcome's tenant                     |
+| `jurisdiction`  | `String`   | first-class per D12                                         |
+| `commitment_id` | `String`   | the Postgres `commitments.id` UUID this lever references    |
+| `created_at`    | `DateTime` | set on initial MERGE                                        |
+
+Uniqueness constraint: `lever_unique_per_tenant` on `(tenant_id, commitment_id)`.
+
+### `LEVER_FOR` edge (S62, D163)
+
+`(:Lever)-[:LEVER_FOR]->(:Outcome)`. Carries the goal's `mode` and, for a
+progressive goal, the qualitative target.
+
+| Property               | Type            | Notes                                                                      |
+|------------------------|-----------------|----------------------------------------------------------------------------|
+| `tenant_id`            | `String`        | not empty; matches both endpoints                                          |
+| `jurisdiction`         | `String`        | matches both endpoints                                                     |
+| `mode`                 | `String`        | `homeostatic` / `progressive` / `sequence` (S62 instances only progressive)|
+| `ladder`               | `List<String>`  | ordered named levels for a progressive goal; empty otherwise               |
+| `current_target_level` | `String`/`null` | the level the goal currently aims at; `null` for non-progressive modes     |
+| `created_at`           | `DateTime`      | set on initial MERGE                                                       |
+
+Uniqueness via the MERGE pattern keyed on `(tenant_id, commitment_id, outcome_id)`
+(Community Edition has no declarative relationship-property uniqueness). The
+`current_target_level` changes only via `set_lever_target` (the explicit raise,
+never automatic — D9, the no-auto-modification invariant).
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.

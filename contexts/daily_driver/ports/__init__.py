@@ -9,11 +9,13 @@ from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
 from contexts.daily_driver.ports.day_repository import DayRepository
+from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from contexts.daily_driver.ports.open_cases_reader import OpenCasesReader
 
 __all__ = [
     "CalendarEventsReader",
     "CommitmentRepository",
     "DayRepository",
+    "GoalGraphPort",
     "OpenCasesReader",
 ]
