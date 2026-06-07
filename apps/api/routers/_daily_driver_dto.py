@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from contexts.daily_driver.domain.commitment import OutcomeStatus
+from contexts.daily_driver.domain.goal_view import GoalReading
 from contexts.daily_driver.domain.today_item import (
     ItemKind,
     TodayItem,
@@ -112,6 +113,44 @@ class MarkDoneRequest(BaseModel):
     done: bool
 
 
+class GoalReadingDTO(BaseModel):
+    """A goal read against its lever — target, progress, gap, recommendation (D163)."""
+
+    outcome_id: UUID
+    name: str
+    mode: str
+    control: str
+    subject: str
+    lever_commitment_id: UUID
+    ladder: list[str] | None
+    current_target: str | None
+    progress_summary: str
+    gap_summary: str
+    recommendation: str
+    reason: str
+    next_target: str | None
+
+
+def goal_reading_to_dto(reading: GoalReading) -> GoalReadingDTO:
+    """Encode a domain GoalReading into the HTTP DTO (D163)."""
+    goal = reading.goal
+    return GoalReadingDTO(
+        outcome_id=goal.id,
+        name=goal.name,
+        mode=goal.mode.value,
+        control=goal.control.value,
+        subject=goal.subject.value,
+        lever_commitment_id=goal.lever_commitment_id,
+        ladder=list(goal.ladder.levels) if goal.ladder is not None else None,
+        current_target=reading.current_target,
+        progress_summary=reading.progress_summary,
+        gap_summary=reading.gap_summary,
+        recommendation=reading.recommendation.value,
+        reason=reading.reason,
+        next_target=reading.next_target,
+    )
+
+
 def today_view_to_dto(view: TodayView) -> TodayDTO:
     """Encode a domain TodayView into the HTTP DTO."""
     return TodayDTO(
@@ -145,11 +184,13 @@ __all__ = [
     "CommitmentDTO",
     "CompletionDTO",
     "CreateCommitmentRequest",
+    "GoalReadingDTO",
     "ItemRef",
     "MarkDoneRequest",
     "RecordObservedOutcomeRequest",
     "SetOrderRequest",
     "TodayDTO",
     "TodayItemDTO",
+    "goal_reading_to_dto",
     "today_view_to_dto",
 ]

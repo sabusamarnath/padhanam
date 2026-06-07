@@ -224,6 +224,8 @@ class AppCompositions:
     # S61 (D162): the configured drop-candidate quiet-window threshold N.
     # None when unconfigured (the list degrades to the S60 view, no nudge).
     daily_driver_drop_candidate_quiet_days: int | None = None
+    # S62 (D163): the goal-layer graph reader/raiser over the shared Neo4j.
+    daily_driver_goal_graph: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
@@ -576,6 +578,7 @@ def _build_default_compositions() -> AppCompositions:
         build_calendar_events_reader,
         build_commitment_repository,
         build_day_repository,
+        build_goal_graph,
         build_open_cases_reader,
     )
     from padhanam.config.calendar import CalendarSettings
@@ -612,6 +615,8 @@ def _build_default_compositions() -> AppCompositions:
     daily_driver_drop_candidate_quiet_days = (
         DailyDriverSettings().drop_candidate_quiet_days
     )
+    # S62 (D163): the goal-layer graph reader over the shared Neo4j (process-shared).
+    daily_driver_goal_graph = build_goal_graph()
     from apps.api._connections_wiring import build_connections_status_reader
 
     connections_status_reader = build_connections_status_reader(
@@ -684,6 +689,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_drop_candidate_quiet_days=(
             daily_driver_drop_candidate_quiet_days
         ),
+        daily_driver_goal_graph=daily_driver_goal_graph,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
         google_oidc=google_oidc,
@@ -934,6 +940,8 @@ def create_app(
     app.state.daily_driver_drop_candidate_quiet_days = (
         compositions.daily_driver_drop_candidate_quiet_days
     )
+    # S62 (D163): the goal-layer graph reader/raiser.
+    app.state.daily_driver_goal_graph = compositions.daily_driver_goal_graph
     app.state.connections_status_reader = (
         compositions.connections_status_reader
     )

@@ -114,13 +114,16 @@ class _FakeOpenCases:
         return self._cases
 
 
-def _client(commit_repo, day_repo, open_cases, *, quiet_days=None) -> TestClient:
+def _client(
+    commit_repo, day_repo, open_cases, *, quiet_days=None, goal_graph=None
+) -> TestClient:
     app = FastAPI()
     app.include_router(daily_driver_router.router)
     app.state.daily_driver_commitment_repository = commit_repo
     app.state.daily_driver_day_repository = day_repo
     app.state.daily_driver_open_cases_reader = open_cases
     app.state.daily_driver_drop_candidate_quiet_days = quiet_days
+    app.state.daily_driver_goal_graph = goal_graph
     app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
@@ -287,3 +290,122 @@ def test_mark_done_and_reorder_persist() -> None:
     )
     assert order.status_code == 204
     assert day.states[item_key(ItemKind.CASE, case.case_id)].position == 0
+
+
+# --- Goal layer routes (S62, D163) ---------------------------------------
+
+_OUTCOME = UUID("00000000-0000-4000-8000-0000006200a1")
+_GERMAN_COMMITMENT = UUID("00000000-0000-4000-8000-000000620c01")
+
+
+def _german_goal(target="B1"):
+    from contexts.daily_driver.domain.goal import (
+        ControlAxis,
+        Goal,
+        GoalMode,
+        LevelLadder,
+        Subject,
+    )
+
+    return Goal(
+        id=_OUTCOME,
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        name="German",
+        mode=GoalMode.PROGRESSIVE,
+        control=ControlAxis.SELF,
+        subject=Subject.SELF,
+        lever_commitment_id=_GERMAN_COMMITMENT,
+        ladder=LevelLadder(
+            levels=("A1", "A2", "B1", "B2", "C1", "C2"), current_target_level=target
+        ),
+    )
+
+
+class _FakeGoalGraph:
+    def __init__(self, goal) -> None:
+        self._goal = goal
+        self.raised_to = None
+
+    async def list_goals(self, *, tenant_context):
+        return (self._goal,)
+
+    async def raise_target_level(
+        self, *, tenant_context, outcome_id, commitment_id, new_target_level
+    ):
+        self.raised_to = new_target_level
+        from dataclasses import replace
+
+        self._goal = replace(
+            self._goal,
+            ladder=replace(self._goal.ladder, current_target_level=new_target_level),
+        )
+        return new_target_level
+
+
+def _german_commitment_repo():
+    from contexts.daily_driver.domain.commitment import OutcomeStatus
+
+    repo = _FakeCommitmentRepo()
+    commitment = Commitment(
+        id=_GERMAN_COMMITMENT,
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        name="German practice",
+        expected_interval_days=1,
+        authored_by_user_id="operator-001",
+        created_at=datetime.now(timezone.utc),
+        expected_outcome="toward fluency",
+        observed_outcome="solid week",
+        outcome_status=OutcomeStatus.MET,
+        observed_at=datetime.now(timezone.utc),
+    )
+    repo.commitments[commitment.id] = commitment
+    # A recent completion keeps the daily cadence on track.
+    repo.completions.append(
+        CommitmentCompletion(
+            id=uuid4(),
+            commitment_id=commitment.id,
+            tenant_id=UUID(_TENANT),
+            jurisdiction="eu-west",
+            completed_at=datetime.now(timezone.utc),
+        )
+    )
+    return repo
+
+
+def test_goals_route_returns_german_reading() -> None:
+    graph = _FakeGoalGraph(_german_goal())
+    client = _client(
+        _german_commitment_repo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph
+    )
+    res = client.get("/api/v1/daily-driver/goals")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert len(body) == 1
+    g = body[0]
+    assert g["name"] == "German"
+    assert g["current_target"] == "B1"
+    assert g["recommendation"] == "raise"
+    assert g["next_target"] == "B2"
+
+
+def test_raise_target_route_raises_one_level() -> None:
+    graph = _FakeGoalGraph(_german_goal())
+    client = _client(
+        _german_commitment_repo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph
+    )
+    res = client.post(f"/api/v1/daily-driver/goals/{_OUTCOME}/raise-target")
+    assert res.status_code == 200, res.text
+    assert graph.raised_to == "B2"
+    assert res.json()["current_target"] == "B2"
+
+
+def test_raise_target_at_top_409() -> None:
+    graph = _FakeGoalGraph(_german_goal(target="C2"))
+    client = _client(
+        _german_commitment_repo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph
+    )
+    res = client.post(f"/api/v1/daily-driver/goals/{_OUTCOME}/raise-target")
+    assert res.status_code == 409
+    assert graph.raised_to is None

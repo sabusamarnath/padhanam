@@ -317,6 +317,9 @@
           <p class="sub">One prioritised list across your whole day — what needs you, and what has gone quiet.</p>
           <div class="legend"><span><span class="swatch work"></span> Work surface</span><span><span class="swatch personal"></span> Personal surface</span></div>
           <div class="list" id="list"></div>
+          <div class="section-label">Goals</div>
+          <p class="sub">A goal sits above your commitments: it has a target, and your commitment is the lever that moves it.</p>
+          <div class="goals" id="goals"></div>
           <div class="section-label">New commitment</div>
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
@@ -327,6 +330,7 @@
         document.getElementById("c-add").onclick = addCommitment;
         document.getElementById("c-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addCommitment(); });
         loadToday();
+        loadGoals();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -342,6 +346,48 @@
       order = data.items.map((it) => ({ kind: it.kind, item_id: it.item_id }));
       itemsByKey = {}; data.items.forEach((it) => { itemsByKey[keyOf(it)] = it; });
       render(data.items);
+    }
+    // --- Goals (S62, D163: the goal layer above commitments) ---
+    async function loadGoals() {
+      const box = document.getElementById("goals"); if (!box) return;
+      let goals;
+      try { goals = await api("/daily-driver/goals"); } catch { box.innerHTML = ""; return; }
+      if (!goals.length) { box.innerHTML = '<div class="empty">No goals yet.</div>'; return; }
+      box.innerHTML = "";
+      goals.forEach((g) => box.appendChild(goalCard(g)));
+    }
+    function goalCard(g) {
+      const card = document.createElement("div");
+      card.className = "row"; card.dataset.tier = "work";
+      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "6px";
+      const raise = g.recommendation === "raise";
+      const rec = raise
+        ? `<span style="color:#1a7f4b;font-weight:600">↑ Raise</span>`
+        : `<span style="color:#8a8a8a;font-weight:600">→ Hold</span>`;
+      const btn = (raise && g.next_target)
+        ? `<button class="btn-primary" data-oid="${g.outcome_id}" data-next="${escapeHtml(g.next_target)}">Raise target to ${escapeHtml(g.next_target)}</button>`
+        : "";
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <strong>${escapeHtml(g.name)}</strong>
+          <span class="sub" style="margin:0">target: <strong>${escapeHtml(g.current_target || "—")}</strong></span>
+        </div>
+        <div class="sub" style="margin:0">Progress — ${escapeHtml(g.progress_summary)}</div>
+        <div class="sub" style="margin:0">Gap — ${escapeHtml(g.gap_summary)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span class="sub" style="margin:0">Recommendation: ${rec} — ${escapeHtml(g.reason)}</span>
+          ${btn}
+        </div>`;
+      const b = card.querySelector("button[data-oid]");
+      if (b) b.onclick = () => raiseTarget(b.dataset.oid, b.dataset.next);
+      return card;
+    }
+    async function raiseTarget(outcomeId, next) {
+      try {
+        await api(`/daily-driver/goals/${outcomeId}/raise-target`, { method: "POST" });
+        toast(`Target raised to ${next}`);
+        await loadGoals();
+      } catch (e) { toast("Could not raise the target", true); }
     }
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }
     function render(items) {

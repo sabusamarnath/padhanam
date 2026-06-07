@@ -40,17 +40,21 @@ from apps.api.routers._daily_driver_dto import (
     CommitmentDTO,
     CompletionDTO,
     CreateCommitmentRequest,
+    GoalReadingDTO,
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
     SetOrderRequest,
     TodayDTO,
+    goal_reading_to_dto,
     today_view_to_dto,
 )
 from contexts.daily_driver.application import (
     create_commitment,
+    list_goals,
     list_today,
     log_commitment_completion,
     mark_item_done,
+    raise_goal_target,
     record_observed_outcome,
     set_today_order,
 )
@@ -59,6 +63,7 @@ from contexts.daily_driver.ports import (
     CalendarEventsReader,
     CommitmentRepository,
     DayRepository,
+    GoalGraphPort,
     OpenCasesReader,
 )
 from shared_kernel import ActorContext
@@ -102,6 +107,11 @@ def get_calendar_events_reader(request: Request) -> CalendarEventsReader | None:
     calendar seam.
     """
     return getattr(request.app.state, "daily_driver_calendar_reader", None)
+
+
+def get_goal_graph(request: Request) -> GoalGraphPort:
+    """FastAPI dependency: the daily-driver GoalGraphPort (D163)."""
+    return _state(request, "daily_driver_goal_graph")  # type: ignore[return-value]
 
 
 def get_drop_candidate_quiet_days(request: Request) -> int | None:
@@ -230,6 +240,56 @@ async def post_observed_outcome(
     if commitment is None:
         raise HTTPException(status_code=404, detail="commitment not found")
     return _commitment_to_dto(commitment)
+
+
+@router.get("/goals", response_model=list[GoalReadingDTO])
+async def get_goals(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> list[GoalReadingDTO]:
+    """Read each goal against its lever — target, progress, gap, recommendation (D163)."""
+    readings = await list_goals(
+        goal_graph=goal_graph,
+        commitment_repository=commitment_repository,
+        actor=actor,
+    )
+    return [goal_reading_to_dto(r) for r in readings]
+
+
+@router.post("/goals/{outcome_id}/raise-target", response_model=GoalReadingDTO)
+async def post_raise_target(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> GoalReadingDTO:
+    """Raise the goal's target one level (D163) — explicit, never automatic (D9).
+
+    Returns the re-read goal on success; 409 when the goal is absent or already
+    at the top of the ladder (nothing to raise to).
+    """
+    new_level = await raise_goal_target(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id
+    )
+    if new_level is None:
+        raise HTTPException(
+            status_code=409,
+            detail="cannot raise: goal not found or already at the top of the ladder",
+        )
+    readings = await list_goals(
+        goal_graph=goal_graph,
+        commitment_repository=commitment_repository,
+        actor=actor,
+    )
+    reading = next((r for r in readings if r.goal.id == outcome_id), None)
+    if reading is None:
+        raise HTTPException(status_code=404, detail="goal not found after raise")
+    return goal_reading_to_dto(reading)
 
 
 @router.put("/today/order", status_code=204)

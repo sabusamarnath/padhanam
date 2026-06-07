@@ -41,6 +41,13 @@ from contexts.daily_driver.domain.commitment import (
     OutcomeStatus,
 )
 from contexts.daily_driver.domain.day import DayItemState
+from contexts.daily_driver.domain.goal import (
+    ControlAxis,
+    Goal,
+    GoalMode,
+    LevelLadder,
+    Subject,
+)
 from contexts.daily_driver.domain.today_item import (
     CalendarToday,
     ItemKind,
@@ -330,6 +337,72 @@ def _calendar_today(meeting: Meeting, *, domain: str) -> CalendarToday:
     )
 
 
+class GoalGraphAdapter:
+    """apps/ adapter implementing daily-driver's ``GoalGraphPort`` over
+    ingestion's ``OutcomeGraphPort`` (D163, D17).
+
+    The bridge from the daily-driver goal layer to the shared graph: it maps
+    the generic ``OutcomeGraphRecord`` rows ingestion returns onto the
+    daily-driver ``Goal`` domain (the calendar ``MeetingGraphIndexBridge``
+    precedent). The underlying ``Neo4jGraphRepository`` is process-shared;
+    tenant scoping flows through the ``tenant_context`` on every call.
+    """
+
+    def __init__(self, *, outcome_graph: Any) -> None:
+        self._outcome_graph = outcome_graph
+
+    @staticmethod
+    def _to_goal(record: Any, *, tenant_context: TenantContext) -> Goal:
+        mode = GoalMode(record.mode)
+        ladder = None
+        if (
+            mode is GoalMode.PROGRESSIVE
+            and record.ladder
+            and record.current_target_level
+        ):
+            ladder = LevelLadder(
+                levels=tuple(record.ladder),
+                current_target_level=record.current_target_level,
+            )
+        return Goal(
+            id=record.outcome_id,
+            tenant_id=UUID(str(tenant_context.tenant_id)),
+            jurisdiction=tenant_context.jurisdiction,
+            name=record.name,
+            mode=mode,
+            control=ControlAxis(record.control),
+            subject=Subject(record.subject),
+            lever_commitment_id=record.commitment_id,
+            ladder=ladder,
+        )
+
+    async def list_goals(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[Goal, ...]:
+        records = await self._outcome_graph.list_outcomes(
+            tenant_context=tenant_context
+        )
+        return tuple(
+            self._to_goal(record, tenant_context=tenant_context)
+            for record in records
+        )
+
+    async def raise_target_level(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        commitment_id: UUID,
+        new_target_level: str,
+    ) -> str | None:
+        return await self._outcome_graph.set_lever_target(
+            tenant_context=tenant_context,
+            outcome_id=outcome_id,
+            commitment_id=commitment_id,
+            current_target_level=new_target_level,
+        )
+
+
 def build_commitment_repository(
     *,
     tenant_registry: PostgresTenantRegistry,
@@ -404,13 +477,30 @@ def build_calendar_events_reader(
     )
 
 
+def build_goal_graph() -> GoalGraphAdapter:
+    """Wire the daily-driver GoalGraphPort over the shared graph (D163, D17).
+
+    The ``Neo4jGraphRepository`` is process-shared (the calendar precedent) and
+    imported lazily so this module stays importable without a live Neo4j; tenant
+    scoping flows through the ``tenant_context`` on each call.
+    """
+    from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
+    from padhanam.config import Neo4jSettings
+
+    return GoalGraphAdapter(
+        outcome_graph=Neo4jGraphRepository.from_settings(Neo4jSettings())
+    )
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
+    "GoalGraphAdapter",
     "OpenCasesReaderAdapter",
     "build_calendar_events_reader",
     "build_commitment_repository",
     "build_day_repository",
+    "build_goal_graph",
     "build_open_cases_reader",
 ]
