@@ -45,6 +45,10 @@ from shared_kernel import TenantContext, TenantId
 _TENANT_UUID_BY_LABEL: dict[str, str] = {
     "a": "00000000-0000-4000-8000-00000000a001",
     "b": "00000000-0000-4000-8000-00000000b002",
+    # The dedicated dogfood personal tenant (D32 [dogfood-setup]). Resolvable
+    # by the dev CLI / connect first-sync so calendar/email pulls run for it;
+    # maps to POSTGRES_TENANT_PERSONAL_* / host postgres-tenant-personal.
+    "personal": "00000000-0000-4000-8000-00000000d001",
 }
 
 
