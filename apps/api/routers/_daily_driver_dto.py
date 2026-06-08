@@ -13,7 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from contexts.daily_driver.domain.commitment import OutcomeStatus
-from contexts.daily_driver.domain.goal_view import GoalReading
+from contexts.daily_driver.domain.goal_view import ChainReading, GoalReading
 from contexts.daily_driver.domain.today_item import (
     ItemKind,
     TodayItem,
@@ -113,26 +113,56 @@ class MarkDoneRequest(BaseModel):
     done: bool
 
 
+class GoalStepDTO(BaseModel):
+    """One lever step in a sequence goal's chain view (D163, S63)."""
+
+    name: str
+    order: int
+    state: str
+    is_active: bool
+
+
 class GoalReadingDTO(BaseModel):
-    """A goal read against its lever — target, progress, gap, recommendation (D163)."""
+    """A goal read against its lever(s) (D163).
+
+    ``remedy_kind`` discriminates the shape: ``raise_or_hold`` (progressive) or
+    ``unblock_or_drop`` (sequence). Progressive fields (``ladder``,
+    ``current_target``, ``next_target``) are ``None`` for a sequence goal;
+    sequence fields (``terminal_target``, ``terminal_state``, ``steps``,
+    ``active_step``) are absent/empty for a progressive goal.
+    """
 
     outcome_id: UUID
     name: str
     mode: str
     control: str
     subject: str
-    lever_commitment_id: UUID | None
-    ladder: list[str] | None
-    current_target: str | None
+    remedy_kind: str
+    # progressive (raise-or-hold)
+    lever_commitment_id: UUID | None = None
+    ladder: list[str] | None = None
+    current_target: str | None = None
+    next_target: str | None = None
+    # sequence (unblock-or-drop)
+    terminal_target: str | None = None
+    terminal_state: str | None = None
+    steps: list[GoalStepDTO] = []
+    active_step: str | None = None
+    # common
     progress_summary: str
     gap_summary: str
     recommendation: str
     reason: str
-    next_target: str | None
 
 
-def goal_reading_to_dto(reading: GoalReading) -> GoalReadingDTO:
-    """Encode a domain GoalReading into the HTTP DTO (D163)."""
+def goal_reading_to_dto(reading: GoalReading | ChainReading) -> GoalReadingDTO:
+    """Encode a domain reading into the HTTP DTO, dispatching on shape (D163)."""
+    if isinstance(reading, ChainReading):
+        return _chain_reading_to_dto(reading)
+    return _goal_reading_to_dto(reading)
+
+
+def _goal_reading_to_dto(reading: GoalReading) -> GoalReadingDTO:
     goal = reading.goal
     return GoalReadingDTO(
         outcome_id=goal.id,
@@ -140,14 +170,43 @@ def goal_reading_to_dto(reading: GoalReading) -> GoalReadingDTO:
         mode=goal.mode.value,
         control=goal.control.value,
         subject=goal.subject.value,
+        remedy_kind="raise_or_hold",
         lever_commitment_id=goal.lever_commitment_id,
         ladder=list(goal.ladder.levels) if goal.ladder is not None else None,
         current_target=reading.current_target,
+        next_target=reading.next_target,
         progress_summary=reading.progress_summary,
         gap_summary=reading.gap_summary,
         recommendation=reading.recommendation.value,
         reason=reading.reason,
-        next_target=reading.next_target,
+    )
+
+
+def _chain_reading_to_dto(reading: ChainReading) -> GoalReadingDTO:
+    goal = reading.goal
+    return GoalReadingDTO(
+        outcome_id=goal.id,
+        name=goal.name,
+        mode=goal.mode.value,
+        control=goal.control.value,
+        subject=goal.subject.value,
+        remedy_kind="unblock_or_drop",
+        terminal_target=reading.terminal_target,
+        terminal_state=reading.terminal_state,
+        steps=[
+            GoalStepDTO(
+                name=s.name,
+                order=s.order,
+                state=s.state.value,
+                is_active=s.is_active,
+            )
+            for s in reading.steps
+        ],
+        active_step=reading.active_step_name,
+        progress_summary=reading.chain_summary,
+        gap_summary=reading.chain_summary,
+        recommendation=reading.recommendation.value,
+        reason=reading.reason,
     )
 
 
@@ -185,6 +244,7 @@ __all__ = [
     "CompletionDTO",
     "CreateCommitmentRequest",
     "GoalReadingDTO",
+    "GoalStepDTO",
     "ItemRef",
     "MarkDoneRequest",
     "RecordObservedOutcomeRequest",

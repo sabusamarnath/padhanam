@@ -28,7 +28,12 @@ from contexts.daily_driver.domain.commitment import (
     CommitmentActivity,
     OutcomeStatus,
 )
-from contexts.daily_driver.domain.goal import Goal, GoalMode
+from contexts.daily_driver.domain.goal import (
+    Goal,
+    GoalMode,
+    StepState,
+    TerminalState,
+)
 from contexts.daily_driver.domain.staleness import is_overdue, overdue_by_days
 
 
@@ -37,6 +42,21 @@ class RaiseOrHold(str, Enum):
 
     RAISE = "raise"
     HOLD = "hold"
+
+
+class UnblockOrDrop(str, Enum):
+    """The sequence remedy (S63): unblock the active step, drop it, or continue.
+
+    Distinct from ``RaiseOrHold`` by construction — the two remedies share no
+    code path (D163: the remedy reads the shape; the wrong remedy must not fire
+    on the wrong mode). ``UNBLOCK`` and ``DROP`` are the two interventions on a
+    stalled step (the actor's call, recommendation-shaped per D9); ``CONTINUE``
+    is the no-intervention default (the chain is moving).
+    """
+
+    UNBLOCK = "unblock"
+    DROP = "drop"
+    CONTINUE = "continue"
 
 
 @dataclass(frozen=True)
@@ -187,4 +207,182 @@ def build_goal_reading(
     )
 
 
-__all__ = ["GoalReading", "RaiseOrHold", "build_goal_reading"]
+# --- sequence reading (S63, D163): unblock-or-drop, reads the chain shape ----
+
+
+@dataclass(frozen=True)
+class StepReading:
+    """One lever step rendered for the chain view (S63)."""
+
+    name: str
+    order: int
+    state: StepState
+    is_active: bool
+
+
+@dataclass(frozen=True)
+class ChainReading:
+    """A sequence goal read against its lever-step chain (D163, S63).
+
+    The sequence analogue of ``GoalReading`` — a deliberately separate type so
+    no read path crosses the two remedies. ``terminal_state`` is the
+    influence-gated terminal (the part another party decides); its richer
+    probabilistic reading is deferred to the influence instance.
+    """
+
+    goal: Goal
+    terminal_target: str | None
+    terminal_state: str
+    steps: tuple[StepReading, ...]
+    active_step_name: str | None
+    chain_summary: str
+    recommendation: UnblockOrDrop
+    reason: str
+
+
+def _step_name(commitment_id, activity_by_id: dict, order: int) -> str:
+    activity = activity_by_id.get(commitment_id)
+    if activity is not None:
+        return activity.commitment.name
+    return f"step {order}"
+
+
+def build_chain_reading(
+    *,
+    goal: Goal,
+    activity_by_id: dict,
+    now: datetime,
+) -> ChainReading:
+    """Read a sequence goal against its lever-step chain (D163, S63).
+
+    unblock-or-drop operates on the steps the actor controls; the
+    influence-gated terminal (the employer's decision) is represented as a state
+    only. The active step is the earliest step not done and not dropped; the
+    recommendation reads its state (a blocked active step → intervene; a moving
+    active step → continue) — the chain's shape, not a single observation, so
+    the credulity flip the S62 raise rec showed cannot recur here.
+    """
+    steps = goal.ordered_steps
+    terminal = goal.terminal
+    terminal_target = terminal.target if terminal is not None else None
+    terminal_state = (
+        terminal.state.value if terminal is not None else TerminalState.PENDING.value
+    )
+
+    active_step = next(
+        (
+            s
+            for s in steps
+            if s.state not in (StepState.DONE, StepState.DROPPED)
+        ),
+        None,
+    )
+    step_readings = tuple(
+        StepReading(
+            name=_step_name(s.commitment_id, activity_by_id, s.order),
+            order=s.order,
+            state=s.state,
+            is_active=(active_step is not None and s.order == active_step.order),
+        )
+        for s in steps
+    )
+    active_name = (
+        _step_name(active_step.commitment_id, activity_by_id, active_step.order)
+        if active_step is not None
+        else None
+    )
+    done_count = sum(1 for s in steps if s.state is StepState.DONE)
+    chain_summary = (
+        f"{done_count} of {len(steps)} steps done; "
+        + (
+            f"active: {active_name} ({active_step.state.value})"
+            if active_step is not None
+            else "chain complete"
+        )
+    )
+
+    # No active step: the chain is done/dropped — the outcome now rests on the
+    # influence-gated terminal, which the actor does not control. Nothing to
+    # unblock or drop.
+    if active_step is None:
+        if terminal_state == TerminalState.REACHED.value:
+            reason = "the terminal is reached — the goal is met"
+        else:
+            reason = (
+                "every step the actor controls is done — the terminal is the "
+                "employer's decision now (influence-gated); nothing to unblock"
+            )
+        return ChainReading(
+            goal=goal,
+            terminal_target=terminal_target,
+            terminal_state=terminal_state,
+            steps=step_readings,
+            active_step_name=None,
+            chain_summary=chain_summary,
+            recommendation=UnblockOrDrop.CONTINUE,
+            reason=reason,
+        )
+
+    # A blocked active step is the clearest unblock-or-drop case: read the shape.
+    if active_step.state is StepState.BLOCKED:
+        return ChainReading(
+            goal=goal,
+            terminal_target=terminal_target,
+            terminal_state=terminal_state,
+            steps=step_readings,
+            active_step_name=active_name,
+            chain_summary=chain_summary,
+            recommendation=UnblockOrDrop.UNBLOCK,
+            reason=(
+                f"'{active_name}' is blocked — unblock it (clear what is "
+                f"stalling it), or drop the step if it is no longer needed"
+            ),
+        )
+
+    # A ready active step: a stalled cadence (sustained, not a single
+    # observation) is the unblock signal; otherwise the chain is moving.
+    activity = activity_by_id.get(active_step.commitment_id)
+    if activity is not None and not _cadence_on_track(activity, now=now):
+        overshoot = overdue_by_days(
+            last_activity_at=(
+                activity.last_completed_at or activity.commitment.created_at
+            ),
+            expected_interval_days=activity.commitment.expected_interval_days,
+            now=now,
+        )
+        return ChainReading(
+            goal=goal,
+            terminal_target=terminal_target,
+            terminal_state=terminal_state,
+            steps=step_readings,
+            active_step_name=active_name,
+            chain_summary=chain_summary,
+            recommendation=UnblockOrDrop.UNBLOCK,
+            reason=(
+                f"'{active_name}' has stalled — {overshoot} days without "
+                f"progress; unblock it, or drop the step if it is no longer "
+                f"needed"
+            ),
+        )
+
+    return ChainReading(
+        goal=goal,
+        terminal_target=terminal_target,
+        terminal_state=terminal_state,
+        steps=step_readings,
+        active_step_name=active_name,
+        chain_summary=chain_summary,
+        recommendation=UnblockOrDrop.CONTINUE,
+        reason=f"'{active_name}' is moving — continue the chain",
+    )
+
+
+__all__ = [
+    "ChainReading",
+    "GoalReading",
+    "RaiseOrHold",
+    "StepReading",
+    "UnblockOrDrop",
+    "build_chain_reading",
+    "build_goal_reading",
+]

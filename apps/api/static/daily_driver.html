@@ -357,6 +357,12 @@
       goals.forEach((g) => box.appendChild(goalCard(g)));
     }
     function goalCard(g) {
+      // The card reads the goal's shape: a sequence goal gets unblock-or-drop
+      // over its chain, a progressive goal gets raise-or-hold (D163). No shared
+      // path renders both.
+      return g.remedy_kind === "unblock_or_drop" ? chainCard(g) : progressiveCard(g);
+    }
+    function progressiveCard(g) {
       const card = document.createElement("div");
       card.className = "row"; card.dataset.tier = "work";
       card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "6px";
@@ -380,6 +386,37 @@
         </div>`;
       const b = card.querySelector("button[data-oid]");
       if (b) b.onclick = () => raiseTarget(b.dataset.oid, b.dataset.next);
+      return card;
+    }
+    function stepGlyph(state, active) {
+      if (state === "done") return "✓";
+      if (state === "dropped") return "✕";
+      if (state === "blocked") return active ? "⚠" : "⋯";
+      return active ? "▶" : "○"; // ready
+    }
+    function chainCard(g) {
+      const card = document.createElement("div");
+      card.className = "row"; card.dataset.tier = "work";
+      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "6px";
+      const intervene = g.recommendation === "unblock" || g.recommendation === "drop";
+      const rec = intervene
+        ? `<span style="color:#b4690e;font-weight:600">⚠ Unblock or drop</span>`
+        : `<span style="color:#8a8a8a;font-weight:600">→ Continue</span>`;
+      const steps = (g.steps || []).map((s) => {
+        const w = s.is_active ? "font-weight:600" : "";
+        const dim = (s.state === "done" || s.state === "dropped") ? "opacity:.6" : "";
+        return `<div class="sub" style="margin:0;${w};${dim}">${stepGlyph(s.state, s.is_active)} ${escapeHtml(s.name)} <span style="color:#8a8a8a">(${escapeHtml(s.state)})</span></div>`;
+      }).join("");
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <strong>${escapeHtml(g.name)}</strong>
+          <span class="sub" style="margin:0">terminal: <strong>${escapeHtml(g.terminal_target || "—")}</strong> <span style="color:#8a8a8a">(${escapeHtml(g.terminal_state || "—")})</span></span>
+        </div>
+        <div style="margin:2px 0">${steps}</div>
+        <div class="sub" style="margin:0">Chain — ${escapeHtml(g.progress_summary)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span class="sub" style="margin:0">Recommendation: ${rec} — ${escapeHtml(g.reason)}</span>
+        </div>`;
       return card;
     }
     async function raiseTarget(outcomeId, next) {

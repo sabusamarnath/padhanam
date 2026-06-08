@@ -409,3 +409,64 @@ def test_raise_target_at_top_409() -> None:
     res = client.post(f"/api/v1/daily-driver/goals/{_OUTCOME}/raise-target")
     assert res.status_code == 409
     assert graph.raised_to is None
+
+
+_SEQ_OUTCOME = UUID("00000000-0000-4000-8000-0000006300a1")
+
+
+def _get_a_job_goal():
+    from contexts.daily_driver.domain.goal import (
+        ControlAxis,
+        Goal,
+        GoalMode,
+        LeverStep,
+        StepState,
+        Subject,
+        Terminal,
+        TerminalState,
+    )
+
+    return Goal(
+        id=_SEQ_OUTCOME,
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        name="Get a job",
+        mode=GoalMode.SEQUENCE,
+        control=ControlAxis.OTHER,
+        subject=Subject.SELF,
+        terminal=Terminal(target="Offer accepted", state=TerminalState.PENDING),
+        steps=(
+            LeverStep(
+                commitment_id=UUID("00000000-0000-4000-8000-0000006300c1"),
+                order=1,
+                state=StepState.DONE,
+            ),
+            LeverStep(
+                commitment_id=UUID("00000000-0000-4000-8000-0000006300c2"),
+                order=2,
+                state=StepState.BLOCKED,
+            ),
+        ),
+    )
+
+
+def test_goals_route_returns_unblock_or_drop_for_sequence() -> None:
+    # AC5/AC6: a sequence goal surfaces its chain + unblock-or-drop, and never
+    # raise-or-hold.
+    graph = _FakeGoalGraph(_get_a_job_goal())
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph
+    )
+    res = client.get("/api/v1/daily-driver/goals")
+    assert res.status_code == 200, res.text
+    g = res.json()[0]
+    assert g["name"] == "Get a job"
+    assert g["mode"] == "sequence"
+    assert g["control"] == "other"  # the influence case
+    assert g["remedy_kind"] == "unblock_or_drop"
+    assert g["recommendation"] == "unblock"
+    assert g["recommendation"] not in ("raise", "hold")
+    assert g["terminal_target"] == "Offer accepted"
+    assert g["terminal_state"] == "pending"
+    assert len(g["steps"]) == 2
+    assert g["current_target"] is None  # no ladder on a sequence goal

@@ -137,3 +137,89 @@ def test_non_progressive_goal_is_not_read_at_s62() -> None:
     reading = build_goal_reading(goal=goal, activity=activity, now=_NOW)
     assert reading.recommendation is RaiseOrHold.HOLD
     assert "homeostatic" in reading.reason
+
+
+# --- sequence reading: unblock-or-drop (S63, D163) ------------------------
+
+from contexts.daily_driver.domain.goal import (  # noqa: E402
+    ControlAxis,
+    GoalMode,
+    LeverStep,
+    StepState,
+    Subject,
+    Terminal,
+    TerminalState,
+)
+from contexts.daily_driver.domain.goal_view import (  # noqa: E402
+    ChainReading,
+    UnblockOrDrop,
+    build_chain_reading,
+)
+
+_SEQ_OUTCOME = UUID("00000000-0000-4000-8000-0000006300a1")
+_C1 = UUID("00000000-0000-4000-8000-0000006300c1")
+_C2 = UUID("00000000-0000-4000-8000-0000006300c2")
+_C3 = UUID("00000000-0000-4000-8000-0000006300c3")
+
+
+def _seq_goal(states) -> Goal:
+    return Goal(
+        id=_SEQ_OUTCOME,
+        tenant_id=UUID("00000000-0000-4000-8000-00000000d001"),
+        jurisdiction="eu-west",
+        name="Get a job",
+        mode=GoalMode.SEQUENCE,
+        control=ControlAxis.OTHER,
+        subject=Subject.SELF,
+        terminal=Terminal(target="Offer accepted", state=TerminalState.PENDING),
+        steps=tuple(
+            LeverStep(commitment_id=cid, order=i + 1, state=st)
+            for i, (cid, st) in enumerate(states)
+        ),
+    )
+
+
+def test_chain_blocked_active_step_recommends_unblock() -> None:
+    goal = _seq_goal(
+        [(_C1, StepState.DONE), (_C2, StepState.BLOCKED), (_C3, StepState.BLOCKED)]
+    )
+    reading = build_chain_reading(goal=goal, activity_by_id={}, now=_NOW)
+    assert isinstance(reading, ChainReading)
+    assert reading.recommendation is UnblockOrDrop.UNBLOCK
+    assert "drop" in reading.reason  # both interventions offered
+    assert reading.active_step_name is not None
+    active = [s for s in reading.steps if s.is_active]
+    assert len(active) == 1 and active[0].order == 2
+
+
+def test_chain_complete_awaits_influence_gated_terminal() -> None:
+    goal = _seq_goal(
+        [(_C1, StepState.DONE), (_C2, StepState.DONE), (_C3, StepState.DONE)]
+    )
+    reading = build_chain_reading(goal=goal, activity_by_id={}, now=_NOW)
+    assert reading.recommendation is UnblockOrDrop.CONTINUE
+    assert reading.terminal_state == "pending"
+    assert reading.active_step_name is None
+
+
+def test_chain_ready_active_step_on_track_continues() -> None:
+    goal = _seq_goal(
+        [(_C1, StepState.DONE), (_C2, StepState.READY), (_C3, StepState.BLOCKED)]
+    )
+    # active step (C2) has a fresh, on-track lever → continue, not unblock.
+    activity = CommitmentActivity(
+        commitment=Commitment(
+            id=_C2,
+            tenant_id=UUID("00000000-0000-4000-8000-00000000d001"),
+            jurisdiction="eu-west",
+            name="Apply to target roles",
+            expected_interval_days=7,
+            authored_by_user_id="operator-001",
+            created_at=_NOW - timedelta(days=1),
+        ),
+        last_completed_at=_NOW - timedelta(hours=2),
+    )
+    reading = build_chain_reading(
+        goal=goal, activity_by_id={_C2: activity}, now=_NOW
+    )
+    assert reading.recommendation is UnblockOrDrop.CONTINUE
