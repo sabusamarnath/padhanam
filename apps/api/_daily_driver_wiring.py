@@ -60,6 +60,10 @@ from contexts.daily_driver.domain.today_item import (
 from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
 )
+from contexts.tasks.adapters.outbound.postgres.task_store import (
+    PostgresTaskStore,
+)
+from contexts.tasks.domain.task import Task
 from contexts.portfolio.application.list_cases import list_cases
 from contexts.portfolio.domain.case import CaseStatus
 from contexts.portfolio.domain.query_filters import CaseListFilters
@@ -424,6 +428,56 @@ class GoalGraphAdapter:
         )
 
 
+class TasksReaderAdapter:
+    """apps/ adapter reading the tasks cache for the daily-driver Tasks view (D167).
+
+    Composes the tasks context's ``PostgresTaskStore`` (bound to the request's
+    tenant — isolation defence-in-depth) and lists the non-deleted tasks. The
+    Tasks view is **its own list**, uncorrelated to calendar or goals (D167);
+    correlation into units of work is P18, so this reader does not touch
+    ``build_today_view`` or the goal graph. apps/ may import a producer
+    context's adapter directly (the calendar ``PostgresMeetingStore`` precedent).
+    """
+
+    def __init__(
+        self, *, session_factory_for_tenant: _SessionFactoryForTenant
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_tasks(
+        self, *, actor: ActorContext, include_completed: bool = True
+    ) -> tuple[Task, ...]:
+        sessionmaker = await self._session_factory_for_tenant(
+            actor.tenant_context
+        )
+        store = PostgresTaskStore(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        return await store.list_tasks(
+            tenant_context=actor.tenant_context,
+            include_completed=include_completed,
+        )
+
+
+def build_tasks_reader(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> TasksReaderAdapter:
+    """Wire the daily-driver Tasks reader over the tasks cache (D167)."""
+    return TasksReaderAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
 def build_commitment_repository(
     *,
     tenant_registry: PostgresTenantRegistry,
@@ -519,9 +573,11 @@ __all__ = [
     "DayRepositoryRouter",
     "GoalGraphAdapter",
     "OpenCasesReaderAdapter",
+    "TasksReaderAdapter",
     "build_calendar_events_reader",
     "build_commitment_repository",
     "build_day_repository",
     "build_goal_graph",
     "build_open_cases_reader",
+    "build_tasks_reader",
 ]

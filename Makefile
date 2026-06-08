@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job pull-tasks scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -229,6 +229,13 @@ seed-german: derive-env
 # `make dogfood-provision` and `make migrate`.
 seed-get-a-job: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_get_a_job
+
+# Pull Google Tasks for the personal tenant (S65, D167): ensure the
+# google-tasks connection then full re-pull into the re-pullable cache.
+# Operator-gated: provision the Nango google-tasks integration
+# (tasks.readonly) + set TASKS_CONNECTION_REF in .env first. Idempotent.
+pull-tasks: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.pull_tasks
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,

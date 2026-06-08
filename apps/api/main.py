@@ -226,6 +226,9 @@ class AppCompositions:
     daily_driver_drop_candidate_quiet_days: int | None = None
     # S62 (D163): the goal-layer graph reader/raiser over the shared Neo4j.
     daily_driver_goal_graph: object | None = None
+    # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
+    # when unwired (the /tasks view degrades to an empty list).
+    daily_driver_tasks_reader: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
@@ -580,6 +583,7 @@ def _build_default_compositions() -> AppCompositions:
         build_day_repository,
         build_goal_graph,
         build_open_cases_reader,
+        build_tasks_reader,
     )
     from padhanam.config.calendar import CalendarSettings
 
@@ -617,6 +621,13 @@ def _build_default_compositions() -> AppCompositions:
     )
     # S62 (D163): the goal-layer graph reader over the shared Neo4j (process-shared).
     daily_driver_goal_graph = build_goal_graph()
+    # S65 (D167): the Tasks-view reader over the ingested tasks cache.
+    daily_driver_tasks_reader = build_tasks_reader(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
     from apps.api._connections_wiring import build_connections_status_reader
 
     connections_status_reader = build_connections_status_reader(
@@ -690,6 +701,7 @@ def _build_default_compositions() -> AppCompositions:
             daily_driver_drop_candidate_quiet_days
         ),
         daily_driver_goal_graph=daily_driver_goal_graph,
+        daily_driver_tasks_reader=daily_driver_tasks_reader,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
         google_oidc=google_oidc,
@@ -942,6 +954,9 @@ def create_app(
     )
     # S62 (D163): the goal-layer graph reader/raiser.
     app.state.daily_driver_goal_graph = compositions.daily_driver_goal_graph
+    app.state.daily_driver_tasks_reader = (
+        compositions.daily_driver_tasks_reader
+    )
     app.state.connections_status_reader = (
         compositions.connections_status_reader
     )

@@ -44,8 +44,10 @@ from apps.api.routers._daily_driver_dto import (
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
     SetOrderRequest,
+    TaskDTO,
     TodayDTO,
     goal_reading_to_dto,
+    task_to_dto,
     today_view_to_dto,
 )
 from contexts.daily_driver.application import (
@@ -112,6 +114,15 @@ def get_calendar_events_reader(request: Request) -> CalendarEventsReader | None:
 def get_goal_graph(request: Request) -> GoalGraphPort:
     """FastAPI dependency: the daily-driver GoalGraphPort (D163)."""
     return _state(request, "daily_driver_goal_graph")  # type: ignore[return-value]
+
+
+def get_tasks_reader(request: Request):
+    """FastAPI dependency: the daily-driver Tasks reader (D167), if wired.
+
+    Optional: returns ``None`` when unconfigured so /tasks degrades to an empty
+    list rather than 503ing for an instance without the tasks seam.
+    """
+    return getattr(request.app.state, "daily_driver_tasks_reader", None)
 
 
 def get_drop_candidate_quiet_days(request: Request) -> int | None:
@@ -290,6 +301,22 @@ async def post_raise_target(
     if reading is None:
         raise HTTPException(status_code=404, detail="goal not found after raise")
     return goal_reading_to_dto(reading)
+
+
+@router.get("/tasks", response_model=list[TaskDTO])
+async def get_tasks(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    tasks_reader: Annotated[object | None, Depends(get_tasks_reader)],
+) -> list[TaskDTO]:
+    """Return the actor's ingested Google tasks as their own view (D167).
+
+    Not correlated to calendar or goals — correlation into units of work is P18.
+    Degrades to an empty list when the tasks seam is unconfigured.
+    """
+    if tasks_reader is None:
+        return []
+    tasks = await tasks_reader.list_tasks(actor=actor)
+    return [task_to_dto(t) for t in tasks]
 
 
 @router.put("/today/order", status_code=204)

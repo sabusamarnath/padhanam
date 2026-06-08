@@ -222,6 +222,15 @@ layers =
     contexts.email.ports
     contexts.email.domain
 
+[importlinter:contract:layers-tasks]
+name = Tasks layers (hexagonal)
+type = layers
+layers =
+    contexts.tasks.adapters
+    contexts.tasks.application
+    contexts.tasks.ports
+    contexts.tasks.domain
+
 [importlinter:contract:layers-threshold-briefing]
 name = Threshold-briefing layers (hexagonal)
 type = layers

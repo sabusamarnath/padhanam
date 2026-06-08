@@ -115,7 +115,13 @@ class _FakeOpenCases:
 
 
 def _client(
-    commit_repo, day_repo, open_cases, *, quiet_days=None, goal_graph=None
+    commit_repo,
+    day_repo,
+    open_cases,
+    *,
+    quiet_days=None,
+    goal_graph=None,
+    tasks_reader=None,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(daily_driver_router.router)
@@ -124,6 +130,7 @@ def _client(
     app.state.daily_driver_open_cases_reader = open_cases
     app.state.daily_driver_drop_candidate_quiet_days = quiet_days
     app.state.daily_driver_goal_graph = goal_graph
+    app.state.daily_driver_tasks_reader = tasks_reader
     app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
@@ -448,6 +455,59 @@ def _get_a_job_goal():
             ),
         ),
     )
+
+
+class _FakeTasksReader:
+    def __init__(self, tasks) -> None:
+        self._tasks = tasks
+
+    async def list_tasks(self, *, actor, include_completed=True):
+        return tuple(self._tasks)
+
+
+def _task(gid="t1", *, status="needsAction", title="Apply to roles"):
+    from contexts.tasks.domain.task import Task, TaskStatus
+
+    return Task(
+        id=uuid4(),
+        tenant_id=UUID(_TENANT),
+        jurisdiction="eu-west",
+        google_task_id=gid,
+        tasklist_id="L1",
+        tasklist_title="My Tasks",
+        status=TaskStatus(status),
+        title=title,
+        notes="shortlist five",
+        due_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+        completed_at=None,
+        parent=None,
+        position=None,
+        source_updated_at=None,
+        content_hash="h",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+def test_tasks_route_returns_ingested_tasks() -> None:
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        tasks_reader=_FakeTasksReader([_task("t1"), _task("t2", title="Refresh CV")]),
+    )
+    res = client.get("/api/v1/daily-driver/tasks")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert [t["google_task_id"] for t in body] == ["t1", "t2"]
+    assert body[0]["title"] == "Apply to roles"
+    assert body[0]["tasklist_title"] == "My Tasks"
+    assert body[0]["status"] == "needsAction"
+
+
+def test_tasks_route_empty_when_reader_unwired() -> None:
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.get("/api/v1/daily-driver/tasks")
+    assert res.status_code == 200
+    assert res.json() == []
 
 
 def test_goals_route_returns_unblock_or_drop_for_sequence() -> None:

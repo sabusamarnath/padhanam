@@ -320,6 +320,9 @@
           <div class="section-label">Goals</div>
           <p class="sub">A goal sits above your commitments: it has a target, and your commitment is the lever that moves it.</p>
           <div class="goals" id="goals"></div>
+          <div class="section-label">Tasks</div>
+          <p class="sub">Your Google Tasks, read-only — Padhanam reads them, it doesn't replace your task tool. Not yet linked to calendar or goals.</p>
+          <div class="goals" id="tasks"></div>
           <div class="section-label">New commitment</div>
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
@@ -331,6 +334,7 @@
         document.getElementById("c-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addCommitment(); });
         loadToday();
         loadGoals();
+        loadTasks();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -425,6 +429,32 @@
         toast(`Target raised to ${next}`);
         await loadGoals();
       } catch (e) { toast("Could not raise the target", true); }
+    }
+    // --- Tasks (S65, D167: ingested Google Tasks, read-only, own view) ---
+    async function loadTasks() {
+      const box = document.getElementById("tasks"); if (!box) return;
+      let tasks;
+      try { tasks = await api("/daily-driver/tasks"); } catch { box.innerHTML = ""; return; }
+      if (!tasks.length) { box.innerHTML = '<div class="empty">No tasks ingested yet. Connect Google Tasks to read them here.</div>'; return; }
+      box.innerHTML = "";
+      tasks.forEach((t) => box.appendChild(taskCard(t)));
+    }
+    function taskCard(t) {
+      const card = document.createElement("div");
+      card.className = "row"; card.dataset.tier = "work";
+      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "4px";
+      const done = t.status === "completed";
+      const glyph = done ? "✓" : "○";
+      const due = t.due_at ? new Date(t.due_at).toLocaleDateString() : null;
+      const titleStyle = done ? "opacity:.6;text-decoration:line-through" : "";
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <strong style="${titleStyle}">${glyph} ${escapeHtml(t.title || "(untitled task)")}</strong>
+          <span class="sub" style="margin:0">${due ? "due " + escapeHtml(due) : ""}</span>
+        </div>
+        ${t.notes ? `<div class="sub" style="margin:0">${escapeHtml(t.notes)}</div>` : ""}
+        <div class="sub" style="margin:0;color:#8a8a8a">list: ${escapeHtml(t.tasklist_title || t.tasklist_id)}</div>`;
+      return card;
     }
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }
     function render(items) {

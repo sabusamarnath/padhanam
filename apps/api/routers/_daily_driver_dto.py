@@ -19,6 +19,7 @@ from contexts.daily_driver.domain.today_item import (
     TodayItem,
     TodayView,
 )
+from contexts.tasks.domain.task import Task
 
 
 class TodayItemDTO(BaseModel):
@@ -210,6 +211,36 @@ def _chain_reading_to_dto(reading: ChainReading) -> GoalReadingDTO:
     )
 
 
+class TaskDTO(BaseModel):
+    """One ingested Google task in the daily-driver Tasks view (D167).
+
+    Its own view — not correlated to calendar or goals (correlation is P18).
+    """
+
+    google_task_id: str
+    tasklist_id: str
+    tasklist_title: str | None
+    status: str
+    title: str | None
+    notes: str | None
+    due_at: datetime | None
+    completed_at: datetime | None
+
+
+def task_to_dto(task: Task) -> TaskDTO:
+    """Encode an ingested Task into the HTTP DTO (D167)."""
+    return TaskDTO(
+        google_task_id=task.google_task_id,
+        tasklist_id=task.tasklist_id,
+        tasklist_title=task.tasklist_title,
+        status=task.status.value,
+        title=task.title,
+        notes=task.notes,
+        due_at=task.due_at,
+        completed_at=task.completed_at,
+    )
+
+
 def today_view_to_dto(view: TodayView) -> TodayDTO:
     """Encode a domain TodayView into the HTTP DTO."""
     return TodayDTO(
@@ -246,11 +277,13 @@ __all__ = [
     "GoalReadingDTO",
     "GoalStepDTO",
     "ItemRef",
+    "TaskDTO",
     "MarkDoneRequest",
     "RecordObservedOutcomeRequest",
     "SetOrderRequest",
     "TodayDTO",
     "TodayItemDTO",
     "goal_reading_to_dto",
+    "task_to_dto",
     "today_view_to_dto",
 ]
