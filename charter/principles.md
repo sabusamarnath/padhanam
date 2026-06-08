@@ -166,3 +166,13 @@ Padhanam does not replace the tools a user already keeps their work in. It reads
 Padhanam also correlates across sources to assemble a unit of work that no single source holds whole: the origin in a message, the tracking in a task, the time in a calendar block, the purpose in a Padhanam-native goal.
 
 The platform's edge is this assessment across the user's own tools, not a unified store that asks the user to switch. The moment Padhanam becomes the one tool that holds everything, it competes on UX with the time-blockers. Assessing across the tools the user keeps is the differentiated position, and it governs every connector the platform will ever add.
+
+### Coverage honesty in assessment
+
+The assessment layer never presents the absence of ingested-and-linked evidence as the user's neglect. A neglected-goal or orphan-work read is valid only inside the boundary of what Padhanam has ingested and linked. Outside that boundary the honest read is "no work visible for this," not "you are not doing this."
+
+This is a credibility precondition of "Assess, do not replace": a platform that reads only part of the user's world must distinguish its own blindness from the user's behaviour, or every partial connection produces a false accusation and the assessment loses trust on first contact. The verdict surface and the coverage surface are different statements and must read differently.
+
+Binds every assessment surface and every future connector. Each new source widens coverage; until a source is connected and linked, the work it holds is invisible, and invisible work reads as a gap in coverage, never as a verdict on the user.
+
+Origin: the first dogfood correlate pass. Five of seven goals linked; the two dark goals (Strength, Get a job) were uncovered, not neglected, and the S70 coverage read (D171) rendered that distinction correctly on live data. The principle generalises the validated behaviour — D171 recorded the fix; this records the law it instances — so later connectors inherit it.

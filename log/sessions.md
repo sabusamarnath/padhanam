@@ -3454,3 +3454,38 @@ metrics:
   corrects: D169 (the bare orphan/neglected framing)
   corrected_by:
 ```
+
+## Dogfood first-read — charter write: coverage-honesty principle + D172/D173 + six deferrals (strategic mode)
+roles: analyst (the link/orphan read of the first real correlate, the ground-truth-over-code correction), architect (the stopword-not-length framing, the plan-not-observation-stream framing), PM (the two decisions' Kano placement, the brief-altitude deferrals), technical writer (the coverage-honesty principle, D172/D173, the six deferred entries, this entry)
+mode: strategic session — deliverable is a charter edit; no code, no migrations, no renames. Records the first dogfood week's findings so they survive outside chat, ahead of any refinement code.
+
+The first dogfood correlate pass ran on real data (the operator's nine Google Tasks pulled via the Nango `google-tasks` connection, the seven goals re-seeded after a graph reset). This session writes its findings into the charter: one new principle (coverage honesty), two new decisions (D172, D173), six deferred entries, this entry — committed charter-only, ahead of refinement code.
+
+- **The first dogfood correlate read.** 989 units; **5 candidate-tier `SERVES` edges**; **5 of 7 goals linked** — German, Voice projection, Litany, Stretch and meditate, Wide World Marathon. **2 uncovered**: Strength (the task "Fitness" shares no keyword) and Get a job (the task "Job search" — the goal name "Get a job" has no token ≥ 4 chars; the shared word "job" is three). **1 orphan task**: Esperanto (no goal seeded). The operator's S69 link/orphan prediction held for four of five; the one break — Job search not linking — is the same recall gap biting where unexpected, via a specific cause (the four-character keyword guard vs the three-character word "job"), now D172.
+
+- **The coverage read validated live (the S70/D171 fix working end to end).** The two dark goals rendered as **uncovered** ("Padhanam can't see your work for this — not a sign you've stopped"), not neglected. Blindness reported as blindness, not as the user's failure — the trust-fix holding on the first read it was actually exercised against, with real coverage present (5/7) rather than the all-zero S69 state.
+
+- **Ground-truth-over-code correction (reconciliation-over-memory, recorded).** Mid-read I claimed the 0.8 floor *suppresses* keyword matches so "only exact matches link" — and would have reported 0 edges. Running the pass showed **5**. The mechanic: a keyword match **always writes an edge** (`goal_assessment.py` `infer_goal_edges`); the floor only *labels* the edge candidate-vs-confirmed, it does not gate creation. The wrong reading came from reading the code; the correction came from running it against the real corpus — the same live-substrate discipline S66 named, applied to my own analysis.
+
+- **The "Get a job" → "Job search" rename is an operational unblock, not the fix.** Renaming the goal would link the task today, but it fits the data to the matcher and breaks again on the next short-word collision. The matcher fix is **D172** (stopword filter, not length guard); the rename is recorded as the optional same-day workaround, the operator's choice, not part of this write.
+
+- Produced (one commit, charter-only): `principles.md` (coverage honesty in assessment — verdict vs coverage, cross-linked to D171 which recorded the fix); `decisions.md` (**D172** keyword suppression becomes stopword-based not length-based, framing; **D173** the Today surface renders the plan not the observation stream, framing); `deferred-decisions.md` (six entries under Phase 2 daily-driver deferrals — non-lexical tag/domain linkage for the first P19 refinement, the D172 stopword-list brief, confidence-tier calibration, recurrence fold, Today time-scoping, native-observation vs source write-back); this entry. Reconciliation: max D was D171 → D172/D173 assigned from the working tree, not the stale snapshot's D157. The brief's "P19 fork" reference carries a `TODO(ref)` — no distinct charter entry exists under that name; the recall-sensitivity reasoning lives in D169, and no prior entry anticipated semantic linkage, so the non-lexical deferral is attributed as dogfood-surfaced rather than fork-anticipated (no-over-claim).
+
+- Decisions: D172 (Kano: performance — recall gain at no precision cost), D173 (Kano: must-have for the surface — a plan drowned in observations is not dogfoodable). Both are framing-altitude; the stopword list, display rules, and non-lexical path are brief-altitude, homed in the deferred entries.
+
+```
+metrics:
+  classification: strategic session (charter write)
+  brief_started: 2026-06-08
+  session_started: 2026-06-08
+  session_closed: 2026-06-08
+  merged: 2026-06-08
+  close_state: the first dogfood correlate read recorded in the charter (5/7 goals linked candidate-tier, 2 uncovered, 1 orphan); coverage-honesty promoted from D171's fix to a binding principle; D172 (stopword shift) + D173 (plan-not-observation surface) framed, their briefs deferred; six daily-driver deferrals logged; the ground-truth-over-code correction recorded
+  tests_passing: n/a (charter-only; no code touched)
+  principles_intact: yes
+  gate_enabling: true
+  no_new_value_surface: true
+  charter_touchpoints: charter/principles.md (coverage honesty in assessment); charter/decisions.md (D172, D173); charter/deferred-decisions.md (six Phase 2 daily-driver entries); log/sessions.md (this entry)
+  corrects: my own mid-read "the floor suppresses keyword matches" claim (the 0.8 floor labels the tier, it does not gate edge creation)
+  corrected_by:
+```

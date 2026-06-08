@@ -962,3 +962,43 @@ Users arrive with heterogeneous task tools, so Padhanam ingests from many, as it
 Build order: Google Tasks first, because it reuses the connected Google provider (D148, D151, D161) as an added OAuth scope rather than a new connector, and proves the ingest-and-assess loop at lowest cost. Trello second, because a goalless kanban is the richest proof of assess-not-replace, the hardest case the assessment layer faces. Two-threshold on the adapters: cheapest first to prove the loop, hardest second to prove the claim.
 
 Activation trigger: after the Phase 2-A dogfooding week, sequenced with the plan-side model build (D166).
+
+### Non-lexical (tag-and-domain) linkage — the first P19 refinement
+
+Surfaced by the first dogfood correlate pass. Goal "Strength" and task "Fitness" share no characters, so no lexical/keyword matcher (D169, D172) can ever form their `SERVES` edge; the goal reads uncovered though the work plainly exists. This is the tag-and-domain (semantic) linkage path — a class no prior charter entry anticipated (`TODO(ref)`: the brief calls it "the P19 fork"; no distinct entry exists under that name, and D169's recall-over-precision call is purely lexical — the nearest prior reasoning, not an anticipation of semantic linkage). It is now evidenced on live data rather than reasoned.
+
+**What defers.** A non-lexical linkage path (tags, domain mapping, or embedding-based similarity behind the existing matcher interface) reaching links lexical overlap cannot.
+
+**Activation trigger.** The first P19 refinement session, post-dogfood. Explicitly out of scope for any mid-week patch; renaming "Fitness" to a Strength-keyword title is a data-fit workaround, not this. References D169 (the lexical matcher, the moat reads), D172 (the stopword shift — still lexical).
+
+### Stopword list and residual floor (brief for D172)
+
+Surfaced by D172. The framing — suppression is stopword-based — is settled; the brief is not: the exact stopword list, whether any minimum length survives for non-stopwords, and the source of the list. Lands in the first P19 refinement session alongside the non-lexical linkage work. References D172.
+
+### Confidence-tier calibration of keyword links
+
+Surfaced by the first dogfood pass. All five links wrote at candidate tier (0.5) because no task title exactly equals a lever name (D169 confirmed tier). A goal-name keyword hit is more reliable than 0.5 implies, so the confidence model may be miscalibrated rather than the lever names being wrong.
+
+**What defers.** Revisiting the candidate/confirmed thresholds, and whether the confirmed tier should depend on something more robust than exact lever-name match.
+
+**Activation trigger.** Post-dogfood tuning. Explicitly do not resolve by renaming levers to task titles to force confirmed tier; that is brittle data-fit and was rejected as the path. References D169 (confirmed/candidate tiering).
+
+### Recurrence fold on the plan surface
+
+Surfaced by D173 and the first surface dogfood. Repeated instances of one recurring source must roll up under the cadence lever as one repeating item, not N rows. This is the recurrence dimension, one of the five Phase 2-B plan constraints (dependency, deadline, capacity, recurrence, waiting-on-others; D166), now confirmed twice: by the ~84-instance correlation collapse (P18/S66) and by surface use.
+
+**Activation trigger.** Phase 2-B, with the other plan-constraint dimensions. References D166 (the constrained-graph plan model), D157 (the cadence lever), D173.
+
+### Today surface time-scoping (near-term)
+
+Surfaced by D173. The display rules scoping Today to today-forward and moving completed/past instances into a history view feeding the expected/observed loop (D162). Cheaper and more clearly right than the recurrence fold; a candidate near-term surface session ahead of Phase 2-B if the dogfood keeps surfacing the clutter.
+
+**Activation trigger.** A near-term surface session if the clutter persists, else folded into Phase 2-B with the recurrence work. References D162 (expected/observed loop), D173.
+
+### Native observation capture versus source write-back
+
+Surfaced by the dogfood "no way to update a task" observation. Native plan interactions (link a unit to a goal, confirm a correlation, accept or dismiss a suggestion) are native edges and on-roadmap. Writing changes back to a source tool (editing or completing the Google task from Padhanam) is forbidden by read-only / assess-not-replace (D148, D155). The subtlety: capturing completion as a native observation is legitimate, it is not write-back, but a native done-tick diverges from the source, which still shows the task open, unless the user also ticks it there.
+
+**What defers.** Whether to offer a native done-tick at all, given the divergence cost.
+
+**Activation trigger.** A deliberate decision, not drift. The clean default until then: the user completes in the source tool and Padhanam observes it on re-pull. References D148/D155 (the read-only external-cache model), D162 (the observed half of the loop).
