@@ -158,6 +158,48 @@ def test_anchor_priority_prefers_task_then_meeting_then_email():
     assert units[0].anchor.facet_id == meeting.facet_id
 
 
+def test_same_type_duplicates_do_not_collapse_into_one_unit():
+    # The live-data failure: recurring calendar instances share a title. They
+    # must NOT collapse into one mega-unit of many same-type facets — each is
+    # its own single-facet unit (a unit binds at most one facet per type).
+    recurrences = tuple(
+        _facet(
+            FacetType.MEETING,
+            "Weekly standup",
+            occurred_at=_NOW + timedelta(days=7 * i),
+        )
+        for i in range(5)
+    )
+    units = correlate_facets(recurrences, tenant_id=_TENANT)
+    assert len(units) == 5
+    assert all(not u.is_correlated for u in units)
+
+
+def test_cross_type_pairs_anchor_with_nearest_in_time_duplicate():
+    # One task + three same-title recurring meetings: the task pairs with the
+    # nearest meeting; the other two meetings stay as their own units.
+    task = _facet(FacetType.TASK, "Board prep", occurred_at=_NOW)
+    near = _facet(
+        FacetType.MEETING, "Board prep", occurred_at=_NOW + timedelta(days=1)
+    )
+    far1 = _facet(
+        FacetType.MEETING, "Board prep", occurred_at=_NOW + timedelta(days=40)
+    )
+    far2 = _facet(
+        FacetType.MEETING, "Board prep", occurred_at=_NOW + timedelta(days=80)
+    )
+    units = correlate_facets((task, far2, near, far1), tenant_id=_TENANT)
+    correlated = [u for u in units if u.is_correlated]
+    assert len(correlated) == 1
+    unit = correlated[0]
+    assert unit.anchor.facet_id == task.facet_id
+    paired = next(l for l in unit.links if l.facet.facet_type is FacetType.MEETING)
+    assert paired.facet.facet_id == near.facet_id
+    assert paired.status is LinkStatus.CONFIRMED
+    # The two far meetings are their own single-facet units.
+    assert len([u for u in units if not u.is_correlated]) == 2
+
+
 def test_tenant_scopes_the_unit_id():
     task = _facet(
         FacetType.TASK,

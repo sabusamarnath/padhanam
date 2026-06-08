@@ -24,9 +24,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import NAMESPACE_URL, UUID, uuid5
+
+# Sort sentinel for an untimed facet — orders after every real timestamp so
+# timed facets pair first. Timezone-aware to stay comparable with aware values.
+_UNTIMED = datetime(9999, 12, 31, tzinfo=timezone.utc)
 
 # Defaults for the inference; the application layer may override from config.
 DEFAULT_CONFIDENCE_FLOOR = 0.8
@@ -179,11 +183,7 @@ def _infer_link(
     the link; a title match without time corroboration is a candidate (D166
     confirm-not-assume).
     """
-    both_timed = facet.occurred_at is not None and anchor.occurred_at is not None
-    within_window = both_timed and (
-        abs((facet.occurred_at - anchor.occurred_at).days) <= time_window_days
-    )
-    if within_window:
+    if _within_window(facet, anchor, time_window_days=time_window_days):
         confidence, basis = _TITLE_AND_TIME_CONFIDENCE, "title+time"
     else:
         confidence, basis = _TITLE_ONLY_CONFIDENCE, "title"
@@ -197,6 +197,105 @@ def _infer_link(
     )
 
 
+def _within_window(a: WorkFacet, b: WorkFacet, *, time_window_days: int) -> bool:
+    if a.occurred_at is None or b.occurred_at is None:
+        return False
+    return abs((a.occurred_at - b.occurred_at).days) <= time_window_days
+
+
+def _time_distance_days(a: WorkFacet, b: WorkFacet) -> float:
+    """Absolute day distance, or infinity when either facet is untimed."""
+    if a.occurred_at is None or b.occurred_at is None:
+        return float("inf")
+    return abs((a.occurred_at - b.occurred_at).days)
+
+
+def _single_facet_unit(facet: WorkFacet, *, tenant_id: UUID) -> WorkUnit:
+    return WorkUnit(
+        unit_id=_unit_id_for(facet, tenant_id=tenant_id),
+        anchor=facet,
+        links=(
+            FacetLink(
+                facet=facet,
+                confidence=_ANCHOR_CONFIDENCE,
+                status=LinkStatus.CONFIRMED,
+                basis="anchor",
+            ),
+        ),
+    )
+
+
+def _units_from_title_group(
+    group: tuple[WorkFacet, ...],
+    *,
+    tenant_id: UUID,
+    confidence_floor: float,
+    time_window_days: int,
+) -> list[WorkUnit]:
+    """Build units from facets that share a normalised title.
+
+    A *unit of work* (D166) binds at most one facet per type — the cross-tool
+    correlation is the differentiator, not collapsing same-type duplicates.
+    So facets are bucketed by type; if only one type is present (e.g. the
+    recurring instances of one calendar event), each facet is its own
+    single-facet unit. When two or more types are present, each facet of the
+    highest-priority type anchors a unit and consumes the *nearest-in-time*
+    available facet of each other type (one-to-one, high-precision); any
+    unconsumed facets become their own single-facet units.
+    """
+    buckets: dict[FacetType, list[WorkFacet]] = {}
+    for facet in group:
+        buckets.setdefault(facet.facet_type, []).append(facet)
+    for facets in buckets.values():
+        facets.sort(key=lambda f: (f.occurred_at or _UNTIMED, str(f.facet_id)))
+
+    if len(buckets) == 1:
+        return [_single_facet_unit(f, tenant_id=tenant_id) for f in group]
+
+    anchor_type = min(buckets, key=lambda t: _ANCHOR_PRIORITY[t])
+    other_types = [t for t in buckets if t != anchor_type]
+    consumed: set[UUID] = set()
+    units: list[WorkUnit] = []
+    for anchor in buckets[anchor_type]:
+        links = [
+            FacetLink(
+                facet=anchor,
+                confidence=_ANCHOR_CONFIDENCE,
+                status=LinkStatus.CONFIRMED,
+                basis="anchor",
+            )
+        ]
+        for other_type in other_types:
+            available = [
+                f for f in buckets[other_type] if f.facet_id not in consumed
+            ]
+            if not available:
+                continue
+            match = min(available, key=lambda f: _time_distance_days(f, anchor))
+            consumed.add(match.facet_id)
+            links.append(
+                _infer_link(
+                    match,
+                    anchor,
+                    confidence_floor=confidence_floor,
+                    time_window_days=time_window_days,
+                )
+            )
+        units.append(
+            WorkUnit(
+                unit_id=_unit_id_for(anchor, tenant_id=tenant_id),
+                anchor=anchor,
+                links=tuple(links),
+            )
+        )
+    # Any non-anchor-type facets not paired become their own units.
+    for other_type in other_types:
+        for facet in buckets[other_type]:
+            if facet.facet_id not in consumed:
+                units.append(_single_facet_unit(facet, tenant_id=tenant_id))
+    return units
+
+
 def correlate_facets(
     facets: tuple[WorkFacet, ...],
     *,
@@ -206,12 +305,14 @@ def correlate_facets(
 ) -> tuple[WorkUnit, ...]:
     """Correlate facets into units of work by a title-and-time inference (D168).
 
-    Facets sharing a normalised title form one unit; a facet whose title does
-    not normalise (blank/punctuation-only) or whose title is unique is its own
-    single-facet unit (every facet belongs to exactly one unit, so P19 can flag
-    an orphan). The anchor facet links confirmed; each other facet's link is
-    scored by ``_infer_link``. Units are returned ordered by ``unit_id`` for a
-    deterministic result.
+    Facets sharing a normalised title are candidates for one *unit of work*, but
+    a unit binds at most one facet per type (D166): the cross-tool link is the
+    differentiator. Same-type duplicates of a title (e.g. recurring calendar
+    instances) do **not** collapse — each is its own single-facet unit. A facet
+    whose title does not normalise (blank/punctuation-only) or whose title is
+    unique is its own single-facet unit too, so every facet belongs to exactly
+    one unit (P19 can then flag an orphan). Units are returned ordered by
+    ``unit_id`` for a deterministic result.
     """
     groups: dict[str, list[WorkFacet]] = {}
     singletons: list[WorkFacet] = []
@@ -223,32 +324,17 @@ def correlate_facets(
             groups.setdefault(key, []).append(facet)
 
     units: list[WorkUnit] = []
-    for members in list(groups.values()) + [[f] for f in singletons]:
-        group = tuple(members)
-        anchor = _anchor_of(group)
-        anchor_link = FacetLink(
-            facet=anchor,
-            confidence=_ANCHOR_CONFIDENCE,
-            status=LinkStatus.CONFIRMED,
-            basis="anchor",
-        )
-        other_links = tuple(
-            _infer_link(
-                f,
-                anchor,
+    for members in groups.values():
+        units.extend(
+            _units_from_title_group(
+                tuple(members),
+                tenant_id=tenant_id,
                 confidence_floor=confidence_floor,
                 time_window_days=time_window_days,
             )
-            for f in group
-            if f is not anchor
         )
-        units.append(
-            WorkUnit(
-                unit_id=_unit_id_for(anchor, tenant_id=tenant_id),
-                anchor=anchor,
-                links=(anchor_link,) + other_links,
-            )
-        )
+    for facet in singletons:
+        units.append(_single_facet_unit(facet, tenant_id=tenant_id))
     units.sort(key=lambda u: str(u.unit_id))
     return tuple(units)
 
