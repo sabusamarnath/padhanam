@@ -115,7 +115,10 @@ SPECS: tuple[GoalSpec, ...] = (
             "Daily voice-projection practice — Cheryl Porter vocal exercises "
             "plus my own."
         ),
-        aliases=("voice", "projection", "articulation", "vocal"),
+        # "articulation" dropped at S71: it floods on "Megan's articulation
+        # warm-ups" (95 units — Megan's speech-therapy work, a different life
+        # area), the cross-life-area collision the residual is meant to measure.
+        aliases=("voice", "projection", "vocal"),
     ),
     GoalSpec(
         outcome_id=UUID("00000000-0000-4000-8000-0000006900a4"),
