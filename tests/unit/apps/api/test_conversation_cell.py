@@ -548,6 +548,11 @@ def test_advance_calendar_turn_answers_from_the_store() -> None:
             purpose="calendar_query",
             turn_count=1,
             text="what's on today",
+            # Inject the clock so "today" resolves against the fixture's _NOW
+            # (2026-06-05), not the wall clock. The meeting keeps its fixed
+            # seeded date; determinism comes from the injected time, not from
+            # reseeding the fixture to a now-relative date.
+            clock=lambda: _NOW,
         )
     )
     assert result.conversation_id == "conv-cal-1"

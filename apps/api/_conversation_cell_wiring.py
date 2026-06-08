@@ -27,6 +27,8 @@ instance). ``cited_audit_events`` stays empty per the mirror disposition
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Callable
 from uuid import UUID
 
 from apps.api._messaging_wiring import MessagingComposition
@@ -362,6 +364,7 @@ def build_calendar_cell(
     actor: ActorContext,
     meeting_reader: MeetingReader,
     refresh_port: object | None,
+    clock: Callable[[], datetime] | None = None,
 ) -> CalendarConversationCell:
     """Construct the calendar-conversation cell, mirroring the messaging dispatch.
 
@@ -383,6 +386,7 @@ def build_calendar_cell(
         audit_port=audit_port,
         refresh_port=refresh_port,
         originating_channel="WEB",
+        clock=clock,
     )
 
 
@@ -446,6 +450,7 @@ async def open_calendar_conversation_with_reader(
     meeting_reader: MeetingReader,
     refresh_port: object | None,
     focus_id: UUID,
+    clock: Callable[[], datetime] | None = None,
 ) -> ConversationTurnResult | None:
     """Open a calendar conversation given an injected reader (the testable core).
 
@@ -467,6 +472,7 @@ async def open_calendar_conversation_with_reader(
         actor=actor,
         meeting_reader=meeting_reader,
         refresh_port=refresh_port,
+        clock=clock,
     )
     state = await cell.open(
         ConversationInvocation(
@@ -491,6 +497,7 @@ async def advance_calendar_conversation_with_reader(
     purpose: str,
     turn_count: int,
     text: str,
+    clock: Callable[[], datetime] | None = None,
 ) -> ConversationTurnResult:
     """Advance a calendar conversation given an injected reader (the testable core).
 
@@ -504,6 +511,7 @@ async def advance_calendar_conversation_with_reader(
         actor=actor,
         meeting_reader=meeting_reader,
         refresh_port=refresh_port,
+        clock=clock,
     )
     state_in = ConversationState(
         conversation_id=conversation_id,
