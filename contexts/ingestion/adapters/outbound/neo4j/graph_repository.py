@@ -26,6 +26,10 @@ from typing import Sequence
 from uuid import UUID
 
 from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
+from contexts.ingestion.ports.unit_graph_port import (
+    UnitGraphRecord,
+    UnitWrite,
+)
 
 from neo4j import AsyncDriver, AsyncGraphDatabase
 from neo4j.exceptions import (
@@ -241,6 +245,39 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.list_outcomes()
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    # --- UnitGraphPort (D168): the typed work-unit-graph capability --------
+
+    async def replace_units(
+        self,
+        *,
+        tenant_context: TenantContext,
+        units: Sequence[UnitWrite],
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.replace_units(units)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_units(
+        self,
+        *,
+        tenant_context: TenantContext,
+    ) -> Sequence[UnitGraphRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.list_units()
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

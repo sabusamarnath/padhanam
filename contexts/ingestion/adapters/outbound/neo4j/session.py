@@ -42,6 +42,11 @@ from contexts.ingestion.ports.outcome_graph_port import (
     LeverEdgeRecord,
     OutcomeGraphRecord,
 )
+from contexts.ingestion.ports.unit_graph_port import (
+    FacetLinkRecord,
+    UnitGraphRecord,
+    UnitWrite,
+)
 from shared_kernel import TenantContext
 
 
@@ -200,6 +205,66 @@ RETURN o.outcome_id AS outcome_id,
        r.step_order AS step_order,
        r.step_state AS step_state
 ORDER BY o.name ASC, r.step_order ASC
+"""
+
+
+# --- Work-unit templates (D168, D166) --------------------------------------
+# The plan-side work-unit correlation: a :Unit anchor node, a thin :Facet
+# reference node per facet (id only, never a copy of the cache row — the :Lever
+# rule), and a SAME_WORK edge carrying the title-and-time inference's confidence,
+# status, and basis. Correlation is derived state (D155): each run deletes the
+# tenant's facets + edges and prunes stale units, then re-merges, preserving
+# :Unit nodes whose deterministic id persists (so P19's goal edge survives).
+_DELETE_FACETS = """
+MATCH (f:Facet {tenant_id: $tenant_id})
+DETACH DELETE f
+"""
+
+# Prune :Unit nodes for the tenant no longer in the recomputed set. DETACH so a
+# dissolved unit's future goal edge (P19) goes with it.
+_PRUNE_UNITS = """
+MATCH (u:Unit {tenant_id: $tenant_id})
+WHERE NOT u.unit_id IN $keep
+DETACH DELETE u
+"""
+
+_MERGE_UNIT = """
+MERGE (u:Unit {tenant_id: $tenant_id, unit_id: $unit_id})
+ON CREATE SET
+    u.jurisdiction = $jurisdiction,
+    u.created_at = $created_at
+"""
+
+# The facet was just deleted above, so MERGE always re-creates it with a fresh
+# created_at — correct for derived state. The SAME_WORK edge carries the
+# inference: confidence, status (confirmed/candidate), and basis.
+_MERGE_FACET_LINK = """
+MATCH (u:Unit {tenant_id: $tenant_id, unit_id: $unit_id})
+MERGE (f:Facet {tenant_id: $tenant_id, facet_type: $facet_type, facet_id: $facet_id})
+ON CREATE SET
+    f.jurisdiction = $jurisdiction,
+    f.created_at = $created_at
+MERGE (f)-[r:SAME_WORK {tenant_id: $tenant_id}]->(u)
+ON CREATE SET
+    r.jurisdiction = $jurisdiction,
+    r.created_at = $created_at
+SET
+    r.confidence = $confidence,
+    r.status = $status,
+    r.basis = $basis
+"""
+
+_LIST_UNITS = """
+MATCH (f:Facet {tenant_id: $tenant_id})
+      -[r:SAME_WORK {tenant_id: $tenant_id}]->
+      (u:Unit {tenant_id: $tenant_id})
+RETURN u.unit_id AS unit_id,
+       f.facet_type AS facet_type,
+       f.facet_id AS facet_id,
+       r.confidence AS confidence,
+       r.status AS status,
+       r.basis AS basis
+ORDER BY u.unit_id ASC, f.facet_type ASC, f.facet_id ASC
 """
 
 
@@ -558,6 +623,86 @@ class TenantScopedNeo4jSession:
                     existing, levers=existing.levers + (lever,)
                 )
         return [by_outcome[oid] for oid in order]
+
+    async def replace_units(self, units: Sequence[UnitWrite]) -> None:
+        """Replace the bound tenant's work-unit subgraph (D168, D166).
+
+        Derived state (D155): delete the tenant's :Facet nodes + SAME_WORK edges,
+        prune :Unit nodes no longer in ``units``, then MERGE each unit + its
+        facets + edges. The statements run on one bound session (auto-commit per
+        statement — the migration-runner shape; atomicity across statements is
+        not required for derived state at dogfooding scale).
+        """
+        session = self._bound_session
+        now = _now_utc()
+        await session.run(_DELETE_FACETS, {"tenant_id": self._tenant_id})
+        await session.run(
+            _PRUNE_UNITS,
+            {
+                "tenant_id": self._tenant_id,
+                "keep": [str(u.unit_id) for u in units],
+            },
+        )
+        for unit in units:
+            await session.run(
+                _MERGE_UNIT,
+                {
+                    "tenant_id": self._tenant_id,
+                    "jurisdiction": self._jurisdiction,
+                    "unit_id": str(unit.unit_id),
+                    "created_at": now,
+                },
+            )
+            for link in unit.links:
+                await session.run(
+                    _MERGE_FACET_LINK,
+                    {
+                        "tenant_id": self._tenant_id,
+                        "jurisdiction": self._jurisdiction,
+                        "unit_id": str(unit.unit_id),
+                        "facet_type": link.facet_type,
+                        "facet_id": str(link.facet_id),
+                        "confidence": link.confidence,
+                        "status": link.status,
+                        "basis": link.basis,
+                        "created_at": now,
+                    },
+                )
+
+    async def list_units(self) -> Sequence[UnitGraphRecord]:
+        """Return every unit with its facet edges for the bound tenant (D168).
+
+        One Cypher row per (unit, facet); aggregated here into one
+        ``UnitGraphRecord`` per unit — the wrapper owns the Cypher boundary, so
+        the aggregation stays on this side of the fence (the ``list_outcomes``
+        shape).
+        """
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id}
+        result = await session.run(_LIST_UNITS, params)
+        rows = await result.data()
+        by_unit: dict[str, UnitGraphRecord] = {}
+        order: list[str] = []
+        for row in rows:
+            uid = row["unit_id"]
+            link = FacetLinkRecord(
+                facet_type=row["facet_type"],
+                facet_id=UUID(row["facet_id"]),
+                confidence=row["confidence"],
+                status=row["status"],
+                basis=row["basis"],
+            )
+            if uid not in by_unit:
+                order.append(uid)
+                by_unit[uid] = UnitGraphRecord(
+                    unit_id=UUID(uid), links=(link,)
+                )
+            else:
+                existing = by_unit[uid]
+                by_unit[uid] = replace(
+                    existing, links=existing.links + (link,)
+                )
+        return [by_unit[uid] for uid in order]
 
 
 def _to_python_datetime(value: object) -> datetime | None:
