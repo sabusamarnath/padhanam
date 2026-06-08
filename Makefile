@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks correlate-units scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks correlate-units coverage-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -249,6 +249,14 @@ pull-tasks: derive-env
 # Idempotent (derived state). Run the cache pulls first so it has input.
 correlate-units: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.correlate_units
+
+# Assessment coverage report (S71, D174): read the live graph and print, per
+# goal, linked (count + tier) or uncovered; the orphan-unit count; and a sample
+# of orphan titles. Read-only — the standing instrument for judging linkage
+# changes and the metric the embedding-tier decision waits on. Run after a fresh
+# correlate-units.
+coverage-report: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.coverage_report
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,
