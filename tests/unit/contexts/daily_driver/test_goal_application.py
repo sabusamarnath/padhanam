@@ -76,7 +76,7 @@ class FakeGoalGraph:
         return (self._goal,)
 
     async def raise_target_level(
-        self, *, tenant_context, outcome_id, commitment_id, new_target_level
+        self, *, tenant_context, outcome_id, new_target_level
     ):
         self.raised_to = new_target_level
         return new_target_level
@@ -186,8 +186,8 @@ class FakeOutcomeGraph:
     async def list_outcomes(self, *, tenant_context):
         return (self._record,)
 
-    async def set_lever_target(
-        self, *, tenant_context, outcome_id, commitment_id, current_target_level
+    async def set_outcome_target(
+        self, *, tenant_context, outcome_id, current_target_level
     ):
         self.set_to = current_target_level
         return current_target_level
@@ -221,7 +221,7 @@ def test_apps_bridge_maps_record_to_progressive_goal() -> None:
     assert g.lever_commitment_id == _COMMITMENT
 
 
-def test_apps_bridge_raise_delegates_to_set_lever_target() -> None:
+def test_apps_bridge_raise_delegates_to_set_outcome_target() -> None:
     from apps.api._daily_driver_wiring import GoalGraphAdapter
     from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
 
@@ -241,7 +241,6 @@ def test_apps_bridge_raise_delegates_to_set_lever_target() -> None:
         adapter.raise_target_level(
             tenant_context=_actor().tenant_context,
             outcome_id=_OUTCOME,
-            commitment_id=_COMMITMENT,
             new_target_level="B2",
         )
     )

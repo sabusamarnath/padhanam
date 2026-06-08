@@ -126,12 +126,15 @@ RETURN r.tenant_id AS tenant_id,
 """
 
 
-# --- Goal-graph templates (D163) ------------------------------------------
+# --- Goal-graph templates (D163, D163-clarification at S63) ----------------
 # The whole-life goal taxonomy's typed shape: an :Outcome node, a thin :Lever
-# reference node (the Postgres commitment by id, never a copy), and a
-# LEVER_FOR edge carrying the mode + (for progressive) the level ladder and the
-# current target. The LEVER_FOR type is a literal in the template (not dynamic),
-# so Community-without-APOC composes it directly with no backtick substitution.
+# reference node (the Postgres commitment by id, never a copy), and a LEVER_FOR
+# edge. Per the D163 clarification (S63), the goal-level properties — mode, the
+# level ladder, and the current target — live on the :Outcome node, not the
+# edge: a goal has one mode and one target and may have many levers. The
+# LEVER_FOR edge carries only that a lever serves the outcome. The LEVER_FOR
+# type is a literal in the template (not dynamic), so Community-without-APOC
+# composes it directly with no backtick substitution.
 _MERGE_OUTCOME = """
 MERGE (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
 ON CREATE SET
@@ -140,7 +143,10 @@ ON CREATE SET
 SET
     o.name = $name,
     o.control = $control,
-    o.subject = $subject
+    o.subject = $subject,
+    o.mode = $mode,
+    o.ladder = $ladder,
+    o.current_target_level = $current_target_level
 """
 
 _MERGE_LEVER_FOR_OUTCOME = """
@@ -153,18 +159,15 @@ MERGE (l)-[r:LEVER_FOR {tenant_id: $tenant_id}]->(o)
 ON CREATE SET
     r.jurisdiction = $jurisdiction,
     r.created_at = $created_at
-SET
-    r.mode = $mode,
-    r.ladder = $ladder,
-    r.current_target_level = $current_target_level
 """
 
-_SET_LEVER_TARGET = """
-MATCH (l:Lever {tenant_id: $tenant_id, commitment_id: $commitment_id})
-      -[r:LEVER_FOR {tenant_id: $tenant_id}]->
-      (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
-SET r.current_target_level = $current_target_level
-RETURN r.current_target_level AS current_target_level
+# The explicit raise (D9) now targets the :Outcome node — the current target is
+# a goal-level property, so the raise no longer needs a lever id (the D163
+# clarification's welcome simplification).
+_SET_OUTCOME_TARGET = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET o.current_target_level = $current_target_level
+RETURN o.current_target_level AS current_target_level
 """
 
 _LIST_OUTCOMES = """
@@ -175,10 +178,10 @@ RETURN o.outcome_id AS outcome_id,
        o.name AS name,
        o.control AS control,
        o.subject AS subject,
-       l.commitment_id AS commitment_id,
-       r.mode AS mode,
-       r.ladder AS ladder,
-       r.current_target_level AS current_target_level
+       o.mode AS mode,
+       o.ladder AS ladder,
+       o.current_target_level AS current_target_level,
+       l.commitment_id AS commitment_id
 ORDER BY o.name ASC
 """
 
@@ -416,8 +419,15 @@ class TenantScopedNeo4jSession:
         name: str,
         control: str,
         subject: str,
+        mode: str,
+        ladder: Sequence[str],
+        current_target_level: str | None,
     ) -> None:
-        """MERGE an :Outcome node bound to the session's tenant (D163)."""
+        """MERGE an :Outcome node bound to the session's tenant (D163).
+
+        Per the D163 clarification (S63), the goal-level properties — mode, the
+        level ladder, and the current target — live on the node, set here.
+        """
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
@@ -426,6 +436,9 @@ class TenantScopedNeo4jSession:
             "name": name,
             "control": control,
             "subject": subject,
+            "mode": mode,
+            "ladder": list(ladder),
+            "current_target_level": current_target_level,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_OUTCOME, params)
@@ -435,40 +448,40 @@ class TenantScopedNeo4jSession:
         *,
         outcome_id: UUID,
         commitment_id: UUID,
-        mode: str,
-        ladder: Sequence[str],
-        current_target_level: str | None,
     ) -> None:
-        """MERGE the :Lever node + the LEVER_FOR edge to the Outcome (D163)."""
+        """MERGE the :Lever node + the LEVER_FOR edge to the Outcome (D163).
+
+        The edge carries only that the lever serves the outcome (the D163
+        clarification); goal-level properties live on the :Outcome node.
+        """
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
             "jurisdiction": self._jurisdiction,
             "outcome_id": str(outcome_id),
             "commitment_id": str(commitment_id),
-            "mode": mode,
-            "ladder": list(ladder),
-            "current_target_level": current_target_level,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_LEVER_FOR_OUTCOME, params)
 
-    async def set_lever_target(
+    async def set_outcome_target(
         self,
         *,
         outcome_id: UUID,
-        commitment_id: UUID,
         current_target_level: str,
     ) -> str | None:
-        """Set the LEVER_FOR edge's current_target_level (the explicit raise)."""
+        """Set the :Outcome node's current_target_level (the explicit raise, D9).
+
+        The target is a goal-level property (D163 clarification), so the raise
+        no longer needs a lever id.
+        """
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
             "outcome_id": str(outcome_id),
-            "commitment_id": str(commitment_id),
             "current_target_level": current_target_level,
         }
-        result = await session.run(_SET_LEVER_TARGET, params)
+        result = await session.run(_SET_OUTCOME_TARGET, params)
         record = await result.single()
         if record is None:
             return None

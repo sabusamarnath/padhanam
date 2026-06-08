@@ -163,6 +163,9 @@ class Neo4jGraphRepository:
         name: str,
         control: str,
         subject: str,
+        mode: str,
+        ladder: Sequence[str],
+        current_target_level: str | None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
@@ -171,6 +174,9 @@ class Neo4jGraphRepository:
                     name=name,
                     control=control,
                     subject=subject,
+                    mode=mode,
+                    ladder=ladder,
+                    current_target_level=current_target_level,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
@@ -185,18 +191,12 @@ class Neo4jGraphRepository:
         tenant_context: TenantContext,
         outcome_id: UUID,
         commitment_id: UUID,
-        mode: str,
-        ladder: Sequence[str],
-        current_target_level: str | None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 await s.merge_lever_for_outcome(
                     outcome_id=outcome_id,
                     commitment_id=commitment_id,
-                    mode=mode,
-                    ladder=ladder,
-                    current_target_level=current_target_level,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
@@ -205,19 +205,17 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
-    async def set_lever_target(
+    async def set_outcome_target(
         self,
         *,
         tenant_context: TenantContext,
         outcome_id: UUID,
-        commitment_id: UUID,
         current_target_level: str,
     ) -> str | None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
-                return await s.set_lever_target(
+                return await s.set_outcome_target(
                     outcome_id=outcome_id,
-                    commitment_id=commitment_id,
                     current_target_level=current_target_level,
                 )
         except _RETRYABLE_DRIVER_EXC as e:

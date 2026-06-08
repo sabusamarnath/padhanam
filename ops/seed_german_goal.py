@@ -103,7 +103,19 @@ async def _seed() -> None:
             GERMAN_COMMITMENT_ID,
         )
 
-    # 2. The Outcome node + the lever-to-outcome edge in the shared graph.
+    # 1b. Clear the synthetic `met` observation the S62 live smoke left on the
+    # German lever (AC10). This is ops test-pollution cleanup, not a product
+    # capability — the observation was never user-authored, so clearing it does
+    # not breach the no-auto-deletion invariant (which guards user content). The
+    # dogfooding week starts from a clean slate (no observation, target reads
+    # B1). Done via a direct update through the bound sessionmaker (ops
+    # composition root may compose adapters and issue the cleanup write).
+    await _clear_observation(session_factory, tenant_context)
+
+    # 2. The Outcome node + the lever-to-outcome edge in the shared graph. Per
+    # the D163 clarification (S63), mode + ladder + current target are
+    # goal-level properties on the :Outcome node; the edge carries only that the
+    # lever serves the outcome.
     graph = Neo4jGraphRepository.from_settings(Neo4jSettings())
     try:
         await graph.merge_outcome(
@@ -112,14 +124,14 @@ async def _seed() -> None:
             name="German",
             control="self",
             subject="self",
+            mode="progressive",
+            ladder=GERMAN_LADDER,
+            current_target_level=GERMAN_CURRENT_TARGET,
         )
         await graph.merge_lever_for_outcome(
             tenant_context=tenant_context,
             outcome_id=GERMAN_OUTCOME_ID,
             commitment_id=GERMAN_COMMITMENT_ID,
-            mode="progressive",
-            ladder=GERMAN_LADDER,
-            current_target_level=GERMAN_CURRENT_TARGET,
         )
         log.info(
             "seeded Outcome %s (German, progressive) with lever edge to %s; "
@@ -131,6 +143,35 @@ async def _seed() -> None:
         )
     finally:
         await graph.close()
+
+
+async def _clear_observation(session_factory, tenant_context) -> None:
+    """Null the German lever's observation fields (AC10 — clear the S62 smoke's
+    synthetic `met`). Idempotent: a clean lever stays clean."""
+    import sqlalchemy as sa
+
+    from contexts.daily_driver.adapters.outbound.postgres._tables import (
+        commitments as commitments_table,
+    )
+
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                sa.update(commitments_table)
+                .where(
+                    sa.and_(
+                        commitments_table.c.id == str(GERMAN_COMMITMENT_ID),
+                        commitments_table.c.tenant_id
+                        == str(tenant_context.tenant_id),
+                    )
+                )
+                .values(
+                    observed_outcome=None,
+                    outcome_status=None,
+                    observed_at=None,
+                )
+            )
+    log.info("cleared any synthetic observation on German lever %s", GERMAN_COMMITMENT_ID)
 
 
 def main() -> int:

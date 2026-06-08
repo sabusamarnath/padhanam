@@ -49,6 +49,9 @@ def test_merge_outcome_binds_tenant_and_fields() -> None:
                 name="German",
                 control="self",
                 subject="self",
+                mode="progressive",
+                ladder=("A1", "A2", "B1"),
+                current_target_level="A2",
             )
 
     asyncio.run(run())
@@ -59,26 +62,7 @@ def test_merge_outcome_binds_tenant_and_fields() -> None:
     assert params["name"] == "German"
     assert params["control"] == "self"
     assert params["subject"] == "self"
-    assert set(re.findall(r"\$(\w+)", cypher)) <= set(params)
-
-
-def test_merge_lever_for_outcome_carries_mode_and_ladder() -> None:
-    driver, session = _mock_driver()
-
-    async def run() -> None:
-        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
-            await s.merge_lever_for_outcome(
-                outcome_id=_OUTCOME_ID,
-                commitment_id=_COMMITMENT_ID,
-                mode="progressive",
-                ladder=("A1", "A2", "B1"),
-                current_target_level="A2",
-            )
-
-    asyncio.run(run())
-    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
-    assert params["tenant_id"] == _TENANT.tenant_id
-    assert params["commitment_id"] == str(_COMMITMENT_ID)
+    # Goal-level properties now live on the node (D163 clarification, S63).
     assert params["mode"] == "progressive"
     assert params["ladder"] == ["A1", "A2", "B1"]
     assert params["current_target_level"] == "A2"
@@ -89,7 +73,30 @@ def test_merge_lever_for_outcome_carries_mode_and_ladder() -> None:
     assert placeholders <= set(params), placeholders - set(params)
 
 
-def test_set_lever_target_returns_new_level() -> None:
+def test_merge_lever_for_outcome_carries_only_the_relationship() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_lever_for_outcome(
+                outcome_id=_OUTCOME_ID,
+                commitment_id=_COMMITMENT_ID,
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert params["tenant_id"] == _TENANT.tenant_id
+    assert params["commitment_id"] == str(_COMMITMENT_ID)
+    # The edge no longer carries goal-level properties (D163 clarification).
+    assert "mode" not in params
+    assert "ladder" not in params
+    assert "current_target_level" not in params
+    assert "$mode" not in cypher and "$current_target_level" not in cypher
+    placeholders = set(re.findall(r"\$(\w+)", cypher))
+    assert placeholders <= set(params), placeholders - set(params)
+
+
+def test_set_outcome_target_returns_new_level() -> None:
     driver, session = _mock_driver()
     result = MagicMock()
     result.single = AsyncMock(return_value={"current_target_level": "B1"})
@@ -97,16 +104,15 @@ def test_set_lever_target_returns_new_level() -> None:
 
     async def run() -> str | None:
         async with TenantScopedNeo4jSession(driver, _TENANT) as s:
-            return await s.set_lever_target(
+            return await s.set_outcome_target(
                 outcome_id=_OUTCOME_ID,
-                commitment_id=_COMMITMENT_ID,
                 current_target_level="B1",
             )
 
     assert asyncio.run(run()) == "B1"
 
 
-def test_set_lever_target_missing_edge_returns_none() -> None:
+def test_set_outcome_target_missing_outcome_returns_none() -> None:
     driver, session = _mock_driver()
     result = MagicMock()
     result.single = AsyncMock(return_value=None)
@@ -114,9 +120,8 @@ def test_set_lever_target_missing_edge_returns_none() -> None:
 
     async def run() -> str | None:
         async with TenantScopedNeo4jSession(driver, _TENANT) as s:
-            return await s.set_lever_target(
+            return await s.set_outcome_target(
                 outcome_id=_OUTCOME_ID,
-                commitment_id=_COMMITMENT_ID,
                 current_target_level="B1",
             )
 

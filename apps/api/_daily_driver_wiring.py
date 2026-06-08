@@ -392,13 +392,11 @@ class GoalGraphAdapter:
         *,
         tenant_context: TenantContext,
         outcome_id: UUID,
-        commitment_id: UUID,
         new_target_level: str,
     ) -> str | None:
-        return await self._outcome_graph.set_lever_target(
+        return await self._outcome_graph.set_outcome_target(
             tenant_context=tenant_context,
             outcome_id=outcome_id,
-            commitment_id=commitment_id,
             current_target_level=new_target_level,
         )
 

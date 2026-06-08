@@ -41,7 +41,6 @@ async def raise_goal_target(
     return await goal_graph.raise_target_level(
         tenant_context=actor.tenant_context,
         outcome_id=outcome_id,
-        commitment_id=goal.lever_commitment_id,
         new_target_level=next_target,
     )
 

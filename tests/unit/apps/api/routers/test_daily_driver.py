@@ -331,7 +331,7 @@ class _FakeGoalGraph:
         return (self._goal,)
 
     async def raise_target_level(
-        self, *, tenant_context, outcome_id, commitment_id, new_target_level
+        self, *, tenant_context, outcome_id, new_target_level
     ):
         self.raised_to = new_target_level
         from dataclasses import replace

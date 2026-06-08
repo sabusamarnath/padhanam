@@ -36,12 +36,13 @@ class GoalGraphPort(Protocol):
         *,
         tenant_context: TenantContext,
         outcome_id: UUID,
-        commitment_id: UUID,
         new_target_level: str,
     ) -> str | None:
         """Set the goal's current target to ``new_target_level`` (the explicit
-        raise). Returns the new level, or ``None`` when the goal is absent or
-        cross-tenant. Never called automatically — only on an explicit action.
+        raise). The target is a goal-level property on the Outcome node (D163
+        clarification), so the raise needs no lever id. Returns the new level,
+        or ``None`` when the goal is absent or cross-tenant. Never called
+        automatically — only on an explicit action.
         """
         ...
 

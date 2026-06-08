@@ -68,11 +68,17 @@ class OutcomeGraphPort(Protocol):
         name: str,
         control: str,
         subject: str,
+        mode: str,
+        ladder: Sequence[str],
+        current_target_level: str | None,
     ) -> None:
         """Idempotently MERGE an ``:Outcome`` node by ``(tenant_id, outcome_id)``.
 
-        Re-running updates ``name``/``control``/``subject`` and leaves
-        ``created_at`` from the first MERGE intact.
+        Per the D163 clarification (S63), the goal-level properties — ``mode``,
+        the ``ladder``, and ``current_target_level`` — are set on the node here.
+        Re-running updates ``name``/``control``/``subject``/``mode``/``ladder``/
+        ``current_target_level`` and leaves ``created_at`` from the first MERGE
+        intact.
         """
         ...
 
@@ -82,29 +88,28 @@ class OutcomeGraphPort(Protocol):
         tenant_context: TenantContext,
         outcome_id: UUID,
         commitment_id: UUID,
-        mode: str,
-        ladder: Sequence[str],
-        current_target_level: str | None,
     ) -> None:
         """MERGE the ``:Lever`` node (by ``(tenant_id, commitment_id)``) and the
-        ``LEVER_FOR`` edge to the Outcome, setting the edge's ``mode``,
-        ``ladder``, and ``current_target_level``. The Outcome must already
-        exist (caller merges it first); the lever is a thin reference to the
-        Postgres commitment, not a copy of it.
+        ``LEVER_FOR`` edge to the Outcome. The edge carries only that the lever
+        serves the outcome (the D163 clarification); goal-level properties live
+        on the Outcome node. The Outcome must already exist (caller merges it
+        first); the lever is a thin reference to the Postgres commitment, not a
+        copy of it.
         """
         ...
 
-    async def set_lever_target(
+    async def set_outcome_target(
         self,
         *,
         tenant_context: TenantContext,
         outcome_id: UUID,
-        commitment_id: UUID,
         current_target_level: str,
     ) -> str | None:
-        """Set the ``current_target_level`` on an existing ``LEVER_FOR`` edge
-        (the explicit raise action — never automatic, D9). Returns the new
-        level on success, ``None`` when the edge is absent or cross-tenant.
+        """Set the ``current_target_level`` on an existing ``:Outcome`` node
+        (the explicit raise action — never automatic, D9). The target is a
+        goal-level property (D163 clarification), so the raise needs no lever
+        id. Returns the new level on success, ``None`` when the outcome is
+        absent or cross-tenant.
         """
         ...
 

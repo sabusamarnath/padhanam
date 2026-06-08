@@ -653,17 +653,28 @@ goal the daily driver holds; its lever is a Commitment (per-tenant Postgres
 migration — the goal is a graph node and the lever reuses the existing
 `commitments` row. Lands via `migrations/neo4j/0002_outcome_goal.cypher`.
 
-| Property      | Type       | Notes                                                                  |
-|---------------|------------|-----------------------------------------------------------------------|
-| `tenant_id`   | `String`   | not empty; tenant-isolation predicate at every Cypher query           |
-| `jurisdiction`| `String`   | first-class per D12                                                    |
-| `outcome_id`  | `String`   | the goal's UUID                                                        |
-| `name`        | `String`   | the goal's human-readable label (e.g. "German")                       |
-| `control`     | `String`   | `self` (actor's levers determine) or `other` (actor only influences)  |
-| `subject`     | `String`   | `self` or `other` (whose goal it is)                                   |
-| `created_at`  | `DateTime` | set on initial MERGE                                                   |
+Per the **D163 clarification (S63)**, the goal-level properties — `mode`, the
+`ladder`, and `current_target_level` — live on the `:Outcome` node, not the
+`LEVER_FOR` edge: a goal has one mode and one target and may have many levers.
+The S62 schema placed them on the edge; `migrations/neo4j/0003_outcome_props_to_node.cypher`
+moves any existing instance (German) in place under the D165 mechanism.
+
+| Property               | Type            | Notes                                                                  |
+|------------------------|-----------------|-----------------------------------------------------------------------|
+| `tenant_id`            | `String`        | not empty; tenant-isolation predicate at every Cypher query           |
+| `jurisdiction`         | `String`        | first-class per D12                                                    |
+| `outcome_id`           | `String`        | the goal's UUID                                                        |
+| `name`                 | `String`        | the goal's human-readable label (e.g. "German")                       |
+| `control`              | `String`        | `self` (actor's levers determine) or `other` (actor only influences)  |
+| `subject`              | `String`        | `self` or `other` (whose goal it is)                                   |
+| `mode`                 | `String`        | `homeostatic` / `progressive` / `sequence`                            |
+| `ladder`               | `List<String>`  | ordered named levels for a progressive goal; empty otherwise          |
+| `current_target_level` | `String`/`null` | the level a progressive goal currently aims at; `null` otherwise      |
+| `created_at`           | `DateTime`      | set on initial MERGE                                                   |
 
 Uniqueness constraint: `outcome_unique_per_tenant` on `(tenant_id, outcome_id)`.
+`current_target_level` changes only via `set_outcome_target` (the explicit
+raise, never automatic — D9, the no-auto-modification invariant).
 
 ### `:Lever` nodes (S62, D163)
 
@@ -680,24 +691,26 @@ no-duplication).
 
 Uniqueness constraint: `lever_unique_per_tenant` on `(tenant_id, commitment_id)`.
 
-### `LEVER_FOR` edge (S62, D163)
+### `LEVER_FOR` edge (S62, D163; goal-level props moved off at S63)
 
-`(:Lever)-[:LEVER_FOR]->(:Outcome)`. Carries the goal's `mode` and, for a
-progressive goal, the qualitative target.
+`(:Lever)-[:LEVER_FOR]->(:Outcome)`. Per the D163 clarification (S63) the edge
+carries only **that** a lever serves the outcome — goal-level properties (mode,
+ladder, current target) moved to the `:Outcome` node. The edge does carry the
+lever's own **relationship-level** attributes for a sequence goal: `step_order`
+and `step_state` describe how a particular lever serves the outcome (a sequence
+has many ordered, individually-stateful steps), which is genuinely edge-level,
+not goal-level. These are absent (`null`) for a single-lever progressive goal.
 
-| Property               | Type            | Notes                                                                      |
-|------------------------|-----------------|----------------------------------------------------------------------------|
-| `tenant_id`            | `String`        | not empty; matches both endpoints                                          |
-| `jurisdiction`         | `String`        | matches both endpoints                                                     |
-| `mode`                 | `String`        | `homeostatic` / `progressive` / `sequence` (S62 instances only progressive)|
-| `ladder`               | `List<String>`  | ordered named levels for a progressive goal; empty otherwise               |
-| `current_target_level` | `String`/`null` | the level the goal currently aims at; `null` for non-progressive modes     |
-| `created_at`           | `DateTime`      | set on initial MERGE                                                       |
+| Property      | Type            | Notes                                                                       |
+|---------------|-----------------|-----------------------------------------------------------------------------|
+| `tenant_id`   | `String`        | not empty; matches both endpoints                                           |
+| `jurisdiction`| `String`        | matches both endpoints                                                      |
+| `step_order`  | `Integer`/`null`| 1-based position in a sequence goal's lever chain; `null` for progressive   |
+| `step_state`  | `String`/`null` | `ready` / `blocked` / `done` / `dropped` for a sequence step; `null` otherwise |
+| `created_at`  | `DateTime`      | set on initial MERGE                                                        |
 
 Uniqueness via the MERGE pattern keyed on `(tenant_id, commitment_id, outcome_id)`
-(Community Edition has no declarative relationship-property uniqueness). The
-`current_target_level` changes only via `set_lever_target` (the explicit raise,
-never automatic — D9, the no-auto-modification invariant).
+(Community Edition has no declarative relationship-property uniqueness).
 
 ## Agent tables (per-tenant)
 
