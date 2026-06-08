@@ -34,9 +34,20 @@ from contexts.daily_driver.domain.work_unit import LinkStatus, normalise_title
 DEFAULT_GOAL_CONFIDENCE_FLOOR = 0.8
 _CONFIRMED_CONFIDENCE = 0.9
 _CANDIDATE_CONFIDENCE = 0.5
-# A token must be at least this long to carry a candidate keyword match — keeps
-# the lean matcher from firing on stopword-shaped fragments ("get", "the").
-_MIN_KEYWORD_LEN = 4
+# A token carries a candidate keyword match unless it is a stopword (D172, the
+# tier-one stopword filter replacing the old four-character length guard). Length
+# is a bad proxy for signal: "job" is short and high-signal, "get" is short and
+# noise — so the short high-signal word "job" links "Get a job" to "Job search",
+# while a stopword like "get" stays suppressed at any length. Inspectable inline
+# data, no dependency; extend from observed false matches.
+_STOPWORDS = frozenset(
+    {
+        "a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at",
+        "for", "with", "my", "your", "our", "get", "got", "do", "did",
+        "doing", "be", "is", "are", "was", "this", "that", "these", "those",
+        "it", "as", "by", "from", "into",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -143,8 +154,8 @@ def _keyword_match(unit_title: str, goal_name: str) -> bool:
         return False
     if goal_name in unit_title or unit_title in goal_name:
         return True
-    unit_tokens = {t for t in unit_title.split() if len(t) >= _MIN_KEYWORD_LEN}
-    goal_tokens = {t for t in goal_name.split() if len(t) >= _MIN_KEYWORD_LEN}
+    unit_tokens = {t for t in unit_title.split() if t not in _STOPWORDS}
+    goal_tokens = {t for t in goal_name.split() if t not in _STOPWORDS}
     return bool(unit_tokens & goal_tokens)
 
 

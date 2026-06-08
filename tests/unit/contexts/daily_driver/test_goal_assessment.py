@@ -81,6 +81,28 @@ def test_candidate_edge_when_facet_keyword_matches_the_goal_name():
     assert edges[0].basis == "goal-name"
 
 
+def test_short_high_signal_word_links_under_the_stopword_filter():
+    # D172: "job" is three chars (below the old length guard) but high-signal,
+    # so it links "Get a job" to a "Job search" unit via the shared token.
+    cid = uuid4()
+    goal = _progressive_goal("Get a job", lever_commitment_id=cid)
+    unit = _unit("Job search")
+    edges = infer_goal_edges((unit,), (goal,), {cid: "Apply to roles"})
+    assert len(edges) == 1
+    assert edges[0].status is LinkStatus.CANDIDATE
+    assert edges[0].basis == "goal-name"
+
+
+def test_a_stopword_only_overlap_forms_no_edge():
+    # The unit and goal share only the stopword "get" — no high-signal token
+    # in common, so the stopword filter forms no candidate edge.
+    cid = uuid4()
+    goal = _progressive_goal("Get a job", lever_commitment_id=cid)
+    unit = _unit("Get a coffee")
+    edges = infer_goal_edges((unit,), (goal,), {cid: "Apply to roles"})
+    assert edges == ()
+
+
 def test_confirmed_takes_precedence_over_candidate_for_a_goal():
     cid = uuid4()
     goal = _progressive_goal("German", lever_commitment_id=cid)
