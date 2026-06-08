@@ -326,6 +326,9 @@
           <div class="section-label">Units of work</div>
           <p class="sub">One piece of work, seen across your tools — the task, the calendar block, the email it came from, drawn together. Padhanam correlates them; it never writes the link back.</p>
           <div class="goals" id="units"></div>
+          <div class="section-label">How am I doing</div>
+          <p class="sub">The layer no tool holds: work adrift of every goal, and goals nothing points at. Recommendations, not verdicts — only meaningful once your goals are seeded.</p>
+          <div class="goals" id="assessment"></div>
           <div class="section-label">New commitment</div>
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
@@ -339,6 +342,7 @@
         loadGoals();
         loadTasks();
         loadUnits();
+        loadAssessment();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -495,6 +499,49 @@
           <span class="sub" style="margin:0">${u.facets.length} facets</span>
         </div>
         ${facetRows}`;
+      return card;
+    }
+    // --- How am I doing (S67, D169: the moat reads, recommendation-shaped) ---
+    async function loadAssessment() {
+      const box = document.getElementById("assessment"); if (!box) return;
+      let a;
+      try { a = await api("/daily-driver/assessment"); } catch { box.innerHTML = ""; return; }
+      const orphans = a.orphan_work || [], neglected = a.neglected_goals || [];
+      if (!orphans.length && !neglected.length) {
+        box.innerHTML = '<div class="empty">Nothing to flag — every unit points at a goal and every goal has work. (Or no goals are seeded yet.)</div>';
+        return;
+      }
+      box.innerHTML = "";
+      if (neglected.length) {
+        const head = document.createElement("div");
+        head.className = "sub"; head.style.margin = "0 0 4px"; head.style.fontWeight = "600";
+        head.textContent = `Neglected goals (${neglected.length})`;
+        box.appendChild(head);
+        neglected.forEach((g) => box.appendChild(assessCard(g.reason, "goal")));
+      }
+      if (orphans.length) {
+        const head = document.createElement("div");
+        head.className = "sub"; head.style.margin = "10px 0 4px"; head.style.fontWeight = "600";
+        // Lead with the cross-tool orphans — the genuine work most likely to deserve a goal.
+        const cross = orphans.filter((o) => o.is_correlated).length;
+        head.textContent = `Work adrift of a goal (${orphans.length}${cross ? ", " + cross + " cross-tool" : ""})`;
+        box.appendChild(head);
+        // Bounded display — restraint against a noisy read; show the leading slice.
+        orphans.slice(0, 12).forEach((o) => box.appendChild(assessCard(o.reason, "orphan")));
+        if (orphans.length > 12) {
+          const more = document.createElement("div");
+          more.className = "sub"; more.style.margin = "4px 0 0";
+          more.textContent = `…and ${orphans.length - 12} more.`;
+          box.appendChild(more);
+        }
+      }
+    }
+    function assessCard(reason, kind) {
+      const card = document.createElement("div");
+      card.className = "row"; card.dataset.tier = "work";
+      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "2px";
+      const glyph = kind === "goal" ? "◎" : "⊘";
+      card.innerHTML = `<div class="sub" style="margin:0">${glyph} ${escapeHtml(reason)}</div>`;
       return card;
     }
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }

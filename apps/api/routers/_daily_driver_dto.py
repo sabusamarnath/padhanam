@@ -19,6 +19,7 @@ from contexts.daily_driver.domain.today_item import (
     TodayItem,
     TodayView,
 )
+from contexts.daily_driver.domain.goal_assessment import GoalAssessment
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.tasks.domain.task import Task
 
@@ -289,6 +290,53 @@ def unit_view_to_dto(view: UnitView) -> UnitDTO:
                 present=f.present,
             )
             for f in view.facets
+        ],
+    )
+
+
+class OrphanUnitDTO(BaseModel):
+    """A unit pointing at no goal (D169) — recommendation-shaped."""
+
+    unit_id: UUID
+    title: str
+    facet_count: int
+    is_correlated: bool
+    reason: str
+
+
+class NeglectedGoalDTO(BaseModel):
+    """A goal nothing in the plan points at (D169) — recommendation-shaped."""
+
+    outcome_id: UUID
+    name: str
+    reason: str
+
+
+class GoalAssessmentDTO(BaseModel):
+    """The two moat reads, surfaced together (D169, D166)."""
+
+    orphan_work: list[OrphanUnitDTO]
+    neglected_goals: list[NeglectedGoalDTO]
+
+
+def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
+    """Encode the domain GoalAssessment into the HTTP DTO (D169)."""
+    return GoalAssessmentDTO(
+        orphan_work=[
+            OrphanUnitDTO(
+                unit_id=o.unit_id,
+                title=o.title,
+                facet_count=o.facet_count,
+                is_correlated=o.is_correlated,
+                reason=o.reason,
+            )
+            for o in assessment.orphan_work
+        ],
+        neglected_goals=[
+            NeglectedGoalDTO(
+                outcome_id=g.outcome_id, name=g.name, reason=g.reason
+            )
+            for g in assessment.neglected_goals
         ],
     )
 

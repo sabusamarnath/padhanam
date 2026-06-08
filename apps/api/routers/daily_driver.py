@@ -43,10 +43,12 @@ from apps.api.routers._daily_driver_dto import (
     GoalReadingDTO,
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
+    GoalAssessmentDTO,
     SetOrderRequest,
     TaskDTO,
     TodayDTO,
     UnitDTO,
+    goal_assessment_to_dto,
     goal_reading_to_dto,
     task_to_dto,
     today_view_to_dto,
@@ -54,6 +56,7 @@ from apps.api.routers._daily_driver_dto import (
 )
 from contexts.daily_driver.application import (
     create_commitment,
+    list_goal_assessment,
     list_goals,
     list_today,
     list_units,
@@ -136,6 +139,15 @@ def get_unit_graph(request: Request):
 def get_facet_source(request: Request):
     """FastAPI dependency: the daily-driver FacetSource (D168), if wired."""
     return getattr(request.app.state, "daily_driver_facet_source", None)
+
+
+def get_goal_graph_optional(request: Request):
+    """FastAPI dependency: the GoalGraphPort if wired, else None (D169).
+
+    The assessment route degrades to empty reads when any correlation seam is
+    unconfigured, so it needs the optional form (the required ``get_goal_graph``
+    503s on absence for the /goals route)."""
+    return getattr(request.app.state, "daily_driver_goal_graph", None)
 
 
 def get_drop_candidate_quiet_days(request: Request) -> int | None:
@@ -352,6 +364,30 @@ async def get_units(
         unit_graph=unit_graph, facet_source=facet_source, actor=actor
     )
     return [unit_view_to_dto(u) for u in units]
+
+
+@router.get("/assessment", response_model=GoalAssessmentDTO)
+async def get_assessment(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+    goal_graph: Annotated[object | None, Depends(get_goal_graph_optional)],
+) -> GoalAssessmentDTO:
+    """Return the two moat reads — orphan work + the neglected goal (D169, D166).
+
+    Recommendation-shaped, never auto-acting. Degrades to empty reads when the
+    correlation seams are unconfigured. The goal facets are populated by the
+    operator-gated correlate run, not on read.
+    """
+    if unit_graph is None or facet_source is None or goal_graph is None:
+        return GoalAssessmentDTO(orphan_work=[], neglected_goals=[])
+    assessment = await list_goal_assessment(
+        unit_graph=unit_graph,
+        facet_source=facet_source,
+        goal_graph=goal_graph,
+        actor=actor,
+    )
+    return goal_assessment_to_dto(assessment)
 
 
 @router.put("/today/order", status_code=204)

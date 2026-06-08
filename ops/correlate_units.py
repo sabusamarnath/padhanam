@@ -1,17 +1,22 @@
-"""Correlate the personal dogfood tenant's work units (S66, D168).
+"""Correlate the personal dogfood tenant's work units + goal facets (S66 D168, S67 D169).
 
-The operator-gated trigger for unit-of-work correlation: reads the personal
-tenant's read-only caches (tasks, calendar, email — decrypted on read), runs the
-title-and-time inference, and replaces the tenant's ``:Unit`` / ``:Facet`` /
-``SAME_WORK`` subgraph in the shared Neo4j. Idempotent — re-running recomputes
-the derived graph from the current caches (D155). Reads nothing back into any
-source tool (D166; the caches are read-only, D167).
+The operator-gated trigger for correlation, two steps:
+
+1. **Unit-of-work correlation (D168)** — reads the read-only caches (tasks,
+   calendar, email — decrypted on read), runs the title-and-time inference, and
+   replaces the tenant's ``:Unit`` / ``:Facet`` / ``SAME_WORK`` subgraph.
+2. **Goal-facet correlation (D169)** — reads the units, the goals (with their
+   lever-commitment ids), and the commitment names, infers the confidence-tiered
+   unit→goal ``SERVES`` edges, and replaces them.
+
+Both are idempotent — re-running recomputes the derived graph from the current
+caches + goals (D155). Reads nothing back into any source tool (D166; D167).
 
 Ops-only, composing the daily-driver correlation bridges at the boundary (the
 ``ops/pull_tasks`` precedent). Must run where the personal-tenant Postgres host
 and the shared Neo4j both resolve (inside ``padhanam-api``, via
 ``make correlate-units``). Run ``make pull-tasks`` (and the calendar/email
-refresh) first so the caches are populated.
+refresh) and seed the goals first so the steps have input.
 """
 
 from __future__ import annotations
@@ -34,15 +39,22 @@ PERSONAL_TENANT_UUID = "00000000-0000-4000-8000-00000000d001"
 async def _correlate() -> None:
     from apps.api._daily_driver_wiring import (
         FacetSourceAdapter,
+        GoalGraphAdapter,
         UnitGraphAdapter,
     )
     from apps.cli._runtime import build_tenant_wiring
-    from contexts.daily_driver.application import correlate_units
+    from contexts.daily_driver.adapters.outbound.postgres.commitment_repository import (  # noqa: E501
+        PostgresCommitmentRepository,
+    )
+    from contexts.daily_driver.application import (
+        correlate_goal_facets,
+        correlate_units,
+    )
     from contexts.ingestion.adapters.outbound.neo4j import (
         Neo4jGraphRepository,
     )
     from padhanam.config import Neo4jSettings
-    from shared_kernel import ActorContext, TenantContext
+    from shared_kernel import ActorContext, TenantContext, TenantId
 
     wiring = build_tenant_wiring(PERSONAL_TENANT_UUID)
     tenant_context: TenantContext = wiring.tenant_context
@@ -51,11 +63,18 @@ async def _correlate() -> None:
     async def _session_factory_for_tenant(_tc: TenantContext):
         return session_factory
 
+    async def _resolver(_tid: TenantId):
+        return session_factory
+
+    graph = Neo4jGraphRepository.from_settings(Neo4jSettings())
     facet_source = FacetSourceAdapter(
         session_factory_for_tenant=_session_factory_for_tenant
     )
-    unit_graph = UnitGraphAdapter(
-        unit_graph=Neo4jGraphRepository.from_settings(Neo4jSettings())
+    unit_graph = UnitGraphAdapter(unit_graph=graph)
+    goal_graph = GoalGraphAdapter(outcome_graph=graph)
+    commitment_repository = PostgresCommitmentRepository(
+        per_tenant_sessionmaker_resolver=_resolver,
+        bound_tenant_id=TenantId(str(tenant_context.tenant_id)),
     )
 
     roles = frozenset({ROLE_OPERATOR})
@@ -66,12 +85,23 @@ async def _correlate() -> None:
         authorisation_set=authorisations_for_roles(roles),
     )
 
-    count = await correlate_units(
+    # Step 1 — unit-of-work correlation (D168).
+    unit_count = await correlate_units(
         facet_source=facet_source,
         unit_graph=unit_graph,
         actor=actor,
     )
-    log.info("correlation complete: %d units written", count)
+    log.info("unit correlation complete: %d units written", unit_count)
+
+    # Step 2 — goal-facet correlation (D169), over the units just written.
+    edge_count = await correlate_goal_facets(
+        unit_graph=unit_graph,
+        facet_source=facet_source,
+        goal_graph=goal_graph,
+        commitment_repository=commitment_repository,
+        actor=actor,
+    )
+    log.info("goal-facet correlation complete: %d SERVES edges written", edge_count)
 
 
 def main() -> int:

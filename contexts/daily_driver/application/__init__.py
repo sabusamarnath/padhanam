@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from contexts.daily_driver.application.correlate_goal_facets import (
+    correlate_goal_facets,
+)
 from contexts.daily_driver.application.correlate_units import correlate_units
 from contexts.daily_driver.application.create_commitment import (
     create_commitment,
+)
+from contexts.daily_driver.application.list_goal_assessment import (
+    list_goal_assessment,
 )
 from contexts.daily_driver.application.list_goals import list_goals
 from contexts.daily_driver.application.list_today import list_today
@@ -22,8 +28,10 @@ from contexts.daily_driver.application.record_observed_outcome import (
 from contexts.daily_driver.application.reorder_today import set_today_order
 
 __all__ = [
+    "correlate_goal_facets",
     "correlate_units",
     "create_commitment",
+    "list_goal_assessment",
     "list_goals",
     "list_today",
     "list_units",

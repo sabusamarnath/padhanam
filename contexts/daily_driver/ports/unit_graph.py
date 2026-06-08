@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence
 
+from contexts.daily_driver.domain.goal_assessment import GoalEdge
 from contexts.daily_driver.domain.work_unit import (
     UnitFacetRef,
     UnitRecord,
@@ -52,6 +53,23 @@ class UnitGraphPort(Protocol):
         Cross-tenant rows never surface (the wrapper binds ``tenant_id`` into
         every predicate).
         """
+        ...
+
+    async def replace_goal_edges(
+        self, *, tenant_context: TenantContext, edges: Sequence[GoalEdge]
+    ) -> None:
+        """Replace the tenant's unit→goal ``SERVES`` edges (D169).
+
+        Derived state, recomputed each correlation run; touches only the goal
+        facet (the unit ``SAME_WORK`` subgraph and the goal ``LEVER_FOR`` edges
+        are left intact). Stores only ids + the inference's edge properties.
+        """
+        ...
+
+    async def list_goal_edges(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[GoalEdge, ...]:
+        """Return the tenant's unit→goal ``SERVES`` edges (D169)."""
         ...
 
 

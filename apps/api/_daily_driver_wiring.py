@@ -57,6 +57,7 @@ from contexts.daily_driver.domain.today_item import (
     ItemKind,
     OpenCase,
 )
+from contexts.daily_driver.domain.goal_assessment import GoalEdge
 from contexts.daily_driver.domain.work_unit import (
     FacetType,
     LinkStatus,
@@ -72,6 +73,7 @@ from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
 )
 from contexts.ingestion.ports.unit_graph_port import (
     FacetLinkWrite,
+    GoalEdgeWrite,
     UnitWrite,
 )
 from contexts.tasks.adapters.outbound.postgres.task_store import (
@@ -620,6 +622,40 @@ class UnitGraphAdapter:
                     )
                     for link in record.links
                 ),
+            )
+            for record in records
+        )
+
+    async def replace_goal_edges(
+        self, *, tenant_context: TenantContext, edges: Any
+    ) -> None:
+        writes = [
+            GoalEdgeWrite(
+                unit_id=edge.unit_id,
+                outcome_id=edge.outcome_id,
+                confidence=edge.confidence,
+                status=edge.status.value,
+                basis=edge.basis,
+            )
+            for edge in edges
+        ]
+        await self._unit_graph.replace_goal_edges(
+            tenant_context=tenant_context, edges=writes
+        )
+
+    async def list_goal_edges(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[GoalEdge, ...]:
+        records = await self._unit_graph.list_goal_edges(
+            tenant_context=tenant_context
+        )
+        return tuple(
+            GoalEdge(
+                unit_id=record.unit_id,
+                outcome_id=record.outcome_id,
+                confidence=record.confidence,
+                status=LinkStatus(record.status),
+                basis=record.basis,
             )
             for record in records
         )

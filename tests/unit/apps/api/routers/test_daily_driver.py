@@ -515,13 +515,17 @@ def test_tasks_route_empty_when_reader_unwired() -> None:
 
 
 class _FakeUnitGraph:
-    """In-memory UnitGraphPort returning pre-set thin UnitRecords."""
+    """In-memory UnitGraphPort returning pre-set thin UnitRecords + goal edges."""
 
-    def __init__(self, records) -> None:
+    def __init__(self, records, goal_edges=()) -> None:
         self._records = records
+        self._goal_edges = goal_edges
 
     async def list_units(self, *, tenant_context):
         return tuple(self._records)
+
+    async def list_goal_edges(self, *, tenant_context):
+        return tuple(self._goal_edges)
 
 
 class _FakeFacetSource:
@@ -581,6 +585,70 @@ def test_units_route_empty_when_seams_unwired() -> None:
     res = client.get("/api/v1/daily-driver/units")
     assert res.status_code == 200
     assert res.json() == []
+
+
+class _FakeGoalGraphForAssessment:
+    def __init__(self, goals) -> None:
+        self._goals = goals
+
+    async def list_goals(self, *, tenant_context):
+        return tuple(self._goals)
+
+
+def test_assessment_route_returns_orphan_work_and_neglected_goals() -> None:
+    from contexts.daily_driver.domain.goal import (
+        ControlAxis, Goal, GoalMode, LevelLadder, Subject,
+    )
+    from contexts.daily_driver.domain.goal_assessment import GoalEdge
+    from contexts.daily_driver.domain.work_unit import (
+        FacetType, LinkStatus, WorkFacet,
+    )
+    from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
+
+    served_unit, orphan_unit = uuid4(), uuid4()
+    task_a, task_b = uuid4(), uuid4()
+    served_goal_id, neglected_goal_id = uuid4(), uuid4()
+    cid = uuid4()
+    records = [
+        UnitRecord(served_unit, (UnitFacetRef(
+            FacetType.TASK, task_a, 1.0, LinkStatus.CONFIRMED, "anchor"),)),
+        UnitRecord(orphan_unit, (UnitFacetRef(
+            FacetType.TASK, task_b, 1.0, LinkStatus.CONFIRMED, "anchor"),)),
+    ]
+    facets = [
+        WorkFacet(FacetType.TASK, task_a, "German practice", None),
+        WorkFacet(FacetType.TASK, task_b, "Budget review", None),
+    ]
+    edges = [GoalEdge(served_unit, served_goal_id, 0.9, LinkStatus.CONFIRMED, "commitment")]
+
+    def _goal(gid, name):
+        return Goal(
+            id=gid, tenant_id=UUID(_TENANT), jurisdiction="eu-west", name=name,
+            mode=GoalMode.PROGRESSIVE, control=ControlAxis.SELF, subject=Subject.SELF,
+            lever_commitment_id=cid,
+            ladder=LevelLadder(levels=("A1", "A2"), current_target_level="A2"),
+        )
+
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        goal_graph=_FakeGoalGraphForAssessment(
+            [_goal(served_goal_id, "German"), _goal(neglected_goal_id, "Marathon")]
+        ),
+        unit_graph=_FakeUnitGraph(records, goal_edges=edges),
+        facet_source=_FakeFacetSource(facets),
+    )
+    res = client.get("/api/v1/daily-driver/assessment")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert [o["unit_id"] for o in body["orphan_work"]] == [str(orphan_unit)]
+    assert [g["outcome_id"] for g in body["neglected_goals"]] == [str(neglected_goal_id)]
+
+
+def test_assessment_route_empty_when_seams_unwired() -> None:
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.get("/api/v1/daily-driver/assessment")
+    assert res.status_code == 200
+    assert res.json() == {"orphan_work": [], "neglected_goals": []}
 
 
 def test_goals_route_returns_unblock_or_drop_for_sequence() -> None:
