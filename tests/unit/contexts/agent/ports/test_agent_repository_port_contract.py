@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import inspect
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -107,23 +108,40 @@ def test_port_import_does_not_pull_in_sqlalchemy_alembic_asyncpg() -> None:
 
 
 # ----------------------------------------------------------------------
-# Behaviour-level assertions deferred to the adapter integration tests
-# at S24 commit 7. The skipped tests below document the behaviour
-# contract that the PostgresAgentRepository must satisfy.
+# Behaviour-level assertions for the PostgresAgentRepository live in the
+# integration home below. The four placeholders that used to sit here as
+# empty `@pytest.mark.skip` tests asserted nothing and pointed at prose
+# ("S24 commit 7 integration tests") that could rot silently. S64 replaces
+# them with the guard below: it reads the named home and fails if any
+# deferred behaviour is renamed or dropped, so the deferral is verified, not
+# decorative.
 # ----------------------------------------------------------------------
 
+_BEHAVIOUR_HOME = (
+    "tests/integration/contexts/agent/adapters/outbound/postgres/"
+    "test_repository.py"
+)
+_DEFERRED_BEHAVIOURS = (
+    "test_create_template_persists_template_and_initial_revision_atomically",
+    "test_add_revision_increments_version_and_chains_hash",
+    "test_get_template_returns_latest_revision_when_version_omitted",
+    "test_archive_template_marks_archived_at_and_leaves_revisions_intact",
+)
 
-@pytest.mark.skip(reason="behaviour assertion lands at S24 commit 7 integration tests")
-def test_create_template_persists_template_and_initial_revision_atomically() -> None: ...
 
+def test_deferred_behaviour_homes_exist() -> None:
+    """The four deferred PostgresAgentRepository behaviours have a real home (S64).
 
-@pytest.mark.skip(reason="behaviour assertion lands at S24 commit 7 integration tests")
-def test_add_revision_increments_version_and_chains_hash() -> None: ...
-
-
-@pytest.mark.skip(reason="behaviour assertion lands at S24 commit 7 integration tests")
-def test_get_template_returns_latest_revision_when_version_omitted() -> None: ...
-
-
-@pytest.mark.skip(reason="behaviour assertion lands at S24 commit 7 integration tests")
-def test_archive_template_marks_archived_at_and_leaves_revisions_intact() -> None: ...
+    Replaces the prior empty skip placeholders. Reads the integration home and
+    asserts every deferred behaviour is defined there; a rename or deletion
+    fails this test, so the port-contract deferral can never decay into a
+    silent gap.
+    """
+    repo_root = Path(__file__).resolve().parents[5]
+    home = repo_root / _BEHAVIOUR_HOME
+    assert home.is_file(), f"deferred behaviour home missing: {_BEHAVIOUR_HOME}"
+    text = home.read_text()
+    missing = [n for n in _DEFERRED_BEHAVIOURS if f"def {n}(" not in text]
+    assert not missing, (
+        f"{_BEHAVIOUR_HOME} no longer defines deferred behaviours: {missing}"
+    )
