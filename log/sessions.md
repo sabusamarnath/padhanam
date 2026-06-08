@@ -3382,3 +3382,38 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## S69 — Dogfood-gate precondition: seed the operator's seven real goals + instance the homeostatic shape for the moat (build mode)
+roles: engineer (the spec-driven seeder, the homeostatic _to_goal read, live seeding + verification), analyst (the 0-edge-at-seven-goals finding — the [S67] title-linkage prediction confirmed on real data), PM (the taxonomy mapping of the operator's goals, the judge-at-six discipline), technical writer (the seeder doc + caveat, this entry)
+mode: build session — the dogfood-gate precondition the Wave-2 brief named ("the six real goals seeded before the gate"), executed after P20 closed the runway
+
+S69 seeds the operator's **seven real goals** for the dogfood gate. German (S62 progressive) + Get-a-job (S63 sequence) were already seeded; this session seeds the five remaining real goals the operator supplied — **Strength** (homeostatic), **Wide World Marathon** (progressive), **Voice projection** (homeostatic), **Stretch & meditate** (homeostatic), **Litany "I will not fear"** (homeostatic) — via a spec-driven `ops/seed_dogfood_goals.py` (DRY, one loop, the S65 duplication discipline) + `make seed-dogfood-goals`. Four are the **homeostatic** mode, schema-present since S62 and **instanced here for the moat**: `GoalGraphAdapter._to_goal` now extracts a homeostatic goal's single lever so the goal-facet confirmed tier (D169) can match it; the homeostatic *re-establish remedy* on `/goals` stays deferred (a homeostatic goal reads a graceful "hold", verified — no crash). +1 test (the homeostatic record→Goal mapping). 43 import-linter contracts; the targeted suites green.
+
+- **The live finding (the load-bearing one): 0 SERVES edges even at seven goals.** Seeded all seven, ran `make correlate-units` → 979 units, **0 goal edges**; `/assessment` → 979 orphans, all 7 neglected; `/goals` → 200 with all 7 (the four homeostatic read "hold"). The reason is the **[S67] title-linkage finding confirmed on the operator's real data**: the goal-facet inference links a unit to a goal by a *title* match (unit-facet vs lever-commitment name = confirmed; keyword vs goal name = candidate), and the operator's ingested calendar units ("3 mins Esperanto with Megan", medication names, "call PVS", "Morning tasks") **textually match none** of the seven goals' names or lever names — because that calendar holds *other* life areas (Megan's speech, a health-maintenance regimen — themselves candidate goals, not in the seven), and the seven goals' actual work (German lessons, strength sessions, applications, voice exercises, stretches, litany) is **not in the ingested cache** (it lives in Google Tasks, not yet pulled, or is titled differently than the goal/lever names). The moat machinery is fully wired and computing correctly — it responds the instant an edge exists (the S67/S68 reversible round-trips proved that) — but on this corpus it correctly reports "your plan has seven goals and the ingested work points at none of them."
+
+- **What this hands the dogfood week (not a bug — the gate's first signal):** the moat is only as useful as the goal-work is (a) ingested and (b) linkable by title. Two operator actions unlock it: **(1) `make pull-tasks`** — ingest the Google Tasks where the goal-work actually lives (the operator-gated pull, S65), then re-correlate; **(2) rename the lever commitments to match how the operator titles that work** in the real calendar/tasks, so the confirmed tier fires (the documented caveat). If after both the moat still floods orphan, that is the genuine P19 refinement signal — the title matcher needs a tag/domain-based linkage rather than title-only (the homeostatic-absorption gap the operator predicted in the P19 fork discussion, now concrete). This is exactly the judge-at-six-on-real-data discipline working: the gap surfaced at setup, before a week of mistrust, not after.
+
+- Produced: two commits. (1) `feat(goals): seed the operator's five remaining dogfood goals + homeostatic lever read` — `ops/seed_dogfood_goals.py` (spec-driven, idempotent, deterministic ids), `make seed-dogfood-goals`, the `_to_goal` homeostatic-lever extraction + its test. (2) this docs commit (this entry + the rebuilt-image digest pin). Live: all seven seeded, correlated, `/goals` + `/assessment` verified at seven (0 edges, the finding).
+
+- Taxonomy mapping (recorded for the operator's review — modes are the operator's to correct): German progressive (CEFR ladder, seeded); Get-a-job sequence (terminal "Offer accepted", seeded); Strength homeostatic (5-min ×6/day regime — progressive-with-a-strength-ladder is the alternative if milestones are wanted); Wide World Marathon progressive (distance ladder 5K→Marathon, current target a placeholder "Half marathon" the operator should set; the April race date is a deadline = a Phase-2-B constraint dimension, not the engine); Voice projection / Stretch & meditate / Litany all homeostatic daily-practice. control self, subject self throughout. Megan's-Esperanto (subject-other) and the health-maintenance (homeostatic) goals evident in the calendar are **not** among the operator's seven — they are separate life areas the operator did not list as tracked goals, so they were not seeded.
+
+methodology: this is the third clean instance of build-the-logic-now / gate-the-proof-on-real-data (S65 pull, S67 six goals, S69 seeded + correlated), and the first where the *gated* proof actually ran and returned a negative — the moat lit up empty on real data, which is the design working, not failing. The value of doing the seeding *as a build session with live verification* (rather than handing the operator a seed script to run blind) is precisely that the 0-edge finding surfaced now, with a diagnosis and two concrete unlocks, instead of as a confusing flood of false orphans mid-dogfood. The live-substrate discipline applied to *setup*, not just to *code*.
+
+- Close state: **the seven real goals are seeded and the dogfood surface reads them cleanly at seven goals (live-verified)**; the moat correctly reports 0 links because the linkable goal-work is not yet ingested (tasks) or title-matched (lever names) — the two operator unlocks (`make pull-tasks`; rename levers to real titles) are documented, and the residual-flood case is the named P19 refinement signal. **The dogfood gate is ready to begin** once the operator runs the task pull + tunes the lever names. No further surface built; the constraint dimensions and Phase 2-B wait for the dogfood verdict. **S64 test-integrity remains owed.**
+
+```
+metrics:
+  classification: build session
+  brief_started: 2026-06-08
+  session_started: 2026-06-08
+  session_closed: 2026-06-08
+  merged: 2026-06-08
+  close_state: the seven real goals seeded + read cleanly at seven (live); the moat correctly reports 0 links (goal-work not yet ingested/title-matched) — two operator unlocks documented; the homeostatic shape instanced for the moat (read path), its /goals remedy still deferred (graceful hold); the dogfood gate is ready pending the operator's task pull + lever-name tuning
+  tests_passing: yes (targeted suites green; +1 homeostatic mapping test; 43 import-linter contracts; the pre-existing wall-clock calendar test still the only failure, carried)
+  principles_intact: yes
+  gate_enabling: true
+  no_new_value_surface: true
+  charter_touchpoints: ops/seed_dogfood_goals.py; Makefile (seed-dogfood-goals); apps/api/_daily_driver_wiring.py (_to_goal homeostatic lever); compose.yaml (rebuilt-image digest pin); tests/unit/contexts/daily_driver/test_goal_application.py; log/sessions.md (this entry)
+  corrects:
+  corrected_by:
+```
