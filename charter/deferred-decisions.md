@@ -991,13 +991,17 @@ Surfaced by the first dogfood pass. All five links wrote at candidate tier (0.5)
 
 Surfaced by D173 and the first surface dogfood. Repeated instances of one recurring source must roll up under the cadence lever as one repeating item, not N rows. This is the recurrence dimension, one of the five Phase 2-B plan constraints (dependency, deadline, capacity, recurrence, waiting-on-others; D166), now confirmed twice: by the ~84-instance correlation collapse (P18/S66) and by surface use.
 
-**Activation trigger.** Phase 2-B, with the other plan-constraint dimensions. References D166 (the constrained-graph plan model), D157 (the cadence lever), D173.
+**Read-layer fold done at S72 (D175); the structural model stays here.** S72 folds recurring instances under their source series (`recurringEventId`) at the **read** layer — the assessment/orphan view and the coverage report now show distinct grouped items with instance counts (982 → ~40), not raw instances. That is D175's near-term slice. **What remains here:** the **structural** recurrence model — instances rolling up under the cadence lever *in the data model*, so the plan graph itself carries recurrence rather than the read recomputing it each time. Build only if the read-layer fold proves insufficient (the two-threshold rule).
+
+**Activation trigger.** Phase 2-B, with the other plan-constraint dimensions. References D166 (the constrained-graph plan model), D157 (the cadence lever), D173, D175 (the read-layer fold that defers this).
 
 ### Today surface time-scoping (near-term)
 
+**Status: resolved by D175 at S72, 2026-06-08.** The body remains for audit per the append-only discipline. S72 scopes Today to today-forward: completed/ended items move out of the live list into a `history` slice on the read, which is the observed stream feeding the expected/observed loop (D162). The data model is unchanged; the split is at the view builder.
+
 Surfaced by D173. The display rules scoping Today to today-forward and moving completed/past instances into a history view feeding the expected/observed loop (D162). Cheaper and more clearly right than the recurrence fold; a candidate near-term surface session ahead of Phase 2-B if the dogfood keeps surfacing the clutter.
 
-**Activation trigger.** A near-term surface session if the clutter persists, else folded into Phase 2-B with the recurrence work. References D162 (expected/observed loop), D173.
+**Activation trigger.** A near-term surface session if the clutter persists, else folded into Phase 2-B with the recurrence work. References D162 (expected/observed loop), D173, D175 (resolves this).
 
 ### Native observation capture versus source write-back
 
