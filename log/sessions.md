@@ -3417,3 +3417,40 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## S70 — P19 refinement: coverage honesty — the moat reports uncovered, not blindness-as-neglect (D171) (build mode)
+roles: architect (the coverage-vs-neglect distinction, the boundary-validity principle), engineer (assess_goals reshape, the DTO/route/panel, live verification incl. the coverage transition), analyst (the trust-killer diagnosis from the operator's reaction), PM (the assess-not-replace honesty principle, the day-zero dogfood read), technical writer (D171, this entry)
+mode: build session — the first real P19 refinement, straight out of the dogfood day-zero reaction (not from reasoning)
+
+S70 fixes the moat's **trust-killer**, surfaced the first time the operator looked at it (S69): with the seven real goals seeded but their work not yet ingested/linked, the moat read "nothing I can see points at this goal" as "**you are neglecting this goal**" — presenting its own coverage blindness as the user's failure. D171 (refining D169, superseding its bare orphan/neglected framing): an **assess-not-replace platform reads only part of the world by definition, so its assessment is valid only inside the boundary of what is ingested and linked**. The moat now distinguishes **coverage** from **neglect**: it leads with an explicit coverage statement, reports a goal with no linked evidence as **uncovered** ("Padhanam can't see your work for this — not a sign you've stopped"), and **emits orphan/neglect verdicts only when coverage exists** — outside the boundary they are unproven and suppressed. Two commits. 2432 unit+contract pass (0 new failures — the 1 is the carried wall-clock test; +reshaped assessment tests incl. the new coverage-gate cases); 43 import-linter contracts; 9 AST. **Live-verified the honest read end-to-end**, including the coverage transition.
+
+- The diagnosis (the operator's, day zero): the platform was conflating "I cannot see a link" (a coverage gap — *its* limitation) with "you are not doing the thing" (a judgment about *the user*). For an assess-not-replace platform — which by definition reads only the tools it's connected to — that conflation is structural, not incidental: a neglect/orphan verdict outside the linked boundary is the platform narrating its own blindness as the user's behaviour. The trust cost is total and immediate (it hit on first contact), which is exactly what the dogfood week exists to catch — and it caught it on day zero, from reaction rather than reasoning.
+
+- The empirical diagnostic (run this session, answering the operator's "do you see the work as units?"): **no** — scanned all 979 ingested units against every goal keyword (german/strength/marathon/voice/stretch/litany/job): **zero matches**. What's ingested is entirely *other* life areas (Esperanto-with-Megan, a medication regimen, contacts) — the seven goals' actual work is in Google Tasks (unpulled) or titled differently. So the goals are genuinely **uncovered**, and even the ingested units belong to *unseeded* goals, so they too read as false orphans. Both reads were conflating coverage with judgment.
+
+- Produced: two commits. (1) `fix(p19/s70): the moat reports coverage, not blindness-as-neglect (D171)` — D171 + the D169 supersession annotation; `assess_goals` reshaped to return `GoalCoverage` + `uncovered_goals` (the honest read) + `orphan_work` (emitted only when `has_coverage`); the DTO (`CoverageDTO`/`UncoveredGoalDTO`, `_empty_assessment_dto`) + the route + the "How am I doing" panel (leads with coverage, says uncovered, withholds unproven verdicts); reshaped + new tests (the no-coverage-suppresses-orphan-and-reports-uncovered case is the trust-fix test). (2) this docs commit (this entry + the rebuilt-image digest pin).
+
+- Decisions: D171 (coverage honesty — uncovered not neglected outside the linked boundary; orphan/neglect emitted only inside coverage; a read is only as valid as its coverage). Kano: must-have (an assessment that presents blindness as judgment is a reverse-Kano trust-killer — coverage honesty is the floor the differentiator stands on). It binds every assess-not-replace read the platform will ever add.
+
+- Live verification (this session, on the operator's stack, Docker reachable; rebuilt + recreated, digest pinned). At the real state: `/assessment` → **coverage 0/7 goals, 0/979 units, has_coverage=False**; all seven goals reported **uncovered** ("can't see work for this — not a sign you've stopped"); **orphan_work suppressed (0)** as unproven. **Coverage transition proven (reversible round-trip):** linked one unit to German → coverage **1/7 goals, 1/979 units, has_coverage=True**; German dropped **off** the uncovered list (6 remain); orphan_work then **emitted (978)** — meaningful now that coverage exists; re-running correlate reset to has_coverage=False, 7 uncovered, 0 orphan. The platform now says "I can see X of your goals' work; inside that I'll judge, outside it I'll only tell you what I can't see."
+
+- Reflection — what the day-zero catch proves about the method. This is the dogfood doing exactly its job: a design gap that no test, no reasoning, and no amount of pre-build review surfaced became obvious the instant a real user with real (un-ingested) goals looked at the real read. The gap was not the title matcher (the [S67]/[S69] recall problem, still real) — it was one level deeper: the *semantics* of an absent edge. The matcher's recall determines *how much* coverage there is; D171 determines what the platform is *allowed to say* about what's outside coverage. The two compose: improve recall to widen coverage, and inside coverage the orphan/neglect reads earn their keep; outside it, the honest read is silence-plus-coverage, never judgment. The methodology lesson: for an assess-not-replace platform, every read must carry its coverage boundary, because partial sight asserted as full sight is the category's signature failure. Worth promoting at the Phase 2-A close audit — "coverage honesty on every partial-sight read" may generalise beyond the moat to every connector-fed assessment the platform adds.
+
+- Close state: **the trust-killer is fixed and live-verified** — the moat reports coverage honestly, says uncovered where it's blind, and withholds orphan/neglect verdicts outside the linked boundary. The genuine-neglect read (a covered goal gone quiet) is reserved for a later session (needs linked-work staleness). The dogfood gate is now safe to run: the operator establishes coverage (`make pull-tasks` + correlate; tune lever names to real titles), and the reads become meaningful inside it — without the platform ever having lied about what it can't see. **S64 test-integrity still owed.**
+
+```
+metrics:
+  classification: build session
+  brief_started: 2026-06-08
+  session_started: 2026-06-08
+  session_closed: 2026-06-08
+  merged: 2026-06-08
+  close_state: the moat's blindness-as-neglect trust-killer fixed + live-verified (coverage statement; uncovered not neglected; orphan/neglect emitted only inside coverage; the coverage transition proven reversible); genuine within-coverage neglect reserved for a later session; the dogfood gate safe to run once coverage is established
+  tests_passing: yes (2432 unit+contract, 12 skipped; assessment tests reshaped + the coverage-gate cases added; 1 pre-existing unrelated failure (wall-clock calendar test) carried, 0 new; 43 import-linter contracts; 9 enforcement)
+  principles_intact: yes
+  gate_enabling: true
+  no_new_value_surface: false
+  charter_touchpoints: charter/decisions.md (D171 + D169 supersession annotation); contexts/daily_driver/domain/goal_assessment.py (GoalCoverage/UncoveredGoal, assess_goals reshape); apps/api/routers/_daily_driver_dto.py (CoverageDTO/UncoveredGoalDTO); apps/api/routers/daily_driver.py; apps/api/static/daily_driver.html (coverage-led panel); compose.yaml (rebuilt-image digest pin); tests/{unit/contexts/daily_driver/test_goal_assessment.py,unit/apps/api/routers/test_daily_driver.py}; log/sessions.md (this entry)
+  corrects: D169 (the bare orphan/neglected framing)
+  corrected_by:
+```
