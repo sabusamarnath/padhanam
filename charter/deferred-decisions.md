@@ -963,15 +963,17 @@ Build order: Google Tasks first, because it reuses the connected Google provider
 
 Activation trigger: after the Phase 2-A dogfooding week, sequenced with the plan-side model build (D166).
 
-### Non-lexical (tag-and-domain) linkage — the first P19 refinement
+### Semantic / embedding linkage (tier three) — retargeted from "non-lexical linkage"
 
-Surfaced by the first dogfood correlate pass. Goal "Strength" and task "Fitness" share no characters, so no lexical/keyword matcher (D169, D172) can ever form their `SERVES` edge; the goal reads uncovered though the work plainly exists. This is the tag-and-domain (semantic) linkage path — a class no prior charter entry anticipated (`TODO(ref)`: the brief calls it "the P19 fork"; no distinct entry exists under that name, and D169's recall-over-precision call is purely lexical — the nearest prior reasoning, not an anticipation of semantic linkage). It is now evidenced on live data rather than reasoned.
+Retargeted at S71 (D174). Originally this named the whole non-lexical class surfaced by the first dogfood pass (goal "Strength" / task "Fitness" share no characters). D174 split that class: the **alias tier (tier two)** now handles category synonyms (Fitness→Strength links via Strength's alias set, S71), so this entry narrows to the residual **referential** class — work whose title names a *person, place, or tool* rather than the subject ("Kieran Bell" for German, a gym name for Strength), which neither lexical (D172, tier one) nor alias matching (D174, tier two) can reach. The embedding tier is tier three (D174); it is explicitly **not** built at S71.
 
-**What defers.** A non-lexical linkage path (tags, domain mapping, or embedding-based similarity behind the existing matcher interface) reaching links lexical overlap cannot.
+**What defers.** Embedding-based semantic similarity behind the existing matcher interface, reaching referential links lexical and alias matching cannot. The LiteLLM/Ollama embedding path already exists in ingestion (D62) — this is its reuse for the goal facet, not a new dependency.
 
-**Activation trigger.** The first P19 refinement session, post-dogfood. Explicitly out of scope for any mid-week patch; renaming "Fitness" to a Strength-keyword title is a data-fit workaround, not this. References D169 (the lexical matcher, the moat reads), D172 (the stopword shift — still lexical).
+**Activation trigger.** The S71 residual coverage report (D174): build the embedding tier only if the residual referential class is more than a handful of cases. A trickle closes with a few more aliases or operator-declared links; a flood justifies the tier. The report is the metric the decision waits on (the observability-needs-a-decision principle). References D169 (the lexical matcher, the moat reads), D172 (tier one), D174 (the tier architecture + the residual trigger), D62 (the ingestion embedder, reusable).
 
 ### Stopword list and residual floor (brief for D172)
+
+**Status: closed by D172's implementation at S71, 2026-06-08.** The body remains for audit per the append-only discipline. The stopword set replaced `_MIN_KEYWORD_LEN` in `goal_assessment.py`: a curated set of low-signal words (articles, prepositions, conjunctions, pronouns, light verbs — `a, an, the, and, or, but, to, of, in, on, at, for, with, my, your, our, get, got, do, did, doing, be, is, are, was, this, that, these, those, it, as, by, from, into`), inspectable inline data with no new dependency, extended from observed false matches. No residual minimum length survives for non-stopwords — a short high-signal word ("job") is eligible, a stopword is not, at any length.
 
 Surfaced by D172. The framing — suppression is stopword-based — is settled; the brief is not: the exact stopword list, whether any minimum length survives for non-stopwords, and the source of the list. Lands in the first P19 refinement session alongside the non-lexical linkage work. References D172.
 
