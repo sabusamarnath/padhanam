@@ -44,6 +44,8 @@ from contexts.ingestion.ports.outcome_graph_port import (
 )
 from contexts.ingestion.ports.unit_graph_port import (
     FacetLinkRecord,
+    GoalEdgeRecord,
+    GoalEdgeWrite,
     UnitGraphRecord,
     UnitWrite,
 )
@@ -265,6 +267,44 @@ RETURN u.unit_id AS unit_id,
        r.status AS status,
        r.basis AS basis
 ORDER BY u.unit_id ASC, f.facet_type ASC, f.facet_id ASC
+"""
+
+
+# --- Goal-facet templates (D169): the unit→goal SERVES edge -----------------
+# The unit's fourth facet (D166): a :Unit serves an :Outcome. Derived state —
+# replaced each correlation run. Touches only SERVES (SAME_WORK + LEVER_FOR are
+# left intact). An edge whose unit or outcome is absent is silently skipped (the
+# MATCH yields no row), so the inference need not pre-check existence.
+_DELETE_GOAL_EDGES = """
+MATCH (:Unit {tenant_id: $tenant_id})
+      -[r:SERVES {tenant_id: $tenant_id}]->
+      (:Outcome {tenant_id: $tenant_id})
+DELETE r
+"""
+
+_MERGE_GOAL_EDGE = """
+MATCH (u:Unit {tenant_id: $tenant_id, unit_id: $unit_id})
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+MERGE (u)-[r:SERVES {tenant_id: $tenant_id}]->(o)
+ON CREATE SET
+    r.jurisdiction = $jurisdiction,
+    r.created_at = $created_at
+SET
+    r.confidence = $confidence,
+    r.status = $status,
+    r.basis = $basis
+"""
+
+_LIST_GOAL_EDGES = """
+MATCH (u:Unit {tenant_id: $tenant_id})
+      -[r:SERVES {tenant_id: $tenant_id}]->
+      (o:Outcome {tenant_id: $tenant_id})
+RETURN u.unit_id AS unit_id,
+       o.outcome_id AS outcome_id,
+       r.confidence AS confidence,
+       r.status AS status,
+       r.basis AS basis
+ORDER BY u.unit_id ASC, o.outcome_id ASC
 """
 
 
@@ -703,6 +743,49 @@ class TenantScopedNeo4jSession:
                     existing, links=existing.links + (link,)
                 )
         return [by_unit[uid] for uid in order]
+
+    async def replace_goal_edges(self, edges: Sequence[GoalEdgeWrite]) -> None:
+        """Replace the bound tenant's unit→goal SERVES edges (D169).
+
+        Deletes the tenant's SERVES edges, then MERGEs the new set. Touches only
+        SERVES (SAME_WORK + LEVER_FOR untouched). An edge whose unit or outcome
+        is absent is silently skipped (the MATCH yields no row). Auto-commit per
+        statement — the derived-state shape (the migration-runner pattern).
+        """
+        session = self._bound_session
+        now = _now_utc()
+        await session.run(_DELETE_GOAL_EDGES, {"tenant_id": self._tenant_id})
+        for edge in edges:
+            await session.run(
+                _MERGE_GOAL_EDGE,
+                {
+                    "tenant_id": self._tenant_id,
+                    "jurisdiction": self._jurisdiction,
+                    "unit_id": str(edge.unit_id),
+                    "outcome_id": str(edge.outcome_id),
+                    "confidence": edge.confidence,
+                    "status": edge.status,
+                    "basis": edge.basis,
+                    "created_at": now,
+                },
+            )
+
+    async def list_goal_edges(self) -> Sequence[GoalEdgeRecord]:
+        """Return every unit→goal SERVES edge for the bound tenant (D169)."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id}
+        result = await session.run(_LIST_GOAL_EDGES, params)
+        rows = await result.data()
+        return [
+            GoalEdgeRecord(
+                unit_id=UUID(row["unit_id"]),
+                outcome_id=UUID(row["outcome_id"]),
+                confidence=row["confidence"],
+                status=row["status"],
+                basis=row["basis"],
+            )
+            for row in rows
+        ]
 
 
 def _to_python_datetime(value: object) -> datetime | None:

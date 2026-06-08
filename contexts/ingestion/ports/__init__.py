@@ -13,6 +13,8 @@ from contexts.ingestion.ports.source_repository_port import SourceRepositoryPort
 from contexts.ingestion.ports.unit_graph_port import (
     FacetLinkRecord,
     FacetLinkWrite,
+    GoalEdgeRecord,
+    GoalEdgeWrite,
     UnitGraphPort,
     UnitGraphRecord,
     UnitWrite,
@@ -24,6 +26,8 @@ __all__ = [
     "EmbedderError",
     "FacetLinkRecord",
     "FacetLinkWrite",
+    "GoalEdgeRecord",
+    "GoalEdgeWrite",
     "LeverEdgeRecord",
     "OutcomeGraphPort",
     "OutcomeGraphRecord",

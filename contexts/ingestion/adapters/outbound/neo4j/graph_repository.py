@@ -27,6 +27,8 @@ from uuid import UUID
 
 from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
 from contexts.ingestion.ports.unit_graph_port import (
+    GoalEdgeRecord,
+    GoalEdgeWrite,
     UnitGraphRecord,
     UnitWrite,
 )
@@ -278,6 +280,37 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.list_units()
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def replace_goal_edges(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edges: Sequence[GoalEdgeWrite],
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.replace_goal_edges(edges)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_goal_edges(
+        self,
+        *,
+        tenant_context: TenantContext,
+    ) -> Sequence[GoalEdgeRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.list_goal_edges()
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

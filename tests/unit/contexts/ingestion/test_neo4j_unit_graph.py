@@ -20,6 +20,7 @@ from contexts.ingestion.adapters.outbound.neo4j.session import (
 )
 from contexts.ingestion.ports.unit_graph_port import (
     FacetLinkWrite,
+    GoalEdgeWrite,
     UnitGraphRecord,
     UnitWrite,
 )
@@ -113,6 +114,81 @@ def test_replace_units_empty_still_clears_the_tenant_subgraph() -> None:
     # nothing still tombstones the prior subgraph.
     assert len(calls) == 2
     assert calls[1][1]["keep"] == []
+
+
+_OUTCOME_ID = UUID("00000000-0000-4000-8000-0000006700a1")
+
+
+def test_replace_goal_edges_deletes_then_merges_with_bound_tenant() -> None:
+    driver, session = _mock_driver()
+    edge = GoalEdgeWrite(
+        unit_id=_UNIT_ID,
+        outcome_id=_OUTCOME_ID,
+        confidence=0.9,
+        status="confirmed",
+        basis="commitment",
+    )
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.replace_goal_edges([edge])
+
+    asyncio.run(run())
+    calls = _all_calls(session)
+    # delete SERVES, merge the one edge = 2 runs.
+    assert len(calls) == 2
+    for cypher, params in calls:
+        assert params["tenant_id"] == _TENANT.tenant_id
+        placeholders = set(re.findall(r"\$(\w+)", cypher))
+        assert placeholders <= set(params), (cypher, placeholders - set(params))
+    _merge_cypher, merge_params = calls[1]
+    assert merge_params["unit_id"] == str(_UNIT_ID)
+    assert merge_params["outcome_id"] == str(_OUTCOME_ID)
+    assert merge_params["status"] == "confirmed"
+    assert merge_params["basis"] == "commitment"
+    # SERVES only — does not touch SAME_WORK or LEVER_FOR.
+    assert "SAME_WORK" not in _merge_cypher and "LEVER_FOR" not in _merge_cypher
+
+
+def test_replace_goal_edges_empty_still_clears() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.replace_goal_edges([])
+
+    asyncio.run(run())
+    calls = _all_calls(session)
+    assert len(calls) == 1  # delete only
+    assert "SERVES" in calls[0][0]
+
+
+def test_list_goal_edges_maps_rows() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(
+        return_value=[
+            {
+                "unit_id": str(_UNIT_ID),
+                "outcome_id": str(_OUTCOME_ID),
+                "confidence": 0.5,
+                "status": "candidate",
+                "basis": "goal-name",
+            }
+        ]
+    )
+    session.run = AsyncMock(return_value=result)
+
+    async def run():
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return list(await s.list_goal_edges())
+
+    edges = asyncio.run(run())
+    assert len(edges) == 1
+    assert edges[0].unit_id == _UNIT_ID
+    assert edges[0].outcome_id == _OUTCOME_ID
+    assert edges[0].status == "candidate"
+    assert edges[0].basis == "goal-name"
 
 
 def _row(**overrides) -> dict:

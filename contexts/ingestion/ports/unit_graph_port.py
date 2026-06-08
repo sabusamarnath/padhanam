@@ -76,6 +76,28 @@ class UnitGraphRecord:
     links: tuple[FacetLinkRecord, ...]
 
 
+@dataclass(frozen=True)
+class GoalEdgeWrite:
+    """One unit→goal facet to write — the ``SERVES`` edge's payload (D169)."""
+
+    unit_id: UUID
+    outcome_id: UUID
+    confidence: float
+    status: str
+    basis: str
+
+
+@dataclass(frozen=True)
+class GoalEdgeRecord:
+    """One unit→goal facet as read back from the graph (D169)."""
+
+    unit_id: UUID
+    outcome_id: UUID
+    confidence: float
+    status: str
+    basis: str
+
+
 class UnitGraphPort(Protocol):
     """Typed work-unit-graph capability on the shared Neo4j instance (D168)."""
 
@@ -106,10 +128,37 @@ class UnitGraphPort(Protocol):
         ``tenant_id`` into every predicate)."""
         ...
 
+    async def replace_goal_edges(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edges: Sequence[GoalEdgeWrite],
+    ) -> None:
+        """Replace the tenant's ``(:Unit)-[:SERVES]->(:Outcome)`` edges (D169).
+
+        Derived state (D155): deletes the tenant's SERVES edges then MERGEs the
+        new set (an edge whose unit or outcome is absent is silently skipped —
+        the MATCH yields no row). Touches only SERVES; SAME_WORK and LEVER_FOR
+        are left intact. The :Unit and :Outcome nodes persist, so re-running unit
+        correlation (D168) and goal-facet correlation (D169) compose.
+        """
+        ...
+
+    async def list_goal_edges(
+        self,
+        *,
+        tenant_context: TenantContext,
+    ) -> Sequence[GoalEdgeRecord]:
+        """Return every unit→goal SERVES edge for the bound tenant, ordered by
+        (unit id, outcome id). Cross-tenant rows never surface."""
+        ...
+
 
 __all__ = [
     "FacetLinkRecord",
     "FacetLinkWrite",
+    "GoalEdgeRecord",
+    "GoalEdgeWrite",
     "UnitGraphPort",
     "UnitGraphRecord",
     "UnitWrite",
