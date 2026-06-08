@@ -449,6 +449,7 @@ class TenantScopedNeo4jSession:
             "mode": mode,
             "ladder": list(ladder),
             "current_target_level": current_target_level,
+            "created_at": _now_utc(),
         }
         await session.run(_MERGE_LEVER_FOR_OUTCOME, params)
 

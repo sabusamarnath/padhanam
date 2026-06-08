@@ -10,6 +10,7 @@ the driver rows onto ``OutcomeGraphRecord``.
 from __future__ import annotations
 
 import asyncio
+import re
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -51,13 +52,14 @@ def test_merge_outcome_binds_tenant_and_fields() -> None:
             )
 
     asyncio.run(run())
-    params = session.run.call_args.args[1]
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
     assert params["tenant_id"] == _TENANT.tenant_id
     assert params["jurisdiction"] == "eu-west"
     assert params["outcome_id"] == str(_OUTCOME_ID)
     assert params["name"] == "German"
     assert params["control"] == "self"
     assert params["subject"] == "self"
+    assert set(re.findall(r"\$(\w+)", cypher)) <= set(params)
 
 
 def test_merge_lever_for_outcome_carries_mode_and_ladder() -> None:
@@ -74,12 +76,17 @@ def test_merge_lever_for_outcome_carries_mode_and_ladder() -> None:
             )
 
     asyncio.run(run())
-    params = session.run.call_args.args[1]
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
     assert params["tenant_id"] == _TENANT.tenant_id
     assert params["commitment_id"] == str(_COMMITMENT_ID)
     assert params["mode"] == "progressive"
     assert params["ladder"] == ["A1", "A2", "B1"]
     assert params["current_target_level"] == "A2"
+    # Every $placeholder in the Cypher must be supplied — live Neo4j rejects a
+    # missing parameter (the created_at miss the S62 live smoke caught; the
+    # mock session.run does not validate, so assert the contract here).
+    placeholders = set(re.findall(r"\$(\w+)", cypher))
+    assert placeholders <= set(params), placeholders - set(params)
 
 
 def test_set_lever_target_returns_new_level() -> None:
