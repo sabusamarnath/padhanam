@@ -19,6 +19,7 @@ from contexts.daily_driver.domain.today_item import (
     TodayItem,
     TodayView,
 )
+from contexts.daily_driver.domain.facet_suggestion import FacetSuggestion
 from contexts.daily_driver.domain.goal_assessment import GoalAssessment
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.tasks.domain.task import Task
@@ -338,6 +339,25 @@ def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
             )
             for g in assessment.neglected_goals
         ],
+    )
+
+
+class FacetSuggestionDTO(BaseModel):
+    """One missing-facet suggestion (D170) — recommendation-shaped."""
+
+    unit_id: UUID
+    kind: str
+    subject: str
+    suggestion: str
+
+
+def facet_suggestion_to_dto(s: FacetSuggestion) -> FacetSuggestionDTO:
+    """Encode a domain FacetSuggestion into the HTTP DTO (D170)."""
+    return FacetSuggestionDTO(
+        unit_id=s.unit_id,
+        kind=s.kind.value,
+        subject=s.subject,
+        suggestion=s.suggestion,
     )
 
 

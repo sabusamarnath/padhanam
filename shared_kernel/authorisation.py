@@ -85,6 +85,8 @@ DAILY_DRIVER_UNITS_READ = "daily_driver.units.read"
 DAILY_DRIVER_UNITS_CORRELATE = "daily_driver.units.correlate"
 # --- Phase 2-A goal-aligned assessment permission (D169, S67) -------
 DAILY_DRIVER_ASSESSMENT_READ = "daily_driver.assessment.read"
+# --- Phase 2-A missing-facet suggestion permission (D170, S68) ------
+DAILY_DRIVER_SUGGESTIONS_READ = "daily_driver.suggestions.read"
 
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
@@ -117,6 +119,7 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             DAILY_DRIVER_UNITS_READ,
             DAILY_DRIVER_UNITS_CORRELATE,
             DAILY_DRIVER_ASSESSMENT_READ,
+            DAILY_DRIVER_SUGGESTIONS_READ,
         }
     ),
 }
@@ -204,6 +207,7 @@ __all__ = [
     "DAILY_DRIVER_TODAY_READ",
     "DAILY_DRIVER_TODAY_WRITE",
     "DAILY_DRIVER_ASSESSMENT_READ",
+    "DAILY_DRIVER_SUGGESTIONS_READ",
     "DAILY_DRIVER_UNITS_CORRELATE",
     "DAILY_DRIVER_UNITS_READ",
     "INTAKE_RECORD_CREATE",

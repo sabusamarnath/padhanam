@@ -43,11 +43,13 @@ from apps.api.routers._daily_driver_dto import (
     GoalReadingDTO,
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
+    FacetSuggestionDTO,
     GoalAssessmentDTO,
     SetOrderRequest,
     TaskDTO,
     TodayDTO,
     UnitDTO,
+    facet_suggestion_to_dto,
     goal_assessment_to_dto,
     goal_reading_to_dto,
     task_to_dto,
@@ -56,6 +58,7 @@ from apps.api.routers._daily_driver_dto import (
 )
 from contexts.daily_driver.application import (
     create_commitment,
+    list_facet_suggestions,
     list_goal_assessment,
     list_goals,
     list_today,
@@ -388,6 +391,26 @@ async def get_assessment(
         actor=actor,
     )
     return goal_assessment_to_dto(assessment)
+
+
+@router.get("/suggestions", response_model=list[FacetSuggestionDTO])
+async def get_suggestions(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+) -> list[FacetSuggestionDTO]:
+    """Return the missing-facet suggestions (D170, D166).
+
+    Selective and confident or silent — credulity-gated on goal-serving units,
+    never auto-applied, never written back. Degrades to an empty list when the
+    correlation seams are unconfigured.
+    """
+    if unit_graph is None or facet_source is None:
+        return []
+    suggestions = await list_facet_suggestions(
+        unit_graph=unit_graph, facet_source=facet_source, actor=actor
+    )
+    return [facet_suggestion_to_dto(s) for s in suggestions]
 
 
 @router.put("/today/order", status_code=204)

@@ -14,6 +14,7 @@ from shared_kernel.authorisation import (
     DAILY_DRIVER_GOAL_RAISE_TARGET,
     DAILY_DRIVER_GOAL_READ,
     DAILY_DRIVER_ASSESSMENT_READ,
+    DAILY_DRIVER_SUGGESTIONS_READ,
     DAILY_DRIVER_TODAY_READ,
     DAILY_DRIVER_TODAY_WRITE,
     DAILY_DRIVER_UNITS_CORRELATE,
@@ -92,6 +93,7 @@ def test_operator_role_grants_the_phase_2a_permissions() -> None:
             DAILY_DRIVER_UNITS_READ,
             DAILY_DRIVER_UNITS_CORRELATE,
             DAILY_DRIVER_ASSESSMENT_READ,
+            DAILY_DRIVER_SUGGESTIONS_READ,
         }
     )
 

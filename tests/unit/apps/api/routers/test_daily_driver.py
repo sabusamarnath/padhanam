@@ -651,6 +651,49 @@ def test_assessment_route_empty_when_seams_unwired() -> None:
     assert res.json() == {"orphan_work": [], "neglected_goals": []}
 
 
+def test_suggestions_route_returns_goal_served_missing_facet_suggestions() -> None:
+    from contexts.daily_driver.domain.goal_assessment import GoalEdge
+    from contexts.daily_driver.domain.work_unit import (
+        FacetType, LinkStatus, WorkFacet,
+    )
+    from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
+
+    served_unit, orphan_unit = uuid4(), uuid4()
+    served_task, orphan_task = uuid4(), uuid4()
+    goal_id = uuid4()
+    records = [
+        UnitRecord(served_unit, (UnitFacetRef(
+            FacetType.TASK, served_task, 1.0, LinkStatus.CONFIRMED, "anchor"),)),
+        UnitRecord(orphan_unit, (UnitFacetRef(
+            FacetType.TASK, orphan_task, 1.0, LinkStatus.CONFIRMED, "anchor"),)),
+    ]
+    due = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    facets = [
+        WorkFacet(FacetType.TASK, served_task, "Ship Q3 report", due),
+        WorkFacet(FacetType.TASK, orphan_task, "Random errand", due),
+    ]
+    # Only the served unit has a SERVES edge → only it can be suggested.
+    edges = [GoalEdge(served_unit, goal_id, 0.9, LinkStatus.CONFIRMED, "commitment")]
+
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        unit_graph=_FakeUnitGraph(records, goal_edges=edges),
+        facet_source=_FakeFacetSource(facets),
+    )
+    res = client.get("/api/v1/daily-driver/suggestions")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert [s["unit_id"] for s in body] == [str(served_unit)]
+    assert body[0]["kind"] == "block"
+
+
+def test_suggestions_route_empty_when_seams_unwired() -> None:
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.get("/api/v1/daily-driver/suggestions")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
 def test_goals_route_returns_unblock_or_drop_for_sequence() -> None:
     # AC5/AC6: a sequence goal surfaces its chain + unblock-or-drop, and never
     # raise-or-hold.

@@ -9,6 +9,9 @@ from contexts.daily_driver.application.correlate_units import correlate_units
 from contexts.daily_driver.application.create_commitment import (
     create_commitment,
 )
+from contexts.daily_driver.application.list_facet_suggestions import (
+    list_facet_suggestions,
+)
 from contexts.daily_driver.application.list_goal_assessment import (
     list_goal_assessment,
 )
@@ -31,6 +34,7 @@ __all__ = [
     "correlate_goal_facets",
     "correlate_units",
     "create_commitment",
+    "list_facet_suggestions",
     "list_goal_assessment",
     "list_goals",
     "list_today",
