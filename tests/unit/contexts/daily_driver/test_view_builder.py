@@ -212,6 +212,38 @@ def test_done_commitment_is_not_a_drop_candidate() -> None:
     assert not view.items
 
 
+def test_overdue_not_done_before_today_is_live_done_before_today_is_history() -> None:
+    # S72 follow-up — the edge the clean S72 data never exercised (every live
+    # item there happened to be today's). The live/history split keys on
+    # done-ness, not a literal today-forward date horizon: an overdue, not-done
+    # commitment whose last activity is *before today* must stay LIVE / needs-you
+    # (the daily driver's reason to exist, D156/D157), never swept into history.
+    # A done item dated before today still goes to history (S72 preserved).
+    overdue = _commitment("Weekly review", interval=7, created_day=1)  # last activity 2026-05-01, overdue at _NOW
+    done_old = _commitment("Old ritual", interval=7, created_day=1)
+    done_state = DayItemState(
+        kind=ItemKind.COMMITMENT, item_id=done_old.id, position=None, done=True
+    )
+    view = _view(
+        commitment_activities=(
+            CommitmentActivity(overdue, None),
+            CommitmentActivity(done_old, None),
+        ),
+        day_states=(done_state,),
+    )
+    live_ids = {i.item_id for i in view.items}
+    history_ids = {i.item_id for i in view.history}
+    # The overdue, not-done item is live and BEHIND — not in history, not absent.
+    assert overdue.id in live_ids
+    assert overdue.id not in history_ids
+    behind = next(i for i in view.items if i.item_id == overdue.id)
+    assert behind.status == ItemStatus.BEHIND
+    assert behind.done is False
+    # The done item (also dated before today) is in history, not live.
+    assert done_old.id in history_ids
+    assert done_old.id not in live_ids
+
+
 def test_persisted_position_overrides_default_rank() -> None:
     overdue = _commitment("Weekly review", interval=7, created_day=1)
     case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=_NOW)
