@@ -2,6 +2,12 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
+## P16 in flight; S63 in flight — schema corrections + get-a-job as the second goal instance (a sequence) (build mode)
+
+S63 corrects the S62 schema, moving mode, ladder, and target to the `:Outcome` node per the D163 clarification, and instances the second goal, get-a-job, as a sequence goal, proving the taxonomy generalises across engine and remedy. get-a-job is recorded as mode sequence, control influence, subject self, with a terminal target; S63 wires only the sequence engine and the unblock-or-drop remedy. Influence semantics, the credulity tuning of the raise recommendation, the remaining shapes, the balance layer, and the capture UI remain deferred to later P16 sessions.
+
+**Step 0 reconciliation (against live code):** mode/ladder/current_target_level sit on the `LEVER_FOR` edge `r` in the S62 wrapper (`session.py`), set by `_MERGE_LEVER_FOR_OUTCOME`, read by `_LIST_OUTCOMES`, written by `_SET_LEVER_TARGET` — so the migration moves exactly those three edge→node (matches the prompt). The thin `:Lever {tenant_id, commitment_id}` node carries only commitment_id + tenant + jurisdiction + created_at, no row copy — D164 ratifies it. `ops/migrate_neo4j.py` (phase 3 of `make migrate`) is already sequenced + idempotent (`IF NOT EXISTS` + `:_Migration` node) — D165 ratifies it; the edge→node move is the first graph *data* migration (`0003_outcome_props_to_node.cypher`). The S62 schema models one lever per outcome (single commitment_id per `OutcomeGraphRecord`, `Goal.lever_commitment_id` singular); a sequence needs many ordered lever steps + a terminal, so S63 reshapes: terminal on the node, `step_order`/`step_state` on the edge (relationship-level, not goal-level — consistent with the D163 clarification), multi-lever aggregation in the wrapper/record/bridge/`Goal`. Docker reachable this session, so the seed + browser smoke run live (the S62 forward-correction lesson rewards it), not operator-gated.
+
 ## P16 in flight; S62 in flight — the goal taxonomy to charter + German as the first causal goal instance (build mode)
 
 **P16 adds a goal layer above commitments.** Commitments are levers; goals are typed Outcome nodes (D163) connected by lever-to-outcome edges in the graph. S62 instances the first goal, German, progressive cadence, end to end. The goal capture UI, the remaining shapes, the balance layer, and the exploratory phase are deferred to later P16 sessions.
