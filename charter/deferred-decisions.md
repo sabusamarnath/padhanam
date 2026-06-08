@@ -954,3 +954,11 @@ propagation with magnitudes).
 
 **Activation trigger.** Dogfooding evidence that qualitative ripple narratives are insufficient to
 drive decisions, per the two-threshold rule. References D156, D9 (recommendation-shaped output).
+
+### Task-tool ingestion (multi-adapter, bring-your-own)
+
+Users arrive with heterogeneous task tools, so Padhanam ingests from many, as it does message channels, behind the existing intake-source and Nango seam, the same pattern as CALENDAR_READ and EMAIL_READ. Each task tool is a new adapter behind a seam that already exists, read-only, per the D148 and D155 external-cache model.
+
+Build order: Google Tasks first, because it reuses the connected Google provider (D148, D151, D161) as an added OAuth scope rather than a new connector, and proves the ingest-and-assess loop at lowest cost. Trello second, because a goalless kanban is the richest proof of assess-not-replace, the hardest case the assessment layer faces. Two-threshold on the adapters: cheapest first to prove the loop, hardest second to prove the claim.
+
+Activation trigger: after the Phase 2-A dogfooding week, sequenced with the plan-side model build (D166).
