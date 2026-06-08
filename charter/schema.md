@@ -773,6 +773,33 @@ Uniqueness via the MERGE pattern keyed on `(tenant_id, facet_type, facet_id, uni
 `:Unit`/`:Facet`/`SAME_WORK` subgraph for a tenant is replaced on each correlation
 run (derived state), so stale links and orphaned units do not accumulate.
 
+### `SERVES` edge (S67, D169)
+
+`(:Unit)-[:SERVES]->(:Outcome)`. The Padhanam-native **goal facet** of a unit of
+work (D166's fourth facet): this unit serves this goal. The inference is
+confidence-tiered (D169): a `confirmed` edge is a unit-facet title match against
+one of the goal's lever-commitment names (the precise commitment bridge); a
+`candidate` edge is a lean title-keyword match against the goal's name (recall,
+surfaced recommendation-shaped). No new node label — the edge connects existing
+`:Unit` (S66) and `:Outcome` (S62) nodes, so **no Neo4j migration** (the
+`LEVER_FOR` precedent); idempotency comes from the MERGE pattern plus the
+per-tenant replace-on-correlate.
+
+| Property      | Type      | Notes                                                              |
+|---------------|-----------|-------------------------------------------------------------------|
+| `tenant_id`   | `String`  | not empty; matches both endpoints                                 |
+| `jurisdiction`| `String`  | matches both endpoints                                            |
+| `confidence`  | `Float`   | 0.0–1.0 inference confidence                                      |
+| `status`      | `String`  | `confirmed` (commitment-bridge) / `candidate` (goal-name keyword) |
+| `basis`       | `String`  | the inference basis, e.g. `commitment` / `goal-name`             |
+| `created_at`  | `DateTime`| set on initial MERGE                                              |
+
+Uniqueness via the MERGE pattern keyed on `(tenant_id, unit_id, outcome_id)`. The
+tenant's `SERVES` edges are replaced on each correlation run (derived state). The
+two reads are computed from the unit set, the outcome set, and these edges:
+**orphan work** = a `:Unit` with no outgoing `SERVES`; **neglected goal** = an
+`:Outcome` with no incoming `SERVES`.
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
