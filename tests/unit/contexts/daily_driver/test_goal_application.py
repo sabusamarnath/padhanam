@@ -230,6 +230,35 @@ def test_apps_bridge_maps_record_to_progressive_goal() -> None:
     assert g.terminal is None
 
 
+def test_apps_bridge_maps_record_to_homeostatic_goal_with_its_lever() -> None:
+    # S69: a homeostatic goal carries a single lever; _to_goal must extract it
+    # so the goal-facet confirmed tier (D169) can match the lever-commitment name.
+    from apps.api._daily_driver_wiring import GoalGraphAdapter
+    from contexts.ingestion.ports.outcome_graph_port import (
+        LeverEdgeRecord,
+        OutcomeGraphRecord,
+    )
+
+    record = OutcomeGraphRecord(
+        outcome_id=_OUTCOME,
+        name="Stretch and meditate",
+        control="self",
+        subject="self",
+        mode="homeostatic",
+        ladder=(),
+        current_target_level=None,
+        levers=(LeverEdgeRecord(commitment_id=_COMMITMENT),),
+    )
+    adapter = GoalGraphAdapter(outcome_graph=FakeOutcomeGraph(record))
+    goals = asyncio.run(adapter.list_goals(tenant_context=_actor().tenant_context))
+    g = goals[0]
+    assert g.mode is GoalMode.HOMEOSTATIC
+    assert g.lever_commitment_id == _COMMITMENT
+    assert g.ladder is None
+    assert g.terminal is None
+    assert g.steps == ()
+
+
 def test_apps_bridge_maps_record_to_sequence_goal() -> None:
     from apps.api._daily_driver_wiring import GoalGraphAdapter
     from contexts.daily_driver.domain.goal import StepState, TerminalState

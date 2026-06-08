@@ -405,6 +405,12 @@ class GoalGraphAdapter:
                 )
                 for idx, lever in enumerate(record.levers)
             )
+        else:
+            # Homeostatic (and any other single-lever cadence mode): one lever,
+            # no ladder/terminal. Extract it so the goal-facet confirmed tier
+            # (D169) can match a unit against the lever-commitment name (S69).
+            if record.levers:
+                lever_commitment_id = record.levers[0].commitment_id
         return Goal(
             id=record.outcome_id,
             tenant_id=UUID(str(tenant_context.tenant_id)),

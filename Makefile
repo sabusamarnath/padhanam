@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job pull-tasks correlate-units scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks correlate-units scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -229,6 +229,12 @@ seed-german: derive-env
 # `make dogfood-provision` and `make migrate`.
 seed-get-a-job: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_get_a_job
+
+# Seed the operator's remaining real dogfood goals (S69): strength, marathon,
+# voice, stretch/meditate, litany — spec-driven, idempotent. Run with
+# seed-german + seed-get-a-job to reach the six-plus goals the dogfood reads.
+seed-dogfood-goals: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.seed_dogfood_goals
 
 # Pull Google Tasks for the personal tenant (S65, D167): ensure the
 # google-tasks connection then full re-pull into the re-pullable cache.
