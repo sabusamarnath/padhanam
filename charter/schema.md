@@ -714,6 +714,65 @@ not goal-level. These are absent (`null`) for a single-lever progressive goal.
 Uniqueness via the MERGE pattern keyed on `(tenant_id, commitment_id, outcome_id)`
 (Community Edition has no declarative relationship-property uniqueness).
 
+### `:Unit` nodes (S66, D168)
+
+The anchor of a *unit of work* (D166): one thing seen from up to four facets. A
+Unit is a Padhanam-native node correlated from the read-only caches — it is
+*derived state* (D155), recomputed from the caches on each correlation run, never
+written back to any source tool. Unit identity is deterministic
+(`uuid5(tenant + anchor facet)`, anchor priority task > meeting > email) so
+re-correlation is idempotent and the id stays stable for P19's goal facet. The
+goal facet (a `LEVER_FOR`-style edge from a `:Unit` to an `:Outcome`) is P19;
+P18 lands the first three facets.
+
+| Property       | Type       | Notes                                                       |
+|----------------|------------|-------------------------------------------------------------|
+| `tenant_id`    | `String`   | not empty; D63/D64 property scoping                         |
+| `jurisdiction` | `String`   | first-class per D12                                         |
+| `unit_id`      | `String`   | deterministic `uuid5(tenant + anchor facet)`               |
+| `created_at`   | `DateTime` | set on initial MERGE                                        |
+
+Uniqueness constraint: `unit_unique_per_tenant` on `(tenant_id, unit_id)`.
+
+### `:Facet` nodes (S66, D168)
+
+A thin *reference* to a row in a read-only ingested cache — it carries only the
+facet's type + id, never a copy of the cache row (the D164 thin-reference rule,
+mirroring `:Lever`). `facet_type ∈ {task, meeting, email}` referencing the
+Postgres `tasks.id` / `meetings.id` / `emails.id` UUID respectively.
+
+| Property       | Type       | Notes                                                       |
+|----------------|------------|-------------------------------------------------------------|
+| `tenant_id`    | `String`   | not empty; matches the Unit's tenant                        |
+| `jurisdiction` | `String`   | first-class per D12                                         |
+| `facet_type`   | `String`   | `task` / `meeting` / `email`                                |
+| `facet_id`     | `String`   | the referenced cache row's UUID                             |
+| `created_at`   | `DateTime` | set on initial MERGE                                        |
+
+Uniqueness constraint: `facet_unique_per_tenant` on `(tenant_id, facet_type, facet_id)`.
+
+### `SAME_WORK` edge (S66, D168)
+
+`(:Facet)-[:SAME_WORK]->(:Unit)`. The Padhanam-native correlation edge (D166):
+this facet is part of this unit of work. The anchor facet links with
+`status=confirmed, confidence=1.0`; additional facets carry the title-and-time
+inference's confidence — `confirmed` at/above the floor, `candidate` below
+(surfaced, not auto-linked). `basis` records the inference used.
+
+| Property      | Type      | Notes                                                                  |
+|---------------|-----------|------------------------------------------------------------------------|
+| `tenant_id`   | `String`  | not empty; matches both endpoints                                      |
+| `jurisdiction`| `String`  | matches both endpoints                                                 |
+| `confidence`  | `Float`   | 0.0–1.0 inference confidence; `1.0` for the anchor                     |
+| `status`      | `String`  | `confirmed` (auto-linked) / `candidate` (surfaced, below floor)        |
+| `basis`       | `String`  | the inference basis, e.g. `anchor` / `title+time` / `title`           |
+| `created_at`  | `DateTime`| set on initial MERGE                                                   |
+
+Uniqueness via the MERGE pattern keyed on `(tenant_id, facet_type, facet_id, unit_id)`
+(Community Edition has no declarative relationship-property uniqueness). The whole
+`:Unit`/`:Facet`/`SAME_WORK` subgraph for a tenant is replaced on each correlation
+run (derived state), so stale links and orphaned units do not accumulate.
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
