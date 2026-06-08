@@ -3600,3 +3600,11 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+### S72 follow-up — Today time-scoping is overdue-safe (integrity close-out)
+roles: engineer (the regression test), analyst (the already-correct-vs-latent-regression determination)
+
+A one-commit integrity close-out on the S72 live/history split. **Verdict: already-correct, not a fix.** Step 0 read the actual rule: the split keys on **done-ness** (`live = not item.done`, `history = item.done`), **not** a literal today-forward date horizon — so an overdue, not-done commitment whose last activity is before today is `done=False` → **live**, with BEHIND computed independently (D157). The history slice only catches `done=True` items (done commitments/cases + ended calendar events). No code change.
+
+- The test (the real deliverable): `test_overdue_not_done_before_today_is_live_done_before_today_is_history` — a commitment overdue and dated before today, still not done, asserts **live + BEHIND, not in history, not absent**; a done item dated before today asserts **in history, not live** (S72 preserved). 2123 unit pass, 0 failed, 0 skipped; 43 contracts.
+- Reflection (the real-data-distribution lesson, landing inside the fold session itself): S72's clean "live all not-done, history all done" render was *true but unproven* — every live item there happened to be today's, so the data lacked the overdue-from-before-today edge that would have exposed a date-horizon rule had I written one. The render looked right; only the test proves the logic is. The same lesson as the [S66] mega-unit and the [S71] articulation flood: a clean output on a corpus missing the edge case is not evidence the logic is correct — confirm by reasoning and a pinned test, not by the render.
