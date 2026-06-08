@@ -51,8 +51,45 @@ class GoalEdge:
 
 
 @dataclass(frozen=True)
+class GoalCoverage:
+    """The boundary statement — what Padhanam can actually see (D171).
+
+    An assess-not-replace platform reads only part of the user's world, so every
+    read is valid only inside this boundary. ``has_coverage`` is the gate: with
+    no goal linked to any ingested work, orphan/neglect verdicts are unproven and
+    are suppressed in favour of the honest "uncovered" read.
+    """
+
+    goals_total: int
+    goals_covered: int  # goals with >= 1 linked unit
+    units_total: int
+    units_linked: int  # units with >= 1 goal edge
+
+    @property
+    def has_coverage(self) -> bool:
+        return self.goals_covered > 0
+
+
+@dataclass(frozen=True)
+class UncoveredGoal:
+    """A goal with no linked evidence — *uncovered*, not neglected (D171).
+
+    The honest read when Padhanam cannot see the work for a goal: a statement of
+    its own blindness, never a judgment that the user has stopped.
+    """
+
+    outcome_id: UUID
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class OrphanUnit:
-    """A unit of work pointing at no goal — recommendation-shaped (D169, D166)."""
+    """A unit Padhanam could not link to a goal — recommendation-shaped (D169).
+
+    Only emitted inside the coverage boundary (D171); outside it, an unlinked
+    unit is unproven, not adrift.
+    """
 
     unit_id: UUID
     title: str
@@ -62,20 +99,19 @@ class OrphanUnit:
 
 
 @dataclass(frozen=True)
-class NeglectedGoal:
-    """A goal nothing in the plan points at — recommendation-shaped (D169)."""
-
-    outcome_id: UUID
-    name: str
-    reason: str
-
-
-@dataclass(frozen=True)
 class GoalAssessment:
-    """The two moat reads, surfaced together."""
+    """The coverage-honest moat reads (D169, D171).
 
+    ``coverage`` is the boundary statement. ``uncovered_goals`` are goals with no
+    linked evidence (honest, not a verdict). ``orphan_work`` is populated only
+    when coverage exists — outside the boundary it is unproven and suppressed.
+    Genuine *neglect* (a covered goal whose linked work has gone quiet) is a
+    within-coverage signal reserved for a later session.
+    """
+
+    coverage: GoalCoverage
+    uncovered_goals: tuple[UncoveredGoal, ...]
     orphan_work: tuple[OrphanUnit, ...]
-    neglected_goals: tuple[NeglectedGoal, ...]
 
 
 def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
@@ -176,52 +212,71 @@ def assess_goals(
     goals: tuple[Goal, ...],
     edges: tuple[GoalEdge, ...],
 ) -> GoalAssessment:
-    """Compute the two moat reads from the units, goals, and goal edges (D169).
+    """Compute the coverage-honest moat reads (D169, D171).
 
-    Orphan work = a unit with no outgoing ``SERVES`` edge (confirmed *or*
-    candidate — a candidate is enough to mean "not orphan", the recall call).
-    Neglected goal = a goal with no incoming ``SERVES`` edge. Both are
-    recommendation-shaped (declarative, specific; the private-assistant
-    discipline). Orphans are ordered cross-tool-units-first (the genuine work
-    most likely to deserve a goal leads; the reverse-Kano restraint against a
-    noisy read), then by title.
+    First the **coverage** boundary: how many goals are linked to ingested work,
+    how many units are linked. A goal with no linked unit is **uncovered** —
+    Padhanam cannot see its work, an honest statement of its own blindness, never
+    a "you're neglecting this" verdict. **Orphan work is emitted only inside the
+    coverage boundary** (``has_coverage``): with no goal linked to anything, an
+    unlinked unit is unproven, so the orphan read is suppressed in favour of the
+    coverage statement. Orphans, when emitted, are ordered cross-tool-first (the
+    reverse-Kano restraint) then by title.
     """
+    goal_ids = {goal.id for goal in goals}
     units_with_edge = {e.unit_id for e in edges}
-    goals_with_edge = {e.outcome_id for e in edges}
+    goals_with_edge = {e.outcome_id for e in edges} & goal_ids
 
-    orphans = [
-        OrphanUnit(
-            unit_id=unit.unit_id,
-            title=unit.title,
-            facet_count=len(unit.facets),
-            is_correlated=unit.is_correlated,
-            reason=f"“{unit.title}” points at no goal you're tracking.",
-        )
-        for unit in units
-        if unit.unit_id not in units_with_edge
-    ]
-    orphans.sort(key=lambda o: (0 if o.is_correlated else 1, o.title.lower()))
+    coverage = GoalCoverage(
+        goals_total=len(goals),
+        goals_covered=len(goals_with_edge),
+        units_total=len(units),
+        units_linked=len(units_with_edge),
+    )
 
-    neglected = tuple(
-        NeglectedGoal(
+    uncovered = tuple(
+        UncoveredGoal(
             outcome_id=goal.id,
             name=goal.name,
-            reason=f"Nothing in your plan points at “{goal.name}”.",
+            reason=(
+                f"No work is linked to “{goal.name}” yet — Padhanam can't see "
+                "work for this goal. Not a sign you've stopped."
+            ),
         )
         for goal in goals
         if goal.id not in goals_with_edge
     )
+
+    orphan_work: tuple[OrphanUnit, ...] = ()
+    if coverage.has_coverage:
+        orphans = [
+            OrphanUnit(
+                unit_id=unit.unit_id,
+                title=unit.title,
+                facet_count=len(unit.facets),
+                is_correlated=unit.is_correlated,
+                reason=f"Padhanam couldn't link “{unit.title}” to a goal.",
+            )
+            for unit in units
+            if unit.unit_id not in units_with_edge
+        ]
+        orphans.sort(key=lambda o: (0 if o.is_correlated else 1, o.title.lower()))
+        orphan_work = tuple(orphans)
+
     return GoalAssessment(
-        orphan_work=tuple(orphans), neglected_goals=neglected
+        coverage=coverage,
+        uncovered_goals=uncovered,
+        orphan_work=orphan_work,
     )
 
 
 __all__ = [
     "DEFAULT_GOAL_CONFIDENCE_FLOOR",
     "GoalAssessment",
+    "GoalCoverage",
     "GoalEdge",
-    "NeglectedGoal",
     "OrphanUnit",
+    "UncoveredGoal",
     "assess_goals",
     "infer_goal_edges",
 ]

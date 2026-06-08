@@ -505,32 +505,44 @@
         ${facetRows}`;
       return card;
     }
-    // --- How am I doing (S67, D169: the moat reads, recommendation-shaped) ---
+    // --- How am I doing (S67 D169 + S70 D171: coverage-honest moat reads) ---
     async function loadAssessment() {
       const box = document.getElementById("assessment"); if (!box) return;
       let a;
       try { a = await api("/daily-driver/assessment"); } catch { box.innerHTML = ""; return; }
-      const orphans = a.orphan_work || [], neglected = a.neglected_goals || [];
-      if (!orphans.length && !neglected.length) {
-        box.innerHTML = '<div class="empty">Nothing to flag — every unit points at a goal and every goal has work. (Or no goals are seeded yet.)</div>';
-        return;
-      }
+      const cov = a.coverage || {goals_total:0, goals_covered:0, units_total:0, units_linked:0, has_coverage:false};
+      const uncovered = a.uncovered_goals || [], orphans = a.orphan_work || [];
       box.innerHTML = "";
-      if (neglected.length) {
-        const head = document.createElement("div");
-        head.className = "sub"; head.style.margin = "0 0 4px"; head.style.fontWeight = "600";
-        head.textContent = `Neglected goals (${neglected.length})`;
-        box.appendChild(head);
-        neglected.forEach((g) => box.appendChild(assessCard(g.reason, "goal")));
+
+      // Always lead with the coverage boundary — the read is only valid inside it.
+      const cline = document.createElement("div");
+      cline.className = "sub"; cline.style.margin = "0 0 6px";
+      cline.innerHTML = `<strong>Coverage:</strong> ${cov.goals_covered} of ${cov.goals_total} goals linked to ingested work · ${cov.units_linked} of ${cov.units_total} units linked.`;
+      box.appendChild(cline);
+
+      if (!cov.has_coverage) {
+        // Outside the boundary: report uncovered, never neglect. The platform
+        // says "I can't see your work for this", not "you're not doing it".
+        const note = document.createElement("div");
+        note.className = "empty"; note.style.marginBottom = "8px";
+        note.textContent = "No goals are linked to ingested work yet, so orphan and neglect reads are unproven and withheld. Connect where the work lives (pull tasks, then correlate) — or tune the lever names to match how you title it.";
+        box.appendChild(note);
       }
+
+      if (uncovered.length) {
+        const head = document.createElement("div");
+        head.className = "sub"; head.style.margin = "6px 0 4px"; head.style.fontWeight = "600";
+        head.textContent = `Can't see work for (${uncovered.length})`;
+        box.appendChild(head);
+        uncovered.forEach((g) => box.appendChild(assessCard(g.reason, "uncovered")));
+      }
+
       if (orphans.length) {
         const head = document.createElement("div");
         head.className = "sub"; head.style.margin = "10px 0 4px"; head.style.fontWeight = "600";
-        // Lead with the cross-tool orphans — the genuine work most likely to deserve a goal.
         const cross = orphans.filter((o) => o.is_correlated).length;
-        head.textContent = `Work adrift of a goal (${orphans.length}${cross ? ", " + cross + " cross-tool" : ""})`;
+        head.textContent = `Work I couldn't link to a goal (${orphans.length}${cross ? ", " + cross + " cross-tool" : ""})`;
         box.appendChild(head);
-        // Bounded display — restraint against a noisy read; show the leading slice.
         orphans.slice(0, 12).forEach((o) => box.appendChild(assessCard(o.reason, "orphan")));
         if (orphans.length > 12) {
           const more = document.createElement("div");
@@ -544,7 +556,7 @@
       const card = document.createElement("div");
       card.className = "row"; card.dataset.tier = "work";
       card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "2px";
-      const glyph = kind === "goal" ? "◎" : "⊘";
+      const glyph = kind === "uncovered" ? "◌" : "⊘";
       card.innerHTML = `<div class="sub" style="margin:0">${glyph} ${escapeHtml(reason)}</div>`;
       return card;
     }

@@ -49,6 +49,7 @@ from apps.api.routers._daily_driver_dto import (
     TaskDTO,
     TodayDTO,
     UnitDTO,
+    _empty_assessment_dto,
     facet_suggestion_to_dto,
     goal_assessment_to_dto,
     goal_reading_to_dto,
@@ -383,7 +384,7 @@ async def get_assessment(
     operator-gated correlate run, not on read.
     """
     if unit_graph is None or facet_source is None or goal_graph is None:
-        return GoalAssessmentDTO(orphan_work=[], neglected_goals=[])
+        return _empty_assessment_dto()
     assessment = await list_goal_assessment(
         unit_graph=unit_graph,
         facet_source=facet_source,

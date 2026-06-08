@@ -595,7 +595,7 @@ class _FakeGoalGraphForAssessment:
         return tuple(self._goals)
 
 
-def test_assessment_route_returns_orphan_work_and_neglected_goals() -> None:
+def test_assessment_route_returns_coverage_uncovered_and_orphan() -> None:
     from contexts.daily_driver.domain.goal import (
         ControlAxis, Goal, GoalMode, LevelLadder, Subject,
     )
@@ -640,15 +640,22 @@ def test_assessment_route_returns_orphan_work_and_neglected_goals() -> None:
     res = client.get("/api/v1/daily-driver/assessment")
     assert res.status_code == 200, res.text
     body = res.json()
+    # One goal covered → coverage exists → orphan emitted; the unlinked goal is
+    # uncovered (D171), not "neglected".
+    assert body["coverage"]["has_coverage"] is True
+    assert body["coverage"]["goals_covered"] == 1
     assert [o["unit_id"] for o in body["orphan_work"]] == [str(orphan_unit)]
-    assert [g["outcome_id"] for g in body["neglected_goals"]] == [str(neglected_goal_id)]
+    assert [g["outcome_id"] for g in body["uncovered_goals"]] == [str(neglected_goal_id)]
 
 
 def test_assessment_route_empty_when_seams_unwired() -> None:
     client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
     res = client.get("/api/v1/daily-driver/assessment")
     assert res.status_code == 200
-    assert res.json() == {"orphan_work": [], "neglected_goals": []}
+    body = res.json()
+    assert body["coverage"]["has_coverage"] is False
+    assert body["uncovered_goals"] == []
+    assert body["orphan_work"] == []
 
 
 def test_suggestions_route_returns_goal_served_missing_facet_suggestions() -> None:

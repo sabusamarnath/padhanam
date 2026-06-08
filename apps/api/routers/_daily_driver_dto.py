@@ -295,8 +295,26 @@ def unit_view_to_dto(view: UnitView) -> UnitDTO:
     )
 
 
+class CoverageDTO(BaseModel):
+    """The assessment's coverage boundary (D171)."""
+
+    goals_total: int
+    goals_covered: int
+    units_total: int
+    units_linked: int
+    has_coverage: bool
+
+
+class UncoveredGoalDTO(BaseModel):
+    """A goal with no linked evidence — uncovered, not neglected (D171)."""
+
+    outcome_id: UUID
+    name: str
+    reason: str
+
+
 class OrphanUnitDTO(BaseModel):
-    """A unit pointing at no goal (D169) — recommendation-shaped."""
+    """A unit Padhanam couldn't link to a goal (D169) — coverage-gated (D171)."""
 
     unit_id: UUID
     title: str
@@ -305,24 +323,43 @@ class OrphanUnitDTO(BaseModel):
     reason: str
 
 
-class NeglectedGoalDTO(BaseModel):
-    """A goal nothing in the plan points at (D169) — recommendation-shaped."""
-
-    outcome_id: UUID
-    name: str
-    reason: str
-
-
 class GoalAssessmentDTO(BaseModel):
-    """The two moat reads, surfaced together (D169, D166)."""
+    """The coverage-honest moat reads (D169, D171, D166)."""
 
+    coverage: CoverageDTO
+    uncovered_goals: list[UncoveredGoalDTO]
     orphan_work: list[OrphanUnitDTO]
-    neglected_goals: list[NeglectedGoalDTO]
+
+
+def _empty_assessment_dto() -> "GoalAssessmentDTO":
+    """The zero-coverage assessment for an unwired/empty instance (D171)."""
+    return GoalAssessmentDTO(
+        coverage=CoverageDTO(
+            goals_total=0, goals_covered=0, units_total=0,
+            units_linked=0, has_coverage=False,
+        ),
+        uncovered_goals=[],
+        orphan_work=[],
+    )
 
 
 def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
-    """Encode the domain GoalAssessment into the HTTP DTO (D169)."""
+    """Encode the domain GoalAssessment into the HTTP DTO (D169, D171)."""
+    c = assessment.coverage
     return GoalAssessmentDTO(
+        coverage=CoverageDTO(
+            goals_total=c.goals_total,
+            goals_covered=c.goals_covered,
+            units_total=c.units_total,
+            units_linked=c.units_linked,
+            has_coverage=c.has_coverage,
+        ),
+        uncovered_goals=[
+            UncoveredGoalDTO(
+                outcome_id=g.outcome_id, name=g.name, reason=g.reason
+            )
+            for g in assessment.uncovered_goals
+        ],
         orphan_work=[
             OrphanUnitDTO(
                 unit_id=o.unit_id,
@@ -332,12 +369,6 @@ def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
                 reason=o.reason,
             )
             for o in assessment.orphan_work
-        ],
-        neglected_goals=[
-            NeglectedGoalDTO(
-                outcome_id=g.outcome_id, name=g.name, reason=g.reason
-            )
-            for g in assessment.neglected_goals
         ],
     )
 

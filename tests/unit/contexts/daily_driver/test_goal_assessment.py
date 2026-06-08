@@ -124,24 +124,48 @@ def test_a_candidate_edge_is_enough_to_keep_a_unit_off_the_orphan_list():
     assert assessment.orphan_work == ()
 
 
-def test_neglected_goal_is_a_goal_with_no_incoming_edge():
-    cid_served, cid_neglected = uuid4(), uuid4()
+def test_a_goal_with_no_link_reads_uncovered_not_neglected():
+    # D171: an unlinked goal is uncovered (Padhanam can't see its work), never
+    # neglected. The served goal establishes coverage so the read is valid.
+    cid_served, cid_unseen = uuid4(), uuid4()
     served_goal = _progressive_goal("German", lever_commitment_id=cid_served)
-    neglected_goal = _progressive_goal("Marathon", lever_commitment_id=cid_neglected)
+    unseen_goal = _progressive_goal("Marathon", lever_commitment_id=cid_unseen)
     unit = _unit("German practice")
-    goals = (served_goal, neglected_goal)
+    goals = (served_goal, unseen_goal)
     edges = infer_goal_edges(
-        (unit,), goals, {cid_served: "German practice", cid_neglected: "Long run"}
+        (unit,), goals, {cid_served: "German practice", cid_unseen: "Long run"}
     )
     assessment = assess_goals((unit,), goals, edges)
-    neglected_ids = {g.outcome_id for g in assessment.neglected_goals}
-    assert neglected_goal.id in neglected_ids
-    assert served_goal.id not in neglected_ids
+    uncovered_ids = {g.outcome_id for g in assessment.uncovered_goals}
+    assert unseen_goal.id in uncovered_ids
+    assert served_goal.id not in uncovered_ids
+    assert assessment.coverage.goals_covered == 1
+    assert assessment.coverage.goals_total == 2
 
 
-def test_orphans_order_cross_tool_units_first():
+def test_no_coverage_suppresses_orphan_and_reports_uncovered():
+    # The trust fix (D171): with nothing linked, the platform must not emit
+    # orphan/neglect verdicts — it reports its own blindness instead.
     cid = uuid4()
     goal = _progressive_goal("German", lever_commitment_id=cid)
+    # No unit matches the goal/lever → 0 edges → no coverage.
+    units = (_unit("Quarterly budget review"), _unit("Call the bank"))
+    edges = infer_goal_edges(units, (goal,), {cid: "German practice"})
+    assert edges == ()
+    assessment = assess_goals(units, (goal,), edges)
+    assert assessment.coverage.has_coverage is False
+    assert assessment.coverage.goals_covered == 0
+    assert assessment.coverage.units_linked == 0
+    # Orphan verdicts are unproven outside coverage → suppressed.
+    assert assessment.orphan_work == ()
+    # The goal is reported uncovered, honestly.
+    assert {g.outcome_id for g in assessment.uncovered_goals} == {goal.id}
+
+
+def test_orphans_emitted_and_ordered_cross_tool_first_when_coverage_exists():
+    cid = uuid4()
+    goal = _progressive_goal("German", lever_commitment_id=cid)
+    served = _unit("German practice")  # establishes coverage
     solo = _unit("Zeta solo errand")
     cross = _unit(
         "Alpha cross-tool work",
@@ -150,13 +174,14 @@ def test_orphans_order_cross_tool_units_first():
             _facet_view("Alpha cross-tool work", facet_type=FacetType.MEETING),
         ),
     )
-    units = (solo, cross)
+    units = (served, solo, cross)
     edges = infer_goal_edges(units, (goal,), {cid: "German practice"})
     assessment = assess_goals(units, (goal,), edges)
-    # Both orphan; the cross-tool unit leads despite the later alphabetical-ish
-    # ordering being a tiebreak only.
+    assert assessment.coverage.has_coverage is True
+    # The cross-tool orphan leads; the served unit is not orphan.
     assert assessment.orphan_work[0].unit_id == cross.unit_id
     assert assessment.orphan_work[0].is_correlated
+    assert served.unit_id not in {o.unit_id for o in assessment.orphan_work}
 
 
 def test_removed_facets_do_not_drive_a_match():
