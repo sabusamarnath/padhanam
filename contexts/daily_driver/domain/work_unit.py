@@ -84,6 +84,11 @@ class WorkFacet:
     facet_id: UUID
     title: str
     occurred_at: datetime | None
+    # Source-series identity for recurrence grouping at read time (D175):
+    # Google's ``recurringEventId`` for a recurring meeting instance, ``None``
+    # for a one-off, a task, or an email. Read-layer only — never written to the
+    # graph (the unit model stays one-facet-per-row, P18).
+    series_id: str | None = None
 
 
 @dataclass(frozen=True)

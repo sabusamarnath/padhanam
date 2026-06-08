@@ -321,6 +321,10 @@ class OrphanUnitDTO(BaseModel):
     facet_count: int
     is_correlated: bool
     reason: str
+    # Recurrence fold (D175): one row per source series, carrying its instance
+    # count; ``instance_count`` is 1 for a one-off, N for a recurring series.
+    instance_count: int = 1
+    series_id: str | None = None
 
 
 class GoalAssessmentDTO(BaseModel):
@@ -367,6 +371,8 @@ def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
                 facet_count=o.facet_count,
                 is_correlated=o.is_correlated,
                 reason=o.reason,
+                instance_count=o.instance_count,
+                series_id=o.series_id,
             )
             for o in assessment.orphan_work
         ],

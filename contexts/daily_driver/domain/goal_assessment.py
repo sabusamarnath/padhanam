@@ -107,6 +107,12 @@ class OrphanUnit:
     facet_count: int
     is_correlated: bool
     reason: str
+    # Recurrence grouping (D175): a recurring series renders as one orphan row
+    # carrying its instance count, not N raw instances. ``series_id`` is the
+    # source-series id (``None`` for a one-off); ``instance_count`` is the number
+    # of unlinked instances folded into this row (1 for a one-off).
+    series_id: str | None = None
+    instance_count: int = 1
 
 
 @dataclass(frozen=True)
@@ -227,6 +233,52 @@ def infer_goal_edges(
     return tuple(edges)
 
 
+def _group_orphans_by_series(units: list[UnitView]) -> tuple[OrphanUnit, ...]:
+    """Fold orphan units sharing a source series into one row (D175).
+
+    Recurring instances carry the same ``series_id`` (the calendar
+    ``recurringEventId``); they collapse to a single orphan row with an
+    ``instance_count``, so the read shows the distinct items (~40), not the raw
+    instances (~982). A unit with no series id (a one-off, a task, an email) is
+    its own row (count 1). The data model is untouched — this folds the *read*
+    only. Representative ordering is correlated-first, then title.
+    """
+    groups: dict[object, list[UnitView]] = {}
+    order: list[object] = []
+    for unit in units:
+        # None-series units never merge — key each on its own unit id.
+        key: object = unit.series_id or ("solo", unit.unit_id)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(unit)
+
+    rows: list[OrphanUnit] = []
+    for key in order:
+        members = groups[key]
+        rep = members[0]
+        count = len(members)
+        reason = (
+            f"Padhanam couldn't link “{rep.title}” "
+            f"(×{count} recurring instances) to a goal."
+            if count > 1
+            else f"Padhanam couldn't link “{rep.title}” to a goal."
+        )
+        rows.append(
+            OrphanUnit(
+                unit_id=rep.unit_id,
+                title=rep.title,
+                facet_count=len(rep.facets),
+                is_correlated=rep.is_correlated,
+                reason=reason,
+                series_id=rep.series_id,
+                instance_count=count,
+            )
+        )
+    rows.sort(key=lambda o: (0 if o.is_correlated else 1, o.title.lower()))
+    return tuple(rows)
+
+
 def assess_goals(
     units: tuple[UnitView, ...],
     goals: tuple[Goal, ...],
@@ -269,19 +321,8 @@ def assess_goals(
 
     orphan_work: tuple[OrphanUnit, ...] = ()
     if coverage.has_coverage:
-        orphans = [
-            OrphanUnit(
-                unit_id=unit.unit_id,
-                title=unit.title,
-                facet_count=len(unit.facets),
-                is_correlated=unit.is_correlated,
-                reason=f"Padhanam couldn't link “{unit.title}” to a goal.",
-            )
-            for unit in units
-            if unit.unit_id not in units_with_edge
-        ]
-        orphans.sort(key=lambda o: (0 if o.is_correlated else 1, o.title.lower()))
-        orphan_work = tuple(orphans)
+        unlinked = [u for u in units if u.unit_id not in units_with_edge]
+        orphan_work = _group_orphans_by_series(unlinked)
 
     return GoalAssessment(
         coverage=coverage,

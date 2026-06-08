@@ -101,15 +101,24 @@ async def _report() -> None:
         else:
             print(f"  uncovered {goal.name:<26} (Padhanam can't see work for this)")
 
+    # Orphans are folded by source series at the read (D175): one row per
+    # distinct series/one-off, carrying its instance count.
     orphans = assessment.orphan_work
-    print(f"\norphan units (no goal edge): {len(orphans)}")
+    total_instances = sum(o.instance_count for o in orphans)
+    print(
+        f"\norphan work (no goal edge): {len(orphans)} distinct items "
+        f"folded from {total_instances} instances"
+    )
     if not cov.has_coverage:
         print("  (orphan read suppressed — no coverage yet, D171)")
-    sample = orphans[:_ORPHAN_SAMPLE]
+    ranked = sorted(orphans, key=lambda o: (-o.instance_count, o.title.lower()))
+    sample = ranked[:_ORPHAN_SAMPLE]
     if sample:
-        print(f"\nsample of {len(sample)} orphan titles (of {len(orphans)}):")
+        print(f"\ntop {len(sample)} orphan items by instance count "
+              f"(of {len(orphans)} distinct):")
         for o in sample:
-            print(f"  · {o.title}")
+            rec = f"  ×{o.instance_count:<4}" if o.instance_count > 1 else "   ·    "
+            print(f"{rec} {o.title}")
     print()
 
 

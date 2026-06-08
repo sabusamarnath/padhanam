@@ -21,7 +21,7 @@ from contexts.daily_driver.domain.work_unit import FacetType, LinkStatus
 _TENANT = UUID("00000000-0000-4000-8000-00000000d001")
 
 
-def _facet_view(title, *, facet_type=FacetType.MEETING, present=True):
+def _facet_view(title, *, facet_type=FacetType.MEETING, present=True, series_id=None):
     return UnitFacetView(
         facet_type=facet_type,
         facet_id=uuid4(),
@@ -31,11 +31,12 @@ def _facet_view(title, *, facet_type=FacetType.MEETING, present=True):
         confidence=1.0,
         basis="anchor",
         present=present,
+        series_id=series_id,
     )
 
 
-def _unit(title, *, facets=None, unit_id=None):
-    fs = facets or (_facet_view(title),)
+def _unit(title, *, facets=None, unit_id=None, series_id=None):
+    fs = facets or (_facet_view(title, series_id=series_id),)
     return UnitView(
         unit_id=unit_id or uuid4(),
         title=title,
@@ -220,6 +221,40 @@ def test_orphans_emitted_and_ordered_cross_tool_first_when_coverage_exists():
     assert assessment.orphan_work[0].unit_id == cross.unit_id
     assert assessment.orphan_work[0].is_correlated
     assert served.unit_id not in {o.unit_id for o in assessment.orphan_work}
+
+
+def test_orphan_recurring_instances_fold_to_one_row_by_series():
+    # D175: coverage exists (one linked unit), so orphan_work is emitted (D171);
+    # three instances of one recurring series collapse to a single orphan row.
+    cid = uuid4()
+    goal = _progressive_goal("German", lever_commitment_id=cid)
+    linked = _unit("German practice")
+    series = "recurring-event-abc"
+    orphans = tuple(
+        _unit("Medication reminder", series_id=series) for _ in range(3)
+    )
+    units = (linked, *orphans)
+    edges = infer_goal_edges(units, (goal,), {cid: "German practice"})
+    assessment = assess_goals(units, (goal,), edges)
+    folded = [o for o in assessment.orphan_work if o.series_id == series]
+    assert len(folded) == 1
+    assert folded[0].instance_count == 3
+    assert "×3 recurring instances" in folded[0].reason
+    # The data model is untouched: the three instances are still three units in.
+    assert len(units) == 4
+
+
+def test_orphans_without_a_series_stay_separate_rows():
+    # D175: one-offs (no series id) never merge — each is its own row, count 1.
+    cid = uuid4()
+    goal = _progressive_goal("German", lever_commitment_id=cid)
+    linked = _unit("German practice")
+    units = (linked, _unit("Haircut"), _unit("Call Natwest"))
+    edges = infer_goal_edges(units, (goal,), {cid: "German practice"})
+    assessment = assess_goals(units, (goal,), edges)
+    solo = [o for o in assessment.orphan_work if o.series_id is None]
+    assert len(solo) == 2
+    assert all(o.instance_count == 1 for o in solo)
 
 
 def test_removed_facets_do_not_drive_a_match():

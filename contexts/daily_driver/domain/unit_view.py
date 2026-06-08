@@ -44,6 +44,7 @@ class UnitFacetView:
     confidence: float
     basis: str
     present: bool  # False when the cache row is gone (a stale reference)
+    series_id: str | None = None  # recurring-series id for read grouping (D175)
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,20 @@ class UnitView:
     def has_candidate(self) -> bool:
         """True when a below-floor facet is surfaced for confirmation."""
         return any(f.status is LinkStatus.CANDIDATE for f in self.facets)
+
+    @property
+    def series_id(self) -> str | None:
+        """The unit's recurring-series id, if any (D175).
+
+        A unit inherits the series identity of its first present facet that
+        carries one (the recurring calendar instance); ``None`` for a one-off
+        or a task/email unit. Read-layer grouping keys on this — the graph
+        model holds no series id (P18 one-facet-per-row stands).
+        """
+        for facet in self.facets:
+            if facet.present and facet.series_id:
+                return facet.series_id
+        return None
 
 
 def _facet_sort_key(facet: UnitFacetView) -> tuple[int, int, str]:
@@ -99,6 +114,7 @@ def build_unit_views(
                     confidence=ref.confidence,
                     basis=ref.basis,
                     present=facet is not None,
+                    series_id=facet.series_id if facet is not None else None,
                 )
             )
         facet_views.sort(key=_facet_sort_key)

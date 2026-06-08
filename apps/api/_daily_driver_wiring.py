@@ -556,6 +556,9 @@ class FacetSourceAdapter:
                     facet_id=meeting.id,
                     title=meeting.title or "",
                     occurred_at=meeting.start_at,
+                    # The recurring-series id for read-time grouping (D175);
+                    # None for a one-off meeting.
+                    series_id=meeting.recurring_event_id,
                 )
             )
         for email in await emails.list_emails(
