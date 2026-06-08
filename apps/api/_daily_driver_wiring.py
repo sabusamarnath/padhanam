@@ -46,7 +46,11 @@ from contexts.daily_driver.domain.goal import (
     Goal,
     GoalMode,
     LevelLadder,
+    LeverStep,
+    StepState,
     Subject,
+    Terminal,
+    TerminalState,
 )
 from contexts.daily_driver.domain.today_item import (
     CalendarToday,
@@ -355,14 +359,31 @@ class GoalGraphAdapter:
     def _to_goal(record: Any, *, tenant_context: TenantContext) -> Goal:
         mode = GoalMode(record.mode)
         ladder = None
-        if (
-            mode is GoalMode.PROGRESSIVE
-            and record.ladder
-            and record.current_target_level
-        ):
-            ladder = LevelLadder(
-                levels=tuple(record.ladder),
-                current_target_level=record.current_target_level,
+        lever_commitment_id = None
+        terminal = None
+        steps: tuple[LeverStep, ...] = ()
+        if mode is GoalMode.PROGRESSIVE:
+            if record.ladder and record.current_target_level:
+                ladder = LevelLadder(
+                    levels=tuple(record.ladder),
+                    current_target_level=record.current_target_level,
+                )
+            # A progressive goal has a single lever.
+            if record.levers:
+                lever_commitment_id = record.levers[0].commitment_id
+        elif mode is GoalMode.SEQUENCE:
+            if record.terminal_target:
+                terminal = Terminal(
+                    target=record.terminal_target,
+                    state=TerminalState(record.terminal_state or "pending"),
+                )
+            steps = tuple(
+                LeverStep(
+                    commitment_id=lever.commitment_id,
+                    order=lever.step_order or (idx + 1),
+                    state=StepState(lever.step_state or "ready"),
+                )
+                for idx, lever in enumerate(record.levers)
             )
         return Goal(
             id=record.outcome_id,
@@ -372,8 +393,10 @@ class GoalGraphAdapter:
             mode=mode,
             control=ControlAxis(record.control),
             subject=Subject(record.subject),
-            lever_commitment_id=record.commitment_id,
+            lever_commitment_id=lever_commitment_id,
             ladder=ladder,
+            terminal=terminal,
+            steps=steps,
         )
 
     async def list_goals(

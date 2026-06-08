@@ -4,6 +4,7 @@ from contexts.ingestion.ports.chunk_embedder_port import (
     EmbedderError,
 )
 from contexts.ingestion.ports.outcome_graph_port import (
+    LeverEdgeRecord,
     OutcomeGraphPort,
     OutcomeGraphRecord,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "ChunkEmbedderPort",
     "EmbedderConfigurationError",
     "EmbedderError",
+    "LeverEdgeRecord",
     "OutcomeGraphPort",
     "OutcomeGraphRecord",
     "ParserError",

@@ -121,7 +121,7 @@ class GoalReadingDTO(BaseModel):
     mode: str
     control: str
     subject: str
-    lever_commitment_id: UUID
+    lever_commitment_id: UUID | None
     ladder: list[str] | None
     current_target: str | None
     progress_summary: str

@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -221,6 +221,14 @@ dogfood-wipe: derive-env
 # (the latter applies migrations/neo4j/0002_outcome_goal.cypher).
 seed-german: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_german_goal
+
+# Seed get-a-job as the second goal, a sequence (S63, D163): a chain of
+# lever-step commitments in the personal tenant's Postgres plus the Outcome
+# node (mode sequence, control influence, subject self, a terminal target)
+# + a lever edge per step in the shared graph. Idempotent. Run after
+# `make dogfood-provision` and `make migrate`.
+seed-get-a-job: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.seed_get_a_job
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,

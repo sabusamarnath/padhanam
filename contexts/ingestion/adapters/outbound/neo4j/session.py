@@ -28,6 +28,7 @@ red-team-verifies on both reads and writes.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import datetime, timezone
 from types import TracebackType
 from typing import Sequence
@@ -37,7 +38,10 @@ from neo4j import AsyncDriver, AsyncSession
 
 from contexts.ingestion.domain.entity import Entity
 from contexts.ingestion.domain.relationship import EntityRef, Relationship
-from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
+from contexts.ingestion.ports.outcome_graph_port import (
+    LeverEdgeRecord,
+    OutcomeGraphRecord,
+)
 from shared_kernel import TenantContext
 
 
@@ -146,9 +150,15 @@ SET
     o.subject = $subject,
     o.mode = $mode,
     o.ladder = $ladder,
-    o.current_target_level = $current_target_level
+    o.current_target_level = $current_target_level,
+    o.terminal_target = $terminal_target,
+    o.terminal_state = $terminal_state
 """
 
+# The LEVER_FOR edge carries only that a lever serves the outcome plus, for a
+# sequence goal, the lever's own relationship-level attributes: step_order +
+# step_state (which step, in what state). These are null for a single-lever
+# progressive goal. Goal-level properties live on the :Outcome node.
 _MERGE_LEVER_FOR_OUTCOME = """
 MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
 MERGE (l:Lever {tenant_id: $tenant_id, commitment_id: $commitment_id})
@@ -159,6 +169,9 @@ MERGE (l)-[r:LEVER_FOR {tenant_id: $tenant_id}]->(o)
 ON CREATE SET
     r.jurisdiction = $jurisdiction,
     r.created_at = $created_at
+SET
+    r.step_order = $step_order,
+    r.step_state = $step_state
 """
 
 # The explicit raise (D9) now targets the :Outcome node — the current target is
@@ -181,8 +194,12 @@ RETURN o.outcome_id AS outcome_id,
        o.mode AS mode,
        o.ladder AS ladder,
        o.current_target_level AS current_target_level,
-       l.commitment_id AS commitment_id
-ORDER BY o.name ASC
+       o.terminal_target AS terminal_target,
+       o.terminal_state AS terminal_state,
+       l.commitment_id AS commitment_id,
+       r.step_order AS step_order,
+       r.step_state AS step_state
+ORDER BY o.name ASC, r.step_order ASC
 """
 
 
@@ -422,11 +439,15 @@ class TenantScopedNeo4jSession:
         mode: str,
         ladder: Sequence[str],
         current_target_level: str | None,
+        terminal_target: str | None = None,
+        terminal_state: str | None = None,
     ) -> None:
         """MERGE an :Outcome node bound to the session's tenant (D163).
 
-        Per the D163 clarification (S63), the goal-level properties — mode, the
-        level ladder, and the current target — live on the node, set here.
+        Per the D163 clarification (S63), the goal-level properties live on the
+        node: mode, the level ladder and current target (progressive), and the
+        terminal target + state (sequence). The unused shape's properties are
+        ``None``.
         """
         session = self._bound_session
         params = {
@@ -439,6 +460,8 @@ class TenantScopedNeo4jSession:
             "mode": mode,
             "ladder": list(ladder),
             "current_target_level": current_target_level,
+            "terminal_target": terminal_target,
+            "terminal_state": terminal_state,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_OUTCOME, params)
@@ -448,11 +471,15 @@ class TenantScopedNeo4jSession:
         *,
         outcome_id: UUID,
         commitment_id: UUID,
+        step_order: int | None = None,
+        step_state: str | None = None,
     ) -> None:
         """MERGE the :Lever node + the LEVER_FOR edge to the Outcome (D163).
 
-        The edge carries only that the lever serves the outcome (the D163
-        clarification); goal-level properties live on the :Outcome node.
+        The edge carries only that the lever serves the outcome plus, for a
+        sequence goal, the lever's relationship-level ``step_order`` +
+        ``step_state`` (the D163 clarification). Goal-level properties live on
+        the :Outcome node.
         """
         session = self._bound_session
         params = {
@@ -460,6 +487,8 @@ class TenantScopedNeo4jSession:
             "jurisdiction": self._jurisdiction,
             "outcome_id": str(outcome_id),
             "commitment_id": str(commitment_id),
+            "step_order": step_order,
+            "step_state": step_state,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_LEVER_FOR_OUTCOME, params)
@@ -488,24 +517,47 @@ class TenantScopedNeo4jSession:
         return record["current_target_level"]
 
     async def list_outcomes(self) -> Sequence[OutcomeGraphRecord]:
-        """Return every Outcome with its lever edge for the bound tenant (D163)."""
+        """Return every Outcome with its lever edges for the bound tenant (D163).
+
+        One Cypher row per (outcome, lever); progressive goals have one lever,
+        sequence goals have many. Rows are aggregated here into one
+        ``OutcomeGraphRecord`` per outcome carrying a tuple of lever-edge
+        records — the wrapper owns the Cypher boundary, so the aggregation
+        stays on this side of the fence.
+        """
         session = self._bound_session
         params = {"tenant_id": self._tenant_id}
         result = await session.run(_LIST_OUTCOMES, params)
-        records = await result.data()
-        return [
-            OutcomeGraphRecord(
-                outcome_id=UUID(row["outcome_id"]),
-                name=row["name"],
-                control=row["control"],
-                subject=row["subject"],
+        rows = await result.data()
+        by_outcome: dict[str, OutcomeGraphRecord] = {}
+        order: list[str] = []
+        for row in rows:
+            oid = row["outcome_id"]
+            lever = LeverEdgeRecord(
                 commitment_id=UUID(row["commitment_id"]),
-                mode=row["mode"],
-                ladder=tuple(row["ladder"] or ()),
-                current_target_level=row["current_target_level"],
+                step_order=row["step_order"],
+                step_state=row["step_state"],
             )
-            for row in records
-        ]
+            if oid not in by_outcome:
+                order.append(oid)
+                by_outcome[oid] = OutcomeGraphRecord(
+                    outcome_id=UUID(oid),
+                    name=row["name"],
+                    control=row["control"],
+                    subject=row["subject"],
+                    mode=row["mode"],
+                    ladder=tuple(row["ladder"] or ()),
+                    current_target_level=row["current_target_level"],
+                    terminal_target=row["terminal_target"],
+                    terminal_state=row["terminal_state"],
+                    levers=(lever,),
+                )
+            else:
+                existing = by_outcome[oid]
+                by_outcome[oid] = replace(
+                    existing, levers=existing.levers + (lever,)
+                )
+        return [by_outcome[oid] for oid in order]
 
 
 def _to_python_datetime(value: object) -> datetime | None:

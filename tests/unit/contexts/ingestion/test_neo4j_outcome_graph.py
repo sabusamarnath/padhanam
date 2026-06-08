@@ -128,21 +128,83 @@ def test_set_outcome_target_missing_outcome_returns_none() -> None:
     assert asyncio.run(run()) is None
 
 
-def test_list_outcomes_maps_rows_to_records() -> None:
+def _row(**overrides) -> dict:
+    base = {
+        "outcome_id": str(_OUTCOME_ID),
+        "name": "German",
+        "control": "self",
+        "subject": "self",
+        "mode": "progressive",
+        "ladder": ["A1", "A2", "B1"],
+        "current_target_level": "A2",
+        "terminal_target": None,
+        "terminal_state": None,
+        "commitment_id": str(_COMMITMENT_ID),
+        "step_order": None,
+        "step_state": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_list_outcomes_maps_progressive_single_lever() -> None:
     driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[_row()])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> list[OutcomeGraphRecord]:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return list(await s.list_outcomes())
+
+    records = asyncio.run(run())
+    assert len(records) == 1
+    rec = records[0]
+    assert rec.mode == "progressive"
+    assert rec.ladder == ("A1", "A2", "B1")
+    assert rec.current_target_level == "A2"
+    assert rec.terminal_target is None
+    assert len(rec.levers) == 1
+    assert rec.levers[0].commitment_id == _COMMITMENT_ID
+    assert rec.levers[0].step_order is None
+
+
+def test_list_outcomes_aggregates_sequence_lever_chain() -> None:
+    driver, session = _mock_driver()
+    seq_outcome = UUID("00000000-0000-4000-8000-0000006300a1")
+    c1 = UUID("00000000-0000-4000-8000-0000006300c1")
+    c2 = UUID("00000000-0000-4000-8000-0000006300c2")
     result = MagicMock()
     result.data = AsyncMock(
         return_value=[
-            {
-                "outcome_id": str(_OUTCOME_ID),
-                "name": "German",
-                "control": "self",
-                "subject": "self",
-                "commitment_id": str(_COMMITMENT_ID),
-                "mode": "progressive",
-                "ladder": ["A1", "A2", "B1"],
-                "current_target_level": "A2",
-            }
+            _row(
+                outcome_id=str(seq_outcome),
+                name="Get a job",
+                control="other",
+                subject="self",
+                mode="sequence",
+                ladder=None,
+                current_target_level=None,
+                terminal_target="Offer accepted",
+                terminal_state="pending",
+                commitment_id=str(c1),
+                step_order=1,
+                step_state="done",
+            ),
+            _row(
+                outcome_id=str(seq_outcome),
+                name="Get a job",
+                control="other",
+                subject="self",
+                mode="sequence",
+                ladder=None,
+                current_target_level=None,
+                terminal_target="Offer accepted",
+                terminal_state="pending",
+                commitment_id=str(c2),
+                step_order=2,
+                step_state="blocked",
+            ),
         ]
     )
     session.run = AsyncMock(return_value=result)
@@ -152,15 +214,15 @@ def test_list_outcomes_maps_rows_to_records() -> None:
             return list(await s.list_outcomes())
 
     records = asyncio.run(run())
-    assert records == [
-        OutcomeGraphRecord(
-            outcome_id=_OUTCOME_ID,
-            name="German",
-            control="self",
-            subject="self",
-            commitment_id=_COMMITMENT_ID,
-            mode="progressive",
-            ladder=("A1", "A2", "B1"),
-            current_target_level="A2",
-        )
-    ]
+    # Two rows, one outcome → one aggregated record with a two-step chain.
+    assert len(records) == 1
+    rec = records[0]
+    assert rec.mode == "sequence"
+    assert rec.terminal_target == "Offer accepted"
+    assert rec.terminal_state == "pending"
+    assert len(rec.levers) == 2
+    assert rec.levers[0].commitment_id == c1
+    assert rec.levers[0].step_order == 1
+    assert rec.levers[0].step_state == "done"
+    assert rec.levers[1].step_order == 2
+    assert rec.levers[1].step_state == "blocked"

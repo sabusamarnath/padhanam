@@ -108,13 +108,80 @@ class LevelLadder:
         return self.level_above(self.current_target_level)
 
 
+class StepState(str, Enum):
+    """The state of one lever step in a sequence goal's chain (D163, S63).
+
+    A sequence releases tasks toward a terminal: ``READY`` is the actionable
+    step (all predecessors done), ``BLOCKED`` waits on a predecessor, ``DONE``
+    has been completed, ``DROPPED`` was abandoned (the operator's explicit
+    drop). The chain's shape — which step is active, what is blocked — is what
+    the unblock-or-drop remedy reads.
+    """
+
+    READY = "ready"
+    BLOCKED = "blocked"
+    DONE = "done"
+    DROPPED = "dropped"
+
+
+class TerminalState(str, Enum):
+    """The state of a sequence goal's influence-gated terminal (D163, S63).
+
+    ``PENDING`` — the terminal has not been reached; for a control-influence
+    goal this is the part another party decides (the employer's offer). Its
+    richer reading (the probabilistic did-my-influence-land gap) is deferred to
+    the influence instance; S63 represents it as a state only. ``REACHED`` —
+    the terminal happened.
+    """
+
+    PENDING = "pending"
+    REACHED = "reached"
+
+
+@dataclass(frozen=True)
+class LeverStep:
+    """One step in a sequence goal's lever chain (D163, S63).
+
+    ``commitment_id`` is the Postgres Commitment that serves as this step's
+    lever; ``order`` is its 1-based position in the chain; ``state`` is its
+    chain state. The step is a lever the actor controls — unblock-or-drop
+    operates on the steps, not on the influence-gated terminal.
+    """
+
+    commitment_id: UUID
+    order: int
+    state: StepState
+
+    def __post_init__(self) -> None:
+        if self.order < 1:
+            raise ValueError("step order is 1-based; must be >= 1")
+
+
+@dataclass(frozen=True)
+class Terminal:
+    """A sequence goal's terminal — the goal reached once (D163, S63).
+
+    ``target`` is the qualitative description of the goal reached once (e.g.
+    "Offer accepted"); ``state`` is whether it has been reached. Unlike a
+    progressive ladder, a terminal is a point, not a ratchet.
+    """
+
+    target: str
+    state: TerminalState
+
+    def __post_init__(self) -> None:
+        if not self.target.strip():
+            raise ValueError("terminal target must be non-empty")
+
+
 @dataclass(frozen=True)
 class Goal:
     """A typed goal (Outcome) above commitments (D163).
 
-    ``id`` is the Outcome node id; ``lever_commitment_id`` is the Commitment
-    that serves as its lever (Postgres). ``ladder`` is present for a progressive
-    goal and ``None`` otherwise.
+    ``id`` is the Outcome node id. A **progressive** goal has a single
+    ``lever_commitment_id`` (Postgres) and a ``ladder``. A **sequence** goal has
+    a ``terminal`` and an ordered chain of ``steps`` (each a lever the actor
+    controls). The unused shape's fields stay at their defaults.
     """
 
     id: UUID
@@ -124,16 +191,41 @@ class Goal:
     mode: GoalMode
     control: ControlAxis
     subject: Subject
-    lever_commitment_id: UUID
+    lever_commitment_id: UUID | None = None
     ladder: LevelLadder | None = None
+    terminal: Terminal | None = None
+    steps: tuple[LeverStep, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():
             raise ValueError("jurisdiction must be non-empty")
         if not self.name.strip():
             raise ValueError("name must be non-empty")
-        if self.mode is GoalMode.PROGRESSIVE and self.ladder is None:
-            raise ValueError("a progressive goal requires a level ladder")
+        if self.mode is GoalMode.PROGRESSIVE:
+            if self.ladder is None:
+                raise ValueError("a progressive goal requires a level ladder")
+            if self.lever_commitment_id is None:
+                raise ValueError("a progressive goal requires a lever commitment")
+        if self.mode is GoalMode.SEQUENCE:
+            if self.terminal is None:
+                raise ValueError("a sequence goal requires a terminal")
+            if not self.steps:
+                raise ValueError("a sequence goal requires a chain of lever steps")
+
+    @property
+    def ordered_steps(self) -> tuple[LeverStep, ...]:
+        """The chain's steps in ascending order (the release order)."""
+        return tuple(sorted(self.steps, key=lambda s: s.order))
 
 
-__all__ = ["ControlAxis", "Goal", "GoalMode", "LevelLadder", "Subject"]
+__all__ = [
+    "ControlAxis",
+    "Goal",
+    "GoalMode",
+    "LevelLadder",
+    "LeverStep",
+    "StepState",
+    "Subject",
+    "Terminal",
+    "TerminalState",
+]

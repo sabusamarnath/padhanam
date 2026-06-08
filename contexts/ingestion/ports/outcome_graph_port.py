@@ -39,22 +39,41 @@ from shared_kernel import TenantContext
 
 
 @dataclass(frozen=True)
-class OutcomeGraphRecord:
-    """One Outcome joined to its lever edge as read from the graph.
+class LeverEdgeRecord:
+    """One ``LEVER_FOR`` edge as read from the graph (D163, S63).
 
-    ``ladder`` is the ordered tuple of named levels for a progressive goal
-    (empty for non-progressive modes); ``current_target_level`` is the level
-    the goal is currently aiming at (``None`` for non-progressive modes).
+    ``commitment_id`` is the thin :Lever reference's Postgres commitment id;
+    ``step_order`` + ``step_state`` are the lever's relationship-level
+    attributes for a sequence goal (``None`` for a single-lever progressive
+    goal).
+    """
+
+    commitment_id: UUID
+    step_order: int | None = None
+    step_state: str | None = None
+
+
+@dataclass(frozen=True)
+class OutcomeGraphRecord:
+    """One Outcome with all its lever edges as read from the graph (D163).
+
+    Goal-level properties live on the Outcome (the D163 clarification):
+    ``ladder`` + ``current_target_level`` for a progressive goal,
+    ``terminal_target`` + ``terminal_state`` for a sequence goal (each ``None``/
+    empty for the other shape). ``levers`` carries every ``LEVER_FOR`` edge — one
+    for a progressive goal, the ordered chain for a sequence goal.
     """
 
     outcome_id: UUID
     name: str
     control: str
     subject: str
-    commitment_id: UUID
     mode: str
     ladder: tuple[str, ...]
     current_target_level: str | None
+    terminal_target: str | None = None
+    terminal_state: str | None = None
+    levers: tuple[LeverEdgeRecord, ...] = ()
 
 
 class OutcomeGraphPort(Protocol):
@@ -71,14 +90,15 @@ class OutcomeGraphPort(Protocol):
         mode: str,
         ladder: Sequence[str],
         current_target_level: str | None,
+        terminal_target: str | None = None,
+        terminal_state: str | None = None,
     ) -> None:
         """Idempotently MERGE an ``:Outcome`` node by ``(tenant_id, outcome_id)``.
 
-        Per the D163 clarification (S63), the goal-level properties — ``mode``,
-        the ``ladder``, and ``current_target_level`` — are set on the node here.
-        Re-running updates ``name``/``control``/``subject``/``mode``/``ladder``/
-        ``current_target_level`` and leaves ``created_at`` from the first MERGE
-        intact.
+        Per the D163 clarification (S63), the goal-level properties live on the
+        node: ``mode``, the ``ladder`` + ``current_target_level`` (progressive),
+        and ``terminal_target`` + ``terminal_state`` (sequence). Re-running
+        updates them and leaves ``created_at`` from the first MERGE intact.
         """
         ...
 
@@ -88,13 +108,15 @@ class OutcomeGraphPort(Protocol):
         tenant_context: TenantContext,
         outcome_id: UUID,
         commitment_id: UUID,
+        step_order: int | None = None,
+        step_state: str | None = None,
     ) -> None:
         """MERGE the ``:Lever`` node (by ``(tenant_id, commitment_id)``) and the
         ``LEVER_FOR`` edge to the Outcome. The edge carries only that the lever
-        serves the outcome (the D163 clarification); goal-level properties live
-        on the Outcome node. The Outcome must already exist (caller merges it
-        first); the lever is a thin reference to the Postgres commitment, not a
-        copy of it.
+        serves the outcome plus, for a sequence goal, the lever's
+        relationship-level ``step_order`` + ``step_state`` (the D163
+        clarification). The Outcome must already exist (caller merges it first);
+        the lever is a thin reference to the Postgres commitment, not a copy.
         """
         ...
 
@@ -124,4 +146,4 @@ class OutcomeGraphPort(Protocol):
         ...
 
 
-__all__ = ["OutcomeGraphPort", "OutcomeGraphRecord"]
+__all__ = ["LeverEdgeRecord", "OutcomeGraphPort", "OutcomeGraphRecord"]

@@ -193,21 +193,28 @@ class FakeOutcomeGraph:
         return current_target_level
 
 
-def test_apps_bridge_maps_record_to_progressive_goal() -> None:
-    from apps.api._daily_driver_wiring import GoalGraphAdapter
-    from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
+def _progressive_record():
+    from contexts.ingestion.ports.outcome_graph_port import (
+        LeverEdgeRecord,
+        OutcomeGraphRecord,
+    )
 
-    record = OutcomeGraphRecord(
+    return OutcomeGraphRecord(
         outcome_id=_OUTCOME,
         name="German",
         control="self",
         subject="self",
-        commitment_id=_COMMITMENT,
         mode="progressive",
         ladder=_LADDER,
         current_target_level="B1",
+        levers=(LeverEdgeRecord(commitment_id=_COMMITMENT),),
     )
-    adapter = GoalGraphAdapter(outcome_graph=FakeOutcomeGraph(record))
+
+
+def test_apps_bridge_maps_record_to_progressive_goal() -> None:
+    from apps.api._daily_driver_wiring import GoalGraphAdapter
+
+    adapter = GoalGraphAdapter(outcome_graph=FakeOutcomeGraph(_progressive_record()))
     goals = asyncio.run(
         adapter.list_goals(tenant_context=_actor().tenant_context)
     )
@@ -219,23 +226,60 @@ def test_apps_bridge_maps_record_to_progressive_goal() -> None:
     assert g.ladder is not None
     assert g.ladder.current_target_level == "B1"
     assert g.lever_commitment_id == _COMMITMENT
+    assert g.steps == ()
+    assert g.terminal is None
+
+
+def test_apps_bridge_maps_record_to_sequence_goal() -> None:
+    from apps.api._daily_driver_wiring import GoalGraphAdapter
+    from contexts.daily_driver.domain.goal import StepState, TerminalState
+    from contexts.ingestion.ports.outcome_graph_port import (
+        LeverEdgeRecord,
+        OutcomeGraphRecord,
+    )
+
+    seq = UUID("00000000-0000-4000-8000-0000006300a1")
+    c1 = UUID("00000000-0000-4000-8000-0000006300c1")
+    c2 = UUID("00000000-0000-4000-8000-0000006300c2")
+    record = OutcomeGraphRecord(
+        outcome_id=seq,
+        name="Get a job",
+        control="other",
+        subject="self",
+        mode="sequence",
+        ladder=(),
+        current_target_level=None,
+        terminal_target="Offer accepted",
+        terminal_state="pending",
+        levers=(
+            LeverEdgeRecord(commitment_id=c1, step_order=1, step_state="done"),
+            LeverEdgeRecord(commitment_id=c2, step_order=2, step_state="blocked"),
+        ),
+    )
+    adapter = GoalGraphAdapter(outcome_graph=FakeOutcomeGraph(record))
+    goals = asyncio.run(
+        adapter.list_goals(tenant_context=_actor().tenant_context)
+    )
+    assert len(goals) == 1
+    g = goals[0]
+    assert g.mode is GoalMode.SEQUENCE
+    assert g.control is ControlAxis.OTHER  # the influence case
+    assert g.subject is Subject.SELF
+    assert g.terminal is not None
+    assert g.terminal.target == "Offer accepted"
+    assert g.terminal.state is TerminalState.PENDING
+    assert len(g.steps) == 2
+    assert g.ordered_steps[0].order == 1
+    assert g.ordered_steps[0].state is StepState.DONE
+    assert g.ordered_steps[1].state is StepState.BLOCKED
+    assert g.ladder is None
+    assert g.lever_commitment_id is None
 
 
 def test_apps_bridge_raise_delegates_to_set_outcome_target() -> None:
     from apps.api._daily_driver_wiring import GoalGraphAdapter
-    from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
 
-    record = OutcomeGraphRecord(
-        outcome_id=_OUTCOME,
-        name="German",
-        control="self",
-        subject="self",
-        commitment_id=_COMMITMENT,
-        mode="progressive",
-        ladder=_LADDER,
-        current_target_level="B1",
-    )
-    fake = FakeOutcomeGraph(record)
+    fake = FakeOutcomeGraph(_progressive_record())
     adapter = GoalGraphAdapter(outcome_graph=fake)
     result = asyncio.run(
         adapter.raise_target_level(

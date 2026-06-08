@@ -670,6 +670,8 @@ moves any existing instance (German) in place under the D165 mechanism.
 | `mode`                 | `String`        | `homeostatic` / `progressive` / `sequence`                            |
 | `ladder`               | `List<String>`  | ordered named levels for a progressive goal; empty otherwise          |
 | `current_target_level` | `String`/`null` | the level a progressive goal currently aims at; `null` otherwise      |
+| `terminal_target`      | `String`/`null` | a sequence goal's terminal — the goal reached once (e.g. "Offer accepted"); `null` otherwise |
+| `terminal_state`       | `String`/`null` | `pending` / `reached` for a sequence goal's terminal; `null` otherwise. `pending` is the influence-gated part (another party decides); richer reading deferred to the influence instance |
 | `created_at`           | `DateTime`      | set on initial MERGE                                                   |
 
 Uniqueness constraint: `outcome_unique_per_tenant` on `(tenant_id, outcome_id)`.
