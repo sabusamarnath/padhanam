@@ -1351,3 +1351,13 @@ Source: the S60c full-suite run. `tests/unit/apps/api/test_conversation_cell.py:
 
   - triaged: 2026-06-06
   - resolution: not fixed in S60c (different context, needs a clock seam into the calendar cell); logged here so the next calendar-context session (or the dogfooding-week date-sensitivity sweep) picks it up. No S60c regression.
+
+## 2026-06-08 — [S62] Live smoke caught a missing-Cypher-parameter the mocked unit test could not (fifth instance of the live-substrate lesson)
+
+Source: the S62 live `make seed-german` against the running Neo4j (run at the operator's direction; the build env cannot reach Docker, the operator's stack can). The new goal-graph wrapper method `merge_lever_for_outcome` built a params dict missing `created_at`, while `_MERGE_LEVER_FOR_OUTCOME`'s `ON CREATE SET` references `$created_at` on both the `:Lever` node and the `LEVER_FOR` edge — live Neo4j rejected it with `Neo.ClientError.Statement.ParameterMissing`. The unit test was green because the mocked `session.run` records the call but does not validate that every Cypher placeholder is supplied — the **exact S55a-fix MockTransport shape** (a double that returns success cannot falsify a parameter contract).
+
+- **Fifth instance of the live-substrate-verification lesson** after (1) S4 Langfuse trace-UI, (2) S55a-fix calendar syncToken, (3) S57 cancellation churn, (4) S58 browser-boundary UI-to-API contract. Not a new failure-surface *face* (it is the same mock-cannot-validate-a-real-contract shape as S55a-fix), so per the [feedback] candidate-promotion bar this is **recurrence, not structural novelty** — it does not earn a new candidate clause; it increments the count under the already-held live-substrate-verification-gate candidate.
+- The durable mitigation applied in-place: the wrapper tests now assert `set(re.findall(r"\$(\w+)", cypher)) <= set(params)` for the goal-graph methods — a cheap structural check that turns "the mock can't validate parameters" into "the test asserts the parameter contract." Worth considering as a small general helper for any Cypher-wrapper test, but not generalised on this instance (one method family).
+
+  - triaged: 2026-06-08
+  - resolution: fixed and live-re-verified (`5735d06`, `fix(p16/s62)`): seed idempotent, graph shape exact, `/goals` reads, raise is explicit-only, tenant_b isolated. The live-substrate-verification-gate candidate (Phase 2-A close audit) gains this as a count-increment, not a new clause.
