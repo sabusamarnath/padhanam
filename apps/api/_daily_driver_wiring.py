@@ -57,8 +57,22 @@ from contexts.daily_driver.domain.today_item import (
     ItemKind,
     OpenCase,
 )
+from contexts.daily_driver.domain.work_unit import (
+    FacetType,
+    LinkStatus,
+    WorkFacet,
+    WorkUnit,
+)
+from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
+from contexts.email.adapters.outbound.postgres.email_store import (
+    PostgresEmailStore,
+)
 from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
+)
+from contexts.ingestion.ports.unit_graph_port import (
+    FacetLinkWrite,
+    UnitWrite,
 )
 from contexts.tasks.adapters.outbound.postgres.task_store import (
     PostgresTaskStore,
@@ -478,6 +492,172 @@ def build_tasks_reader(
     )
 
 
+class FacetSourceAdapter:
+    """apps/ adapter implementing daily-driver's ``FacetSource`` (D168, D17).
+
+    Composes the three read-only ingested caches (tasks, calendar, email — each
+    store bound to the request's tenant, the isolation defence-in-depth) into the
+    flat ``WorkFacet`` list the correlation matcher consumes. The stores decrypt
+    content on read, so the matcher sees plaintext titles. Only correlation
+    candidates are surfaced: open tasks, non-cancelled meetings, non-deleted
+    emails. apps/ may import a producer context's adapter directly (the calendar
+    ``PostgresMeetingStore`` precedent).
+    """
+
+    def __init__(
+        self, *, session_factory_for_tenant: _SessionFactoryForTenant
+    ) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_facets(
+        self, *, actor: ActorContext
+    ) -> tuple[WorkFacet, ...]:
+        sessionmaker = await self._session_factory_for_tenant(
+            actor.tenant_context
+        )
+        bound = TenantId(str(actor.tenant_context.tenant_id))
+        resolver = _resolver_for(sessionmaker)
+        tasks = PostgresTaskStore(
+            per_tenant_sessionmaker_resolver=resolver, bound_tenant_id=bound
+        )
+        meetings = PostgresMeetingStore(
+            per_tenant_sessionmaker_resolver=resolver, bound_tenant_id=bound
+        )
+        emails = PostgresEmailStore(
+            per_tenant_sessionmaker_resolver=resolver, bound_tenant_id=bound
+        )
+        facets: list[WorkFacet] = []
+        for task in await tasks.list_tasks(
+            tenant_context=actor.tenant_context, include_completed=False
+        ):
+            facets.append(
+                WorkFacet(
+                    facet_type=FacetType.TASK,
+                    facet_id=task.id,
+                    title=task.title or "",
+                    occurred_at=task.due_at,
+                )
+            )
+        for meeting in await meetings.list_meetings(
+            tenant_context=actor.tenant_context, include_cancelled=False
+        ):
+            facets.append(
+                WorkFacet(
+                    facet_type=FacetType.MEETING,
+                    facet_id=meeting.id,
+                    title=meeting.title or "",
+                    occurred_at=meeting.start_at,
+                )
+            )
+        for email in await emails.list_emails(
+            tenant_context=actor.tenant_context, include_deleted=False
+        ):
+            facets.append(
+                WorkFacet(
+                    facet_type=FacetType.EMAIL,
+                    facet_id=email.id,
+                    title=email.subject or "",
+                    occurred_at=email.received_at,
+                )
+            )
+        return tuple(facets)
+
+
+class UnitGraphAdapter:
+    """apps/ adapter implementing daily-driver's ``UnitGraphPort`` over
+    ingestion's ``UnitGraphPort`` (D168, D17).
+
+    The bridge from the daily-driver unit layer to the shared graph: maps the
+    daily-driver ``WorkUnit`` onto ingestion's primitive ``UnitWrite`` for the
+    write, and ingestion's ``UnitGraphRecord`` onto the daily-driver
+    ``UnitRecord`` for the read (the ``GoalGraphAdapter`` precedent). The
+    underlying ``Neo4jGraphRepository`` is process-shared; tenant scoping flows
+    through ``tenant_context`` on every call.
+    """
+
+    def __init__(self, *, unit_graph: Any) -> None:
+        self._unit_graph = unit_graph
+
+    async def replace_units(
+        self, *, tenant_context: TenantContext, units: Any
+    ) -> None:
+        writes = [
+            UnitWrite(
+                unit_id=unit.unit_id,
+                links=tuple(
+                    FacetLinkWrite(
+                        facet_type=link.facet.facet_type.value,
+                        facet_id=link.facet.facet_id,
+                        confidence=link.confidence,
+                        status=link.status.value,
+                        basis=link.basis,
+                    )
+                    for link in unit.links
+                ),
+            )
+            for unit in units
+        ]
+        await self._unit_graph.replace_units(
+            tenant_context=tenant_context, units=writes
+        )
+
+    async def list_units(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[UnitRecord, ...]:
+        records = await self._unit_graph.list_units(
+            tenant_context=tenant_context
+        )
+        return tuple(
+            UnitRecord(
+                unit_id=record.unit_id,
+                facets=tuple(
+                    UnitFacetRef(
+                        facet_type=FacetType(link.facet_type),
+                        facet_id=link.facet_id,
+                        confidence=link.confidence,
+                        status=LinkStatus(link.status),
+                        basis=link.basis,
+                    )
+                    for link in record.links
+                ),
+            )
+            for record in records
+        )
+
+
+def build_facet_source(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> FacetSourceAdapter:
+    """Wire the daily-driver FacetSource over the three caches (D168, D17)."""
+    return FacetSourceAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+def build_unit_graph() -> UnitGraphAdapter:
+    """Wire the daily-driver UnitGraphPort over the shared graph (D168, D17).
+
+    The ``Neo4jGraphRepository`` is process-shared (the ``build_goal_graph``
+    precedent) and imported lazily so this module stays importable without a live
+    Neo4j; tenant scoping flows through the ``tenant_context`` on each call.
+    """
+    from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
+    from padhanam.config import Neo4jSettings
+
+    return UnitGraphAdapter(
+        unit_graph=Neo4jGraphRepository.from_settings(Neo4jSettings())
+    )
+
+
 def build_commitment_repository(
     *,
     tenant_registry: PostgresTenantRegistry,
@@ -571,13 +751,17 @@ __all__ = [
     "CalendarEventsReaderAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
+    "FacetSourceAdapter",
     "GoalGraphAdapter",
     "OpenCasesReaderAdapter",
     "TasksReaderAdapter",
+    "UnitGraphAdapter",
     "build_calendar_events_reader",
     "build_commitment_repository",
     "build_day_repository",
+    "build_facet_source",
     "build_goal_graph",
     "build_open_cases_reader",
     "build_tasks_reader",
+    "build_unit_graph",
 ]

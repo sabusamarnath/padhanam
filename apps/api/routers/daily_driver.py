@@ -46,14 +46,17 @@ from apps.api.routers._daily_driver_dto import (
     SetOrderRequest,
     TaskDTO,
     TodayDTO,
+    UnitDTO,
     goal_reading_to_dto,
     task_to_dto,
     today_view_to_dto,
+    unit_view_to_dto,
 )
 from contexts.daily_driver.application import (
     create_commitment,
     list_goals,
     list_today,
+    list_units,
     log_commitment_completion,
     mark_item_done,
     raise_goal_target,
@@ -123,6 +126,16 @@ def get_tasks_reader(request: Request):
     list rather than 503ing for an instance without the tasks seam.
     """
     return getattr(request.app.state, "daily_driver_tasks_reader", None)
+
+
+def get_unit_graph(request: Request):
+    """FastAPI dependency: the daily-driver UnitGraphPort (D168), if wired."""
+    return getattr(request.app.state, "daily_driver_unit_graph", None)
+
+
+def get_facet_source(request: Request):
+    """FastAPI dependency: the daily-driver FacetSource (D168), if wired."""
+    return getattr(request.app.state, "daily_driver_facet_source", None)
 
 
 def get_drop_candidate_quiet_days(request: Request) -> int | None:
@@ -317,6 +330,28 @@ async def get_tasks(
         return []
     tasks = await tasks_reader.list_tasks(actor=actor)
     return [task_to_dto(t) for t in tasks]
+
+
+@router.get("/units", response_model=list[UnitDTO])
+async def get_units(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+) -> list[UnitDTO]:
+    """Return the actor's correlated units of work (D168, D166).
+
+    Each unit is shown *as a unit* — its facets (task, calendar block,
+    email-origin) grouped — with below-floor matches flagged as candidates.
+    Degrades to an empty list when the correlation seams are unconfigured (no
+    graph reachable); the units are populated by the operator-gated correlate
+    run, not on read.
+    """
+    if unit_graph is None or facet_source is None:
+        return []
+    units = await list_units(
+        unit_graph=unit_graph, facet_source=facet_source, actor=actor
+    )
+    return [unit_view_to_dto(u) for u in units]
 
 
 @router.put("/today/order", status_code=204)

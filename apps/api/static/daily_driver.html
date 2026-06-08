@@ -323,6 +323,9 @@
           <div class="section-label">Tasks</div>
           <p class="sub">Your Google Tasks, read-only — Padhanam reads them, it doesn't replace your task tool. Not yet linked to calendar or goals.</p>
           <div class="goals" id="tasks"></div>
+          <div class="section-label">Units of work</div>
+          <p class="sub">One piece of work, seen across your tools — the task, the calendar block, the email it came from, drawn together. Padhanam correlates them; it never writes the link back.</p>
+          <div class="goals" id="units"></div>
           <div class="section-label">New commitment</div>
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
@@ -335,6 +338,7 @@
         loadToday();
         loadGoals();
         loadTasks();
+        loadUnits();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -454,6 +458,43 @@
         </div>
         ${t.notes ? `<div class="sub" style="margin:0">${escapeHtml(t.notes)}</div>` : ""}
         <div class="sub" style="margin:0;color:#8a8a8a">list: ${escapeHtml(t.tasklist_title || t.tasklist_id)}</div>`;
+      return card;
+    }
+    // --- Units of work (S66, D168: cross-tool correlation, read-only) ---
+    const FACET_GLYPH = { task: "✓", meeting: "📅", email: "✉" };
+    async function loadUnits() {
+      const box = document.getElementById("units"); if (!box) return;
+      let units;
+      try { units = await api("/daily-driver/units"); } catch { box.innerHTML = ""; return; }
+      // Lead with the cross-tool units (more than one facet); single-facet
+      // units are just the uncorrelated source rows, shown elsewhere.
+      const correlated = units.filter((u) => u.is_correlated);
+      if (!correlated.length) {
+        box.innerHTML = '<div class="empty">No correlated units yet. Run a correlation pass once your tasks, calendar, and email are ingested.</div>';
+        return;
+      }
+      box.innerHTML = "";
+      correlated.forEach((u) => box.appendChild(unitCard(u)));
+    }
+    function unitCard(u) {
+      const card = document.createElement("div");
+      card.className = "row"; card.dataset.tier = "work";
+      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "6px";
+      const facetRows = u.facets.map((f) => {
+        const glyph = FACET_GLYPH[f.facet_type] || "•";
+        const when = f.occurred_at ? new Date(f.occurred_at).toLocaleDateString() : "";
+        const candidate = f.status === "candidate"
+          ? ` <span class="sub" style="margin:0;color:var(--navy)">· suggested link — ${escapeHtml(f.basis)} (confirm?)</span>`
+          : "";
+        const gone = f.present ? "" : " opacity:.5;text-decoration:line-through";
+        return `<div class="sub" style="margin:0;${gone}">${glyph} ${escapeHtml(f.facet_type)}: ${escapeHtml(f.title)}${when ? " · " + escapeHtml(when) : ""}${candidate}</div>`;
+      }).join("");
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <strong>${escapeHtml(u.title)}</strong>
+          <span class="sub" style="margin:0">${u.facets.length} facets</span>
+        </div>
+        ${facetRows}`;
       return card;
     }
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }

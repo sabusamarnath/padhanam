@@ -19,6 +19,7 @@ from contexts.daily_driver.domain.today_item import (
     TodayItem,
     TodayView,
 )
+from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.tasks.domain.task import Task
 
 
@@ -238,6 +239,57 @@ def task_to_dto(task: Task) -> TaskDTO:
         notes=task.notes,
         due_at=task.due_at,
         completed_at=task.completed_at,
+    )
+
+
+class UnitFacetDTO(BaseModel):
+    """One facet of a correlated unit (D168)."""
+
+    facet_type: str
+    facet_id: UUID
+    title: str
+    occurred_at: datetime | None
+    status: str
+    confidence: float
+    basis: str
+    present: bool
+
+
+class UnitDTO(BaseModel):
+    """One correlated unit of work in the daily-driver Units view (D168, D166).
+
+    Shown as a unit — its facets (task, calendar block, email-origin) grouped —
+    rather than as separate rows. ``has_candidate`` flags a below-floor facet
+    surfaced as a suggestion-to-confirm, not an asserted link.
+    """
+
+    unit_id: UUID
+    title: str
+    is_correlated: bool
+    has_candidate: bool
+    facets: list[UnitFacetDTO]
+
+
+def unit_view_to_dto(view: UnitView) -> UnitDTO:
+    """Encode a domain UnitView into the HTTP DTO (D168)."""
+    return UnitDTO(
+        unit_id=view.unit_id,
+        title=view.title,
+        is_correlated=view.is_correlated,
+        has_candidate=view.has_candidate,
+        facets=[
+            UnitFacetDTO(
+                facet_type=f.facet_type.value,
+                facet_id=f.facet_id,
+                title=f.title,
+                occurred_at=f.occurred_at,
+                status=f.status.value,
+                confidence=f.confidence,
+                basis=f.basis,
+                present=f.present,
+            )
+            for f in view.facets
+        ],
     )
 
 

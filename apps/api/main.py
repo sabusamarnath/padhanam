@@ -229,6 +229,11 @@ class AppCompositions:
     # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
     # when unwired (the /tasks view degrades to an empty list).
     daily_driver_tasks_reader: object | None = None
+    # S66 (D168): the work-unit correlation seams — the FacetSource over the
+    # three caches and the UnitGraphPort over the shared Neo4j. None when
+    # unwired (the /units view degrades to an empty list).
+    daily_driver_facet_source: object | None = None
+    daily_driver_unit_graph: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
@@ -581,9 +586,11 @@ def _build_default_compositions() -> AppCompositions:
         build_calendar_events_reader,
         build_commitment_repository,
         build_day_repository,
+        build_facet_source,
         build_goal_graph,
         build_open_cases_reader,
         build_tasks_reader,
+        build_unit_graph,
     )
     from padhanam.config.calendar import CalendarSettings
 
@@ -628,6 +635,15 @@ def _build_default_compositions() -> AppCompositions:
         operator_principal=operator_principal,
         security_events=sec,
     )
+    # S66 (D168): the work-unit correlation seams — the FacetSource over the
+    # three caches and the UnitGraphPort over the shared Neo4j (process-shared).
+    daily_driver_facet_source = build_facet_source(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    daily_driver_unit_graph = build_unit_graph()
     from apps.api._connections_wiring import build_connections_status_reader
 
     connections_status_reader = build_connections_status_reader(
@@ -702,6 +718,8 @@ def _build_default_compositions() -> AppCompositions:
         ),
         daily_driver_goal_graph=daily_driver_goal_graph,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
+        daily_driver_facet_source=daily_driver_facet_source,
+        daily_driver_unit_graph=daily_driver_unit_graph,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
         google_oidc=google_oidc,
@@ -957,6 +975,11 @@ def create_app(
     app.state.daily_driver_tasks_reader = (
         compositions.daily_driver_tasks_reader
     )
+    # S66 (D168): the work-unit correlation seams.
+    app.state.daily_driver_facet_source = (
+        compositions.daily_driver_facet_source
+    )
+    app.state.daily_driver_unit_graph = compositions.daily_driver_unit_graph
     app.state.connections_status_reader = (
         compositions.connections_status_reader
     )

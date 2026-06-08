@@ -93,6 +93,29 @@ class FacetLink:
 
 
 @dataclass(frozen=True)
+class UnitFacetRef:
+    """One facet's membership as read back from the graph (thin — id only).
+
+    The graph stores only the cache row's id; the units reader joins each ref
+    back to its cache for the title at display time.
+    """
+
+    facet_type: FacetType
+    facet_id: UUID
+    confidence: float
+    status: LinkStatus
+    basis: str
+
+
+@dataclass(frozen=True)
+class UnitRecord:
+    """One correlated unit as read back from the graph (D168) — thin facets."""
+
+    unit_id: UUID
+    facets: tuple[UnitFacetRef, ...]
+
+
+@dataclass(frozen=True)
 class WorkUnit:
     """A correlated unit of work: an anchor facet plus every facet linked to it.
 
@@ -236,6 +259,8 @@ __all__ = [
     "FacetLink",
     "FacetType",
     "LinkStatus",
+    "UnitFacetRef",
+    "UnitRecord",
     "WorkFacet",
     "WorkUnit",
     "correlate_facets",

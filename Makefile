@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job pull-tasks scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job pull-tasks correlate-units scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -236,6 +236,13 @@ seed-get-a-job: derive-env
 # (tasks.readonly) + set TASKS_CONNECTION_REF in .env first. Idempotent.
 pull-tasks: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.pull_tasks
+
+# Correlate the personal tenant's work units (S66, D168): read the
+# read-only caches (tasks/calendar/email), run the title-and-time
+# inference, replace the :Unit/:Facet/SAME_WORK subgraph in Neo4j.
+# Idempotent (derived state). Run the cache pulls first so it has input.
+correlate-units: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.correlate_units
 
 # Run the scheduled supply-chain check (D25). Reads
 # ops/scheduled_checks.yaml, queries upstream registries (PyPI online,

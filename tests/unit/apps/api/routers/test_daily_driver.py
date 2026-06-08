@@ -122,6 +122,8 @@ def _client(
     quiet_days=None,
     goal_graph=None,
     tasks_reader=None,
+    unit_graph=None,
+    facet_source=None,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(daily_driver_router.router)
@@ -131,6 +133,8 @@ def _client(
     app.state.daily_driver_drop_candidate_quiet_days = quiet_days
     app.state.daily_driver_goal_graph = goal_graph
     app.state.daily_driver_tasks_reader = tasks_reader
+    app.state.daily_driver_unit_graph = unit_graph
+    app.state.daily_driver_facet_source = facet_source
     app.dependency_overrides[get_actor_context] = _actor_context
     return TestClient(app)
 
@@ -506,6 +510,75 @@ def test_tasks_route_returns_ingested_tasks() -> None:
 def test_tasks_route_empty_when_reader_unwired() -> None:
     client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
     res = client.get("/api/v1/daily-driver/tasks")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+class _FakeUnitGraph:
+    """In-memory UnitGraphPort returning pre-set thin UnitRecords."""
+
+    def __init__(self, records) -> None:
+        self._records = records
+
+    async def list_units(self, *, tenant_context):
+        return tuple(self._records)
+
+
+class _FakeFacetSource:
+    def __init__(self, facets) -> None:
+        self._facets = facets
+
+    async def list_facets(self, *, actor):
+        return tuple(self._facets)
+
+
+def test_units_route_returns_correlated_unit_with_grouped_facets() -> None:
+    from contexts.daily_driver.domain.work_unit import (
+        FacetType,
+        LinkStatus,
+        WorkFacet,
+    )
+    from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
+
+    task_id = uuid4()
+    meeting_id = uuid4()
+    unit_id = uuid4()
+    record = UnitRecord(
+        unit_id=unit_id,
+        facets=(
+            UnitFacetRef(
+                facet_type=FacetType.TASK, facet_id=task_id,
+                confidence=1.0, status=LinkStatus.CONFIRMED, basis="anchor",
+            ),
+            UnitFacetRef(
+                facet_type=FacetType.MEETING, facet_id=meeting_id,
+                confidence=0.9, status=LinkStatus.CONFIRMED, basis="title+time",
+            ),
+        ),
+    )
+    facets = [
+        WorkFacet(FacetType.TASK, task_id, "Ship Q3 report", None),
+        WorkFacet(FacetType.MEETING, meeting_id, "Ship Q3 report", None),
+    ]
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        unit_graph=_FakeUnitGraph([record]),
+        facet_source=_FakeFacetSource(facets),
+    )
+    res = client.get("/api/v1/daily-driver/units")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert len(body) == 1
+    unit = body[0]
+    assert unit["is_correlated"] is True
+    assert unit["title"] == "Ship Q3 report"
+    assert {f["facet_type"] for f in unit["facets"]} == {"task", "meeting"}
+    assert all(f["present"] for f in unit["facets"])
+
+
+def test_units_route_empty_when_seams_unwired() -> None:
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()))
+    res = client.get("/api/v1/daily-driver/units")
     assert res.status_code == 200
     assert res.json() == []
 

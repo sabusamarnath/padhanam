@@ -80,6 +80,9 @@ DAILY_DRIVER_COMMITMENT_OBSERVE = "daily_driver.commitment.observe"
 # --- Phase 2-A goal-layer permissions (D163, S62) ------------------
 DAILY_DRIVER_GOAL_READ = "daily_driver.goal.read"
 DAILY_DRIVER_GOAL_RAISE_TARGET = "daily_driver.goal.raise_target"
+# --- Phase 2-A work-unit correlation permissions (D168, S66) --------
+DAILY_DRIVER_UNITS_READ = "daily_driver.units.read"
+DAILY_DRIVER_UNITS_CORRELATE = "daily_driver.units.correlate"
 
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
@@ -109,6 +112,8 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             DAILY_DRIVER_COMMITMENT_OBSERVE,
             DAILY_DRIVER_GOAL_READ,
             DAILY_DRIVER_GOAL_RAISE_TARGET,
+            DAILY_DRIVER_UNITS_READ,
+            DAILY_DRIVER_UNITS_CORRELATE,
         }
     ),
 }
@@ -195,6 +200,8 @@ __all__ = [
     "DAILY_DRIVER_GOAL_READ",
     "DAILY_DRIVER_TODAY_READ",
     "DAILY_DRIVER_TODAY_WRITE",
+    "DAILY_DRIVER_UNITS_CORRELATE",
+    "DAILY_DRIVER_UNITS_READ",
     "INTAKE_RECORD_CREATE",
     "INTAKE_RECORD_GET",
     "INTAKE_RECORD_LIST",
