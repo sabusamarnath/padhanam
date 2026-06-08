@@ -2,6 +2,14 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
+## P20 in flight; S68 — missing-facet suggestions (the Wave-2 runway terminus), Phase 2-A (build mode)
+
+P20, the fourth and final Wave-2 package: the **missing-facet suggestion engine** (D170). Padhanam suggests the facet a unit lacks — a block for a substantial task with no time, satellite-work for an event with no task, a candidate task for an email with no task — **selective and confident or silent**, never auto-applied, never written back. After P20, the dogfoodable core is built and the **dogfood gate** follows (the runway's terminus).
+
+**Step 0 reconciliation (against live code):** S67 highest → **S68**; D169 highest → **D170**. **No graph write, no migration** — suggestions are a **read-time computation** (recommendation-shaped, the drop-candidate/raise precedent), over the units (P18 unit graph + `FacetSource` for facet titles/times) + the **goal facet** (P19 `SERVES` edges). **The credulity gate (the load-bearing call):** over-suggestion is the failure to watch (the reverse-Kano shape — [S57] threshold restraint, [S62] raise-nudge), so the engine fires only on units that **serve a goal** (the D169 facet — work that matters), at most one suggestion per unit. So "the remedy reads the goal shape" is the gate itself: an orphan unit gets no suggestion (it may be noise); a goal-serving unit missing a facet gets exactly one. **The three remedies:** task-facet present + no meeting facet + substantial (has a due anchor; an atomic one-off — no due — is skipped) → *block*; meeting-facet present + no task facet → *satellite-work* (prep/follow-up, **not** an event mirror); email-facet present + no task/meeting facet → *candidate task*. **At the current two-goal / 0-SERVES-edge state the engine is correctly silent**; built against the logic, judged at six goals + real use (the build-now/gate-the-proof pattern, P19). New `DAILY_DRIVER_SUGGESTIONS_READ` permission; `GET /suggestions` + a `/app` panel.
+
+**Out of scope (named):** the constraint dimensions (dependency, deadline, capacity, recurrence, waiting-on-others — Phase 2-B); write-back / auto-application of any suggestion; richer substantiality than the due-anchor signal (notes/effort — a refinement); persisting suggestions as entities (they are read-time recommendations); the rest of Phase 2-B (waits for the dogfood verdict).
+
 ## P19 in flight; S67 — goal-aligned assessment, the moat (the dogfoodable threshold), Wave 2 of Phase 2-A (build mode)
 
 P19, the third Wave-2 package and **the moat**: Padhanam infers the unit's fourth facet (D166 purpose/native goal) as a Padhanam-native `(:Unit)-[:SERVES]->(:Outcome)` edge — never written back — and surfaces two recommendation-shaped reads in the daily driver: **orphan work** (a unit pointing at no goal) and the **neglected goal** (a goal nothing points at). D169. **This is the dogfoodable threshold.**
