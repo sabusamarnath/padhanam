@@ -317,6 +317,10 @@
           <p class="sub">One prioritised list across your whole day — what needs you, and what has gone quiet.</p>
           <div class="legend"><span><span class="swatch work"></span> Work surface</span><span><span class="swatch personal"></span> Personal surface</span></div>
           <div class="list" id="list"></div>
+          <div id="history-section" style="display:none">
+            <div class="section-label">Earlier today · done</div>
+            <div class="list" id="history-list"></div>
+          </div>
           <div class="section-label">Goals</div>
           <p class="sub">A goal sits above your commitments: it has a target, and your commitment is the lever that moves it.</p>
           <div class="goals" id="goals"></div>
@@ -362,6 +366,25 @@
       order = data.items.map((it) => ({ kind: it.kind, item_id: it.item_id }));
       itemsByKey = {}; data.items.forEach((it) => { itemsByKey[keyOf(it)] = it; });
       render(data.items);
+      renderHistory(data.history || []);
+    }
+    // D175: the observed stream — completed/ended items today, off the live plan.
+    function renderHistory(history) {
+      const section = document.getElementById("history-section");
+      const list = document.getElementById("history-list");
+      if (!section || !list) return;
+      if (!history.length) { section.style.display = "none"; list.innerHTML = ""; return; }
+      section.style.display = "";
+      list.innerHTML = "";
+      history.forEach((it) => {
+        const d = domainOf(it);
+        const row = document.createElement("div");
+        row.className = "row is-done"; row.dataset.tier = d.tier;
+        row.innerHTML = `${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
+          <div class="meta">${escapeHtml(it.detail)}</div></div>
+          <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
+        list.appendChild(row);
+      });
     }
     // --- Goals (S62, D163: the goal layer above commitments) ---
     async function loadGoals() {

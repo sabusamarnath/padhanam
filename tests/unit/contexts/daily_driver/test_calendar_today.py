@@ -91,11 +91,15 @@ def test_upcoming_event_is_on_track_past_event_is_done() -> None:
     upcoming = _event("Standup", hour=16)  # after _NOW (12:00)
     past = _event("Breakfast", hour=8, end_hour=9)  # ended before _NOW
     view = _view(calendar_events=(upcoming, past))
-    by_title = {i.title: i for i in view.items}
-    assert by_title["Standup"].status is ItemStatus.ON_TRACK
-    assert by_title["Standup"].done is False
-    assert by_title["Breakfast"].status is ItemStatus.DONE
-    assert by_title["Breakfast"].done is True
+    # D175 time-scoping: the upcoming event is live today-forward; the ended
+    # event moves to the history slice (the observed stream).
+    live = {i.title: i for i in view.items}
+    history = {i.title: i for i in view.history}
+    assert live["Standup"].status is ItemStatus.ON_TRACK
+    assert live["Standup"].done is False
+    assert "Breakfast" not in live
+    assert history["Breakfast"].status is ItemStatus.DONE
+    assert history["Breakfast"].done is True
 
 
 def test_calendar_items_sort_by_start_time_within_band() -> None:

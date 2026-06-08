@@ -92,7 +92,9 @@ def test_last_completion_clears_overdue() -> None:
     assert view.items[0].status == ItemStatus.ON_TRACK
 
 
-def test_done_mark_overlays_and_sinks_to_bottom() -> None:
+def test_done_item_moves_to_history_not_the_live_list() -> None:
+    # D175 time-scoping: a done item leaves the live today-forward list for the
+    # history slice (the observed stream feeding D162) — kept, not deleted.
     overdue = _commitment("Weekly review", interval=7, created_day=1)
     case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=_NOW)
     done_state = DayItemState(
@@ -103,10 +105,13 @@ def test_done_mark_overlays_and_sinks_to_bottom() -> None:
         commitment_activities=(CommitmentActivity(overdue, None),),
         day_states=(done_state,),
     )
-    assert view.items[-1].status == ItemStatus.DONE
-    assert view.items[-1].done is True
-    # the non-done case ranks above the done (formerly-behind) commitment
+    # The done commitment is in history, not the live list.
+    assert view.history[-1].status == ItemStatus.DONE
+    assert view.history[-1].done is True
+    assert overdue.id not in {i.item_id for i in view.items}
+    # The live list is today-forward: the not-done case remains.
     assert view.items[0].kind == ItemKind.CASE
+    assert all(i.done is False for i in view.items)
 
 
 # --- S61 (D162): the gap view + drop-candidate recommendation ------
@@ -202,7 +207,9 @@ def test_done_commitment_is_not_a_drop_candidate() -> None:
         day_states=(done_state,),
         drop_candidate_quiet_days=21,
     )
-    assert view.items[0].drop_candidate is False
+    # The done commitment is in history (D175); it is not a drop candidate.
+    assert view.history[0].drop_candidate is False
+    assert not view.items
 
 
 def test_persisted_position_overrides_default_rank() -> None:

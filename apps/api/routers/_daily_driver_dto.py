@@ -48,10 +48,15 @@ class TodayItemDTO(BaseModel):
 
 
 class TodayDTO(BaseModel):
-    """The ordered prioritised-today list."""
+    """The ordered prioritised-today list.
+
+    ``items`` is the live today-forward plan; ``history`` is the observed
+    stream of completed/ended items today (D175 time-scoping, feeding D162).
+    """
 
     day_date: date
     items: list[TodayItemDTO]
+    history: list[TodayItemDTO] = []
 
 
 class CommitmentDTO(BaseModel):
@@ -403,6 +408,7 @@ def today_view_to_dto(view: TodayView) -> TodayDTO:
     return TodayDTO(
         day_date=view.day_date,
         items=[_item_to_dto(item) for item in view.items],
+        history=[_item_to_dto(item) for item in view.history],
     )
 
 

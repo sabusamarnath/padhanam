@@ -112,10 +112,17 @@ class TodayItem:
 
 @dataclass(frozen=True)
 class TodayView:
-    """The ordered prioritised-today list for one user on one day."""
+    """The ordered prioritised-today list for one user on one day.
+
+    ``items`` is the live, today-forward plan (D173/D175): not-done, not-ended.
+    ``history`` is the observed stream — completed and already-ended items that
+    happened today — kept (not deleted) as the observed half of the
+    expected/observed loop (D162), off the live plan rather than burying it.
+    """
 
     day_date: date
     items: tuple[TodayItem, ...]
+    history: tuple[TodayItem, ...] = ()
 
 
 __all__ = [

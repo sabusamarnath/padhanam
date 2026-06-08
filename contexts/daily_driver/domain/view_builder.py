@@ -290,7 +290,12 @@ def build_today_view(
     for event in calendar_events:
         items.append(_calendar_item(event, now=now))
     items.sort(key=_sort_key)
-    return TodayView(day_date=day_date, items=tuple(items))
+    # Time-scope to today-forward (D173/D175): completed/ended items leave the
+    # live plan for the history slice (the observed stream feeding D162). Kept,
+    # not deleted — an item's done mark is observation data the loop needs.
+    live = tuple(item for item in items if not item.done)
+    history = tuple(item for item in items if item.done)
+    return TodayView(day_date=day_date, items=live, history=history)
 
 
 __all__ = ["build_today_view"]

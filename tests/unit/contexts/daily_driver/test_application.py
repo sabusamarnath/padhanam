@@ -413,7 +413,9 @@ def test_mark_done_overlays_and_persists() -> None:
             actor=_actor(),
         )
     )
-    assert view.items[0].status == ItemStatus.DONE
+    # D175: the done case moves to the history slice, off the live list.
+    assert view.history[0].status == ItemStatus.DONE
+    assert not view.items
 
 
 def test_set_order_persisted_and_applied() -> None:
