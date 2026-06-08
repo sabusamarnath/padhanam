@@ -143,6 +143,13 @@ async def _seed() -> None:
             current_target_level=None,
             terminal_target=GET_A_JOB_TERMINAL_TARGET,
             terminal_state="pending",  # influence-gated; awaiting the employer
+            aliases=(  # category synonyms (D174 tier two)
+                "job",
+                "application",
+                "interview",
+                "cv",
+                "recruiter",
+            ),
         )
         for commitment_id, order, name, _interval, state in GET_A_JOB_STEPS:
             await graph.merge_lever_for_outcome(

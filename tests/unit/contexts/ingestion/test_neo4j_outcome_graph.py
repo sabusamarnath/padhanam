@@ -139,6 +139,7 @@ def _row(**overrides) -> dict:
         "current_target_level": "A2",
         "terminal_target": None,
         "terminal_state": None,
+        "aliases": None,
         "commitment_id": str(_COMMITMENT_ID),
         "step_order": None,
         "step_state": None,

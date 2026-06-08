@@ -195,6 +195,10 @@ class Goal:
     ladder: LevelLadder | None = None
     terminal: Terminal | None = None
     steps: tuple[LeverStep, ...] = ()
+    # Goal-owned alias terms — category synonyms beyond the name, matched by the
+    # candidate keyword path (D174 tier two). "Fitness" links to "Strength" via
+    # an alias. Category synonyms only, never per-instance referential terms.
+    aliases: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():

@@ -423,6 +423,7 @@ class GoalGraphAdapter:
             ladder=ladder,
             terminal=terminal,
             steps=steps,
+            aliases=tuple(getattr(record, "aliases", ()) or ()),
         )
 
     async def list_goals(

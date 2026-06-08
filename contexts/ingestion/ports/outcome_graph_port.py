@@ -74,6 +74,8 @@ class OutcomeGraphRecord:
     terminal_target: str | None = None
     terminal_state: str | None = None
     levers: tuple[LeverEdgeRecord, ...] = ()
+    # Goal-owned alias terms (category synonyms, D174 tier two).
+    aliases: tuple[str, ...] = ()
 
 
 class OutcomeGraphPort(Protocol):
@@ -92,6 +94,7 @@ class OutcomeGraphPort(Protocol):
         current_target_level: str | None,
         terminal_target: str | None = None,
         terminal_state: str | None = None,
+        aliases: Sequence[str] = (),
     ) -> None:
         """Idempotently MERGE an ``:Outcome`` node by ``(tenant_id, outcome_id)``.
 

@@ -159,7 +159,8 @@ SET
     o.ladder = $ladder,
     o.current_target_level = $current_target_level,
     o.terminal_target = $terminal_target,
-    o.terminal_state = $terminal_state
+    o.terminal_state = $terminal_state,
+    o.aliases = $aliases
 """
 
 # The LEVER_FOR edge carries only that a lever serves the outcome plus, for a
@@ -203,6 +204,7 @@ RETURN o.outcome_id AS outcome_id,
        o.current_target_level AS current_target_level,
        o.terminal_target AS terminal_target,
        o.terminal_state AS terminal_state,
+       o.aliases AS aliases,
        l.commitment_id AS commitment_id,
        r.step_order AS step_order,
        r.step_state AS step_state
@@ -546,6 +548,7 @@ class TenantScopedNeo4jSession:
         current_target_level: str | None,
         terminal_target: str | None = None,
         terminal_state: str | None = None,
+        aliases: Sequence[str] = (),
     ) -> None:
         """MERGE an :Outcome node bound to the session's tenant (D163).
 
@@ -567,6 +570,7 @@ class TenantScopedNeo4jSession:
             "current_target_level": current_target_level,
             "terminal_target": terminal_target,
             "terminal_state": terminal_state,
+            "aliases": list(aliases),
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_OUTCOME, params)
@@ -655,6 +659,7 @@ class TenantScopedNeo4jSession:
                     current_target_level=row["current_target_level"],
                     terminal_target=row["terminal_target"],
                     terminal_state=row["terminal_state"],
+                    aliases=tuple(row["aliases"] or ()),
                     levers=(lever,),
                 )
             else:

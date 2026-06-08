@@ -43,7 +43,7 @@ def _unit(title, *, facets=None, unit_id=None):
     )
 
 
-def _progressive_goal(name, *, lever_commitment_id, goal_id=None):
+def _progressive_goal(name, *, lever_commitment_id, goal_id=None, aliases=()):
     return Goal(
         id=goal_id or uuid4(),
         tenant_id=_TENANT,
@@ -54,6 +54,7 @@ def _progressive_goal(name, *, lever_commitment_id, goal_id=None):
         subject=Subject.SELF,
         lever_commitment_id=lever_commitment_id,
         ladder=LevelLadder(levels=("A1", "A2", "B1"), current_target_level="A2"),
+        aliases=tuple(aliases),
     )
 
 
@@ -101,6 +102,21 @@ def test_a_stopword_only_overlap_forms_no_edge():
     unit = _unit("Get a coffee")
     edges = infer_goal_edges((unit,), (goal,), {cid: "Apply to roles"})
     assert edges == ()
+
+
+def test_alias_term_links_a_unit_with_no_name_overlap():
+    # D174 tier two: "Fitness" shares no characters with "Strength", but links
+    # via the goal-owned alias "fitness" at candidate tier.
+    cid = uuid4()
+    goal = _progressive_goal(
+        "Strength", lever_commitment_id=cid, aliases=("fitness", "gym")
+    )
+    unit = _unit("Fitness")
+    edges = infer_goal_edges((unit,), (goal,), {cid: "Strength micro-sessions"})
+    assert len(edges) == 1
+    assert edges[0].status is LinkStatus.CANDIDATE
+    assert edges[0].basis == "goal-name"
+    assert edges[0].outcome_id == goal.id
 
 
 def test_confirmed_takes_precedence_over_candidate_for_a_goal():

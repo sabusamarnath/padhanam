@@ -62,6 +62,11 @@ class GoalSpec:
     expected_outcome: str
     ladder: tuple[str, ...] = ()  # progressive only
     current_target_level: str | None = None  # progressive only
+    # Goal-owned alias terms — category synonyms matched by the candidate
+    # keyword path (D174 tier two). Category synonyms only, never per-instance
+    # referential terms (no tutor names), so the residual still measures the
+    # referential class honestly.
+    aliases: tuple[str, ...] = ()
 
 
 # Deterministic, neutral ids — encode no real identity (the dogfood precedent).
@@ -79,6 +84,7 @@ SPECS: tuple[GoalSpec, ...] = (
             "Build strength with 5-minute micro-sessions at least 6 times a "
             "day, including seated exercises between work calls."
         ),
+        aliases=("strength", "fitness", "gym", "workout", "lifting", "weights"),
     ),
     GoalSpec(
         outcome_id=UUID("00000000-0000-4000-8000-0000006900a2"),
@@ -94,6 +100,7 @@ SPECS: tuple[GoalSpec, ...] = (
         ),
         ladder=("5K", "10K", "Half marathon", "30K", "Marathon"),
         current_target_level="Half marathon",  # operator: set to your real current rung
+        aliases=("marathon", "running", "long run", "10k", "5k"),
     ),
     GoalSpec(
         outcome_id=UUID("00000000-0000-4000-8000-0000006900a3"),
@@ -108,6 +115,7 @@ SPECS: tuple[GoalSpec, ...] = (
             "Daily voice-projection practice — Cheryl Porter vocal exercises "
             "plus my own."
         ),
+        aliases=("voice", "projection", "articulation", "vocal"),
     ),
     GoalSpec(
         outcome_id=UUID("00000000-0000-4000-8000-0000006900a4"),
@@ -119,6 +127,7 @@ SPECS: tuple[GoalSpec, ...] = (
         lever_name="Stretch and meditate",
         expected_interval_days=1,
         expected_outcome="Stretch and meditate daily.",
+        aliases=("stretch", "stretching", "meditate", "meditation", "mobility"),
     ),
     GoalSpec(
         outcome_id=UUID("00000000-0000-4000-8000-0000006900a5"),
@@ -130,6 +139,7 @@ SPECS: tuple[GoalSpec, ...] = (
         lever_name="Litany — I will not fear",
         expected_interval_days=1,
         expected_outcome='Recite the litany "I will not fear" five times daily.',
+        aliases=("litany", "mantra"),
     ),
 )
 
@@ -165,6 +175,7 @@ async def _seed_one(spec: GoalSpec, *, commitments, graph, tenant_context) -> No
         mode=spec.mode,
         ladder=spec.ladder,
         current_target_level=spec.current_target_level,
+        aliases=spec.aliases,
     )
     await graph.merge_lever_for_outcome(
         tenant_context=tenant_context,

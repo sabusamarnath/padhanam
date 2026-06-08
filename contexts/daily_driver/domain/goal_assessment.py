@@ -199,8 +199,17 @@ def infer_goal_edges(
                     )
                 )
                 continue
-            goal_name = normalise_title(goal.name)
-            if any(_keyword_match(t, goal_name) for t in titles):
+            # Candidate tier: keyword match against the goal name or any of its
+            # goal-owned alias terms (D174 tier two — "Fitness" → "Strength").
+            match_targets = [normalise_title(goal.name)]
+            match_targets.extend(
+                normalise_title(a) for a in goal.aliases if normalise_title(a)
+            )
+            if any(
+                _keyword_match(t, target)
+                for t in titles
+                for target in match_targets
+            ):
                 status = (
                     LinkStatus.CONFIRMED
                     if _CANDIDATE_CONFIDENCE >= confidence_floor

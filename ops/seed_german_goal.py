@@ -127,6 +127,7 @@ async def _seed() -> None:
             mode="progressive",
             ladder=GERMAN_LADDER,
             current_target_level=GERMAN_CURRENT_TARGET,
+            aliases=("german", "deutsch"),  # category synonyms (D174 tier two)
         )
         await graph.merge_lever_for_outcome(
             tenant_context=tenant_context,
