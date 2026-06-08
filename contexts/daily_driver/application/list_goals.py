@@ -53,13 +53,17 @@ async def list_goals(
     goal_graph: GoalGraphPort,
     commitment_repository: CommitmentRepository,
     actor: ActorContext,
+    now: datetime | None = None,
 ) -> tuple[GoalReading | ChainReading, ...]:
     """Read the actor's goals, each against its lever(s) (D163).
 
     The remedy branches on mode: progressive → raise-or-hold, sequence →
     unblock-or-drop. No shared path crosses the two.
+
+    ``now`` is the injectable clock (S64): the goal staleness read resolves
+    against it, defaulting to the wall clock in production.
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     goals = await goal_graph.list_goals(tenant_context=actor.tenant_context)
     activities = await commitment_repository.list_with_activity(
         tenant_context=actor.tenant_context

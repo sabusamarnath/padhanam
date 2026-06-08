@@ -40,6 +40,7 @@ async def list_today(
     actor: ActorContext,
     calendar_events_reader: CalendarEventsReader | None = None,
     drop_candidate_quiet_days: int | None = None,
+    now: datetime | None = None,
 ) -> TodayView:
     """Build the actor's prioritised-today list for the current UTC day.
 
@@ -51,8 +52,11 @@ async def list_today(
     ``drop_candidate_quiet_days`` (D162) is the configured quiet-window
     threshold for the drop-candidate recommendation; ``None`` disables the
     flag (the S60 view).
+
+    ``now`` is the injectable clock (S64): the today window + the D157 staleness
+    compute resolve against it, defaulting to the wall clock in production.
     """
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     day_date = now.date()
     open_cases = await open_cases_reader.list_open_cases(actor=actor)
     activities = await commitment_repository.list_with_activity(
