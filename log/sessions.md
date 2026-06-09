@@ -3708,3 +3708,35 @@ metrics:
   corrects: S74 (the pre-existing wall-clock failure flagged there)
   corrected_by:
 ```
+
+## S76 — Clock-seam remainder: the two today-mutation reads through the seam (build mode)
+roles: engineer (the two routings + the caller threading + the deterministic tests), analyst (the Step 0 caller-set check, the debt-fully-paid sweep), technical writer (this entry)
+mode: build session — a trivial debt-completion slice closing the S75 reflection-1 follow-up, narrow by design (two reads), run in parallel with the calendar/seed path before the gate week. Charter ahead of code; one code commit (both reads share the trivial pattern).
+
+S76 routes the last two controllable-today reads — `mark_item_done` and `set_today_order` (in `reorder_today.py`), each previously reading `datetime.now().date()` for the day — through the clock seam, threaded as a **required** `now` from the caller per the S75 precedent, so neither can mint its own clock. After this the daily driver carries no controllable-today read on the raw wall clock into the lived-use week.
+
+- **Step 0 (against the live tree).** (1) The two reads confirmed at `mark_item_done.py` and `reorder_today.py` (`set_today_order`), each `day_date = datetime.now(timezone.utc).date()`. (2) **Callers:** the HTTP router only (`apps/api/routers/daily_driver.py`, `put_order` + `post_done`) plus the two unit tests — a small, clean caller set, so one commit. (3) **Seam shape:** the S75 required-`now` pattern (a required `datetime` parameter, not minted internally); these two match it (`now: datetime`, `day_date = now.date()`), not a second pattern. (4) **Tracked follow-up:** S75 logged it as a `current-package.md` narrative note, not a `deferred-decisions.md` entry — so a small charter commit marks it resolved (the S76 marker) and the session log is the record; nothing structured to close.
+- **The build, two commits.** Charter (`fe0b250`): the S76 `current-package.md` marker records the debt fully paid. Code (`436a8a7`): both use cases take a required `now`; the router passes `datetime.now(timezone.utc)`; the two existing tests inject a fixed `now` into the write and the `list_today` read, and two new deterministic tests assert the persisted `day_date` equals the injected `now.date()` for two different injected dates — recorded via the `FakeDayRepository` capturing each write's `day_date` (the fake is not day-scoped on read, so the round-trip can't distinguish days; asserting the `day_date` the use case passes is the direct, deterministic proof).
+- **Suite: 2456 passed, 0 failed, 0 skipped** (+2 over S75's 2454 — the two determinism tests). Enforcement green (no lint violations from the import trims).
+- Reflection — **were these the last two controllable-today reads?** Yes. A sweep for `datetime.now(...).date()` / `date.today()` across `contexts/` and `apps/` returns **nothing** outside tests. **The clock-seam debt is now fully paid:** every controllable-today read resolves through the seam; the genuinely-real-time reads (action-instant stamps, latency, DB-side `func.now()`) stay on the wall clock by design. No further follow-up.
+- Reflection — **both tests are deterministic by construction**, not by a fresh fixture date: each asserts the `day_date` written equals the *injected* `now.date()` across two distinct injected dates (one late-evening UTC to catch a date-boundary slip, one a year away), so the outcome turns only on the injected date and cannot rot as real time advances.
+- Enforcement layer: no new contracts. The structural prevention is the **required** `now` on both use cases (the S75 pattern) — a caller cannot omit the seam, so the wall-clock-by-luck pattern cannot reappear on these paths.
+- methodology: a clean trivial slice — Step 0 confirmed the caller set was just the router (so the required-`now` ripple was bounded to two call sites), and the debt-fully-paid claim is backed by a sweep, not an assertion. The one wrinkle was the test fake not modelling day-scoping, which redirected the determinism test from a list_today round-trip (which couldn't distinguish days) to a direct assertion on the `day_date` the use case passes — the more honest test of the actual behaviour anyway.
+- Close state: **the two reads routed, the clock-seam debt fully paid (sweep-confirmed), the suite green at 2456/0/0.** The daily driver's today-dependent logic is now fully deterministic under the seam. **Owed/next, unchanged:** the calendar/seed path (D159 applied + work calendar + professional seed + measure) and the gate week converge after this; methodology.md line 187's claimed-but-absent AST append-only enforcement remains the one named one-line charter follow-up.
+
+```
+metrics:
+  classification: build session (debt slice, clock-seam remainder, closes the S75 reflection-1 follow-up)
+  brief_started: 2026-06-09
+  session_started: 2026-06-09
+  session_closed: 2026-06-09
+  merged: 2026-06-09
+  close_state: mark_item_done + set_today_order routed through the clock seam (required now from the caller); the clock-seam debt is fully paid (sweep-confirmed: no datetime.now().date() controllable-today read remains in contexts/ or apps/); two deterministic seam-driven tests assert the day keys on the injected date alone
+  tests_passing: 2456 passed, 0 failed, 0 skipped (+2 over S75)
+  clock_seam_debt_closed: true
+  principles_intact: yes
+  gate_enabling: true
+  charter_touchpoints: charter/current-package.md (S76 marker, debt-fully-paid); contexts/daily_driver/application/{mark_item_done.py,reorder_today.py}; apps/api/routers/daily_driver.py; tests/unit/contexts/daily_driver/test_application.py; log/sessions.md (this entry)
+  corrects:
+  corrected_by:
+```
