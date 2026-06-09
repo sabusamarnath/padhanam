@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks correlate-units coverage-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-calendar correlate-units coverage-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -242,6 +242,13 @@ seed-dogfood-goals: derive-env
 # (tasks.readonly) + set TASKS_CONNECTION_REF in .env first. Idempotent.
 pull-tasks: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.pull_tasks
+
+# Re-pull the personal tenant's calendar (D159 deployment smoke):
+# resolves the google_calendar connection and drives the D150 refresh
+# adapter (the D149 scoped full pull, sync_calendar) against live Nango.
+# Read-only into the re-pullable meetings cache (D155). Idempotent.
+sync-calendar: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.sync_calendar
 
 # Correlate the personal tenant's work units (S66, D168): read the
 # read-only caches (tasks/calendar/email), run the title-and-time
