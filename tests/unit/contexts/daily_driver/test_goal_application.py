@@ -112,12 +112,44 @@ def _activity() -> CommitmentActivity:
 def test_list_goals_joins_lever_and_recommends_raise() -> None:
     graph = FakeGoalGraph(_goal())
     repo = FakeCommitmentRepo(_activity())
+    # Inject today via the clock seam (S64/S75): the outcome resolves against
+    # _NOW, not the real system date, so this is deterministic by construction
+    # and cannot rot as real dates advance (the S74 wall-clock-by-luck flip).
     readings = asyncio.run(
-        list_goals(goal_graph=graph, commitment_repository=repo, actor=_actor())
+        list_goals(
+            goal_graph=graph,
+            commitment_repository=repo,
+            actor=_actor(),
+            now=_NOW,
+        )
     )
     assert len(readings) == 1
     assert readings[0].recommendation is RaiseOrHold.RAISE
     assert readings[0].next_target == "B2"
+
+
+def test_list_goals_recommendation_depends_only_on_injected_now() -> None:
+    """The RAISE/HOLD outcome is a function of the injected ``now`` alone, not
+    the wall clock (S75). On-rhythm at _NOW → RAISE; far past the rhythm at a
+    later injected date → HOLD. Pin both so neither can drift with real time."""
+    graph = FakeGoalGraph(_goal())
+    repo = FakeCommitmentRepo(_activity())  # last_completed_at = _NOW - 6h
+
+    on_rhythm = asyncio.run(
+        list_goals(
+            goal_graph=graph, commitment_repository=repo, actor=_actor(), now=_NOW
+        )
+    )
+    behind = asyncio.run(
+        list_goals(
+            goal_graph=graph,
+            commitment_repository=repo,
+            actor=_actor(),
+            now=_NOW + timedelta(days=30),
+        )
+    )
+    assert on_rhythm[0].recommendation is RaiseOrHold.RAISE
+    assert behind[0].recommendation is RaiseOrHold.HOLD
 
 
 def test_list_goals_unauthorised_denied() -> None:
