@@ -3740,3 +3740,41 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## S77 — D159 multi-calendar deployment (operational close)
+roles: engineer (the rebuild, the recovery point, the sequenced deploy + migrate, the live smoke), analyst (the transition-safety reconciliation, the no-auto-trigger finding, the smoke verification against the S74 baseline), technical writer (ops/sync_calendar, this entry)
+mode: operational session — D159 live deployment close. No feature build: deploys and applies the S74 work to the live stack. Live-database mutation, operator-gated at both checkpoints. Deliverables are the deploy pin, the sync-calendar script, and the live migration.
+
+The D159 multi-calendar code (S74, D176), built and verified against real Postgres without real-table mutation, is now **live**: the rebuilt api image is the running image, migration 0031 is applied across all three tenant databases, and the existing 979 meetings are backfilled to the personal `calendar_id`. This deployment **gates the work-calendar connect** (the next session), which is the professional-coverage unblock the gate audit named.
+
+- **Step 0 (against the live tree, the running stack, vendor sources).** (1) **Transition safety:** no expand-contract or maintenance-stop machinery exists, but **nothing auto-fires a calendar upsert** — no cron/scheduler in compose; `sync_calendar` triggers only from the /app D150 conversation refresh, the connect flow, the threshold endpoint (no cron hits it), or ops. The /app Today list reads the cache (no sync, S60). So the brief new-image/old-schema window between force-recreate and migrate is safe provided the calendar surface is not touched in it; /app was kept closed for the ~30s window. (2) **Recovery point:** no DB backup tooling existed (only a charter-export), so a `pg_dump` of all three tenant DBs was taken before the mutation (personal 10.8 MB, a, b) to `/tmp/d159_recovery/`. (3) **Reversibility:** 0031's downgrade is present and tested; 0031 touches only Postgres `meetings`/`connections`, **not Neo4j**, so the expensive dogfood graph (989 units / 7 edges / 7 goals) was never at risk, and meetings are a re-pullable external cache (D155). (4) **Migrate runs inside the api container** (`exec padhanam-api python -m ops.migrate`), so the container must already be the new image to apply 0031 — which is why the new-image/old-schema window is unavoidable and pausing-by-no-auto-trigger is the mitigation.
+- **The transition-safe sequence executed.** `make build-api` (image `29292aef` + compose pin, commit `7125af0`; rollback digest `393bcf8d`) → `pg_dump` recovery point → `docker compose up -d --force-recreate padhanam-api` (new image live, window opens) → `make migrate` (0031 applied to personal/a/b, neo4j phase a no-op, window closes) → smoke. The mismatched-pair window held nothing: no auto-trigger fires an upsert, and the re-pull ran only after migrate. A read-only `ops/sync_calendar.py` (`make sync-calendar`, commit `23ebca6`) was added so the smoke re-pull is a repeatable scripted artifact rather than a /app action.
+- **Smoke result — all criteria passed.** Backfill **979/979** to the single personal `calendar_id`, 0 NULLs; constraints swapped to `ux_meetings_tenant_calendar_event` + `ux_connections_tenant_provider_config_ref` (old ones gone); all three tenants at head `0031_calendar_multi_connection`. **Coverage 7/7 intact, identical to baseline** (same 7 goals — Wide World Marathon, German, Get-a-job, Litany, Strength, Stretch & meditate, Voice projection — 41 orphans across 982 instances): no regression on the existing calendar, the load-bearing result. `make sync-calendar` resolved the connection and completed clean; the cache went **979 → 996** as the new code upserted 17 genuinely-new in-window events, all stamped with `calendar_id`, no log errors — the new scoped upsert runs clean on both backfilled rows and fresh events.
+- Reflection — **the transition pattern held the safety property cleanly.** build → force-recreate → migrate → smoke left no window in which an upsert could hit a mismatched image-schema pair, because nothing auto-fires sync and /app was closed. **This sequence is the reusable pattern for the next migration close** (recorded here for it).
+- Reflection — **the live re-pull matched the S74 real-Postgres verification.** This was the first real-*table* run of a migration previously verified against temp tables; the backfill resolved exactly as S74's dry-run predicted (979 → one calendar_id), and the new code's scoped upsert ran clean on the live data. No divergence between verified and live.
+- Reflection — **the smoke is now a scripted artifact** (`make sync-calendar` / `ops/sync_calendar.py`), read-only, so the work-calendar connect reuses it rather than depending on a /app action — closing a real operational gap (there was no ops way to trigger a calendar re-pull).
+- Carry-forward: (a) the **996-meeting cache leads the 982-instance graph by 17 events** pending correlation — the normal pull-then-correlate split, expected, clears on the next `correlate-units`; the unchanged graph is the correct no-regression signal, so it was deliberately not re-correlated here. (b) The `/tmp/d159_recovery/` dumps served their purpose and can be discarded now the stack is confirmed healthy; the tested downgrade remains the reversibility path. (c) The relaxed `ux_connections_tenant_provider_config_ref` is the **schema-level unblock** that permits a second calendar connection per tenant — exactly what the work-calendar connect now depends on.
+- methodology: the value of deferring the transition-safety design to the repo's real pattern (rather than assuming an order) was that Step 0 found the specific fact — no auto-trigger fires a calendar upsert — that dissolves the abstract "both orderings break" into "the window holds nothing." The operator-gated two-checkpoint shape (confirm before the live mutation, confirm the smoke before declaring done) is the right discipline for a live-DB close, and the recovery point was taken despite the near-zero risk because cheap insurance on irreplaceable dogfood state is the honest default.
+- Close state: **D159 is live; the schema and the running image are matched at the new digest; the existing calendar carries no regression (coverage 7/7, backfill 979/979); a second calendar connection is now schema-permitted.** The work-calendar connect is next (reuses `make sync-calendar`), then the professional-goal seed, the coverage measurement, and the gate week. The personal-goal dry run remains a parallel session.
+
+```
+metrics:
+  classification: operational (D159 live deployment close)
+  session_started: 2026-06-09
+  session_closed: 2026-06-09
+  migration_0031_applied: true
+  tenants: 3
+  meetings_backfilled: 979
+  meetings_cache_after_repull: 996
+  personal_coverage: 7/7 intact (identical to baseline)
+  smoke_passed: true
+  mismatched_pair_upsert: none
+  recovery_point: pg_dump of 3 tenant DBs taken pre-mutation (/tmp/d159_recovery/)
+  rollback_path: 0031 downgrade (tested) + image revert to 393bcf8d
+  new_image_digest: 29292aef
+  rollback_digest: 393bcf8d
+  principles_intact: yes
+  charter_touchpoints: compose.yaml (image pin); ops/sync_calendar.py + Makefile (sync-calendar); alembic 0031 applied live; log/sessions.md (this entry)
+  corrects:
+  corrected_by:
+```
