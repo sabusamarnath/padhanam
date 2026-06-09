@@ -60,6 +60,8 @@ The work targets senior product leaders, CPOs, VPs of Product, and consultancies
 
 Decided at Phase 1 close audit. The pivot will reflect what Phase 1 surfaced about the proposition (whether and how it holds), about the methodology (which patterns generalise), and about the operator's interests. Phase 2 is open at this point.
 
+**Resolved (2026-06-09).** Phase 2 direction is settled and in build: a whole-life causal daily driver positioning methodology-as-product (D93, concretised at D156), shipping as Initiative 2 (see `charter/roadmap.md`). The "open at this point" clause above is retained as the Phase-1-close-moment statement per the append-only discipline; it no longer describes the live state.
+
 ## What this is not
 
 Padhanam is Apache 2.0 licensed. Anyone can fork it, deploy it, host it, build a commercial product on top of it, or rebrand and resell it. Padhanam is not operating as a product or a commercial offering. The platform is the demonstration; the methodology is the proprietary insight. The Apache licence is itself part of the proposition: a methodology that requires code lock-in to monetise is not a methodology worth describing.
