@@ -35,6 +35,7 @@ MetaClassifier port.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 from uuid import UUID
@@ -347,6 +348,9 @@ async def _resolve_dispatch_clarification(
         _DISPATCH_CLARIFICATION_LEXICON.get(normalised)
         or _DISPATCH_CLARIFICATION_LEXICON.get(first_token)
     )
+    # One "now" for this resolve turn — the expiry here is reply-driven (the
+    # action instant), so the operation owns its now and passes it (S75).
+    now = datetime.now(timezone.utc)
 
     if chosen is None:
         # Unrecognised reply — expire the prior pending and re-prompt.
@@ -355,6 +359,7 @@ async def _resolve_dispatch_clarification(
             audit_port=audit_port,
             actor=actor,
             pending=active,
+            now=now,
         )
         await _create_and_send_dispatch_clarification(
             context=context,
@@ -376,6 +381,7 @@ async def _resolve_dispatch_clarification(
         audit_port=audit_port,
         actor=actor,
         pending=active,
+        now=now,
     )
 
     original_text = str(active.proposed_intent.get("original_inbound_text", ""))

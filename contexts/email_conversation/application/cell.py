@@ -206,6 +206,7 @@ class EmailConversationCell:
                 await expire_pending_clarification(
                     repository=self._pending_repo, audit_port=self._audit_port,
                     actor=self._actor, pending=active,
+                    now=self._clock(),
                 )
                 return self._render(
                     state, _empty("OK, cancelled. Send a new email query when ready."),
@@ -214,6 +215,7 @@ class EmailConversationCell:
             await expire_pending_clarification(
                 repository=self._pending_repo, audit_port=self._audit_port,
                 actor=self._actor, pending=active,
+                now=self._clock(),
             )
 
         try:

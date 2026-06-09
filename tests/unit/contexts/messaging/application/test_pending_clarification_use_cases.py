@@ -226,16 +226,23 @@ def test_expire_transitions_to_expired_and_emits_event() -> None:
         )
     )
 
+    # The expiry instant comes through the clock seam (S75): a fixed, injected
+    # now, so the EXPIRED stamp is deterministic and cannot become
+    # wall-clock-by-luck. Far from any real date to prove the read is the
+    # injected value, not the wall clock.
+    fixed_now = datetime(2030, 1, 1, 9, 0, tzinfo=timezone.utc)
     expired = asyncio.run(
         expire_pending_clarification(
             repository=repo,
             audit_port=audit,
             actor=actor,
             pending=pending,
+            now=fixed_now,
         )
     )
 
     assert expired.status is PendingClarificationStatus.EXPIRED
+    assert expired.resolved_at == fixed_now
     assert (
         audit.events[-1].action_verb
         == "messaging.pending_clarification.expire"

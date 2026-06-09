@@ -11,7 +11,7 @@ sufficient.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from contexts.audit.domain.ports import AuditPort
 
@@ -38,11 +38,18 @@ async def expire_pending_clarification(
     audit_port: AuditPort,
     actor: ActorContext,
     pending: PendingClarification,
+    now: datetime,
 ) -> PendingClarification:
-    """Transition a PENDING clarification to EXPIRED."""
+    """Transition a PENDING clarification to EXPIRED.
+
+    ``now`` is the expiry instant, supplied by the caller through the clock
+    seam (S75): a cell passes its per-turn ``self._clock()`` so the EXPIRED
+    stamp shares the turn's single notion of "now" and stays deterministic in
+    tests — the read is required, not minted here, so it cannot become
+    wall-clock-by-luck.
+    """
     tenant_context = actor.tenant_context
     authored_by = ActorReference(user_id=actor.actor_id)
-    now = datetime.now(timezone.utc)
 
     expired = pending.expire(at=now)
     await repository.update_status(

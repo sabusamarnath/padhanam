@@ -248,6 +248,7 @@ def _cell(
     medium_cutoff: float = 0.5,
     pending_repo: _FakePendingRepo | None = None,
     threshold_resolver: _RecordingThresholdResolver | None = None,
+    clock: Any | None = None,
 ) -> ManualEntryCell:
     structured_output = (
         extraction
@@ -273,6 +274,7 @@ def _cell(
         pending_clarification_reader=_FakePendingReader(repo),
         pending_clarification_repository=repo,
         audit_port=_FakeAuditPort(),
+        clock=clock,
     )
 
 
@@ -1008,3 +1010,44 @@ def test_add_data_point_no_match_returns_clarification_no_pending() -> None:
     assert repo.pendings == {}
     response: CellResponse = state.payload["cell_response"]
     assert "could not find" in response.text.lower()
+
+
+def test_lazy_expiry_sweep_fires_on_injected_clock_not_wall_clock() -> None:
+    """The lazy-expiry sweep resolves "now" from the cell's clock seam (S75):
+    an active PENDING transitions to EXPIRED when the injected clock is past
+    its expires_at, deterministically and far from the real system date — so
+    this path can never become wall-clock-by-luck."""
+    actor = _actor()
+    expires_at = datetime(2027, 3, 1, 12, 0, tzinfo=timezone.utc)
+    pending = PendingClarification(
+        id=uuid4(),
+        tenant_id=UUID(actor.tenant_context.tenant_id),
+        jurisdiction="eu-west",
+        user_id=actor.actor_id,
+        originating_channel="WHATSAPP",
+        originating_user_address="+447700900123",
+        originating_intake_id=uuid4(),
+        proposed_intent={"intent_type": "create_case"},
+        proposed_action_summary="proposal",
+        status=PendingClarificationStatus.PENDING,
+        target_cell="manual_entry",
+        created_at=expires_at - timedelta(hours=24),
+        expires_at=expires_at,
+    )
+    repo = _FakePendingRepo()
+    repo.pendings[pending.id] = pending
+
+    # Injected clock one hour past expiry → the sweep fires.
+    _turn_once(
+        _cell(
+            _extraction(intent_type="create_case", title="fresh after sweep"),
+            _FakeGateway(),
+            pending_repo=repo,
+            clock=lambda: expires_at + timedelta(hours=1),
+        ),
+        "start a case",
+    )
+    assert (
+        repo.pendings[pending.id].status is PendingClarificationStatus.EXPIRED
+    )
+    assert repo.pendings[pending.id].resolved_at == expires_at + timedelta(hours=1)

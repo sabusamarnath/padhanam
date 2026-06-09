@@ -239,6 +239,7 @@ class CalendarConversationCell:
                     audit_port=self._audit_port,
                     actor=self._actor,
                     pending=active,
+                    now=self._clock(),
                 )
                 return self._render_turn_state(
                     state=state,
@@ -255,6 +256,7 @@ class CalendarConversationCell:
                 audit_port=self._audit_port,
                 actor=self._actor,
                 pending=active,
+                now=self._clock(),
             )
 
         try:

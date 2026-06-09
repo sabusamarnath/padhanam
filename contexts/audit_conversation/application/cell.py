@@ -321,6 +321,7 @@ class AuditConversationCell:
                     audit_port=self._audit_port,
                     actor=self._actor,
                     pending=active,
+                    now=self._clock(),
                 )
                 response = _empty_response(
                     "OK, cancelled. Send a new audit query when ready."
@@ -339,6 +340,7 @@ class AuditConversationCell:
                 audit_port=self._audit_port,
                 actor=self._actor,
                 pending=active,
+                now=self._clock(),
             )
 
         # Fresh turn: extract intent + confidence.

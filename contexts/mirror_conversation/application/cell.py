@@ -294,6 +294,7 @@ class MirrorConversationCell:
                     audit_port=self._audit_port,
                     actor=self._actor,
                     pending=active,
+                    now=self._clock(),
                 )
                 response = MirrorConversationResponse(
                     text="OK, cancelled. Send a new query when ready."
@@ -309,6 +310,7 @@ class MirrorConversationCell:
                 audit_port=self._audit_port,
                 actor=self._actor,
                 pending=active,
+                now=self._clock(),
             )
 
         # Fresh turn: classify intent.

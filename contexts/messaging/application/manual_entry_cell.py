@@ -48,7 +48,7 @@ D131 citation fields), ``intent_type``, and ``confidence_band``.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID, uuid4
 
 from contexts.audit.domain.ports import AuditPort
@@ -289,6 +289,7 @@ class ManualEntryCell:
         pending_clarification_reader: PendingClarificationReader,
         pending_clarification_repository: PendingClarificationRepository,
         audit_port: AuditPort,
+        clock: Callable[[], datetime] | None = None,
         originating_channel: str = "WHATSAPP",
         originating_intake_id: UUID | None = None,
     ) -> None:
@@ -300,6 +301,10 @@ class ManualEntryCell:
         self._pending_reader = pending_clarification_reader
         self._pending_repo = pending_clarification_repository
         self._audit_port = audit_port
+        # The clock seam (S64/S75): the lazy-expiry-sweep resolves "now" against
+        # it, the sibling conversation cells' pattern, defaulting to the wall
+        # clock in production and injected in tests so the sweep is deterministic.
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._originating_channel = originating_channel
         # S47 smoke fix: the cell uses the webhook's actual inbound
         # intake_id for any PendingClarification it creates, so the
@@ -347,7 +352,10 @@ class ManualEntryCell:
             tenant_id=tenant_id, user_id=user_id
         )
         if active is not None:
-            if datetime.now(timezone.utc) >= active.expires_at:
+            # One "now" per turn through the seam (S75): the expiry check and
+            # the EXPIRED stamp share it, so the lazy sweep is deterministic.
+            now = self._clock()
+            if now >= active.expires_at:
                 # Lazy expiry sweep: the reader returned a stale
                 # PENDING whose window elapsed; close the audit
                 # transition cleanly before treating the inbound as
@@ -357,6 +365,7 @@ class ManualEntryCell:
                     audit_port=self._audit_port,
                     actor=self._actor,
                     pending=active,
+                    now=now,
                 )
             else:
                 # S50: a resolution-ambiguity pending carries the
