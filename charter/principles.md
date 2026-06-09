@@ -40,6 +40,7 @@ For architectural synthesis with diagrams, see `charter/architecture.md`. For fu
 ## Engineering practice
 
 - Tests are part of the build, not a follow-up.
+- Today/now-dependent domain logic resolves the current time through an injectable clock seam (a `now` parameter or injected clock), defaulting to the wall clock in production and set explicitly in tests, so logic whose output depends on the date stays deterministic as real dates advance. Within one logical operation (a use case, a cell turn) there is a single `now`: sub-steps receive it rather than minting their own. The genuinely-real-time exception is reads that must reflect the true wall clock irrespective of operation context — measuring elapsed latency, or stamping the real instant of an event no enclosing operation owns. The boundary is a judgement call at the margin (an action-timestamp *inside* an operation routes through that operation's `now`; a standalone real-instant stamp reads the wall clock); when ambiguous, leave the read real and flag it rather than route speculatively. Established at S64 (the clock-seam build and the ~50-read sweep — 3 fixed, 1 tracked, ~40 legitimately real-time, the rest controllable-today); the D157 staleness siblings were the first consumers, and the goal-state RAISE/HOLD and pending-clarification-expiry reads were routed at S75.
 - Schema changes update `charter/schema.md` in the same commit.
 - New observability metrics require a documented decision they will inform (per D8).
 - Optimization output is recommendation-shaped, not chart-shaped (per D9).

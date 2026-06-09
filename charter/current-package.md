@@ -2,6 +2,10 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
+## Phase 2-B, Epic E1; S75 — clock-seam slice: goal-state + pending-clarification expiry through the seam (build mode)
+
+A gate-week-enabling debt slice, the S64 clock-seam follow-up, run in parallel with the calendar/seed path and closing before the lived-use week. The lived-use week runs over real advancing dates; today-dependent logic that drifts with the wall clock while other surfaces read the seam would show incoherent state across the week — reading as the moat failing when it is the clock. **S75 routes the daily-driver goal-state RAISE/HOLD read and the pending-clarification expiry stamp through the S64 clock seam, ratifies the clock-seam discipline in `principles.md`, and closes the pre-existing wall-clock failure S74 flagged.** Step 0 found the goal-state seam already existed (S64; the failing test simply never injected `now`), and that there is no time-based expiry *check* (expiry is user-action-driven) — so the only expiry wall-clock read is the action-timestamp stamp, routed through the cell's per-turn `now`. The ~40 genuinely-real-time reads from S64 are untouched; `mark_item_done`/`reorder_today`'s `day_date` reads are flagged as a controllable-today follow-up, not routed in this slice.
+
 ## Phase 2-B, Epic E1 (thicken-by-seed); S74 — D159 multi-calendar support, the professional-coverage unblock (build mode)
 
 The Phase 2-A gate opened on the engine (gate audit, roadmap v9): the moat is trustworthy but the experienced signal is thin, a seeding/coverage problem. Phase 2-B opens **thicken → live → clothe**. **E1 (thicken-by-seed)** is the opening sequence ahead of P21; its critical path to a valid lived-use week is **professional coverage**, which the gate audit found blocked by a source dependency — the connected calendar is personal, and the single-calendar-per-tenant model could not also hold the work calendar.
