@@ -2,6 +2,14 @@
 
 Active package details. Updated when a new package starts. Archived to `docs/archive/packages/` at package close.
 
+## Wave 2 (P17–P20) complete; dogfood-gate sprint (S69–S72) closed; the Phase 2-A gate audit is next (no package in flight)
+
+Wave 2 of Phase 2-A is built end-to-end — task ingestion (P17/S65), unit-of-work correlation (P18/S66), the goal-aligned **moat** (P19/S67), and missing-facet suggestions (P20/S68): the dogfoodable core. The post-P20 **dogfood-gate sprint** then ran on the operator's real data: **S69** seeded the operator's seven real goals + instanced the homeostatic shape (the moat correctly read **0 SERVES edges** — the goal-work not yet ingested/title-matched, the gate's first signal, with two operator unlocks named: `make pull-tasks` + lever-name tuning); **S70** fixed the coverage-vs-neglect **trust-killer** (D171 — uncovered ≠ neglected, the assessment is valid only inside the ingested/linked boundary); **S71** added the stopword + alias **recall tiers** and the residual coverage report (D174), deferring the embedding tier to the residual; **S72** folded recurring instances by source series and time-scoped Today to today-forward (D175 — **982 → 41 orphans, live-verified**), with a follow-up integrity test confirming overdue-not-done stays live. Suite: **2123 unit, 0 failed, 0 skipped; 43 import-linter contracts; 9 AST enforcement**.
+
+**S73 (this session) is charter hygiene only** — `charter/decisions.md` reunified (Phase 2 full-content D114–D175 in one canonical section; upper block back to Phase 1 D11–D113) with a generated D-number ToC (`ops/decisions_toc.py`), and this marker. No domain code, no test changes.
+
+**Next is the Phase 2-A gate audit** — a Claude.ai strategic conversation run on these refreshed files, judging the week-of-real-use restraint verdict (D156, the reverse-Kano test). No further value surface until that verdict; the constraint dimensions and the rest of Phase 2-B wait on it. **Owed and carried:** the S64 test-integrity slice (still reserved-and-unrun); the pending-clarification expiry-clock routing (S64 follow-up); the shared external-cache ingestion-substrate extraction (owed before the fourth adapter, Trello); structural recurrence + the full D162 gap computation (Phase 2-B); more goal-seeding (operator's call).
+
 ## P20 in flight; S68 — missing-facet suggestions (the Wave-2 runway terminus), Phase 2-A (build mode)
 
 P20, the fourth and final Wave-2 package: the **missing-facet suggestion engine** (D170). Padhanam suggests the facet a unit lacks — a block for a substantial task with no time, satellite-work for an event with no task, a candidate task for an email with no task — **selective and confident or silent**, never auto-applied, never written back. After P20, the dogfoodable core is built and the **dogfood gate** follows (the runway's terminus).
