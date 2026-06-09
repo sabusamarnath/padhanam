@@ -111,11 +111,16 @@ class FakeCommitmentRepository:
 class FakeDayRepository:
     def __init__(self) -> None:
         self.states: dict[str, DayItemState] = {}
+        # S76: record the day_date each write keyed on, to prove the use case
+        # resolves the day from the injected now (not the wall clock).
+        self.done_day_dates: list[date] = []
+        self.position_day_dates: list[date] = []
 
     async def get_states(self, *, tenant_context, user_id, day_date):
         return tuple(self.states.values())
 
     async def set_positions(self, *, tenant_context, user_id, day_date, ordered_keys):
+        self.position_day_dates.append(day_date)
         for pos, (kind, item_id) in enumerate(ordered_keys):
             k = item_key(kind, item_id)
             prev = self.states.get(k)
@@ -127,6 +132,7 @@ class FakeDayRepository:
             )
 
     async def set_done(self, *, tenant_context, user_id, day_date, kind, item_id, done):
+        self.done_day_dates.append(day_date)
         k = item_key(kind, item_id)
         prev = self.states.get(k)
         self.states[k] = DayItemState(
@@ -395,7 +401,9 @@ def test_logging_completion_unknown_commitment_returns_none() -> None:
 def test_mark_done_overlays_and_persists() -> None:
     repo = FakeCommitmentRepository()
     day = FakeDayRepository()
-    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=datetime.now(timezone.utc))
+    # The done mark keys on the injected day (S76), not the wall clock.
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=now)
     asyncio.run(
         mark_item_done(
             day_repository=day,
@@ -403,6 +411,7 @@ def test_mark_done_overlays_and_persists() -> None:
             kind=ItemKind.CASE,
             item_id=case.case_id,
             done=True,
+            now=now,
         )
     )
     view = asyncio.run(
@@ -411,18 +420,44 @@ def test_mark_done_overlays_and_persists() -> None:
             commitment_repository=repo,
             day_repository=day,
             actor=_actor(),
+            now=now,
         )
     )
     # D175: the done case moves to the history slice, off the live list.
     assert view.history[0].status == ItemStatus.DONE
     assert not view.items
+    # The done mark keyed on the injected day (S76).
+    assert day.done_day_dates == [now.date()]
+
+
+def test_mark_done_day_resolves_from_injected_now_not_wall_clock() -> None:
+    """The done mark's day is a function of the injected now alone (S76):
+    two different injected dates key two different days, deterministically."""
+    case_id = uuid4()
+    d1 = datetime(2026, 6, 9, 23, 30, tzinfo=timezone.utc)
+    d2 = datetime(2027, 1, 1, 1, 0, tzinfo=timezone.utc)
+    for moment in (d1, d2):
+        day = FakeDayRepository()
+        asyncio.run(
+            mark_item_done(
+                day_repository=day,
+                actor=_actor(),
+                kind=ItemKind.CASE,
+                item_id=case_id,
+                done=True,
+                now=moment,
+            )
+        )
+        assert day.done_day_dates == [moment.date()]
 
 
 def test_set_order_persisted_and_applied() -> None:
     repo = FakeCommitmentRepository()
     overdue = _seed_overdue(repo)
     day = FakeDayRepository()
-    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=datetime.now(timezone.utc))
+    # The ordering persists for the injected day (S76), not the wall clock.
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=now)
     # pin the case ahead of the (behind) commitment
     asyncio.run(
         set_today_order(
@@ -432,6 +467,7 @@ def test_set_order_persisted_and_applied() -> None:
                 (ItemKind.CASE, case.case_id),
                 (ItemKind.COMMITMENT, overdue.id),
             ),
+            now=now,
         )
     )
     view = asyncio.run(
@@ -440,7 +476,29 @@ def test_set_order_persisted_and_applied() -> None:
             commitment_repository=repo,
             day_repository=day,
             actor=_actor(),
+            now=now,
         )
     )
     assert view.items[0].kind == ItemKind.CASE
     assert view.items[1].kind == ItemKind.COMMITMENT
+    # The ordering keyed on the injected day (S76).
+    assert day.position_day_dates == [now.date()]
+
+
+def test_set_order_day_resolves_from_injected_now_not_wall_clock() -> None:
+    """The persisted ordering's day is a function of the injected now alone
+    (S76): two different injected dates key two different days."""
+    keys = ((ItemKind.CASE, uuid4()),)
+    d1 = datetime(2026, 6, 9, 23, 30, tzinfo=timezone.utc)
+    d2 = datetime(2027, 1, 1, 1, 0, tzinfo=timezone.utc)
+    for moment in (d1, d2):
+        day = FakeDayRepository()
+        asyncio.run(
+            set_today_order(
+                day_repository=day,
+                actor=_actor(),
+                ordered_keys=keys,
+                now=moment,
+            )
+        )
+        assert day.position_day_dates == [moment.date()]

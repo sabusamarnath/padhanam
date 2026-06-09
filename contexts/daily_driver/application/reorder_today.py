@@ -7,7 +7,7 @@ render.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from contexts.daily_driver.domain.today_item import ItemKind
 from contexts.daily_driver.ports.day_repository import DayRepository
@@ -25,9 +25,16 @@ async def set_today_order(
     day_repository: DayRepository,
     actor: ActorContext,
     ordered_keys: tuple[tuple[ItemKind, UUID], ...],
+    now: datetime,
 ) -> None:
-    """Persist the user's ordering for the current UTC day."""
-    day_date = datetime.now(timezone.utc).date()
+    """Persist the user's ordering for the current UTC day.
+
+    ``now`` is the day's clock, threaded from the caller through the seam
+    (S75/S76, required so it cannot be minted internally): the ordering keys
+    on ``now.date()``, deterministic in tests, the production caller passing
+    the real wall clock.
+    """
+    day_date = now.date()
     await day_repository.set_positions(
         tenant_context=actor.tenant_context,
         user_id=actor.actor_id,

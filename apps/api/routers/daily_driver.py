@@ -28,6 +28,7 @@ handler at ``apps/api/_auth_errors.py``.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -425,6 +426,7 @@ async def put_order(
         day_repository=day_repository,
         actor=actor,
         ordered_keys=tuple((ref.kind, ref.item_id) for ref in body.ordered),
+        now=datetime.now(timezone.utc),
     )
     return Response(status_code=204)
 
@@ -442,6 +444,7 @@ async def post_done(
         kind=body.kind,
         item_id=body.item_id,
         done=body.done,
+        now=datetime.now(timezone.utc),
     )
     return Response(status_code=204)
 

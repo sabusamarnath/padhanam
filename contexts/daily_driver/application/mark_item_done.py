@@ -9,7 +9,7 @@ marked done-for-today without mutating any canonical state.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
 
 from contexts.daily_driver.domain.today_item import ItemKind
@@ -29,9 +29,16 @@ async def mark_item_done(
     kind: ItemKind,
     item_id: UUID,
     done: bool,
+    now: datetime,
 ) -> None:
-    """Set the done-for-today mark for one item on the current UTC day."""
-    day_date = datetime.now(timezone.utc).date()
+    """Set the done-for-today mark for one item on the current UTC day.
+
+    ``now`` is the day's clock, threaded from the caller through the seam
+    (S75/S76, required so it cannot be minted internally): the done mark
+    keys on ``now.date()``, deterministic in tests, the production caller
+    passing the real wall clock.
+    """
+    day_date = now.date()
     await day_repository.set_done(
         tenant_context=actor.tenant_context,
         user_id=actor.actor_id,
