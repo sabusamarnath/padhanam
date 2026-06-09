@@ -47,6 +47,14 @@ Padhanam as the assessment layer over the work tools the user already keeps (the
 
 ## Phase 2-B: Scale to broader senior-leader-ICP (renumbered P21-P24 at roadmap v8)
 
+**Phase 2-A's close gate opened on the engine, not the experience** (gate audit, 2026-06-09; roadmap v9, the canonical record). The moat is trustworthy on real data; the experienced signal is thin at current goal density — a seeding/coverage problem, not an engine problem. Phase 2-B therefore opens with a strict **thicken → live → clothe** sequence:
+
+- **E1 — thicken (by seed).** Script-seed professional and personal goals to raise SERVES-edge density; an **opening sequence ahead of P21, not a numbered package**, with **S74 its first story**. The already-built Google Tasks pull (S65) is activated; Trello stays the decoupled later adapter. A seeded-goal-coverage density trigger (professional broken out, not a global orphan rate) gates entry to E2.
+- **E2 — the lived-use week.** A **gate-milestone**, not a build epic: the lived-use validation condition 1 demands, on the thickened signal, before any clothing, against a pre-committed falsifiable verdict. Its week-gate trigger is gate-audit output 3, **ratified at roadmap v10 after S74** measures achievable professional coverage.
+- **E3 — clothe.** The experience layer (the daily-driver surfaces D156 places in the B-stream below); internal ordering and its priority against the B-stream packages defer to a **post-week RICE pass** (pre-ordering now re-commits the structure the week exists to teach).
+
+**The P21–P24 B-stream below is provisionally preserved, not endorsed.** Those methodology-platform packages predate the attentional-assistant pivot; whether they survived it resolves at the post-week RICE pass, when E3's experience-layer packages are prioritised against them. Any re-home to Phase 3 or retirement is a deliberate later decision with its own log entry — never folded silently here. The B-stream is **not renumbered again** (the v8 old→new mapping stands verbatim). The connected-calendar source dependency (work calendar needed for confirmed professional coverage) is named at roadmap v9, surfaced by S74 Step 0.
+
 Per D156, Phase 2-B absorbs the daily-driver epics into the B-stream: cadence-with-staleness (the
 must-have active-surfacing primitive on the threshold engine per D153), scheduled-with-lead-time
 (due dates and lead-time pull-forward), the causal-decision-graph context (Factor and CausalLink
