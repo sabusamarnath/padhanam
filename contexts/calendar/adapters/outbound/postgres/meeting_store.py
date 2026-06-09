@@ -110,6 +110,7 @@ def _row_to_meeting(row: dict[str, Any], *, tenant_id: object) -> Meeting:
         id=UUID(str(row["id"])),
         tenant_id=UUID(str(row["tenant_id"])),
         jurisdiction=row["jurisdiction"],
+        calendar_id=row["calendar_id"],
         google_event_id=row["google_event_id"],
         status=MeetingStatus(row["status"]),
         title=title,
@@ -168,6 +169,7 @@ class PostgresMeetingStore:
             "id": str(meeting.id),
             "tenant_id": str(meeting.tenant_id),
             "jurisdiction": meeting.jurisdiction,
+            "calendar_id": meeting.calendar_id,
             "google_event_id": meeting.google_event_id,
             "status": meeting.status.value,
             "start_at": meeting.start_at,
@@ -191,14 +193,20 @@ class PostgresMeetingStore:
         stmt = pg_insert(meetings_table).values(**values)
         # Preserve identity and creation time on conflict; refresh everything
         # else from the delta.
-        preserved = {"id", "tenant_id", "google_event_id", "created_at"}
+        preserved = {
+            "id",
+            "tenant_id",
+            "calendar_id",
+            "google_event_id",
+            "created_at",
+        }
         update_cols = {
             col: stmt.excluded[col]
             for col in values
             if col not in preserved
         }
         stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "google_event_id"],
+            index_elements=["tenant_id", "calendar_id", "google_event_id"],
             set_=update_cols,
         )
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
@@ -210,12 +218,15 @@ class PostgresMeetingStore:
         self,
         *,
         tenant_context: TenantContext,
+        calendar_id: str,
         google_event_id: str,
         cancelled_at: datetime,
     ) -> None:
         self._assert_bound(tenant_context)
         # Raw SQL because the embedding column is pgvector-typed and absent
         # from the Core MetaData. Purges content + vector; retains the row.
+        # Scoped by calendar_id (D176) so a tombstone in one account never
+        # purges a colliding-event-id row in another.
         stmt = sa.text(
             "UPDATE meetings SET "
             "status = 'cancelled', "
@@ -228,7 +239,9 @@ class PostgresMeetingStore:
             "embedding = NULL, "
             "cancelled_at = :cancelled_at, "
             "updated_at = :cancelled_at "
-            "WHERE tenant_id = :tenant_id AND google_event_id = :event_id"
+            "WHERE tenant_id = :tenant_id "
+            "AND calendar_id = :calendar_id "
+            "AND google_event_id = :event_id"
         )
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
         async with sessionmaker() as session:
@@ -238,6 +251,7 @@ class PostgresMeetingStore:
                     {
                         "cancelled_at": cancelled_at,
                         "tenant_id": str(self._bound_tenant_id),
+                        "calendar_id": calendar_id,
                         "event_id": google_event_id,
                     },
                 )
@@ -246,13 +260,16 @@ class PostgresMeetingStore:
         self,
         *,
         tenant_context: TenantContext,
+        calendar_id: str,
         google_event_id: str,
         vector: Sequence[float],
     ) -> None:
         self._assert_bound(tenant_context)
         stmt = sa.text(
             "UPDATE meetings SET embedding = CAST(:vector AS vector) "
-            "WHERE tenant_id = :tenant_id AND google_event_id = :event_id"
+            "WHERE tenant_id = :tenant_id "
+            "AND calendar_id = :calendar_id "
+            "AND google_event_id = :event_id"
         )
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
         async with sessionmaker() as session:
@@ -262,18 +279,30 @@ class PostgresMeetingStore:
                     {
                         "vector": _format_vector_literal(vector),
                         "tenant_id": str(self._bound_tenant_id),
+                        "calendar_id": calendar_id,
                         "event_id": google_event_id,
                     },
                 )
 
     async def get_by_event_id(
-        self, *, tenant_context: TenantContext, google_event_id: str
+        self,
+        *,
+        tenant_context: TenantContext,
+        google_event_id: str,
+        calendar_id: str | None = None,
     ) -> Meeting | None:
         self._assert_bound(tenant_context)
+        # The write path (sync) passes calendar_id for the exact row of the
+        # calendar it is pulling (D176). The read path (the conversation cell)
+        # omits it and resolves any calendar's copy of a shared event — fine
+        # for a display read, where the duplicate copies are the same event.
         stmt = sa.select(meetings_table).where(
             meetings_table.c.tenant_id == str(self._bound_tenant_id),
             meetings_table.c.google_event_id == google_event_id,
         )
+        if calendar_id is not None:
+            stmt = stmt.where(meetings_table.c.calendar_id == calendar_id)
+        stmt = stmt.order_by(meetings_table.c.created_at.asc())
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
         async with sessionmaker() as session:
             result = await session.execute(stmt)

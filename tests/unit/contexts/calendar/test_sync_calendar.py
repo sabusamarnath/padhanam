@@ -114,18 +114,29 @@ class FakeMeetingStore:
         self.by_event: dict[str, object] = {}
         self.tombstoned: list[str] = []
         self.embeddings: dict[str, list[float]] = {}
+        # D176: record the calendar_id every write/lookup is scoped by.
+        self.tombstone_calendar_ids: list[str] = []
+        self.get_calendar_ids: list[str | None] = []
 
     async def upsert_meeting(self, *, tenant_context, meeting) -> None:
         self.by_event[meeting.google_event_id] = meeting
 
-    async def tombstone_meeting(self, *, tenant_context, google_event_id, cancelled_at) -> None:
+    async def tombstone_meeting(
+        self, *, tenant_context, calendar_id, google_event_id, cancelled_at
+    ) -> None:
         self.tombstoned.append(google_event_id)
+        self.tombstone_calendar_ids.append(calendar_id)
         self.by_event.pop(google_event_id, None)
 
-    async def set_embedding(self, *, tenant_context, google_event_id, vector) -> None:
+    async def set_embedding(
+        self, *, tenant_context, calendar_id, google_event_id, vector
+    ) -> None:
         self.embeddings[google_event_id] = list(vector)
 
-    async def get_by_event_id(self, *, tenant_context, google_event_id):
+    async def get_by_event_id(
+        self, *, tenant_context, google_event_id, calendar_id=None
+    ):
+        self.get_calendar_ids.append(calendar_id)
         return self.by_event.get(google_event_id)
 
     async def list_meetings(self, *, tenant_context, include_cancelled=False):  # pragma: no cover
@@ -261,3 +272,29 @@ def test_missing_connection_raises() -> None:
     store = FakeMeetingStore()
     with pytest.raises(NoSuchConnectionError):
         _run(source, conns, store)
+
+
+def test_sync_stamps_and_scopes_writes_by_calendar_id() -> None:
+    """D176: the pull stamps the connection id as calendar_id on each Meeting
+    and scopes its change-detection get and its tombstone by it, so a pull of
+    one calendar never reads or writes another calendar's rows."""
+    store = FakeMeetingStore()
+    source = FakeEventSource(
+        full_pages=[
+            CalendarEventPage(
+                events=(
+                    _event("live", summary="Standup"),
+                    _event("gone", cancelled=True),
+                ),
+                next_sync_token=None,
+            )
+        ]
+    )
+    conns = FakeConnectionRepo(_connection(), token=None)
+    _run(source, conns, store)
+
+    # The stamped calendar_id is the connection id (the scope key).
+    assert store.by_event["live"].calendar_id == str(_CONN_ID)
+    # The change-detection get and the tombstone were scoped by it.
+    assert store.get_calendar_ids == [str(_CONN_ID)]
+    assert store.tombstone_calendar_ids == [str(_CONN_ID)]

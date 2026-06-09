@@ -49,11 +49,15 @@ connections = sa.Table(
         nullable=False,
         server_default=sa.text("now()"),
     ),
+    # Multi-connection per tenant (D176): the unique key carries
+    # provider_connection_ref so a second calendar *account* (a distinct Nango
+    # connection ref) coexists, while re-connecting the same account upserts.
     sa.UniqueConstraint(
         "tenant_id",
         "provider",
         "provider_config_key",
-        name="ux_connections_tenant_provider_config",
+        "provider_connection_ref",
+        name="ux_connections_tenant_provider_config_ref",
     ),
 )
 
@@ -64,6 +68,10 @@ meetings = sa.Table(
     sa.Column("id", pg.UUID(as_uuid=False), primary_key=True),
     sa.Column("tenant_id", pg.UUID(as_uuid=False), nullable=False),
     sa.Column("jurisdiction", sa.Text, nullable=False),
+    # Connection-scoped calendar identity (D176): the calendar connection's id.
+    # Part of the identity key so two accounts' primary calendars sharing a
+    # Google event id (a meeting both are invited to) do not collide.
+    sa.Column("calendar_id", sa.Text, nullable=False),
     sa.Column("google_event_id", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("start_at", sa.TIMESTAMP(timezone=True), nullable=True),
@@ -96,7 +104,10 @@ meetings = sa.Table(
     ),
     sa.Column("cancelled_at", sa.TIMESTAMP(timezone=True), nullable=True),
     sa.UniqueConstraint(
-        "tenant_id", "google_event_id", name="ux_meetings_tenant_event"
+        "tenant_id",
+        "calendar_id",
+        "google_event_id",
+        name="ux_meetings_tenant_calendar_event",
     ),
     sa.Index("ix_meetings_tenant_start", "tenant_id", "start_at"),
 )

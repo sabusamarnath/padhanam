@@ -108,6 +108,11 @@ async def sync_calendar(
     if connection is None:
         raise NoSuchConnectionError(str(connection_id))
 
+    # The connection-scoped calendar identity (D176): every Meeting this pull
+    # writes is stamped and scoped by it, so pulling one calendar never
+    # overwrites or tombstones another calendar's rows.
+    calendar_id = str(connection_id)
+
     # Scoped full pull (D149). Drains every page before the store loop
     # runs, so a tombstone pass never sees a partially-fetched window.
     events = await _drain_full(
@@ -122,6 +127,7 @@ async def sync_calendar(
         if event.is_tombstone:
             await meetings.tombstone_meeting(
                 tenant_context=tenant_context,
+                calendar_id=calendar_id,
                 google_event_id=event.google_event_id,
                 cancelled_at=now,
             )
@@ -131,11 +137,13 @@ async def sync_calendar(
         existing = await meeting_reader.get_by_event_id(
             tenant_context=tenant_context,
             google_event_id=event.google_event_id,
+            calendar_id=calendar_id,
         )
         meeting = meeting_from_event(
             event,
             tenant_id=UUID(tenant_context.tenant_id),
             jurisdiction=tenant_context.jurisdiction,
+            calendar_id=calendar_id,
             meeting_id=existing.id if existing is not None else uuid4(),
             now=now,
             created_at=existing.created_at if existing is not None else None,

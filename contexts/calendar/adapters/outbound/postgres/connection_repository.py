@@ -84,15 +84,21 @@ class PostgresConnectionRepository:
             "updated_at": connection.updated_at,
         }
         stmt = pg_insert(connections_table).values(**values)
-        # On conflict the unique key is (tenant_id, provider, config key), so a
-        # re-connect updates the existing row WITHOUT changing its id. RETURNING
-        # yields the canonical persisted id — the existing row's id on conflict,
-        # the new id on insert — so the caller always references the stored row
-        # (otherwise a re-register would hand a transient id to the first sync).
+        # On conflict the unique key is (tenant_id, provider, config key,
+        # connection ref) per D176, so re-connecting the *same account* (same
+        # ref) updates its existing row WITHOUT changing its id, while a
+        # *different account* (a distinct ref) inserts a new row — the two
+        # coexist. RETURNING yields the canonical persisted id (the existing
+        # row's id on conflict, the new id on insert), so the caller always
+        # references the stored row rather than a transient id.
         stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "provider", "provider_config_key"],
+            index_elements=[
+                "tenant_id",
+                "provider",
+                "provider_config_key",
+                "provider_connection_ref",
+            ],
             set_={
-                "provider_connection_ref": stmt.excluded.provider_connection_ref,
                 "jurisdiction": stmt.excluded.jurisdiction,
                 "updated_at": stmt.excluded.updated_at,
             },

@@ -33,6 +33,7 @@ async def index_meeting(
         vector = await embedder.embed(text=text, tenant_context=tenant_context)
         await meetings.set_embedding(
             tenant_context=tenant_context,
+            calendar_id=meeting.calendar_id,
             google_event_id=meeting.google_event_id,
             vector=vector,
         )

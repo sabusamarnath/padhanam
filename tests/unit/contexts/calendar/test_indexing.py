@@ -125,7 +125,9 @@ class FakeMeetingRepo:
     async def tombstone_meeting(self, **_kwargs) -> None:  # pragma: no cover
         pass
 
-    async def set_embedding(self, *, tenant_context, google_event_id, vector) -> None:
+    async def set_embedding(
+        self, *, tenant_context, calendar_id, google_event_id, vector
+    ) -> None:
         self.embeddings[google_event_id] = list(vector)
 
 
@@ -194,7 +196,9 @@ class _FakeStore(FakeMeetingRepo):
     async def upsert_meeting(self, *, tenant_context, meeting) -> None:
         self.rows[meeting.google_event_id] = meeting
 
-    async def get_by_event_id(self, *, tenant_context, google_event_id):
+    async def get_by_event_id(
+        self, *, tenant_context, google_event_id, calendar_id=None
+    ):
         return self.rows.get(google_event_id)
 
     async def list_meetings(self, **_kwargs):  # pragma: no cover

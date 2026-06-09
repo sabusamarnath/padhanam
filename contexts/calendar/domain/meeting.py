@@ -64,6 +64,13 @@ class Meeting:
     created_at: datetime
     updated_at: datetime
     cancelled_at: datetime | None = None
+    # The connection-scoped calendar identity (D176). Value is the calendar
+    # connection's id at the current primary-only pull (one connection = one
+    # account's primary calendar); part of the Meeting identity key
+    # (tenant_id, calendar_id, google_event_id) so two accounts whose primary
+    # calendars share a Google event id do not collide. Defaults empty for
+    # pure-domain test construction; the sync path always sets it.
+    calendar_id: str = ""
 
     def __post_init__(self) -> None:
         if not self.jurisdiction or not self.jurisdiction.strip():
@@ -151,6 +158,7 @@ def meeting_from_event(
     meeting_id: UUID,
     now: datetime,
     created_at: datetime | None = None,
+    calendar_id: str = "",
 ) -> Meeting:
     """Map a live (non-cancelled) fetched event to a stored Meeting.
 
@@ -184,6 +192,7 @@ def meeting_from_event(
         id=meeting_id,
         tenant_id=tenant_id,
         jurisdiction=jurisdiction,
+        calendar_id=calendar_id,
         google_event_id=event.google_event_id,
         status=status,
         title=event.summary,
