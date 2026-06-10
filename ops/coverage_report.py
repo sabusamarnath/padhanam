@@ -91,13 +91,23 @@ async def _report() -> None:
         f"has_coverage={cov.has_coverage}\n"
     )
 
+    # Per-goal coverage is folded by source series (D175 reaching the coverage
+    # read; D177): a dense goal reads as its distinct routines, not the raw
+    # serving instances. ``linked_goals`` carries the fold from the domain.
+    linked_by_goal = {lg.outcome_id: lg for lg in assessment.linked_goals}
     print("per goal:")
     for goal in sorted(goals, key=lambda g: g.name.lower()):
-        goal_edges = edges_by_goal.get(goal.id, [])
-        if goal_edges:
-            tiers = Counter(e.status.value for e in goal_edges)
-            tier_str = ", ".join(f"{n} {s}" for s, n in sorted(tiers.items()))
-            print(f"  LINKED    {goal.name:<26} {len(goal_edges)} units ({tier_str})")
+        lg = linked_by_goal.get(goal.id)
+        if lg is not None:
+            inst = (
+                f", folded from {lg.total_instances} instances"
+                if lg.total_instances > lg.distinct_units
+                else ""
+            )
+            print(
+                f"  LINKED    {goal.name:<26} {lg.distinct_units} routines "
+                f"({lg.confirmed_distinct} confirmed{inst})"
+            )
         else:
             print(f"  uncovered {goal.name:<26} (Padhanam can't see work for this)")
 

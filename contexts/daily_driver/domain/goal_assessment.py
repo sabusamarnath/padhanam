@@ -82,6 +82,28 @@ class GoalCoverage:
 
 
 @dataclass(frozen=True)
+class LinkedGoal:
+    """A covered goal's linked work, folded by source series (D175 reaching the
+    coverage read; D177's dense activation case).
+
+    A goal whose work is one recurring routine — or several, the health
+    regimen's four medications — links one unit per instance (~120 each, ~480
+    total). The coverage read must show the **distinct routines** (~4), not the
+    raw serving instances (~480), or a dense goal floods exactly as the orphan
+    read did before D175. ``distinct_units`` folds linked units sharing a source
+    series into one (the same fold the orphan read uses); ``total_instances`` is
+    the raw count; ``confirmed_distinct`` is how many of the distinct routines
+    carry a confirmed (0.9) edge.
+    """
+
+    outcome_id: UUID
+    name: str
+    distinct_units: int
+    total_instances: int
+    confirmed_distinct: int
+
+
+@dataclass(frozen=True)
 class UncoveredGoal:
     """A goal with no linked evidence — *uncovered*, not neglected (D171).
 
@@ -129,6 +151,7 @@ class GoalAssessment:
     coverage: GoalCoverage
     uncovered_goals: tuple[UncoveredGoal, ...]
     orphan_work: tuple[OrphanUnit, ...]
+    linked_goals: tuple[LinkedGoal, ...] = ()
 
 
 def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
@@ -337,10 +360,46 @@ def assess_goals(
         unlinked = [u for u in units if u.unit_id not in units_with_edge]
         orphan_work = _group_orphans_by_series(unlinked)
 
+    # Per-goal coverage, folded by source series (D175 reaching coverage; D177).
+    # A dense goal (the health regimen's four medications, ~120 instances each)
+    # reads as its distinct routines, not the raw serving instances — the same
+    # fold the orphan read uses, so the coverage read does not flood.
+    units_by_id = {u.unit_id: u for u in units}
+    edges_by_goal: dict[UUID, list[GoalEdge]] = {}
+    for e in edges:
+        edges_by_goal.setdefault(e.outcome_id, []).append(e)
+    linked_goals: list[LinkedGoal] = []
+    for goal in goals:
+        g_edges = edges_by_goal.get(goal.id)
+        if not g_edges:
+            continue
+        series_count: dict[object, int] = {}
+        series_confirmed: dict[object, bool] = {}
+        for e in g_edges:
+            unit = units_by_id.get(e.unit_id)
+            if unit is None:
+                continue
+            key = unit.series_id or ("solo", unit.unit_id)
+            series_count[key] = series_count.get(key, 0) + 1
+            if e.status is LinkStatus.CONFIRMED:
+                series_confirmed[key] = True
+        linked_goals.append(
+            LinkedGoal(
+                outcome_id=goal.id,
+                name=goal.name,
+                distinct_units=len(series_count),
+                total_instances=sum(series_count.values()),
+                confirmed_distinct=sum(
+                    1 for k in series_count if series_confirmed.get(k)
+                ),
+            )
+        )
+
     return GoalAssessment(
         coverage=coverage,
         uncovered_goals=uncovered,
         orphan_work=orphan_work,
+        linked_goals=tuple(linked_goals),
     )
 
 
@@ -349,6 +408,7 @@ __all__ = [
     "GoalAssessment",
     "GoalCoverage",
     "GoalEdge",
+    "LinkedGoal",
     "OrphanUnit",
     "UncoveredGoal",
     "assess_goals",

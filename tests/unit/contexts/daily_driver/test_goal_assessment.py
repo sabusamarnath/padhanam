@@ -300,3 +300,22 @@ def test_multi_commitment_goal_confirms_against_any_lever():
     assert all(e.confidence == 0.9 for e in edges if e.basis == "commitment")
     # The unrelated unit confirms against none of the four (no false positive).
     assert noise.unit_id not in confirmed
+
+
+def test_dense_recurring_coverage_folds_in_the_coverage_read():
+    """D175's recurrence-fold reaches the coverage read (D177): a goal whose
+    linked work is one recurring series of N instances reads as 1 distinct
+    routine carrying N instances, not N raw linked units — so a dense goal
+    (the health regimen's medications, ~120 instances each) does not flood."""
+    cid = uuid4()
+    goal = _progressive_goal("Medication", lever_commitment_id=cid)
+    series = "recurring-med-series"
+    units = tuple(
+        _unit("daily med", series_id=series, unit_id=uuid4()) for _ in range(120)
+    )
+    edges = infer_goal_edges(units, (goal,), {cid: "daily med"})
+    assessment = assess_goals(units, (goal,), edges)
+    linked = {lg.outcome_id: lg for lg in assessment.linked_goals}[goal.id]
+    assert linked.distinct_units == 1  # one routine, folded
+    assert linked.total_instances == 120  # the raw instance count, not flooded
+    assert linked.confirmed_distinct == 1
