@@ -267,3 +267,36 @@ def test_removed_facets_do_not_drive_a_match():
     )
     edges = infer_goal_edges((unit,), (goal,), {cid: "German practice"})
     assert edges == ()
+
+
+def test_multi_commitment_goal_confirms_against_any_lever():
+    """D177: a goal carrying a lever-commitment per work-type confirms a unit
+    against ANY of its commitments (the health regimen's four medication
+    routines), not just the first lever (the S69 single-lever cap), and a
+    non-matching title produces no false confirmed edge."""
+    c1, c2, c3, c4 = uuid4(), uuid4(), uuid4(), uuid4()
+    goal = Goal(
+        id=uuid4(),
+        tenant_id=_TENANT,
+        jurisdiction="eu-west",
+        name="Health regimen",
+        mode=GoalMode.HOMEOSTATIC,
+        control=ControlAxis.SELF,
+        subject=Subject.SELF,
+        lever_commitment_ids=(c1, c2, c3, c4),
+    )
+    names = {c1: "med one", c2: "med two", c3: "med three", c4: "med four"}
+    u1, u2, u3, u4 = (
+        _unit("med one"),
+        _unit("med two"),
+        _unit("med three"),
+        _unit("med four"),
+    )
+    noise = _unit("buy groceries")
+    edges = infer_goal_edges((u1, u2, u3, u4, noise), (goal,), names)
+    confirmed = {e.unit_id for e in edges if e.basis == "commitment"}
+    # All four work-types confirm — not just the first lever.
+    assert confirmed == {u1.unit_id, u2.unit_id, u3.unit_id, u4.unit_id}
+    assert all(e.confidence == 0.9 for e in edges if e.basis == "commitment")
+    # The unrelated unit confirms against none of the four (no false positive).
+    assert noise.unit_id not in confirmed

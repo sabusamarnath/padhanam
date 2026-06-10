@@ -380,6 +380,7 @@ class GoalGraphAdapter:
         mode = GoalMode(record.mode)
         ladder = None
         lever_commitment_id = None
+        lever_commitment_ids: tuple[UUID, ...] = ()
         terminal = None
         steps: tuple[LeverStep, ...] = ()
         if mode is GoalMode.PROGRESSIVE:
@@ -388,9 +389,13 @@ class GoalGraphAdapter:
                     levels=tuple(record.ladder),
                     current_target_level=record.current_target_level,
                 )
-            # A progressive goal has a single lever.
+            # A progressive goal's primary lever is the first; D177 carries the
+            # whole set so the confirmed tier matches a unit against any.
             if record.levers:
                 lever_commitment_id = record.levers[0].commitment_id
+                lever_commitment_ids = tuple(
+                    lever.commitment_id for lever in record.levers
+                )
         elif mode is GoalMode.SEQUENCE:
             if record.terminal_target:
                 terminal = Terminal(
@@ -406,11 +411,16 @@ class GoalGraphAdapter:
                 for idx, lever in enumerate(record.levers)
             )
         else:
-            # Homeostatic (and any other single-lever cadence mode): one lever,
-            # no ladder/terminal. Extract it so the goal-facet confirmed tier
-            # (D169) can match a unit against the lever-commitment name (S69).
+            # Homeostatic (and any other cadence mode): D177 — a regimen carries
+            # a lever-commitment per work-type (the health regimen's four
+            # medications). The primary is the first; the whole set is extracted
+            # so the confirmed tier (D169) matches a unit against any, not one
+            # (S69 took only the first, which understated multi-facet coverage).
             if record.levers:
                 lever_commitment_id = record.levers[0].commitment_id
+                lever_commitment_ids = tuple(
+                    lever.commitment_id for lever in record.levers
+                )
         return Goal(
             id=record.outcome_id,
             tenant_id=UUID(str(tenant_context.tenant_id)),
@@ -420,6 +430,7 @@ class GoalGraphAdapter:
             control=ControlAxis(record.control),
             subject=Subject(record.subject),
             lever_commitment_id=lever_commitment_id,
+            lever_commitment_ids=lever_commitment_ids,
             ladder=ladder,
             terminal=terminal,
             steps=steps,

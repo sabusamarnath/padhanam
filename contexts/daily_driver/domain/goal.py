@@ -192,6 +192,13 @@ class Goal:
     control: ControlAxis
     subject: Subject
     lever_commitment_id: UUID | None = None
+    # Multi-commitment goals (D177): a goal's work is often several distinct
+    # commitments (a health regimen is four medications; a fitness goal is
+    # strength, cardio, mobility). The full set of lever-commitments any mode
+    # may carry; the confirmed tier matches a unit against any of them. The
+    # singular ``lever_commitment_id`` stays the primary lever (the goal_view
+    # progress read for progressive/homeostatic); this carries the whole set.
+    lever_commitment_ids: tuple[UUID, ...] = ()
     ladder: LevelLadder | None = None
     terminal: Terminal | None = None
     steps: tuple[LeverStep, ...] = ()

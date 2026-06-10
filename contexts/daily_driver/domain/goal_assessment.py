@@ -132,11 +132,24 @@ class GoalAssessment:
 
 
 def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
-    """Every Postgres commitment id that serves as a lever for the goal."""
+    """Every Postgres commitment id that serves as a lever for the goal.
+
+    A goal may carry many lever-commitments (D177): the primary
+    ``lever_commitment_id``, the full ``lever_commitment_ids`` set (any mode),
+    and a sequence's ``steps``. The confirmed tier matches a unit against any of
+    them. Deduplicated, order-preserving.
+    """
     ids: list[UUID] = []
-    if goal.lever_commitment_id is not None:
-        ids.append(goal.lever_commitment_id)
-    ids.extend(step.commitment_id for step in goal.steps)
+    seen: set[UUID] = set()
+    candidates = (
+        goal.lever_commitment_id,
+        *goal.lever_commitment_ids,
+        *(step.commitment_id for step in goal.steps),
+    )
+    for cid in candidates:
+        if cid is not None and cid not in seen:
+            seen.add(cid)
+            ids.append(cid)
     return tuple(ids)
 
 
