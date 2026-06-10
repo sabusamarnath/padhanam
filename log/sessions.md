@@ -3778,3 +3778,27 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## S78 — Work-calendar connect: infrastructure landed, the live second-account connect did not (deferred)
+roles: engineer (the multi-connection sync extension, the title-dump tool, the live Nango reconciliation), analyst (the Step 0 connect-surface finding, the no-operator-connection verification), technical writer (this close)
+mode: operational + build, gated on an operator runtime action (the second-account OAuth) that did not complete. Honest deferral close.
+
+S78 set out to connect the operator's work calendar as a distinct second connection on the personal tenant, pull and correlate its events scoped by `calendar_id`, and surface the work-meeting title shape for the S79 seed. **The infrastructure landed; the live connect did not.**
+
+- **Step 0 — the load-bearing finding (resolved in our favour).** The connect surface **does** support a distinct second connection: the D176-relaxed upsert key `(tenant, provider, provider_config_key, provider_connection_ref)` makes a distinct ref an INSERT, not an overwrite (verified in the live connection repo), so a second account coexists with the personal row without aging it out. The architectural guard correctly did not trip — this is the relaxed key behaving as D176 specified, a mechanical reuse of the existing flow, not a new decision. *(The connect surface supporting only one account, as the S78 brief framed it, is not what the live code shows — D176 supports the second; the blocker was the OAuth, below.)*
+- **What landed (ready infrastructure for an eventual work-merge).** `sync-calendar` now iterates **every** tenant connection, each scoped by its own `calendar_id`, with a two-connection unit test (`9fc25f9`); `make dump-calendar-titles` is the read-only decrypting title-dump for the seed input (`6207aa3`); the S78 charter marker (`5859c04`). Suite green, import-linter 43/0.
+- **Why it deferred — the live connect did not complete.** The in-app one-tap connect-session is operator-gated and raises (D160, no wired session creator), so the only path is the Nango self-hosted runbook → POST the ref to `/calendar/callback`. Across the attempt, **no second google-calendar connection ever persisted in this self-hosted Nango**: a direct read of `_nango_connections` showed exactly two google-calendar connections, both pre-existing (`d46195b2` from S55a/tenant_a, `f5cfb303` the personal account), and no fifth connection under any integration. The most likely causes (the work/second Gmail not yet added as a test user on the OAuth consent screen, or the authorization completed against a different Nango environment) are operator-side; the connection simply was not in the broker, so there was no ref to save and nothing to pull. I declined to substitute the personal ref (that would re-point and age out the personal corpus, the exact D176 failure mode) — the honest outcome is a deferral, not a forced connect.
+- Carry-forward (the E3 clothing cluster): three items now sit at the experience-layer threshold, all out of thicken-phase scope — **(1)** the in-app one-tap connect raising since D160 (real users cannot connect in-product, only the operator via the Nango runbook); **(2)** per-calendar domain tagging, the D159-deferred build now activated by the second-calendar threshold (storage-architecture choice → its D-entry at E3 framing); **(3)** a working second-account connect path. The deferred professional coverage and the work-merge re-open when a connect path exists.
+- Close state: **D176 multi-calendar infrastructure is built, deployed (S77), and connection-iterating (S78), and stands ready for a work-merge the moment a second calendar connects.** Professional coverage is deferred to that merge. S79 proves the confirmed-coverage loop on the accessible personal side meanwhile, which does not need the work calendar.
+
+```
+metrics:
+  classification: operational + build (work-connect deferral)
+  session_closed: 2026-06-09
+  multi_connection_sync: landed (9fc25f9)
+  title_dump_tool: landed (6207aa3)
+  second_account_connection: did not persist in Nango (deferred)
+  professional_coverage: deferred to the work-merge
+  principles_intact: yes
+  charter_touchpoints: charter/current-package.md; ops/sync_calendar.py + tests; ops/dump_calendar_titles.py + Makefile; log/sessions.md (this entry)
+```
