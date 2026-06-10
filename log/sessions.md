@@ -3802,3 +3802,38 @@ metrics:
   principles_intact: yes
   charter_touchpoints: charter/current-package.md; ops/sync_calendar.py + tests; ops/dump_calendar_titles.py + Makefile; log/sessions.md (this entry)
 ```
+
+## S79 — Personal-goal seed-and-measure dry run: the confirmed-coverage loop proven (7/7) (build mode)
+roles: analyst (the corpus read, the correction of a wrong finding, the per-goal diagnosis), engineer (the lever-rename, the re-correlate + measure, the recovery point), PM (the title-matchability read, the transferable signal for the professional seed), technical writer (this entry)
+mode: build session, live-DB mutation (lever-renames on the personal tenant), recovery-point taken. A mechanism-proof on the accessible personal side, explicitly **not** the gate week (the no-personal-only-gate rule holds).
+
+S79 proved the moat's confirmed-coverage loop on the personal corpus: lever-naming each goal's commitment to the exact title of its ingested work converted all seven candidate edges to **confirmed (0.9)** edges. **7/7 confirmed, up from 7 candidate / 0 confirmed (S71).**
+
+- **Step 0.** Corpus: 996 calendar meetings (medication/family/social, no goal-work) + a 44-task cache, of which seven **active** tasks are the goal-work — `German`, `Fitness`, `Wide World Marathon`, `Voice`, `Stretch · meditate`, `Litany`, `Job search`, one per goal. The seven goals carried 7 candidate edges (basis `goal-name`) / 0 confirmed (the S71 baseline); lever-commitments were descriptively named (`German practice`, `Strength micro-sessions`, `Marathon training run`, …). The confirmed tier is exact lever-name match only (D169); `make coverage-report` is the instrument; this is S79 (D176 highest, S78 commits landed).
+- **The correction (a methodology miss, caught and owned).** I first concluded "goal-work not ingested" from an **incomplete** task read — the decrypted dump truncated at the completed personal errands ("Pick up meds", "Cancel NowTV") and I missed the seven active goal-work tasks behind them. The operator agreed to close on that finding; I had committed the S78 close + S79 marker on it. Before closing S79 I checked **what the candidate edges actually linked to** — each linked (basis `goal-name`) to one of the seven goal-work tasks — which disproved the finding. The goal-work **is** ingested. I declined to execute a close on a finding I had just disproven and surfaced the correction; the operator confirmed the real measurement.
+- **The measurement.** A fresh recovery point (`pg_dump` of `commitments` to `/tmp/s79_recovery/`), then the seven lever-commitments renamed to the **exact** task titles (a local DB `UPDATE`, not committed — titles stay local), `correlate-units`, `coverage-report`. Result: **7/7 confirmed**, every edge basis `commitment` (the exact-match bridge, not `goal-name`) — so no false confirmed edges (AC5); the candidate edges **upgraded** to confirmed, none lost (AC6). Units 989→1006, orphans 41→42 (the re-correlate folded the S77-pending calendar events; not load-bearing). No code changed (charter + log + DB only); the suite stands from S78 (AC7).
+- Reflection — **the required title-matchability read.** Title-only lever-naming **sufficed** here: all seven goals confirmed, because the operator's goal-work tasks are **clean single-concept labels** (`German`, `Fitness`, `Voice`, `Litany`) a lever-name can equal exactly. The referential class D174 named (a person/place/tool name standing in for the work) did **not** bite — none of these titles is oblique. But that is the **easy** case, and the dry run's honest limit: these tasks are essentially goal-labels the operator titled to be matchable. **Real professional work-meeting titles are unlikely to be this clean** — they tend to be generic (`Sync`, `1:1`, `Standup`, `Catch-up`) or referential (a project codename, a counterpart's name), which an exact lever-name cannot reach. So this proves the **mechanism** (lever-name = work-title → confirmed) but does **not** test the **hard** case the professional seed will face. The transferable signal: the professional seed's confirmed coverage hinges on whether real work-meeting titles are lever-nameable; where they are generic/referential, the tag-or-domain-linkage refinement (S69/D174) is the thing that will be needed there — and *that* is when its D-entry gets drafted, against real residual evidence, not now (the guard).
+- Reflection — **the constraint the loop imposes.** Confirmed requires the lever-name to **exactly equal** a unit title (the precise commitment bridge, D169), which forces the operator to name levers as their work is titled, not descriptively (`German` not `German practice`). That naming constraint is itself product friction the clothing phase and the professional seed inherit: either the user titles work to match goals, or the moat needs a linkage that does not depend on title equality.
+- methodology: the miss-and-catch is the lesson. Concluding "absent" from a **partial** read (the truncated dump) produced a confident wrong finding; the fix was to interrogate the *actual linked data* (what the candidate edges pointed at), which the evidence then corrected. And when the correction invalidated the operator's "close on work-not-ingested" instruction, the honest move was to surface the disproof and not commit a false close — the same don't-assert-past-the-evidence discipline the charter keeps relearning (S4, S55a-fix), here applied to my own prior conclusion within a single session.
+- Carry-forward: the lever-renames **stand** (the operator's tasks are titled `German`/`Fitness`/etc., so the levers matching them is the legitimate confirmed bridge; revert to descriptive names trades confirmed → candidate, the operator's call). The professional seed and professional coverage re-open at the **work-merge**, when a second-calendar connect path exists (the deferred E3 cluster). The generic/referential-title hard case is what that seed will measure; this dry run hands it a proven mechanism and a named risk.
+- Close state: **the confirmed-coverage loop is proven on the personal side — 7/7 confirmed, exact-match, no false edges.** The moat converts ingested-and-matchably-titled goal-work into confirmed edges cleanly; the open question it cannot answer from the personal corpus is whether real professional work-meeting titles are matchable, which the professional seed inherits. The recovery point is in `/tmp/s79_recovery/`.
+
+```
+metrics:
+  classification: build session (personal-goal seed-and-measure dry run, mechanism-proof)
+  session_started: 2026-06-10
+  session_closed: 2026-06-10
+  confirmed_coverage: 7/7 (up from 7 candidate / 0 confirmed at S71)
+  candidate_only: 0
+  uncovered: 0
+  false_confirmed_edges: 0 (all basis=commitment, exact lever-name match)
+  goal_work_ingested: yes (7 active tasks, one per goal)
+  title_only_sufficed: yes on clean task-labels; the generic/referential hard case is untested here (the professional seed inherits it)
+  refinement_signal: tag-or-domain linkage deferred to the professional seed's real residual (no D-entry now, per the guard)
+  recovery_point: /tmp/s79_recovery/commitments_pre_rename.sql
+  tests_passing: no code changed this session; suite stands from S78
+  principles_intact: yes
+  charter_touchpoints: charter/current-package.md (S79 marker, prior commit); log/sessions.md (this entry); commitments lever-names (live DB, local)
+  corrects: my own in-session work-not-ingested misread
+  corrected_by:
+```
