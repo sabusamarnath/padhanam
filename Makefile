@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-calendar correlate-units coverage-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-calendar dump-calendar-titles correlate-units coverage-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -249,6 +249,12 @@ pull-tasks: derive-env
 # Read-only into the re-pullable meetings cache (D155). Idempotent.
 sync-calendar: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.sync_calendar
+
+# Dump distinct calendar meeting titles per connection (S78 → S79 seed
+# input): reads meetings through the decrypting MeetingReader (D21),
+# groups by calendar_id. Read-only. Capture stdout to a committed artefact.
+dump-calendar-titles: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.dump_calendar_titles
 
 # Correlate the personal tenant's work units (S66, D168): read the
 # read-only caches (tasks/calendar/email), run the title-and-time
