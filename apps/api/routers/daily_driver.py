@@ -46,14 +46,17 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     FacetSuggestionDTO,
     GoalAssessmentDTO,
+    GoalGroupedUnitsDTO,
     SetOrderRequest,
     TaskDTO,
     TodayDTO,
     UnitDTO,
     _empty_assessment_dto,
+    _empty_grouped_units_dto,
     facet_suggestion_to_dto,
     goal_assessment_to_dto,
     goal_reading_to_dto,
+    grouped_units_to_dto,
     task_to_dto,
     today_view_to_dto,
     unit_view_to_dto,
@@ -65,6 +68,7 @@ from contexts.daily_driver.application import (
     list_goals,
     list_today,
     list_units,
+    list_units_by_goal,
     log_commitment_completion,
     mark_item_done,
     raise_goal_target,
@@ -397,6 +401,31 @@ async def get_assessment(
         actor=actor,
     )
     return goal_assessment_to_dto(assessment)
+
+
+@router.get("/units-by-goal", response_model=GoalGroupedUnitsDTO)
+async def get_units_by_goal(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+    goal_graph: Annotated[object | None, Depends(get_goal_graph_optional)],
+) -> GoalGroupedUnitsDTO:
+    """Return the moat view anchored on the goal served (D180).
+
+    Units grouped under the ``:Outcome`` each ``SERVES``; orphan units under one
+    unlinked group (coverage-gated, D171); the D175 fold applied before
+    grouping. A read-and-render projection — no graph write. Degrades to an
+    empty, zero-coverage view when the correlation seams are unconfigured.
+    """
+    if unit_graph is None or facet_source is None or goal_graph is None:
+        return _empty_grouped_units_dto()
+    grouped = await list_units_by_goal(
+        unit_graph=unit_graph,
+        facet_source=facet_source,
+        goal_graph=goal_graph,
+        actor=actor,
+    )
+    return grouped_units_to_dto(grouped)
 
 
 @router.get("/suggestions", response_model=list[FacetSuggestionDTO])

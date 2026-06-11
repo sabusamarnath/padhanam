@@ -15,9 +15,13 @@ from contexts.daily_driver.domain.goal import (
     Terminal,
     TerminalState,
 )
+from datetime import datetime, timezone
+
 from contexts.daily_driver.domain.goal_assessment import (
+    GoalEdge,
     assess_goals,
     commitment_domains_from_goals,
+    group_units_by_goal,
     infer_goal_edges,
 )
 from contexts.daily_driver.domain.unit_view import UnitFacetView, UnitView
@@ -399,3 +403,102 @@ def test_commitment_domains_clamps_unknown_domain_to_work():
     cid = uuid4()
     goal = _domain_goal(name="Meds", domain="health", lever_commitment_id=cid)
     assert commitment_domains_from_goals([goal]) == {cid: "work"}
+
+
+# --- D180: group_units_by_goal (the moat view anchored on the goal served) ---
+
+def _served_unit(title, *, series_id=None, occurred_at=None,
+                 facet_type=FacetType.MEETING):
+    return UnitView(
+        unit_id=uuid4(),
+        title=title,
+        facets=(
+            UnitFacetView(
+                facet_type=facet_type, facet_id=uuid4(), title=title,
+                occurred_at=occurred_at, status=LinkStatus.CONFIRMED,
+                confidence=1.0, basis="anchor", present=True,
+                series_id=series_id,
+            ),
+        ),
+    )
+
+
+def _edge(unit, goal, status=LinkStatus.CONFIRMED, basis="commitment"):
+    return GoalEdge(
+        unit_id=unit.unit_id, outcome_id=goal.id, confidence=0.9,
+        status=status, basis=basis,
+    )
+
+
+def test_group_yields_one_group_of_n_not_n_flat_rows():
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    units = (_served_unit("A"), _served_unit("B"), _served_unit("C"))
+    edges = tuple(_edge(u, goal) for u in units)
+    grouped = group_units_by_goal(units, (goal,), edges)
+    assert len(grouped.groups) == 1
+    assert grouped.groups[0].outcome_id == goal.id
+    assert len(grouped.groups[0].units) == 3
+    assert grouped.unlinked == ()
+
+
+def test_group_folds_a_recurring_series_to_one_row():
+    # D175 applied before grouping: ~N instances of one series → one row.
+    goal = _progressive_goal("Meds", lever_commitment_id=uuid4())
+    insts = tuple(_served_unit("Dose", series_id="rec-1") for _ in range(5))
+    edges = tuple(_edge(u, goal) for u in insts)
+    grouped = group_units_by_goal(insts, (goal,), edges)
+    rows = grouped.groups[0].units
+    assert len(rows) == 1
+    assert rows[0].instance_count == 5
+
+
+def test_orphans_land_in_unlinked_none_dropped():
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    served = _served_unit("German practice")
+    o1, o2 = _served_unit("Budget review"), _served_unit("Call bank")
+    grouped = group_units_by_goal((served, o1, o2), (goal,), (_edge(served, goal),))
+    assert {r.title for r in grouped.unlinked} == {"Budget review", "Call bank"}
+    # the unlinked count equals the orphan count; none dropped
+    assert len(grouped.unlinked) == 2
+
+
+def test_no_coverage_suppresses_unlinked_and_groups():
+    # D171: outside the coverage boundary, an unlinked unit is unproven, withheld.
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    grouped = group_units_by_goal((_served_unit("Budget review"),), (goal,), ())
+    assert grouped.coverage.has_coverage is False
+    assert grouped.unlinked == ()
+    assert grouped.groups == ()
+
+
+def test_groups_follow_canonical_goal_order():
+    g1 = _progressive_goal("Alpha", lever_commitment_id=uuid4())
+    g2 = _progressive_goal("Beta", lever_commitment_id=uuid4())
+    ua, ub = _served_unit("a"), _served_unit("b")
+    grouped = group_units_by_goal(
+        (ua, ub), (g1, g2), (_edge(ua, g1), _edge(ub, g2))
+    )
+    assert [g.name for g in grouped.groups] == ["Alpha", "Beta"]
+
+
+def test_within_group_orders_by_time_then_title():
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    later = _served_unit("Z", occurred_at=datetime(2026, 6, 3, tzinfo=timezone.utc))
+    earlier = _served_unit("A", occurred_at=datetime(2026, 6, 1, tzinfo=timezone.utc))
+    grouped = group_units_by_goal(
+        (later, earlier), (goal,), (_edge(later, goal), _edge(earlier, goal))
+    )
+    assert [r.title for r in grouped.groups[0].units] == ["A", "Z"]
+
+
+def test_confirmed_flag_reflects_serving_edge_status():
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    conf, cand = _served_unit("conf"), _served_unit("cand")
+    grouped = group_units_by_goal(
+        (conf, cand), (goal,),
+        (_edge(conf, goal, LinkStatus.CONFIRMED),
+         _edge(cand, goal, LinkStatus.CANDIDATE, "goal-name")),
+    )
+    by_title = {r.title: r for r in grouped.groups[0].units}
+    assert by_title["conf"].confirmed is True
+    assert by_title["cand"].confirmed is False

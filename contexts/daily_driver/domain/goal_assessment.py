@@ -25,6 +25,7 @@ units candidate-linking to a homeostatic goal rather than reading as orphan
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Iterable
 from uuid import UUID
 
@@ -154,6 +155,172 @@ class GoalAssessment:
     uncovered_goals: tuple[UncoveredGoal, ...]
     orphan_work: tuple[OrphanUnit, ...]
     linked_goals: tuple[LinkedGoal, ...] = ()
+
+
+# ----------------------------------------------------------- D180 grouped read
+# The moat view anchored on the goal served: units grouped under the :Outcome
+# they SERVE, orphans under one unlinked group. A read-and-render projection
+# over the same inputs the coverage read takes (units, goals, SERVES edges) —
+# no graph write. The D175 series-fold applies before grouping (a recurring
+# unit is one row carrying its instance count).
+
+
+@dataclass(frozen=True)
+class GroupedUnit:
+    """One folded unit row inside a group (D180; the D175 fold applied).
+
+    ``confirmed`` is whether any serving edge for this row is confirmed (0.9,
+    D169) versus candidate-only; ``False`` for an unlinked (orphan) row.
+    ``instance_count`` is how many instances of a recurring series this row
+    folds (1 for a one-off). ``occurred_at`` is the row's representative time
+    (the earliest present facet), used for within-group ordering.
+    """
+
+    unit_id: UUID
+    title: str
+    facet_count: int
+    is_correlated: bool
+    confirmed: bool
+    series_id: str | None = None
+    instance_count: int = 1
+    occurred_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class GoalGroup:
+    """A goal gathering the units that SERVE it (D180)."""
+
+    outcome_id: UUID
+    name: str
+    domain: str | None
+    units: tuple[GroupedUnit, ...]
+
+
+@dataclass(frozen=True)
+class GoalGroupedUnits:
+    """The moat view anchored on the goal served (D180).
+
+    ``groups`` are the covered goals each gathering their (folded) serving unit
+    rows, in the goals' canonical order. ``unlinked`` is the single group of
+    orphan units (no SERVES edge), populated only inside the coverage boundary
+    (D171) and folded the same way. ``coverage`` is the boundary statement.
+    """
+
+    groups: tuple[GoalGroup, ...]
+    unlinked: tuple[GroupedUnit, ...]
+    coverage: GoalCoverage
+
+
+def _unit_time(unit: UnitView) -> datetime | None:
+    """A unit's representative time: the earliest present facet's ``occurred_at``."""
+    times = [
+        f.occurred_at
+        for f in unit.facets
+        if f.present and f.occurred_at is not None
+    ]
+    return min(times) if times else None
+
+
+def _fold_units_to_rows(
+    items: list[tuple[UnitView, bool]]
+) -> tuple[GroupedUnit, ...]:
+    """Fold (unit, confirmed) pairs by source series (D175) into one row each.
+
+    Units sharing a recurring-series id collapse to one representative row
+    carrying the instance count; a series is ``confirmed`` if any of its
+    members' serving edges is confirmed. Rows order by time then title (the
+    moat has no per-day proposed order — that is the action Today's, D180).
+    """
+    by_series: dict[object, list[tuple[UnitView, bool]]] = {}
+    order: list[object] = []
+    for unit, confirmed in items:
+        key: object = unit.series_id or ("solo", unit.unit_id)
+        if key not in by_series:
+            by_series[key] = []
+            order.append(key)
+        by_series[key].append((unit, confirmed))
+    rows: list[GroupedUnit] = []
+    for key in order:
+        members = by_series[key]
+        rep = members[0][0]
+        rows.append(
+            GroupedUnit(
+                unit_id=rep.unit_id,
+                title=rep.title,
+                facet_count=len(rep.facets),
+                is_correlated=rep.is_correlated,
+                confirmed=any(c for _, c in members),
+                series_id=rep.series_id,
+                instance_count=len(members),
+                occurred_at=_unit_time(rep),
+            )
+        )
+    rows.sort(
+        key=lambda r: (
+            r.occurred_at is None,
+            r.occurred_at.timestamp() if r.occurred_at is not None else 0.0,
+            r.title.lower(),
+        )
+    )
+    return tuple(rows)
+
+
+def group_units_by_goal(
+    units: tuple[UnitView, ...],
+    goals: tuple[Goal, ...],
+    edges: tuple[GoalEdge, ...],
+) -> GoalGroupedUnits:
+    """Group units under the goal each SERVES; orphans under one unlinked group.
+
+    Pure projection (D180) over the coverage read's inputs — no graph write. A
+    unit serving multiple goals appears under each. Groups follow the goals'
+    given (canonical) order; the unlinked group is rendered last and is emitted
+    only inside the coverage boundary (D171). The D175 fold runs before grouping.
+    """
+    goal_ids = {g.id for g in goals}
+    units_with_edge = {e.unit_id for e in edges}
+    goals_with_edge = {e.outcome_id for e in edges} & goal_ids
+    coverage = GoalCoverage(
+        goals_total=len(goals),
+        goals_covered=len(goals_with_edge),
+        units_total=len(units),
+        units_linked=len(units_with_edge),
+    )
+    units_by_id = {u.unit_id: u for u in units}
+    edges_by_goal: dict[UUID, list[GoalEdge]] = {}
+    for e in edges:
+        edges_by_goal.setdefault(e.outcome_id, []).append(e)
+
+    groups: list[GoalGroup] = []
+    for goal in goals:
+        g_edges = edges_by_goal.get(goal.id)
+        if not g_edges:
+            continue
+        items: list[tuple[UnitView, bool]] = []
+        for e in g_edges:
+            unit = units_by_id.get(e.unit_id)
+            if unit is None:
+                continue
+            items.append((unit, e.status is LinkStatus.CONFIRMED))
+        groups.append(
+            GoalGroup(
+                outcome_id=goal.id,
+                name=goal.name,
+                domain=goal.domain,
+                units=_fold_units_to_rows(items),
+            )
+        )
+
+    unlinked: tuple[GroupedUnit, ...] = ()
+    if coverage.has_coverage:
+        orphans = [
+            (u, False) for u in units if u.unit_id not in units_with_edge
+        ]
+        unlinked = _fold_units_to_rows(orphans)
+
+    return GoalGroupedUnits(
+        groups=tuple(groups), unlinked=unlinked, coverage=coverage
+    )
 
 
 def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
@@ -433,8 +600,12 @@ __all__ = [
     "GoalEdge",
     "LinkedGoal",
     "OrphanUnit",
+    "GoalGroup",
+    "GoalGroupedUnits",
+    "GroupedUnit",
     "UncoveredGoal",
     "assess_goals",
     "commitment_domains_from_goals",
+    "group_units_by_goal",
     "infer_goal_edges",
 ]

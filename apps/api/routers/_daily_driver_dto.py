@@ -20,7 +20,10 @@ from contexts.daily_driver.domain.today_item import (
     TodayView,
 )
 from contexts.daily_driver.domain.facet_suggestion import FacetSuggestion
-from contexts.daily_driver.domain.goal_assessment import GoalAssessment
+from contexts.daily_driver.domain.goal_assessment import (
+    GoalAssessment,
+    GoalGroupedUnits,
+)
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.tasks.domain.task import Task
 
@@ -381,6 +384,86 @@ def goal_assessment_to_dto(assessment: GoalAssessment) -> GoalAssessmentDTO:
             )
             for o in assessment.orphan_work
         ],
+    )
+
+
+# --- D180: the moat view anchored on the goal served --------------------------
+
+
+class GroupedUnitDTO(BaseModel):
+    """One folded unit row inside a group (D180; the D175 fold applied)."""
+
+    unit_id: UUID
+    title: str
+    facet_count: int
+    is_correlated: bool
+    confirmed: bool
+    instance_count: int = 1
+    series_id: str | None = None
+
+
+class GoalGroupDTO(BaseModel):
+    """A goal gathering the units that serve it (D180)."""
+
+    outcome_id: UUID
+    name: str
+    domain: str | None
+    units: list[GroupedUnitDTO]
+
+
+class GoalGroupedUnitsDTO(BaseModel):
+    """The moat view anchored on the goal served (D180): groups + unlinked."""
+
+    coverage: CoverageDTO
+    groups: list[GoalGroupDTO]
+    unlinked: list[GroupedUnitDTO]
+
+
+def _grouped_unit_dto(u) -> "GroupedUnitDTO":
+    return GroupedUnitDTO(
+        unit_id=u.unit_id,
+        title=u.title,
+        facet_count=u.facet_count,
+        is_correlated=u.is_correlated,
+        confirmed=u.confirmed,
+        instance_count=u.instance_count,
+        series_id=u.series_id,
+    )
+
+
+def _empty_grouped_units_dto() -> "GoalGroupedUnitsDTO":
+    """The zero-coverage grouped view for an unwired/empty instance (D171)."""
+    return GoalGroupedUnitsDTO(
+        coverage=CoverageDTO(
+            goals_total=0, goals_covered=0, units_total=0,
+            units_linked=0, has_coverage=False,
+        ),
+        groups=[],
+        unlinked=[],
+    )
+
+
+def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
+    """Encode the domain GoalGroupedUnits into the HTTP DTO (D180)."""
+    c = grouped.coverage
+    return GoalGroupedUnitsDTO(
+        coverage=CoverageDTO(
+            goals_total=c.goals_total,
+            goals_covered=c.goals_covered,
+            units_total=c.units_total,
+            units_linked=c.units_linked,
+            has_coverage=c.has_coverage,
+        ),
+        groups=[
+            GoalGroupDTO(
+                outcome_id=g.outcome_id,
+                name=g.name,
+                domain=g.domain,
+                units=[_grouped_unit_dto(u) for u in g.units],
+            )
+            for g in grouped.groups
+        ],
+        unlinked=[_grouped_unit_dto(u) for u in grouped.unlinked],
     )
 
 

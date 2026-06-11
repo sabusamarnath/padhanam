@@ -18,6 +18,9 @@ from contexts.daily_driver.application.list_goal_assessment import (
 from contexts.daily_driver.application.list_goals import list_goals
 from contexts.daily_driver.application.list_today import list_today
 from contexts.daily_driver.application.list_units import list_units
+from contexts.daily_driver.application.list_units_by_goal import (
+    list_units_by_goal,
+)
 from contexts.daily_driver.application.log_completion import (
     log_commitment_completion,
 )
@@ -39,6 +42,7 @@ __all__ = [
     "list_goals",
     "list_today",
     "list_units",
+    "list_units_by_goal",
     "log_commitment_completion",
     "mark_item_done",
     "raise_goal_target",
