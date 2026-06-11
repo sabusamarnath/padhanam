@@ -30,6 +30,7 @@ structured ``CalendarConversationResponse``), ``intent_class``, and
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import UUID, uuid4
@@ -96,6 +97,17 @@ from shared_kernel.intent_classification_calendar import (
     CALENDAR_INTENT_EXTRACTION_SCHEMA,
     build_calendar_extraction_prompt,
 )
+
+_log = logging.getLogger(__name__)
+
+# D178 background refresh: process-global state so a fire-and-forget refresh
+# survives the request that scheduled it and so rapid successive opens do not
+# stampede overlapping full syncs of the same tenant's calendar.
+#   _INFLIGHT_REFRESH — tenant ids with a refresh currently running.
+#   _BACKGROUND_TASKS — strong refs to the live tasks (asyncio holds only weak
+#     refs, so a task without a strong ref can be GC'd mid-flight).
+_INFLIGHT_REFRESH: set[str] = set()
+_BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
 _RESOLUTION_CANDIDATES_KEY = "resolution_candidates"
 _PURPOSE = "calendar_query"
@@ -183,6 +195,10 @@ class CalendarConversationCell:
         self._page_size = page_size
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._staleness_note: str | None = None
+        # The background refresh task scheduled this turn (D178), or None when
+        # none was scheduled (no port, or a refresh for this tenant is already
+        # in flight). Held so tests can deterministically await the refresh.
+        self._refresh_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------ open
     async def open(
@@ -284,32 +300,46 @@ class CalendarConversationCell:
 
     # ------------------------------------------------------------- refresh
     async def _maybe_refresh(self) -> None:
-        """Refresh the calendar within the tier budget (D150 Option A).
+        """Kick a calendar refresh in the background (D178, revising D150 A).
 
-        Sets ``self._staleness_note`` when the refresh times out or fails,
-        so any answer composed this turn carries the freshness caveat; a
-        successful (or absent) refresh clears it. Never raises — a refresh
-        miss must not fail the turn.
+        The open serves the cached Meeting store immediately — no synchronous
+        wait, no staleness caveat — and a fire-and-forget refresh updates the
+        store for the next turn. The refresh runs the D149 full sync, which
+        cannot fit a per-open budget at real corpus scale; blocking on it
+        (D150 Option A) taxed every open the full budget and fell back to
+        cache anyway, so backgrounding removes both the latency and the
+        always-on "timed out" warning while keeping the data near-fresh.
+
+        Process-global dedup (``_INFLIGHT_REFRESH``) keeps rapid successive
+        opens from stampeding overlapping full syncs of the same tenant's
+        calendar. The task never raises into the request: failures are
+        swallowed with a warning (the store simply stays as it was).
         """
         self._staleness_note = None
+        self._refresh_task = None
         if self._refresh_port is None:
             return
+        key = str(self._actor.tenant_context.tenant_id)
+        if key in _INFLIGHT_REFRESH:
+            return
+        _INFLIGHT_REFRESH.add(key)
+        task = asyncio.create_task(self._run_background_refresh(key))
+        self._refresh_task = task
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    async def _run_background_refresh(self, key: str) -> None:
+        """Run the scheduled refresh; never propagate, always release the key."""
         try:
-            await asyncio.wait_for(
-                self._refresh_port.refresh(
-                    tenant_context=self._actor.tenant_context
-                ),
-                timeout=self._refresh_timeout,
+            await self._refresh_port.refresh(
+                tenant_context=self._actor.tenant_context
             )
-        except asyncio.TimeoutError:
-            self._staleness_note = (
-                "Showing your cached calendar — the live refresh timed out."
-            )
-        except CalendarRefreshError:
-            self._staleness_note = (
-                "Showing your cached calendar — the live refresh is "
-                "currently unavailable."
-            )
+        except CalendarRefreshError as exc:
+            _log.warning("background calendar refresh unavailable: %s", exc)
+        except Exception as exc:  # fire-and-forget: must never crash the loop
+            _log.warning("background calendar refresh failed: %s", exc)
+        finally:
+            _INFLIGHT_REFRESH.discard(key)
 
     # ---------------------------------------------------------- intent extract
     async def _extract_intent(
