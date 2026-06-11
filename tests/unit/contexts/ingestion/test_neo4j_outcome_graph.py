@@ -140,6 +140,7 @@ def _row(**overrides) -> dict:
         "terminal_target": None,
         "terminal_state": None,
         "aliases": None,
+        "domain": None,
         "commitment_id": str(_COMMITMENT_ID),
         "step_order": None,
         "step_state": None,

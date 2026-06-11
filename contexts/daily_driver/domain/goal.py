@@ -206,6 +206,14 @@ class Goal:
     # candidate keyword path (D174 tier two). "Fitness" links to "Strength" via
     # an alias. Category synonyms only, never per-instance referential terms.
     aliases: tuple[str, ...] = ()
+    # Domain (D179): the surface tier a goal's covered work renders under
+    # (work / personal / family — KNOWN_CALENDAR_DOMAINS). A calendar item whose
+    # unit serves this goal inherits this domain at the Today read; an unset
+    # domain (None) falls through to the connection's default tag, like an
+    # orphan. Constrained to the known set; the read clamps an unknown value via
+    # ``resolve_calendar_domain``. A distinct ``health`` tier is a deferred
+    # surface addition (S83), so the health regimen carries ``personal`` today.
+    domain: str | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():

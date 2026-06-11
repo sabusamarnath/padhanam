@@ -160,7 +160,8 @@ SET
     o.current_target_level = $current_target_level,
     o.terminal_target = $terminal_target,
     o.terminal_state = $terminal_state,
-    o.aliases = $aliases
+    o.aliases = $aliases,
+    o.domain = $domain
 """
 
 # The LEVER_FOR edge carries only that a lever serves the outcome plus, for a
@@ -205,6 +206,7 @@ RETURN o.outcome_id AS outcome_id,
        o.terminal_target AS terminal_target,
        o.terminal_state AS terminal_state,
        o.aliases AS aliases,
+       o.domain AS domain,
        l.commitment_id AS commitment_id,
        r.step_order AS step_order,
        r.step_state AS step_state
@@ -549,6 +551,7 @@ class TenantScopedNeo4jSession:
         terminal_target: str | None = None,
         terminal_state: str | None = None,
         aliases: Sequence[str] = (),
+        domain: str | None = None,
     ) -> None:
         """MERGE an :Outcome node bound to the session's tenant (D163).
 
@@ -571,6 +574,7 @@ class TenantScopedNeo4jSession:
             "terminal_target": terminal_target,
             "terminal_state": terminal_state,
             "aliases": list(aliases),
+            "domain": domain,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_OUTCOME, params)
@@ -660,6 +664,7 @@ class TenantScopedNeo4jSession:
                     terminal_target=row["terminal_target"],
                     terminal_state=row["terminal_state"],
                     aliases=tuple(row["aliases"] or ()),
+                    domain=row["domain"],
                     levers=(lever,),
                 )
             else:

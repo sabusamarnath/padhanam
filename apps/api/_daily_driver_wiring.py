@@ -435,6 +435,7 @@ class GoalGraphAdapter:
             terminal=terminal,
             steps=steps,
             aliases=tuple(getattr(record, "aliases", ()) or ()),
+            domain=getattr(record, "domain", None),
         )
 
     async def list_goals(

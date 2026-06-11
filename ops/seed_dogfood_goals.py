@@ -67,6 +67,12 @@ class GoalSpec:
     # referential terms (no tutor names), so the residual still measures the
     # referential class honestly.
     aliases: tuple[str, ...] = ()
+    # Domain (D179): the surface tier this goal's covered work renders under
+    # (work / personal / family). Every dogfood goal here is a personal-life
+    # goal, so all default to "personal"; a work goal would set domain="work".
+    # A unit serving this goal inherits the domain at the Today read; the
+    # health regimen (seeded inline, local) is assigned its domain separately.
+    domain: str = "personal"
 
 
 # Deterministic, neutral ids — encode no real identity (the dogfood precedent).
@@ -179,6 +185,7 @@ async def _seed_one(spec: GoalSpec, *, commitments, graph, tenant_context) -> No
         ladder=spec.ladder,
         current_target_level=spec.current_target_level,
         aliases=spec.aliases,
+        domain=spec.domain,
     )
     await graph.merge_lever_for_outcome(
         tenant_context=tenant_context,

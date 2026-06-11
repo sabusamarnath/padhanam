@@ -175,6 +175,7 @@ class Neo4jGraphRepository:
         terminal_target: str | None = None,
         terminal_state: str | None = None,
         aliases: Sequence[str] = (),
+        domain: str | None = None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
@@ -189,6 +190,7 @@ class Neo4jGraphRepository:
                     terminal_target=terminal_target,
                     terminal_state=terminal_state,
                     aliases=aliases,
+                    domain=domain,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
