@@ -134,6 +134,27 @@ def title_tokens(text: str) -> frozenset[str]:
     )
 
 
+def _fold_by_series(meetings: list[Meeting]) -> list[Meeting]:
+    """One representative per recurring source series (D175 reaching the title
+    resolution; the same fold the orphan/coverage reads use).
+
+    A recurring event's many same-titled instances (a daily medication, ~120
+    instances) collapse to one representative keyed on ``recurring_event_id``;
+    a one-off is its own (keyed on its id). Without this, opening a recurring
+    event matched all its instances and forced a "choose among 122 meetings"
+    resolution clarification — overwhelming, and on the web path it 500'd
+    (the clarification's PendingClarification has no real originating intake).
+    """
+    seen: dict[object, Meeting] = {}
+    order: list[object] = []
+    for m in meetings:
+        key: object = m.recurring_event_id or ("solo", m.id)
+        if key not in seen:
+            seen[key] = m
+            order.append(key)
+    return [seen[k] for k in order]
+
+
 def resolve_title_reference(
     reference: str, meetings: tuple[Meeting, ...]
 ) -> tuple[Meeting | None, tuple[Meeting, ...]]:
@@ -141,7 +162,9 @@ def resolve_title_reference(
 
     Returns ``(matched, ())`` on exactly-one best match; ``(None, candidates)``
     on a multi-match top-scoring tie (D139 resolution-ambiguity); ``(None, ())``
-    on no match. Mirrors the audit cell's ``_resolve_case_reference``.
+    on no match. Recurring instances are folded by source series first (D175),
+    so a recurring event resolves to one representative rather than N instances.
+    Mirrors the audit cell's ``_resolve_case_reference``.
     """
     ref_tokens = title_tokens(reference)
     candidates = [
@@ -150,9 +173,13 @@ def resolve_title_reference(
     if not ref_tokens or not candidates:
         return None, ()
 
-    exact = [m for m in candidates if title_tokens(m.title or "") == ref_tokens]
+    exact = _fold_by_series(
+        [m for m in candidates if title_tokens(m.title or "") == ref_tokens]
+    )
     if len(exact) == 1:
         return exact[0], ()
+    if len(exact) > 1:
+        return None, tuple(exact)
 
     scored = [
         (len(ref_tokens & title_tokens(m.title or "")), m) for m in candidates
@@ -160,10 +187,10 @@ def resolve_title_reference(
     best = max(score for score, _ in scored)
     if best == 0:
         return None, ()
-    winners = tuple(m for score, m in scored if score == best)
+    winners = _fold_by_series([m for score, m in scored if score == best])
     if len(winners) == 1:
         return winners[0], ()
-    return None, winners
+    return None, tuple(winners)
 
 
 __all__ = [

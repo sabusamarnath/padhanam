@@ -77,3 +77,37 @@ def test_resolve_title_single_multi_none() -> None:
     # No match.
     matched, candidates = resolve_title_reference("budget review", (a, b, c))
     assert matched is None and candidates == ()
+
+
+def test_resolve_title_folds_recurring_series_to_one() -> None:
+    # A recurring event's many same-titled instances share a recurring_event_id;
+    # the fold (D175) collapses them to one representative so opening it renders
+    # directly instead of forcing a "choose among N" clarification (the web-path
+    # 500 root cause: the clarification's pending has no real originating intake).
+    series = [
+        make_meeting(
+            title="Second dose", start_at=_NOW, recurring_event_id="rec-1"
+        )
+        for _ in range(120)
+    ]
+    other = make_meeting(title="Standup", start_at=_NOW)
+    matched, candidates = resolve_title_reference(
+        "second dose", (*series, other)
+    )
+    assert matched is not None and matched.recurring_event_id == "rec-1"
+    assert candidates == ()
+
+
+def test_resolve_title_distinct_series_still_clarify() -> None:
+    # Two *distinct* recurring series sharing a title fold to one each, so the
+    # clarification is among series (2), not raw instances — manageable, honest.
+    s1 = [
+        make_meeting(title="Sync", start_at=_NOW, recurring_event_id="a")
+        for _ in range(5)
+    ]
+    s2 = [
+        make_meeting(title="Sync", start_at=_NOW, recurring_event_id="b")
+        for _ in range(5)
+    ]
+    matched, candidates = resolve_title_reference("sync", (*s1, *s2))
+    assert matched is None and len(candidates) == 2

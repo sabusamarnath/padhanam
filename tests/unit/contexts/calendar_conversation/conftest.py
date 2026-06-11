@@ -18,6 +18,7 @@ def make_meeting(
     organizer_email: str | None = None,
     status: MeetingStatus = MeetingStatus.CONFIRMED,
     event_id: str | None = None,
+    recurring_event_id: str | None = None,
     now: datetime | None = None,
 ) -> Meeting:
     now = now or datetime(2026, 6, 2, 9, 0, tzinfo=timezone.utc)
@@ -40,7 +41,7 @@ def make_meeting(
         start_raw=start_at.isoformat() if start_at else None,
         end_raw=None,
         source_updated_at=None,
-        recurring_event_id=None,
+        recurring_event_id=recurring_event_id,
         html_link=None,
         content_hash="h" if status is not MeetingStatus.CANCELLED else None,
         created_at=now,
