@@ -398,6 +398,7 @@ class GroupedUnitDTO(BaseModel):
     facet_count: int
     is_correlated: bool
     confirmed: bool
+    facet_types: list[str] = []
     instance_count: int = 1
     series_id: str | None = None
 
@@ -426,6 +427,7 @@ def _grouped_unit_dto(u) -> "GroupedUnitDTO":
         facet_count=u.facet_count,
         is_correlated=u.is_correlated,
         confirmed=u.confirmed,
+        facet_types=list(u.facet_types),
         instance_count=u.instance_count,
         series_id=u.series_id,
     )

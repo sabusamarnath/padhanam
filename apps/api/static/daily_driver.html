@@ -111,6 +111,12 @@
     .row .title { font-size: 14px; font-weight: 600; color: var(--ink-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .row.is-done .title { text-decoration: line-through; }
     .row .meta { font-size: 12px; color: var(--ink-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* D180: goal groups in the moat view */
+    .group { margin-bottom: 14px; }
+    .group-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+    .group-name { font-size: 13px; font-weight: 700; color: var(--ink-1); }
+    .group-count { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+    .facet-cue { flex-shrink: 0; min-width: 34px; font-size: 13px; color: var(--ink-2); }
     .reorder { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
     .reorder button { font: inherit; font-size: 10px; line-height: 1; color: var(--ink-3); background: none;
       border: 1px solid var(--hairline); border-radius: 3px; padding: 2px 5px; cursor: pointer; }
@@ -327,12 +333,9 @@
           <div class="section-label">Tasks</div>
           <p class="sub">Your Google Tasks, read-only — Padhanam reads them, it doesn't replace your task tool. Not yet linked to calendar or goals.</p>
           <div class="goals" id="tasks"></div>
-          <div class="section-label">Units of work</div>
-          <p class="sub">One piece of work, seen across your tools — the task, the calendar block, the email it came from, drawn together. Padhanam correlates them; it never writes the link back.</p>
-          <div class="goals" id="units"></div>
-          <div class="section-label">How am I doing</div>
-          <p class="sub">The layer no tool holds: work adrift of every goal, and goals nothing points at. Recommendations, not verdicts — only meaningful once your goals are seeded.</p>
-          <div class="goals" id="assessment"></div>
+          <div class="section-label">How am I doing — by goal</div>
+          <p class="sub">Your work, grouped under the goal it serves — the layer no tool holds. One row per unit, recurring work folded; work no goal claims sits under “unlinked”. Recommendations, not verdicts — meaningful once your goals are seeded.</p>
+          <div class="goals" id="moat"></div>
           <div class="section-label">Suggestions</div>
           <p class="sub">The facet a piece of goal-serving work is missing — a time block, prep, a task. Surfaced only when Padhanam is confident; silence is the default.</p>
           <div class="goals" id="suggestions"></div>
@@ -348,8 +351,7 @@
         loadToday();
         loadGoals();
         loadTasks();
-        loadUnits();
-        loadAssessment();
+        loadUnitsByGoal();
         loadSuggestions();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
@@ -493,96 +495,69 @@
     }
     // --- Units of work (S66, D168: cross-tool correlation, read-only) ---
     const FACET_GLYPH = { task: "✓", meeting: "📅", email: "✉" };
-    async function loadUnits() {
-      const box = document.getElementById("units"); if (!box) return;
-      let units;
-      try { units = await api("/daily-driver/units"); } catch { box.innerHTML = ""; return; }
-      // Lead with the cross-tool units (more than one facet); single-facet
-      // units are just the uncorrelated source rows, shown elsewhere.
-      const correlated = units.filter((u) => u.is_correlated);
-      if (!correlated.length) {
-        box.innerHTML = '<div class="empty">No correlated units yet. Run a correlation pass once your tasks, calendar, and email are ingested.</div>';
-        return;
-      }
+    // D180 — the moat view anchored on the goal served: units grouped under
+    // the goal they serve, orphans under one "unlinked" group. Domain rides
+    // the group (colour + category icon); each unit row carries one signal per
+    // channel (design-language §2): colour = tier, icon = facet category, no
+    // initials (no cluster yet), status in one pill, meta bare.
+    async function loadUnitsByGoal() {
+      const box = document.getElementById("moat"); if (!box) return;
+      let g;
+      try { g = await api("/daily-driver/units-by-goal"); } catch { box.innerHTML = ""; return; }
+      const cov = g.coverage || {goals_total:0, goals_covered:0, units_total:0, units_linked:0, has_coverage:false};
       box.innerHTML = "";
-      correlated.forEach((u) => box.appendChild(unitCard(u)));
-    }
-    function unitCard(u) {
-      const card = document.createElement("div");
-      card.className = "row"; card.dataset.tier = "work";
-      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "6px";
-      const facetRows = u.facets.map((f) => {
-        const glyph = FACET_GLYPH[f.facet_type] || "•";
-        const when = f.occurred_at ? new Date(f.occurred_at).toLocaleDateString() : "";
-        const candidate = f.status === "candidate"
-          ? ` <span class="sub" style="margin:0;color:var(--navy)">· suggested link — ${escapeHtml(f.basis)} (confirm?)</span>`
-          : "";
-        const gone = f.present ? "" : " opacity:.5;text-decoration:line-through";
-        return `<div class="sub" style="margin:0;${gone}">${glyph} ${escapeHtml(f.facet_type)}: ${escapeHtml(f.title)}${when ? " · " + escapeHtml(when) : ""}${candidate}</div>`;
-      }).join("");
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <strong>${escapeHtml(u.title)}</strong>
-          <span class="sub" style="margin:0">${u.facets.length} facets</span>
-        </div>
-        ${facetRows}`;
-      return card;
-    }
-    // --- How am I doing (S67 D169 + S70 D171: coverage-honest moat reads) ---
-    async function loadAssessment() {
-      const box = document.getElementById("assessment"); if (!box) return;
-      let a;
-      try { a = await api("/daily-driver/assessment"); } catch { box.innerHTML = ""; return; }
-      const cov = a.coverage || {goals_total:0, goals_covered:0, units_total:0, units_linked:0, has_coverage:false};
-      const uncovered = a.uncovered_goals || [], orphans = a.orphan_work || [];
-      box.innerHTML = "";
-
-      // Always lead with the coverage boundary — the read is only valid inside it.
+      // Lead with the coverage boundary — the read is only valid inside it (D171).
       const cline = document.createElement("div");
-      cline.className = "sub"; cline.style.margin = "0 0 6px";
+      cline.className = "sub"; cline.style.margin = "0 0 8px";
       cline.innerHTML = `<strong>Coverage:</strong> ${cov.goals_covered} of ${cov.goals_total} goals linked to ingested work · ${cov.units_linked} of ${cov.units_total} units linked.`;
       box.appendChild(cline);
-
       if (!cov.has_coverage) {
-        // Outside the boundary: report uncovered, never neglect. The platform
-        // says "I can't see your work for this", not "you're not doing it".
         const note = document.createElement("div");
-        note.className = "empty"; note.style.marginBottom = "8px";
-        note.textContent = "No goals are linked to ingested work yet, so orphan and neglect reads are unproven and withheld. Connect where the work lives (pull tasks, then correlate) — or tune the lever names to match how you title it.";
+        note.className = "empty";
+        note.textContent = "No goals are linked to ingested work yet, so the grouped read is unproven and withheld. Connect where the work lives (pull tasks, then correlate) — or tune the lever names to match how you title it.";
         box.appendChild(note);
+        return;
       }
-
-      if (uncovered.length) {
-        const head = document.createElement("div");
-        head.className = "sub"; head.style.margin = "6px 0 4px"; head.style.fontWeight = "600";
-        head.textContent = `Can't see work for (${uncovered.length})`;
-        box.appendChild(head);
-        uncovered.forEach((g) => box.appendChild(assessCard(g.reason, "uncovered")));
-      }
-
-      if (orphans.length) {
-        const head = document.createElement("div");
-        head.className = "sub"; head.style.margin = "10px 0 4px"; head.style.fontWeight = "600";
-        const cross = orphans.filter((o) => o.is_correlated).length;
-        head.textContent = `Work I couldn't link to a goal (${orphans.length}${cross ? ", " + cross + " cross-tool" : ""})`;
-        box.appendChild(head);
-        orphans.slice(0, 12).forEach((o) => box.appendChild(assessCard(o.reason, "orphan")));
-        if (orphans.length > 12) {
-          const more = document.createElement("div");
-          more.className = "sub"; more.style.margin = "4px 0 0";
-          more.textContent = `…and ${orphans.length - 12} more.`;
-          box.appendChild(more);
-        }
+      (g.groups || []).forEach((grp) => box.appendChild(goalGroupEl(grp)));
+      if (g.unlinked && g.unlinked.length) {
+        box.appendChild(groupEl("Unlinked", "work", null,
+          `${g.unlinked.length} not linked to any goal`, g.unlinked, true));
       }
     }
-    function assessCard(reason, kind) {
-      const card = document.createElement("div");
-      card.className = "row"; card.dataset.tier = "work";
-      card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "2px";
-      const glyph = kind === "uncovered" ? "◌" : "⊘";
-      card.innerHTML = `<div class="sub" style="margin:0">${glyph} ${escapeHtml(reason)}</div>`;
-      return card;
+    function goalGroupEl(grp) {
+      const d = DOMAINS[grp.domain] || DOMAINS.work;
+      const n = grp.units.length;
+      return groupEl(grp.name, d.tier, d, `${n} unit${n === 1 ? "" : "s"}`, grp.units, false);
     }
+    function groupEl(name, tier, domain, countLabel, units, unlinked) {
+      const wrap = document.createElement("div");
+      wrap.className = "group";
+      const head = document.createElement("div");
+      head.className = "group-head";
+      const cue = domain ? `<span class="cue" style="--tint:${domain.tint}">${domain.icon}</span>` : "";
+      head.innerHTML = `${cue}<span class="group-name">${escapeHtml(name)}</span><span class="group-count">${escapeHtml(countLabel)}</span>`;
+      wrap.appendChild(head);
+      units.forEach((u) => wrap.appendChild(moatRow(u, tier, unlinked)));
+      return wrap;
+    }
+    function moatRow(u, tier, unlinked) {
+      const row = document.createElement("div");
+      row.className = "row"; row.dataset.tier = tier;
+      const glyphs = (u.facet_types || []).map((t) => FACET_GLYPH[t] || "•").join(" ");
+      const bits = [];
+      if (u.instance_count > 1) bits.push(`×${u.instance_count}`);
+      bits.push(`${u.facet_count} facet${u.facet_count === 1 ? "" : "s"}`);
+      // One status pill: a candidate link is the suggestion-to-confirm; a
+      // confirmed link is the settled default and carries no pill.
+      const pill = (!unlinked && !u.confirmed) ? `<span class="pill needs_you">suggested</span>` : "";
+      row.innerHTML = `<span class="facet-cue">${glyphs || "•"}</span><div class="main-c">` +
+        `<div class="title">${escapeHtml(u.title)}</div>` +
+        `<div class="meta">${escapeHtml(bits.join(" · "))}</div></div>${pill}`;
+      return row;
+    }
+    // (D180: the former flat "Units of work" panel and the coverage-stats "How
+    // am I doing" panel are collapsed into loadUnitsByGoal above — the moat read
+    // anchored on the goal served. Coverage + uncovered ride the coverage line.)
     // --- Suggestions (S68, D170: missing-facet, credulity-gated, recommendation-shaped) ---
     const SUGGEST_GLYPH = { block: "⧗", satellite_work: "✎", candidate_task: "✓" };
     async function loadSuggestions() {

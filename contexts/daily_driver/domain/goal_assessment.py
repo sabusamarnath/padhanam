@@ -181,6 +181,9 @@ class GroupedUnit:
     facet_count: int
     is_correlated: bool
     confirmed: bool
+    # The unit's present facet types (task / meeting / email), ordered, deduped
+    # — the row's category channel (design-language §2: category in icon).
+    facet_types: tuple[str, ...] = ()
     series_id: str | None = None
     instance_count: int = 1
     occurred_at: datetime | None = None
@@ -221,6 +224,20 @@ def _unit_time(unit: UnitView) -> datetime | None:
     return min(times) if times else None
 
 
+_FACET_PRIORITY = {"task": 0, "meeting": 1, "email": 2}
+
+
+def _unit_facet_types(unit: UnitView) -> tuple[str, ...]:
+    """The unit's present facet types, deduped and priority-ordered (the row's
+    category channel — task / meeting / email)."""
+    seen: list[str] = []
+    for f in unit.facets:
+        if f.present and f.facet_type.value not in seen:
+            seen.append(f.facet_type.value)
+    seen.sort(key=lambda t: _FACET_PRIORITY.get(t, 9))
+    return tuple(seen)
+
+
 def _fold_units_to_rows(
     items: list[tuple[UnitView, bool]]
 ) -> tuple[GroupedUnit, ...]:
@@ -250,6 +267,7 @@ def _fold_units_to_rows(
                 facet_count=len(rep.facets),
                 is_correlated=rep.is_correlated,
                 confirmed=any(c for _, c in members),
+                facet_types=_unit_facet_types(rep),
                 series_id=rep.series_id,
                 instance_count=len(members),
                 occurred_at=_unit_time(rep),

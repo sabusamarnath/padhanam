@@ -17,8 +17,12 @@ from contexts.daily_driver.domain.goal import (
 )
 from datetime import datetime, timezone
 
+from dataclasses import fields
+
 from contexts.daily_driver.domain.goal_assessment import (
     GoalEdge,
+    GoalGroup,
+    GroupedUnit,
     assess_goals,
     commitment_domains_from_goals,
     group_units_by_goal,
@@ -502,3 +506,40 @@ def test_confirmed_flag_reflects_serving_edge_status():
     by_title = {r.title: r for r in grouped.groups[0].units}
     assert by_title["conf"].confirmed is True
     assert by_title["cand"].confirmed is False
+
+
+def test_grouped_row_holds_one_signal_per_channel():
+    # Three-channel discipline (D180 / design-language §2): tier (domain) rides
+    # the group, category (facet_types) and status (confirmed) ride the row.
+    # The row carries no domain, so colour (tier) and icon (category) can never
+    # duplicate the same signal across channels.
+    row_fields = {f.name for f in fields(GroupedUnit)}
+    group_fields = {f.name for f in fields(GoalGroup)}
+    assert "domain" not in row_fields       # tier is not on the row
+    assert "facet_types" in row_fields       # category channel
+    assert "confirmed" in row_fields         # status channel
+    assert "domain" in group_fields          # tier rides the group
+
+
+def test_grouped_row_facet_types_are_the_category_channel():
+    goal = _progressive_goal("Project", lever_commitment_id=uuid4())
+    u = UnitView(
+        unit_id=uuid4(), title="Cross-tool unit",
+        facets=(
+            UnitFacetView(
+                facet_type=FacetType.MEETING, facet_id=uuid4(), title="m",
+                occurred_at=None, status=LinkStatus.CONFIRMED, confidence=1.0,
+                basis="anchor", present=True,
+            ),
+            UnitFacetView(
+                facet_type=FacetType.TASK, facet_id=uuid4(), title="t",
+                occurred_at=None, status=LinkStatus.CONFIRMED, confidence=1.0,
+                basis="anchor", present=True,
+            ),
+        ),
+    )
+    grouped = group_units_by_goal((u,), (goal,), (_edge(u, goal),))
+    row = grouped.groups[0].units[0]
+    # Deduped + priority-ordered (task before meeting).
+    assert row.facet_types == ("task", "meeting")
+    assert row.facet_count == 2
