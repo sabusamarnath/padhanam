@@ -247,6 +247,34 @@ def _sort_key(item: TodayItem) -> tuple[int, int, str]:
     return (done_key, order_key, _tiebreak(item))
 
 
+def _dedupe_recurring_instance(items: list[TodayItem]) -> list[TodayItem]:
+    """Drop a calendar item that duplicates a commitment of the same title (D181).
+
+    A recurring commitment (the rhythm — lever-named to its title, S80) and its
+    same-titled calendar instance (today's occurrence) both render; the rhythm
+    subsumes its today-instance, so the work shows once (the D175 show-recurring-
+    work-once principle reaching this cross-kind read). The commitment is kept —
+    it carries the cadence + status; a calendar item is only ever ON_TRACK/DONE,
+    never an attention status, so this can never drop a needs-you item.
+    Title-normalised (case-insensitive, trimmed).
+    """
+    commitment_titles = {
+        item.title.strip().casefold()
+        for item in items
+        if item.kind is ItemKind.COMMITMENT
+    }
+    if not commitment_titles:
+        return items
+    return [
+        item
+        for item in items
+        if not (
+            item.kind is ItemKind.CALENDAR
+            and item.title.strip().casefold() in commitment_titles
+        )
+    ]
+
+
 def build_today_view(
     *,
     open_cases: tuple[OpenCase, ...],
@@ -296,6 +324,7 @@ def build_today_view(
         )
     for event in calendar_events:
         items.append(_calendar_item(event, now=now))
+    items = _dedupe_recurring_instance(items)
     items.sort(key=_sort_key)
     # Time-scope to today-forward (D173/D175): completed/ended items leave the
     # live plan for the history slice (the observed stream feeding D162). Kept,

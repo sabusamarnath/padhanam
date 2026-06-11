@@ -16,6 +16,7 @@ from contexts.daily_driver.domain.commitment import (
 )
 from contexts.daily_driver.domain.day import DayItemState
 from contexts.daily_driver.domain.today_item import (
+    CalendarToday,
     ItemKind,
     ItemStatus,
     OpenCase,
@@ -282,3 +283,50 @@ def test_commitment_domain_defaults_to_work_without_a_map() -> None:
     c = _commitment("Weekly review", 7, 1)
     view = _view(commitment_activities=(CommitmentActivity(c, None),))
     assert view.items[0].domain == "work"
+
+
+# --- D181: recurring commitment / calendar-instance dedupe -------------------
+
+def _cal(title, *, start_hour=15):
+    return CalendarToday(
+        meeting_id=uuid4(),
+        google_event_id="g" + uuid4().hex,
+        title=title,
+        start_at=datetime(2026, 6, 4, start_hour, tzinfo=timezone.utc),
+        end_at=datetime(2026, 6, 4, start_hour + 1, tzinfo=timezone.utc),
+        domain="personal",
+    )
+
+
+def test_recurring_commitment_dedupes_its_calendar_instance():
+    # The commitment (the rhythm) subsumes its same-titled calendar instance;
+    # the work shows once, as the commitment. A non-matching calendar stays.
+    c = _commitment("Second dose", 1, 1)
+    view = _view(
+        commitment_activities=(CommitmentActivity(c, None),),
+        calendar_events=(_cal("Second dose"), _cal("Standup")),
+    )
+    rows = [(i.title, i.kind) for i in view.items]
+    assert sum(1 for t, _ in rows if t == "Second dose") == 1
+    assert ("Second dose", ItemKind.COMMITMENT) in rows
+    assert ("Standup", ItemKind.CALENDAR) in rows
+
+
+def test_dedupe_is_case_insensitive_and_trimmed():
+    c = _commitment("Second Dose", 1, 1)
+    view = _view(
+        commitment_activities=(CommitmentActivity(c, None),),
+        calendar_events=(_cal("  second dose  "),),
+    )
+    matches = [
+        i for i in view.items if i.title.strip().casefold() == "second dose"
+    ]
+    assert len(matches) == 1 and matches[0].kind is ItemKind.COMMITMENT
+
+
+def test_calendar_with_no_matching_commitment_is_kept():
+    view = _view(calendar_events=(_cal("Solo event"),))
+    assert any(
+        i.title == "Solo event" and i.kind is ItemKind.CALENDAR
+        for i in view.items
+    )
