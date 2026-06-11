@@ -54,3 +54,29 @@ def test_today_endpoints_untouched_server_side():
     # are unchanged (only the client reorder affordance was removed).
     assert '@router.get("/today"' in _ROUTER
     assert '"/today/order"' in _ROUTER
+
+
+# --- S85 (D181): recommendation-shaped action Today -------------------------
+
+
+def test_action_today_leads_with_needs_you_collapses_the_rest():
+    # The head set is {needs-you, behind} (no at-risk status exists); the render
+    # leads with them in full and collapses the quiet into a summary.
+    assert 'new Set(["NEEDS_YOU", "BEHIND"])' in _HTML
+    assert "function collapsibleSummary(" in _HTML
+    assert "on track" in _HTML       # the "N on track" quiet summary
+    assert "done earlier" in _HTML    # the "N done earlier" summary
+
+
+def test_collapse_is_default_state_filled_on_toggle():
+    # No display:none streaming: the summary is the default (collapsed) and its
+    # rows are appended only on an explicit expand toggle.
+    assert "collapse-body" in _HTML
+    assert 'body.style.display = "none"' in _HTML
+    assert "body.appendChild(rowEl(it))" in _HTML
+
+
+def test_done_history_collapsed_not_flat():
+    # The done-earlier section is one collapsed summary, not a flat row loop.
+    assert "history.forEach" not in _HTML
+    assert "} done earlier`" in _HTML

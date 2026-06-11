@@ -111,6 +111,16 @@
     .group-name { font-size: 13px; font-weight: 700; color: var(--ink-1); }
     .group-count { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
     .facet-cue { flex-shrink: 0; min-width: 34px; font-size: 13px; color: var(--ink-2); }
+    /* D181: collapsed "N on track" / "N done earlier" summaries */
+    .collapse { margin: 4px 0; }
+    .collapse-head { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+      font: inherit; background: none; border: 1px solid var(--hairline); border-radius: 8px;
+      padding: 9px 12px; cursor: pointer; color: var(--ink-2); }
+    .collapse-head:hover { border-color: var(--hairline-strong); color: var(--ink-1); }
+    .collapse-caret { font-size: 10px; color: var(--ink-3); }
+    .collapse-label { font-size: 13px; font-weight: 600; color: var(--ink-1); }
+    .collapse-sub { font-size: 12px; color: var(--ink-3); }
+    .collapse-body { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -312,7 +322,6 @@
           <p class="sub">One prioritised list across your whole day — what needs you, and what has gone quiet.</p>
           <div class="list" id="list"></div>
           <div id="history-section" style="display:none">
-            <div class="section-label">Earlier today · done</div>
             <div class="list" id="history-list"></div>
           </div>
           <div class="section-label">Goals</div>
@@ -357,7 +366,8 @@
       render(data.items);
       renderHistory(data.history || []);
     }
-    // D175: the observed stream — completed/ended items today, off the live plan.
+    // D175/D181: the observed stream — completed/ended items today, off the live
+    // plan — collapses into one expandable "N done earlier" summary.
     function renderHistory(history) {
       const section = document.getElementById("history-section");
       const list = document.getElementById("history-list");
@@ -365,15 +375,7 @@
       if (!history.length) { section.style.display = "none"; list.innerHTML = ""; return; }
       section.style.display = "";
       list.innerHTML = "";
-      history.forEach((it) => {
-        const d = domainOf(it);
-        const row = document.createElement("div");
-        row.className = "row is-done"; row.dataset.tier = d.tier;
-        row.innerHTML = `${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
-          <div class="meta">${escapeHtml(it.detail)}</div></div>
-          <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
-        list.appendChild(row);
-      });
+      list.appendChild(collapsibleSummary(`${history.length} done earlier`, "completed today", history));
     }
     // --- Goals (S62, D163: the goal layer above commitments) ---
     async function loadGoals() {
@@ -566,25 +568,54 @@
       });
     }
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }
+    // The attention statuses lead the surface; on-track is the quiet remainder.
+    // (No at-risk status exists; the head set is {needs-you, behind}.)
+    const NEEDS_ATTENTION = new Set(["NEEDS_YOU", "BEHIND"]);
+    function rowEl(it) {
+      const d = domainOf(it);
+      const row = document.createElement("div");
+      row.className = "row" + (it.done ? " is-done" : ""); row.dataset.tier = d.tier;
+      const nudge = it.drop_candidate ? `<div class="drop-nudge"><span class="dn-why">gone quiet</span> drop it?</div>` : "";
+      row.innerHTML = `${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
+        <div class="meta">${escapeHtml(it.detail)}</div>${nudge}</div>
+        <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
+      row.addEventListener("click", () => openItem(keyOf(it)));
+      return row;
+    }
+    // A collapsed summary line — the default state — that fills with its rows on
+    // an explicit toggle (no display:none streaming; the rows render on expand).
+    function collapsibleSummary(label, subtitle, items) {
+      const wrap = document.createElement("div"); wrap.className = "collapse";
+      const head = document.createElement("button"); head.type = "button"; head.className = "collapse-head";
+      head.innerHTML = `<span class="collapse-caret">▸</span><span class="collapse-label">${escapeHtml(label)}</span><span class="collapse-sub">${escapeHtml(subtitle)}</span>`;
+      const body = document.createElement("div"); body.className = "collapse-body"; body.style.display = "none";
+      let filled = false;
+      head.onclick = () => {
+        const opening = body.style.display === "none";
+        if (opening && !filled) { items.forEach((it) => body.appendChild(rowEl(it))); filled = true; }
+        body.style.display = opening ? "" : "none";
+        head.querySelector(".collapse-caret").textContent = opening ? "▾" : "▸";
+      };
+      wrap.appendChild(head); wrap.appendChild(body);
+      return wrap;
+    }
+    // D181: recommendation-shaped. Lead with what needs you, in full; collapse
+    // the quiet (on-track) into one expandable "N on track" summary. The
+    // proposed order holds within the needs-you section.
     function render(items) {
       const list = document.getElementById("list"); if (!list) return;
-      if (!items.length) { list.innerHTML = '<div class="empty">Nothing on your plate. Connect a calendar or add a commitment below.</div>'; return; }
       list.innerHTML = "";
-      // S84: rows render in the system's proposed order (the read's order). The
-      // per-row reorder chevrons are removed for the legibility pass; the full
-      // hybrid override (drag/bump/pin/park, design-language §5) is post-week.
-      // The per-day position/order read + /today/order endpoint are untouched.
-      items.forEach((it) => {
-        const d = domainOf(it);
-        const row = document.createElement("div");
-        row.className = "row" + (it.done ? " is-done" : ""); row.dataset.tier = d.tier;
-        const nudge = it.drop_candidate ? `<div class="drop-nudge"><span class="dn-why">gone quiet</span> drop it?</div>` : "";
-        row.innerHTML = `${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
-          <div class="meta">${escapeHtml(it.detail)}</div>${nudge}</div>
-          <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
-        row.addEventListener("click", () => openItem(keyOf(it)));
-        list.appendChild(row);
-      });
+      if (!items.length) { list.innerHTML = '<div class="empty">Nothing on your plate. Connect a calendar or add a commitment below.</div>'; return; }
+      const head = items.filter((it) => NEEDS_ATTENTION.has(it.status));
+      const quiet = items.filter((it) => !NEEDS_ATTENTION.has(it.status));
+      if (head.length) {
+        head.forEach((it) => list.appendChild(rowEl(it)));
+      } else {
+        const none = document.createElement("div"); none.className = "sub"; none.style.margin = "0 0 4px";
+        none.textContent = "Nothing needs you right now — all on track.";
+        list.appendChild(none);
+      }
+      if (quiet.length) list.appendChild(collapsibleSummary(`${quiet.length} on track`, "what has gone quiet", quiet));
     }
     async function onDone(key) {
       const it = itemsByKey[key];
