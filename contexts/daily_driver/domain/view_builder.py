@@ -18,6 +18,7 @@ deterministic per D16.
 from __future__ import annotations
 
 from datetime import date, datetime
+from uuid import UUID
 
 from contexts.daily_driver.domain.commitment import (
     CommitmentActivity,
@@ -144,6 +145,7 @@ def _commitment_item(
     *,
     now: datetime,
     drop_candidate_quiet_days: int | None,
+    domain: str = _WORK_DOMAIN,
 ) -> TodayItem:
     commitment = activity.commitment
     last_activity = activity.last_completed_at or commitment.created_at
@@ -203,7 +205,7 @@ def _commitment_item(
         position=position,
         done=done,
         overdue_by_days=overshoot,
-        domain=_WORK_DOMAIN,
+        domain=domain,
         expected_outcome=commitment.expected_outcome,
         observed_outcome=commitment.observed_outcome,
         outcome_status=outcome_status,
@@ -254,6 +256,7 @@ def build_today_view(
     day_date: date,
     calendar_events: tuple[CalendarToday, ...] = (),
     drop_candidate_quiet_days: int | None = None,
+    commitment_domains: dict[UUID, str] | None = None,
 ) -> TodayView:
     """Compose the ordered prioritised-today list (D157, D159, D162).
 
@@ -275,6 +278,7 @@ def build_today_view(
     for case in open_cases:
         state = states_by_key.get(item_key(ItemKind.CASE, case.case_id))
         items.append(_case_item(case, state))
+    domains = commitment_domains or {}
     for activity in commitment_activities:
         state = states_by_key.get(
             item_key(ItemKind.COMMITMENT, activity.commitment.id)
@@ -285,6 +289,9 @@ def build_today_view(
                 state,
                 now=now,
                 drop_candidate_quiet_days=drop_candidate_quiet_days,
+                # D179: a commitment that levers a goal takes the goal's
+                # domain; one that levers no goal keeps the work default.
+                domain=domains.get(activity.commitment.id, _WORK_DOMAIN),
             )
         )
     for event in calendar_events:

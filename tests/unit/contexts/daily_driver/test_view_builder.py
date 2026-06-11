@@ -259,3 +259,26 @@ def test_persisted_position_overrides_default_rank() -> None:
     )
     assert view.items[0].kind == ItemKind.CASE
     assert view.items[1].kind == ItemKind.COMMITMENT
+
+
+def test_commitment_takes_its_goals_domain_via_the_map() -> None:
+    # D179: a commitment that levers a goal renders the goal's domain; one with
+    # no map entry keeps the work default.
+    personal = _commitment("Marathon training run", 2, 1)
+    work = _commitment("Job search", 3, 1)
+    view = _view(
+        commitment_activities=(
+            CommitmentActivity(personal, None),
+            CommitmentActivity(work, None),
+        ),
+        commitment_domains={personal.id: "personal"},
+    )
+    by_id = {i.item_id: i for i in view.items}
+    assert by_id[personal.id].domain == "personal"  # inherited from its goal
+    assert by_id[work.id].domain == "work"  # no entry → surface default
+
+
+def test_commitment_domain_defaults_to_work_without_a_map() -> None:
+    c = _commitment("Weekly review", 7, 1)
+    view = _view(commitment_activities=(CommitmentActivity(c, None),))
+    assert view.items[0].domain == "work"

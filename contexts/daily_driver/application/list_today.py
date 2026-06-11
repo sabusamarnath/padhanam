@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from contexts.daily_driver.domain.goal_assessment import (
+    commitment_domains_from_goals,
+)
 from contexts.daily_driver.domain.today_item import CalendarToday, TodayView
 from contexts.daily_driver.domain.view_builder import build_today_view
 from contexts.daily_driver.ports.calendar_events_reader import (
@@ -23,6 +26,7 @@ from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
 from contexts.daily_driver.ports.day_repository import DayRepository
+from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from contexts.daily_driver.ports.open_cases_reader import OpenCasesReader
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
@@ -39,6 +43,7 @@ async def list_today(
     day_repository: DayRepository,
     actor: ActorContext,
     calendar_events_reader: CalendarEventsReader | None = None,
+    goal_graph: GoalGraphPort | None = None,
     drop_candidate_quiet_days: int | None = None,
     now: datetime | None = None,
 ) -> TodayView:
@@ -72,6 +77,13 @@ async def list_today(
         calendar_events = await calendar_events_reader.list_today_events(
             actor=actor, day_date=day_date
         )
+    # D179: a commitment that levers a goal takes the goal's domain. The map is
+    # absent (every commitment → work default) when no goal graph is wired, so
+    # the surface degrades to the pre-D179 view rather than failing.
+    commitment_domains: dict = {}
+    if goal_graph is not None:
+        goals = await goal_graph.list_goals(tenant_context=actor.tenant_context)
+        commitment_domains = commitment_domains_from_goals(goals)
     return build_today_view(
         open_cases=open_cases,
         commitment_activities=activities,
@@ -80,6 +92,7 @@ async def list_today(
         day_date=day_date,
         calendar_events=calendar_events,
         drop_candidate_quiet_days=drop_candidate_quiet_days,
+        commitment_domains=commitment_domains,
     )
 
 

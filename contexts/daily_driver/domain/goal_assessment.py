@@ -25,8 +25,10 @@ units candidate-linking to a homeostatic goal rather than reading as orphan
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 from uuid import UUID
 
+from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
 from contexts.daily_driver.domain.goal import Goal
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import LinkStatus, normalise_title
@@ -174,6 +176,27 @@ def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
             seen.add(cid)
             ids.append(cid)
     return tuple(ids)
+
+
+def commitment_domains_from_goals(goals: Iterable[Goal]) -> dict[UUID, str]:
+    """Map each goal's lever-commitment ids to that goal's domain (D179).
+
+    A Commitment that levers a goal takes the goal's domain on the Today
+    surface (the direct lever link — no SERVES-unit join). A commitment that
+    levers no goal, or whose goal carries no explicit domain, is absent from
+    the map and keeps the surface's work default. The value is clamped to the
+    known domain set (``resolve_calendar_domain``) so an unknown value never
+    reaches the surface. Cross-goal commitment sharing is out (D177); on the
+    rare overlap the last goal wins, deterministically by the goals' order.
+    """
+    out: dict[UUID, str] = {}
+    for goal in goals:
+        if goal.domain is None:
+            continue
+        domain = resolve_calendar_domain(goal.domain)
+        for cid in _goal_commitment_ids(goal):
+            out[cid] = domain
+    return out
 
 
 def _unit_titles(unit: UnitView) -> tuple[str, ...]:
@@ -412,5 +435,6 @@ __all__ = [
     "OrphanUnit",
     "UncoveredGoal",
     "assess_goals",
+    "commitment_domains_from_goals",
     "infer_goal_edges",
 ]

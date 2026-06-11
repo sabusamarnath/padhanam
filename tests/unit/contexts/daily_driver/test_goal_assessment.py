@@ -9,10 +9,15 @@ from contexts.daily_driver.domain.goal import (
     Goal,
     GoalMode,
     LevelLadder,
+    LeverStep,
+    StepState,
     Subject,
+    Terminal,
+    TerminalState,
 )
 from contexts.daily_driver.domain.goal_assessment import (
     assess_goals,
+    commitment_domains_from_goals,
     infer_goal_edges,
 )
 from contexts.daily_driver.domain.unit_view import UnitFacetView, UnitView
@@ -319,3 +324,78 @@ def test_dense_recurring_coverage_folds_in_the_coverage_read():
     assert linked.distinct_units == 1  # one routine, folded
     assert linked.total_instances == 120  # the raw instance count, not flooded
     assert linked.confirmed_distinct == 1
+
+
+# --- D179: commitment_domains_from_goals (a commitment takes its goal's domain)
+
+def _domain_goal(
+    *, name, domain, mode=GoalMode.HOMEOSTATIC,
+    lever_commitment_id=None, lever_commitment_ids=(), steps=(),
+):
+    # A sequence goal requires a terminal; supply one when testing steps.
+    terminal = (
+        Terminal(target="Offer accepted", state=TerminalState.PENDING)
+        if mode is GoalMode.SEQUENCE
+        else None
+    )
+    return Goal(
+        id=uuid4(),
+        tenant_id=_TENANT,
+        jurisdiction="eu-west",
+        name=name,
+        mode=mode,
+        control=ControlAxis.SELF,
+        subject=Subject.SELF,
+        lever_commitment_id=lever_commitment_id,
+        lever_commitment_ids=tuple(lever_commitment_ids),
+        steps=tuple(steps),
+        terminal=terminal,
+        domain=domain,
+    )
+
+
+def test_commitment_domains_maps_primary_lever_to_goal_domain():
+    cid = uuid4()
+    goal = _domain_goal(
+        name="Wide World Marathon", domain="personal", lever_commitment_id=cid
+    )
+    assert commitment_domains_from_goals([goal]) == {cid: "personal"}
+
+
+def test_commitment_domains_covers_all_lever_commitments():
+    # A regimen with several lever-commitments (D177) — all take the one domain.
+    a, b, c = uuid4(), uuid4(), uuid4()
+    goal = _domain_goal(
+        name="Regimen", domain="personal",
+        lever_commitment_id=a, lever_commitment_ids=(a, b, c),
+    )
+    assert commitment_domains_from_goals([goal]) == {
+        a: "personal", b: "personal", c: "personal"
+    }
+
+
+def test_commitment_domains_covers_sequence_steps():
+    s1, s2 = uuid4(), uuid4()
+    goal = _domain_goal(
+        name="Get a job", domain="work", mode=GoalMode.SEQUENCE,
+        steps=(
+            LeverStep(commitment_id=s1, order=1, state=StepState.READY),
+            LeverStep(commitment_id=s2, order=2, state=StepState.BLOCKED),
+        ),
+    )
+    # A work goal's levers resolve to work (the fix is per-goal, not blanket).
+    assert commitment_domains_from_goals([goal]) == {s1: "work", s2: "work"}
+
+
+def test_commitment_domains_skips_goal_without_explicit_domain():
+    cid = uuid4()
+    goal = _domain_goal(name="Unset", domain=None, lever_commitment_id=cid)
+    assert commitment_domains_from_goals([goal]) == {}
+
+
+def test_commitment_domains_clamps_unknown_domain_to_work():
+    # "health" is not a known surface domain (the distinct tier is S83-deferred),
+    # so it clamps to the surface default rather than rendering an unknown tier.
+    cid = uuid4()
+    goal = _domain_goal(name="Meds", domain="health", lever_commitment_id=cid)
+    assert commitment_domains_from_goals([goal]) == {cid: "work"}

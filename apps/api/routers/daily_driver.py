@@ -196,6 +196,9 @@ async def get_today(
     calendar_events_reader: Annotated[
         CalendarEventsReader | None, Depends(get_calendar_events_reader)
     ],
+    goal_graph: Annotated[
+        GoalGraphPort | None, Depends(get_goal_graph_optional)
+    ],
     drop_candidate_quiet_days: Annotated[
         int | None, Depends(get_drop_candidate_quiet_days)
     ],
@@ -207,6 +210,7 @@ async def get_today(
         day_repository=day_repository,
         actor=actor,
         calendar_events_reader=calendar_events_reader,
+        goal_graph=goal_graph,
         drop_candidate_quiet_days=drop_candidate_quiet_days,
     )
     return today_view_to_dto(view)
