@@ -80,3 +80,43 @@ def test_done_history_collapsed_not_flat():
     # The done-earlier section is one collapsed summary, not a flat row loop.
     assert "history.forEach" not in _HTML
     assert "} done earlier`" in _HTML
+
+
+# --- S86 (D182): one lens per view (Today list-only; dash holds the moat) ----
+
+
+def _today_template() -> str:
+    start = _HTML.index('if (activeView === "today")')
+    end = _HTML.index('else if (activeView === "dash")', start)
+    return _HTML[start:end]
+
+
+def _dash_template() -> str:
+    start = _HTML.index('else if (activeView === "dash")')
+    end = _HTML.index("} else {", start)
+    return _HTML[start:end]
+
+
+def test_today_renders_list_and_history_only():
+    today = _today_template()
+    assert 'id="list"' in today
+    assert 'id="history-section"' in today
+    for cut in ('id="goals"', 'id="tasks"', 'id="moat"', 'id="suggestions"'):
+        assert cut not in today, f"{cut} must not render on Today (D182)"
+
+
+def test_dash_view_live_and_holds_moat_and_suggestions():
+    assert '{ id: "dash", label: "How am I doing", live: true }' in _HTML
+    dash = _dash_template()
+    assert 'id="moat"' in dash
+    assert 'id="suggestions"' in dash
+    assert "loadUnitsByGoal()" in dash
+
+
+def test_raw_tasks_and_goal_readings_cut_from_the_surface():
+    # The raw ingested-tasks dump and the standalone goal-readings block are cut
+    # from every user-facing view (their endpoints stay; this is render-only).
+    assert "function loadTasks" not in _HTML
+    assert "function loadGoals" not in _HTML
+    assert 'id="tasks"' not in _HTML
+    assert 'id="goals"' not in _HTML
