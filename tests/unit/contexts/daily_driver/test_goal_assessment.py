@@ -445,6 +445,53 @@ def test_group_yields_one_group_of_n_not_n_flat_rows():
     assert grouped.unlinked == ()
 
 
+# --- D187/S92: per-goal status flows through group_units_by_goal ----------
+
+def test_group_sets_progressive_status_active_from_recent_edge():
+    from contexts.daily_driver.domain.goal_assessment import GoalStatus
+
+    _now = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    unit = _served_unit("A", occurred_at=_now - timedelta(days=3))
+    grouped = group_units_by_goal(
+        (unit,), (goal,), (_edge(unit, goal),), now=_now
+    )
+    assert grouped.groups[0].status is GoalStatus.ACTIVE
+
+
+def test_group_emits_homeostatic_goal_with_no_edges_as_stalled():
+    # A dead habit (homeostatic, daily lever never completed, no ingested edges)
+    # surfaces with a stalled verdict, not hidden as uncovered (D187).
+    from contexts.daily_driver.domain.commitment import (
+        Commitment,
+        CommitmentActivity,
+    )
+    from contexts.daily_driver.domain.goal import ControlAxis, Subject
+    from contexts.daily_driver.domain.goal_assessment import GoalStatus
+
+    _now = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    cid = uuid4()
+    commitment = Commitment(
+        id=cid, tenant_id=_TENANT, jurisdiction="eu-west", name="Fitness",
+        expected_interval_days=1, authored_by_user_id="op",
+        created_at=_now - timedelta(days=365),
+    )
+    goal = Goal(
+        id=uuid4(), tenant_id=_TENANT, jurisdiction="eu-west", name="Strength",
+        mode=GoalMode.HOMEOSTATIC, control=ControlAxis.SELF, subject=Subject.SELF,
+        lever_commitment_ids=(cid,),
+    )
+    grouped = group_units_by_goal(
+        (), (goal,), (), now=_now,
+        commitment_activities={
+            cid: CommitmentActivity(commitment=commitment, last_completed_at=None)
+        },
+    )
+    assert len(grouped.groups) == 1
+    assert grouped.groups[0].status is GoalStatus.STALLED
+    assert grouped.groups[0].units == ()
+
+
 def test_group_folds_a_recurring_series_to_one_row():
     # D175 applied before grouping: ~N instances of one series → one row.
     goal = _progressive_goal("Meds", lever_commitment_id=uuid4())

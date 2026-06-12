@@ -31,7 +31,14 @@ from typing import Iterable
 from uuid import UUID
 
 from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
-from contexts.daily_driver.domain.goal import Goal
+from contexts.daily_driver.domain.commitment import CommitmentActivity
+from contexts.daily_driver.domain.goal import Goal, GoalMode
+from contexts.daily_driver.domain.goal_status import (
+    DEFAULT_GOAL_STATUS_THRESHOLDS,
+    GoalStatus,
+    GoalStatusThresholds,
+    compute_goal_status,
+)
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import (
     FacetType,
@@ -216,6 +223,9 @@ class GoalGroup:
     units: tuple[GroupedUnit, ...]
     email_activity: tuple[tuple[str, int], ...] = ()
     active: bool = False
+    # D187/S92: the goal's one status — on-track / behind / stalled / done /
+    # active. None only on a group built without the status read (legacy/tests).
+    status: GoalStatus | None = None
 
 
 @dataclass(frozen=True)
@@ -322,6 +332,8 @@ def group_units_by_goal(
     edges: tuple[GoalEdge, ...],
     email_kinds: dict[UUID, str] | None = None,
     now: datetime | None = None,
+    commitment_activities: dict[UUID, CommitmentActivity] | None = None,
+    thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
 ) -> GoalGroupedUnits:
     """Group units under the goal each SERVES; orphans under one unlinked group.
 
@@ -356,27 +368,54 @@ def group_units_by_goal(
         else None
     )
 
+    activities = commitment_activities or {}
     groups: list[GoalGroup] = []
     for goal in goals:
-        g_edges = edges_by_goal.get(goal.id)
-        if not g_edges:
+        g_edges = edges_by_goal.get(goal.id) or []
+        # A cadence goal (homeostatic) reads its status from the commitment
+        # completion log (user-owned), so it surfaces with a verdict even with no
+        # ingested edges — a dead habit reads stalled, not hidden (D187). A
+        # cadence-less goal with no edges stays uncovered (D171), not emitted.
+        is_cadence_goal = goal.mode is GoalMode.HOMEOSTATIC and any(
+            cid in activities for cid in _goal_commitment_ids(goal)
+        )
+        if not g_edges and not is_cadence_goal:
             continue
         items: list[tuple[UnitView, bool]] = []
         kind_counts: Counter[str] = Counter()
         active = False
+        latest_activity_at: datetime | None = None
         for e in g_edges:
             unit = units_by_id.get(e.unit_id)
             if unit is None:
                 continue
+            confirmed = e.status is LinkStatus.CONFIRMED
+            t = _unit_time(unit)
+            # The goal's latest *confirmed*-edge activity drives the cadence-less
+            # active/stalled read (D187).
+            if confirmed and t is not None and (
+                latest_activity_at is None or t > latest_activity_at
+            ):
+                latest_activity_at = t
             kind = _email_facet_kind(unit, email_kinds)
             if kind is not None:
                 # Seriesless job-search email: fold to a count by kind, not a row.
                 kind_counts[kind] += 1
-                t = _unit_time(unit)
                 if recency_cut is not None and t is not None and t.timestamp() >= recency_cut:
                     active = True
                 continue
-            items.append((unit, e.status is LinkStatus.CONFIRMED))
+            items.append((unit, confirmed))
+        status = (
+            compute_goal_status(
+                goal=goal,
+                commitment_activities=activities,
+                latest_activity_at=latest_activity_at,
+                now=now,
+                thresholds=thresholds,
+            )
+            if now is not None
+            else None
+        )
         groups.append(
             GoalGroup(
                 outcome_id=goal.id,
@@ -385,6 +424,7 @@ def group_units_by_goal(
                 units=_fold_units_to_rows(items),
                 email_activity=tuple(sorted(kind_counts.items())),
                 active=active,
+                status=status,
             )
         )
 
@@ -744,6 +784,7 @@ __all__ = [
     "OrphanUnit",
     "GoalGroup",
     "GoalGroupedUnits",
+    "GoalStatus",
     "GroupedUnit",
     "UncoveredGoal",
     "WEAK_KEYWORD_BASIS",

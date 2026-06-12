@@ -417,14 +417,18 @@ async def get_units_by_goal(
     email_job_search_source: Annotated[
         object | None, Depends(get_email_job_search_source)
     ],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
 ) -> GoalGroupedUnitsDTO:
     """Return the moat view anchored on the goal served (D180).
 
     Units grouped under the ``:Outcome`` each ``SERVES``; orphan units under one
     unlinked group (coverage-gated, D171); the D175 fold applied before
     grouping. Job-search email activity folds to a count by kind and reads
-    active on recency (D183/S89). A read-and-render projection — no graph write.
-    Degrades to an empty, zero-coverage view when the seams are unconfigured.
+    active on recency (D183/S89). Each goal carries its status (D187/S92) —
+    on-track / behind / stalled / done / active. A read-and-render projection —
+    no graph write. Degrades to an empty view when the seams are unconfigured.
     """
     if unit_graph is None or facet_source is None or goal_graph is None:
         return _empty_grouped_units_dto()
@@ -434,6 +438,7 @@ async def get_units_by_goal(
         goal_graph=goal_graph,
         actor=actor,
         email_job_search_source=email_job_search_source,
+        commitment_repository=commitment_repository,
     )
     return grouped_units_to_dto(grouped)
 

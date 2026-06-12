@@ -414,6 +414,9 @@ class GoalGroupDTO(BaseModel):
     # seriesless), and whether that activity is recent (the active reading).
     email_activity: dict[str, int] = {}
     active: bool = False
+    # D187/S92: the goal's one status (on_track / behind / stalled / done /
+    # active), or None when the status read is unavailable.
+    status: str | None = None
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -468,6 +471,7 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                 units=[_grouped_unit_dto(u) for u in g.units],
                 email_activity=dict(g.email_activity),
                 active=g.active,
+                status=g.status.value if g.status is not None else None,
             )
             for g in grouped.groups
         ],

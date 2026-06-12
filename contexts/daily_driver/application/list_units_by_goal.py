@@ -17,6 +17,9 @@ from contexts.daily_driver.domain.goal_assessment import (
     group_units_by_goal,
 )
 from contexts.daily_driver.domain.unit_view import build_unit_views
+from contexts.daily_driver.ports.commitment_repository import (
+    CommitmentRepository,
+)
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchSource,
 )
@@ -38,6 +41,7 @@ async def list_units_by_goal(
     goal_graph: GoalGraphPort,
     actor: ActorContext,
     email_job_search_source: EmailJobSearchSource | None = None,
+    commitment_repository: CommitmentRepository | None = None,
     now: datetime | None = None,
 ) -> GoalGroupedUnits:
     """Return the tenant's units grouped by the goal each serves (D180).
@@ -59,10 +63,19 @@ async def list_units_by_goal(
     if email_job_search_source is not None:
         for c in await email_job_search_source.list_confirmed(actor=actor):
             email_kinds[c.facet_id] = c.kind
+    # D187/S92: the commitment cadence signal for the per-goal status (the
+    # homeostatic cadence read). Keyed by commitment id.
+    commitment_activities: dict = {}
+    if commitment_repository is not None:
+        for a in await commitment_repository.list_with_activity(
+            tenant_context=actor.tenant_context
+        ):
+            commitment_activities[a.commitment.id] = a
     return group_units_by_goal(
         views, goals, edges,
         email_kinds=email_kinds,
         now=now or datetime.now(timezone.utc),
+        commitment_activities=commitment_activities,
     )
 
 
