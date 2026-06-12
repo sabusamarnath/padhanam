@@ -41,6 +41,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from contexts.audit.ports.reader import AuditEventReader
+from contexts.matcher_evaluation.ports.matcher_quality_run_reader import (
+    MatcherQualityRunReader,
+)
 from contexts.retrieval_evaluation.ports.evaluation_run_reader import (
     EvaluationRunReader,
 )
@@ -64,6 +67,10 @@ class EvidenceContext:
     run_history_reader: RunHistoryReader
     gold_set_reader: GoldSetReader
     audit_event_reader: AuditEventReader
+    # D185/S91: the matcher-quality producer's reader (the first non-inference
+    # evidence source). Optional — a tenant or test without the matcher producer
+    # is a substrate gap the matcher rule reports, mirroring the Phase-2 rules.
+    matcher_quality_run_reader: MatcherQualityRunReader | None = None
 
 
 __all__ = ["EvidenceContext"]

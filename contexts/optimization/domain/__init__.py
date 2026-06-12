@@ -32,6 +32,7 @@ from contexts.optimization.domain.evidence_citation import (
     CostAggregate,
     CostOptimizationEvidenceCitation,
     EvidenceCitation,
+    MatcherSuppressionEvidenceCitation,
     RetrievalStrategyEvidenceCitation,
     StrategyComparison,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "CostAggregate",
     "CostOptimizationEvidenceCitation",
     "EvidenceCitation",
+    "MatcherSuppressionEvidenceCitation",
     "OptimizationRun",
     "OptimizationRunStatus",
     "Recommendation",

@@ -64,6 +64,9 @@ from contexts.optimization.domain import (
     RecommendationCategory,
     RecommendationStatus,
 )
+from contexts.matcher_evaluation.adapters.outbound.postgres import (
+    PostgresMatcherQualityRunReader,
+)
 from contexts.optimization.domain.query_filters import (
     RecommendationListFilters,
 )
@@ -147,12 +150,18 @@ def _build_dependencies(wiring):
         bound_tenant_id=bound_tenant_id,
     )
 
+    matcher_quality_run_reader = PostgresMatcherQualityRunReader(
+        per_tenant_sessionmaker_resolver=_resolver,
+        bound_tenant_id=bound_tenant_id,
+    )
+
     evidence_context = EvidenceContext(
         tenant_context=wiring.tenant_context,
         evaluation_run_reader=evaluation_run_reader,
         run_history_reader=run_history_reader,
         gold_set_reader=gold_set_reader,
         audit_event_reader=audit_event_reader,
+        matcher_quality_run_reader=matcher_quality_run_reader,
     )
 
     return (

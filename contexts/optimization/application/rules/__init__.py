@@ -39,6 +39,9 @@ from contexts.optimization.application.rules.prompt_revision_rule import (
 from contexts.optimization.application.rules.retrieval_strategy_rule import (
     RetrievalStrategyRule,
 )
+from contexts.optimization.application.rules.suppress_single_signal_rule import (
+    SuppressSingleSignalRule,
+)
 
 
 def default_rules(
@@ -47,10 +50,11 @@ def default_rules(
     cost_per_successful_task_threshold_usd: float = 0.10,
     cost_window_days: int = 14,
 ) -> tuple:
-    """Construct the four default rules with the Phase 1 thresholds.
+    """Construct the default rules with the Phase 1 thresholds.
 
     Returns the tuple in registration order: retrieval_strategy,
-    cost_optimization, model_choice (zero), prompt_revision (zero).
+    cost_optimization, model_choice (zero), prompt_revision (zero),
+    matcher single-signal suppression (D185/S91, the first non-inference rule).
     Composition roots call this and pass the result to the engine.
     """
     return (
@@ -65,6 +69,7 @@ def default_rules(
         ),
         ModelChoiceRule(),
         PromptRevisionRule(),
+        SuppressSingleSignalRule(),
     )
 
 
@@ -73,5 +78,6 @@ __all__ = [
     "ModelChoiceRule",
     "PromptRevisionRule",
     "RetrievalStrategyRule",
+    "SuppressSingleSignalRule",
     "default_rules",
 ]

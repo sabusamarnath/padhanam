@@ -155,7 +155,7 @@ def test_engine_completes_with_default_rules_and_no_evidence() -> None:
     assert isinstance(result, RunOptimizationResult)
     assert result.run.status is OptimizationRunStatus.COMPLETED
     assert result.recommendations == ()
-    assert set(result.skipped_categories.keys()) == {"model_choice", "prompt_revision"}
+    assert set(result.skipped_categories.keys()) == {"model_choice", "prompt_revision", "matcher_suppression"}
     for reason in result.skipped_categories.values():
         assert reason.reason_code == "substrate_gap"
 
@@ -180,7 +180,7 @@ def test_engine_emits_run_start_and_complete_audit_events() -> None:
     # skipped_categories embedded in the complete event's after_state
     terminal_event = audit.events[-1]
     skipped = terminal_event.after_state["skipped_categories"]
-    assert set(skipped.keys()) == {"model_choice", "prompt_revision"}
+    assert set(skipped.keys()) == {"model_choice", "prompt_revision", "matcher_suppression"}
 
 
 def test_engine_generates_recommendations_from_retrieval_strategy_rule() -> None:

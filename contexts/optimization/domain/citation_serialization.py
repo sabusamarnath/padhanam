@@ -26,6 +26,7 @@ from contexts.optimization.domain.evidence_citation import (
     CostAggregate,
     CostOptimizationEvidenceCitation,
     EvidenceCitation,
+    MatcherSuppressionEvidenceCitation,
     RetrievalStrategyEvidenceCitation,
     StrategyComparison,
 )
@@ -82,6 +83,20 @@ def citation_to_dict(citation: EvidenceCitation) -> dict[str, Any]:
                 "n_runs_total": citation.cost_aggregate.n_runs_total,
             },
         }
+    if isinstance(citation, MatcherSuppressionEvidenceCitation):
+        return {
+            "category": RecommendationCategory.MATCHER_SUPPRESSION.value,
+            "matcher_quality_run_id": str(citation.matcher_quality_run_id),
+            "edge_count": citation.edge_count,
+            "single_signal_count": citation.single_signal_count,
+            "current_single_signal_share": float(
+                citation.current_single_signal_share
+            ),
+            "projected_single_signal_share": float(
+                citation.projected_single_signal_share
+            ),
+            "confidence": float(citation.confidence),
+        }
     raise TypeError(
         f"unsupported citation type: {type(citation).__name__}"
     )
@@ -106,6 +121,8 @@ def citation_from_dict(payload: Mapping[str, Any]) -> EvidenceCitation:
         return _retrieval_strategy_from_dict(payload)
     if category_raw == RecommendationCategory.COST_OPTIMIZATION.value:
         return _cost_optimization_from_dict(payload)
+    if category_raw == RecommendationCategory.MATCHER_SUPPRESSION.value:
+        return _matcher_suppression_from_dict(payload)
     raise ValueError(f"unknown citation category: {category_raw!r}")
 
 
@@ -171,6 +188,23 @@ def _cost_optimization_from_dict(
             UUID(rid) for rid in payload["run_history_record_ids"]
         ),
         cost_aggregate=aggregate,
+    )
+
+
+def _matcher_suppression_from_dict(
+    payload: Mapping[str, Any],
+) -> MatcherSuppressionEvidenceCitation:
+    return MatcherSuppressionEvidenceCitation(
+        matcher_quality_run_id=UUID(payload["matcher_quality_run_id"]),
+        edge_count=int(payload["edge_count"]),
+        single_signal_count=int(payload["single_signal_count"]),
+        current_single_signal_share=float(
+            payload["current_single_signal_share"]
+        ),
+        projected_single_signal_share=float(
+            payload["projected_single_signal_share"]
+        ),
+        confidence=float(payload["confidence"]),
     )
 
 

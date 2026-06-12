@@ -129,10 +129,41 @@ class CostOptimizationEvidenceCitation:
         return RecommendationCategory.COST_OPTIMIZATION
 
 
-# Phase 1 evidence-citation union. Phase 2 adds the model_choice and
-# prompt_revision variants when their substrate ships.
+@dataclass(frozen=True)
+class MatcherSuppressionEvidenceCitation:
+    """Evidence citation for matcher_suppression recommendations (D185/S91).
+
+    The first non-inference citation. Cites the matcher-quality run the evidence
+    came from (the producer-run reference, mirroring the inference citations'
+    ``evaluation_run_id`` / ``run_history_record_ids``) and the structural metric
+    that triggered the recommendation: the single-signal count and share now, the
+    projected share after suppression (the impact), and the rule's confidence.
+
+    No content — counts, rates, and a run id only (the producer is label-free).
+    ``confidence`` and ``projected_single_signal_share`` live here because the
+    inference-shaped ``RecommendationCandidate`` carries no first-class impact or
+    confidence field; the structured evidence is the citation's job (D111 cmt 7).
+    """
+
+    matcher_quality_run_id: UUID
+    edge_count: int
+    single_signal_count: int
+    current_single_signal_share: float
+    projected_single_signal_share: float
+    confidence: float
+
+    @property
+    def category(self) -> RecommendationCategory:
+        return RecommendationCategory.MATCHER_SUPPRESSION
+
+
+# Evidence-citation union. The inference variants (D108) plus the first
+# non-inference variant, matcher_suppression (D185/S91). model_choice and
+# prompt_revision variants land when their substrate ships.
 EvidenceCitation = (
-    RetrievalStrategyEvidenceCitation | CostOptimizationEvidenceCitation
+    RetrievalStrategyEvidenceCitation
+    | CostOptimizationEvidenceCitation
+    | MatcherSuppressionEvidenceCitation
 )
 
 
@@ -142,6 +173,7 @@ __all__ = [
     "CostAggregate",
     "CostOptimizationEvidenceCitation",
     "EvidenceCitation",
+    "MatcherSuppressionEvidenceCitation",
     "RetrievalStrategyEvidenceCitation",
     "StrategyComparison",
 ]

@@ -480,15 +480,18 @@ def test_prompt_revision_rule_raises_substrate_gap_error() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_default_rules_returns_four_in_order() -> None:
+def test_default_rules_returns_five_in_order() -> None:
     from contexts.optimization.application.rules import default_rules
 
     rules = default_rules()
-    assert len(rules) == 4
+    # Four inference rules + the first non-inference rule (matcher suppression,
+    # D185/S91), registered last.
+    assert len(rules) == 5
     categories = [r.category for r in rules]
     assert categories == [
         RecommendationCategory.RETRIEVAL_STRATEGY,
         RecommendationCategory.COST_OPTIMIZATION,
         RecommendationCategory.MODEL_CHOICE,
         RecommendationCategory.PROMPT_REVISION,
+        RecommendationCategory.MATCHER_SUPPRESSION,
     ]
