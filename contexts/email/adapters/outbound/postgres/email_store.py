@@ -230,6 +230,53 @@ class PostgresEmailStore:
             rows = (await s.execute(stmt)).scalars().all()
         return frozenset(str(r) for r in rows)
 
+    async def set_job_search_kinds(
+        self, *, tenant_context: TenantContext, verdicts: dict[str, str | None]
+    ) -> int:
+        """Persist the classifier verdict per message id (D183/S89). ``None``
+        clears it (a re-run after tightening flips a previously-confirmed email
+        back). Returns the rows updated."""
+        self._assert_bound(tenant_context)
+        if not verdicts:
+            return 0
+        sm = await self._resolve(self._bound)
+        n = 0
+        async with sm() as s:
+            async with s.begin():
+                for message_id, kind in verdicts.items():
+                    res = await s.execute(
+                        sa.update(emails_table)
+                        .where(
+                            emails_table.c.tenant_id == str(self._bound),
+                            emails_table.c.message_id == message_id,
+                        )
+                        .values(job_search_kind=kind)
+                    )
+                    n += res.rowcount or 0
+        return n
+
+    async def list_job_search_classifications(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[tuple[UUID, str, datetime | None], ...]:
+        """The live emails the classifier confirmed (job_search_kind not null):
+        ``(email_id, kind, received_at)``. The email id is the ``:Facet``
+        ``facet_id`` the SERVES edge pass keys on; received_at drives the
+        recency-active reading (S89)."""
+        self._assert_bound(tenant_context)
+        stmt = sa.select(
+            emails_table.c.id,
+            emails_table.c.job_search_kind,
+            emails_table.c.received_at,
+        ).where(
+            emails_table.c.tenant_id == str(self._bound),
+            emails_table.c.deleted_at.is_(None),
+            emails_table.c.job_search_kind.isnot(None),
+        )
+        sm = await self._resolve(self._bound)
+        async with sm() as s:
+            rows = (await s.execute(stmt)).all()
+        return tuple((UUID(str(r[0])), str(r[1]), r[2]) for r in rows)
+
 
 class PostgresEmailChunkStore:
     """EmailChunkRepository adapter — the email-local chunk store (D151)."""

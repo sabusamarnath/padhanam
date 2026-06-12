@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-email-jobsearch sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -249,6 +249,10 @@ pull-tasks: derive-env
 # EMAIL_CONNECTION_REF (the operator's google-mail connection) in .env.
 sync-email-jobsearch: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.sync_email_jobsearch
+
+# Classify the stored job-search emails + persist the verdict (S89, D183).
+classify-job-search: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.classify_job_search
 
 # Re-pull the personal tenant's calendar (D159 deployment smoke):
 # resolves the google_calendar connection and drives the D150 refresh

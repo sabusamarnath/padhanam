@@ -54,6 +54,10 @@ emails = sa.Table(
     sa.Column("received_at", sa.TIMESTAMP(timezone=True), nullable=True),
     sa.Column("labels", pg.JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")),
     sa.Column("history_id", sa.Text, nullable=True),
+    # D183/S89: the rules-only job-search classifier verdict (derived metadata,
+    # not content) — kind (application/acknowledgement/interview/offer/rejection)
+    # when job-search, NULL otherwise. Persisted so correlate re-reads it.
+    sa.Column("job_search_kind", sa.Text, nullable=True),
     # Digest of subject+body; NULL when tombstoned.
     sa.Column("content_hash", sa.Text, nullable=True),
     # P3 envelope-encrypted content (subject/body/addresses/snippet JSON).
