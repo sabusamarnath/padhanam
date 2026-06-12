@@ -543,3 +543,57 @@ def test_grouped_row_facet_types_are_the_category_channel():
     # Deduped + priority-ordered (task before meeting).
     assert row.facet_types == ("task", "meeting")
     assert row.facet_count == 2
+
+
+# --- D183/S89: the classifier-fed Get-a-job edge + the dedup tiebreak --------
+
+def _email_unit(facet_id, *, present=True):
+    return UnitView(
+        unit_id=uuid4(), title="job-search email",
+        facets=(UnitFacetView(
+            facet_type=FacetType.EMAIL, facet_id=facet_id, title="Your application",
+            occurred_at=None, status=LinkStatus.CONFIRMED, confidence=1.0,
+            basis="anchor", present=present),),
+    )
+
+
+def test_infer_email_edges_confirmed_email_yields_one_confirmed_edge():
+    from contexts.daily_driver.domain.goal_assessment import (
+        infer_email_job_search_edges,
+    )
+    goal_id, fid = uuid4(), uuid4()
+    edges = infer_email_job_search_edges(
+        (_email_unit(fid),), goal_id, frozenset({fid})
+    )
+    assert len(edges) == 1
+    e = edges[0]
+    assert e.outcome_id == goal_id
+    assert e.status is LinkStatus.CONFIRMED
+    assert e.basis == "email-job-search"
+    assert e.confidence >= 0.9
+
+
+def test_infer_email_edges_unconfirmed_email_yields_nothing():
+    from contexts.daily_driver.domain.goal_assessment import (
+        infer_email_job_search_edges,
+    )
+    fid = uuid4()
+    # the email facet exists but is NOT in the confirmed set -> no edge
+    edges = infer_email_job_search_edges(
+        (_email_unit(fid),), uuid4(), frozenset()
+    )
+    assert edges == ()
+
+
+def test_dedup_prefers_email_job_search_basis_over_title_match():
+    from contexts.daily_driver.domain.goal_assessment import dedup_goal_edges
+    u, g = uuid4(), uuid4()
+    title_edge = GoalEdge(unit_id=u, outcome_id=g, confidence=0.9,
+                          status=LinkStatus.CONFIRMED, basis="commitment")
+    email_edge = GoalEdge(unit_id=u, outcome_id=g, confidence=0.95,
+                          status=LinkStatus.CONFIRMED, basis="email-job-search")
+    out = dedup_goal_edges((title_edge, email_edge))
+    assert len(out) == 1 and out[0].basis == "email-job-search"
+    # order-independent: email edge wins even when it comes first
+    out2 = dedup_goal_edges((email_edge, title_edge))
+    assert len(out2) == 1 and out2[0].basis == "email-job-search"

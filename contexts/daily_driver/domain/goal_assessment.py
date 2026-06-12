@@ -32,7 +32,11 @@ from uuid import UUID
 from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
 from contexts.daily_driver.domain.goal import Goal
 from contexts.daily_driver.domain.unit_view import UnitView
-from contexts.daily_driver.domain.work_unit import LinkStatus, normalise_title
+from contexts.daily_driver.domain.work_unit import (
+    FacetType,
+    LinkStatus,
+    normalise_title,
+)
 
 DEFAULT_GOAL_CONFIDENCE_FLOOR = 0.8
 _CONFIRMED_CONFIDENCE = 0.9
@@ -409,6 +413,71 @@ def _keyword_match(unit_title: str, goal_name: str) -> bool:
     return bool(unit_tokens & goal_tokens)
 
 
+# --- D183/S89: the classifier-fed edge -------------------------------------
+# A rule classifier's verdict, not a lever-title match, establishes the edge —
+# a distinct, higher-specificity basis. Confidence sits at/above CONFIRMED.
+_EMAIL_RULE_CONFIDENCE = 0.95
+_EMAIL_RULE_BASIS = "email-job-search"
+# Tiebreak when a unit-goal pair is reached by more than one path: the
+# rule-confirmed basis wins (higher specificity), then commitment, then
+# goal-name (the D183 dedup requirement).
+_BASIS_PRIORITY = {_EMAIL_RULE_BASIS: 0, "commitment": 1, "goal-name": 2}
+
+
+def infer_email_job_search_edges(
+    units: tuple[UnitView, ...],
+    outcome_id: UUID,
+    confirmed_facet_ids: frozenset[UUID],
+) -> tuple[GoalEdge, ...]:
+    """A CONFIRMED SERVES edge to ``outcome_id`` (Get a job) for each unit
+    carrying a present EMAIL facet the rules confirmed as job-search (D183/S89).
+
+    The verdict is the classifier's, persisted on the store and read back each
+    correlate run (so the edges are durable), not a lever-title match — hence
+    the distinct ``email-job-search`` basis at high confidence. One edge per
+    unit; the caller dedups against the title-match edges (``dedup_goal_edges``).
+    """
+    edges: list[GoalEdge] = []
+    seen: set[UUID] = set()
+    for unit in units:
+        if unit.unit_id in seen:
+            continue
+        if any(
+            f.facet_type is FacetType.EMAIL
+            and f.present
+            and f.facet_id in confirmed_facet_ids
+            for f in unit.facets
+        ):
+            edges.append(
+                GoalEdge(
+                    unit_id=unit.unit_id,
+                    outcome_id=outcome_id,
+                    confidence=_EMAIL_RULE_CONFIDENCE,
+                    status=LinkStatus.CONFIRMED,
+                    basis=_EMAIL_RULE_BASIS,
+                )
+            )
+            seen.add(unit.unit_id)
+    return tuple(edges)
+
+
+def dedup_goal_edges(edges: tuple[GoalEdge, ...]) -> tuple[GoalEdge, ...]:
+    """One edge per ``(unit_id, outcome_id)``; on collision keep the
+    higher-specificity basis (email-job-search > commitment > goal-name, D183).
+    Order-preserving on first appearance of each kept key."""
+    best: dict[tuple[UUID, UUID], GoalEdge] = {}
+    order: list[tuple[UUID, UUID]] = []
+    for e in edges:
+        key = (e.unit_id, e.outcome_id)
+        cur = best.get(key)
+        if cur is None:
+            best[key] = e
+            order.append(key)
+        elif _BASIS_PRIORITY.get(e.basis, 9) < _BASIS_PRIORITY.get(cur.basis, 9):
+            best[key] = e
+    return tuple(best[k] for k in order)
+
+
 def infer_goal_edges(
     units: tuple[UnitView, ...],
     goals: tuple[Goal, ...],
@@ -624,6 +693,8 @@ __all__ = [
     "UncoveredGoal",
     "assess_goals",
     "commitment_domains_from_goals",
+    "dedup_goal_edges",
     "group_units_by_goal",
+    "infer_email_job_search_edges",
     "infer_goal_edges",
 ]

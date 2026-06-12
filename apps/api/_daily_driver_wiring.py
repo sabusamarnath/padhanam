@@ -64,6 +64,9 @@ from contexts.daily_driver.domain.work_unit import (
     WorkFacet,
     WorkUnit,
 )
+from contexts.daily_driver.ports.email_job_search_source import (
+    EmailJobSearchClassification,
+)
 from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
 from contexts.email.adapters.outbound.postgres.email_store import (
     PostgresEmailStore,
@@ -692,6 +695,52 @@ def build_facet_source(
 ) -> FacetSourceAdapter:
     """Wire the daily-driver FacetSource over the three caches (D168, D17)."""
     return FacetSourceAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+class EmailJobSearchSourceAdapter:
+    """apps/ adapter implementing daily-driver's ``EmailJobSearchSource`` over the
+    email store's persisted classifier verdict (D183/S89, D17). Reads which email
+    facets the rules confirmed as job-search — durable state, re-read each
+    correlate run — without the daily-driver context importing the email store.
+    """
+
+    def __init__(self, *, session_factory_for_tenant: _SessionFactoryForTenant) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_confirmed(
+        self, *, actor: ActorContext
+    ) -> tuple[EmailJobSearchClassification, ...]:
+        sessionmaker = await self._session_factory_for_tenant(actor.tenant_context)
+        bound = TenantId(str(actor.tenant_context.tenant_id))
+        emails = PostgresEmailStore(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=bound,
+        )
+        rows = await emails.list_job_search_classifications(
+            tenant_context=actor.tenant_context
+        )
+        return tuple(
+            EmailJobSearchClassification(facet_id=fid, kind=kind, occurred_at=rec)
+            for fid, kind, rec in rows
+        )
+
+
+def build_email_job_search_source(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> EmailJobSearchSourceAdapter:
+    """Wire the daily-driver EmailJobSearchSource over the email store (D183)."""
+    return EmailJobSearchSourceAdapter(
         session_factory_for_tenant=_session_factory_builder(
             tenant_registry=tenant_registry,
             session_factory_cache=session_factory_cache,

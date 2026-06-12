@@ -12,15 +12,25 @@ from __future__ import annotations
 
 from contexts.daily_driver.domain.goal_assessment import (
     DEFAULT_GOAL_CONFIDENCE_FLOOR,
+    dedup_goal_edges,
+    infer_email_job_search_edges,
     infer_goal_edges,
 )
 from contexts.daily_driver.domain.unit_view import build_unit_views
 from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
+from contexts.daily_driver.ports.email_job_search_source import (
+    EmailJobSearchSource,
+)
 from contexts.daily_driver.ports.facet_source import FacetSource
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from contexts.daily_driver.ports.unit_graph import UnitGraphPort
+
+# The job-search emails serve this goal (D183). Named match against the seeded
+# Get-a-job outcome; a goal-level "this is the job-search goal" flag is the
+# general form, deferred (one dogfood instance).
+_JOB_SEARCH_GOAL_NAME = "get a job"
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
     DAILY_DRIVER_UNITS_CORRELATE,
@@ -36,6 +46,7 @@ async def correlate_goal_facets(
     goal_graph: GoalGraphPort,
     commitment_repository: CommitmentRepository,
     actor: ActorContext,
+    email_job_search_source: EmailJobSearchSource | None = None,
     confidence_floor: float = DEFAULT_GOAL_CONFIDENCE_FLOOR,
 ) -> int:
     """Recompute and persist the tenant's unit→goal facet. Returns edge count."""
@@ -54,6 +65,23 @@ async def correlate_goal_facets(
     edges = infer_goal_edges(
         views, goals, commitment_names, confidence_floor=confidence_floor
     )
+    # D183/S89: the classifier-fed edge. Rule-confirmed job-search emails (read
+    # back from the persisted store verdict, so durable across recomputes) serve
+    # the Get-a-job outcome at high confidence; unioned + deduped with the
+    # title-match edges, the rule basis winning the tiebreak.
+    if email_job_search_source is not None:
+        target = next(
+            (g for g in goals if g.name.strip().lower() == _JOB_SEARCH_GOAL_NAME),
+            None,
+        )
+        if target is not None:
+            confirmed = await email_job_search_source.list_confirmed(actor=actor)
+            confirmed_ids = frozenset(c.facet_id for c in confirmed)
+            if confirmed_ids:
+                email_edges = infer_email_job_search_edges(
+                    views, target.id, confirmed_ids
+                )
+                edges = dedup_goal_edges(edges + email_edges)
     await unit_graph.replace_goal_edges(
         tenant_context=actor.tenant_context, edges=edges
     )

@@ -38,6 +38,7 @@ PERSONAL_TENANT_UUID = "00000000-0000-4000-8000-00000000d001"
 
 async def _correlate() -> None:
     from apps.api._daily_driver_wiring import (
+        EmailJobSearchSourceAdapter,
         FacetSourceAdapter,
         GoalGraphAdapter,
         UnitGraphAdapter,
@@ -70,6 +71,9 @@ async def _correlate() -> None:
     facet_source = FacetSourceAdapter(
         session_factory_for_tenant=_session_factory_for_tenant
     )
+    email_job_search_source = EmailJobSearchSourceAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant
+    )
     unit_graph = UnitGraphAdapter(unit_graph=graph)
     goal_graph = GoalGraphAdapter(outcome_graph=graph)
     commitment_repository = PostgresCommitmentRepository(
@@ -99,6 +103,7 @@ async def _correlate() -> None:
         facet_source=facet_source,
         goal_graph=goal_graph,
         commitment_repository=commitment_repository,
+        email_job_search_source=email_job_search_source,
         actor=actor,
     )
     log.info("goal-facet correlation complete: %d SERVES edges written", edge_count)
