@@ -45,11 +45,15 @@ from contexts.optimization.adapters.outbound.postgres.recommendation_reader impo
 from contexts.optimization.adapters.outbound.postgres.recommendation_repository import (
     PostgresRecommendationRepository,
 )
+from contexts.matcher_policy.adapters.outbound.postgres import (
+    PostgresMatcherPolicyRepository,
+)
 from contexts.optimization.application import (
     EvidenceContext,
     RecommendationNotFoundError,
     TransitionNotPermittedError,
     acknowledge_recommendation,
+    apply_matcher_suppression,
     apply_recommendation,
     get_optimization_run,
     get_recommendation,
@@ -463,6 +467,63 @@ def cmd_optimization_apply(
         apply_recommendation,
         "applied",
     )
+
+
+@optimization_app.command("apply-matcher")
+def cmd_optimization_apply_matcher(
+    tenant_id: Annotated[
+        str, typer.Option("--tenant-id", help="Tenant short label or UUID.")
+    ],
+    recommendation_id: Annotated[
+        UUID, typer.Option("--recommendation-id", help="Recommendation UUID.")
+    ],
+    actor: Annotated[
+        str, typer.Option("--actor", help="Acting user id.")
+    ] = "cli-operator",
+) -> None:
+    """Apply a matcher_suppression recommendation (D186/S91b).
+
+    Writes the active suppress-single-signal policy to the neutral MatcherPolicy
+    surface and marks the recommendation APPLIED — the platform's first automated
+    apply. The matcher suppresses single-signal candidates on its next correlate
+    run. This is the gated final step; run it only after the ground-truth verdict
+    on the surfaced candidates (S91a).
+    """
+    wiring = build_tenant_wiring(tenant_id)
+    _, _, rec_repo, rec_reader, audit_adapter, _ = _build_dependencies(wiring)
+
+    async def _resolver(_tid):
+        return wiring.session_factory
+
+    policy_repository = PostgresMatcherPolicyRepository(
+        per_tenant_sessionmaker_resolver=_resolver,
+        bound_tenant_id=TenantId(str(wiring.tenant_context.tenant_id)),
+    )
+
+    async def _go() -> None:
+        try:
+            try:
+                applied = await apply_matcher_suppression(
+                    tenant_context=wiring.tenant_context,
+                    recommendation_id=recommendation_id,
+                    actor_user_id=actor,
+                    reader=rec_reader,
+                    repository=rec_repo,
+                    audit_port=audit_adapter,
+                    policy_repository=policy_repository,
+                )
+            except RecommendationNotFoundError as exc:
+                typer.echo(f"error: {exc}", err=True)
+                raise typer.Exit(code=2)
+            typer.echo(
+                f"recommendation {recommendation_id} applied → "
+                f"{applied.status.value}; suppress_single_signal policy active"
+            )
+        finally:
+            await audit_adapter.dispose()
+            await wiring.engine.dispose()
+
+    asyncio.run(_go())
 
 
 @optimization_app.command("reject")

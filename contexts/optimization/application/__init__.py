@@ -36,6 +36,9 @@ from contexts.optimization.application._transition_helpers import (
 from contexts.optimization.application.acknowledge_recommendation import (
     acknowledge_recommendation,
 )
+from contexts.optimization.application.apply_matcher_suppression import (
+    apply_matcher_suppression,
+)
 from contexts.optimization.application.apply_recommendation import (
     apply_recommendation,
 )
@@ -67,6 +70,7 @@ __all__ = [
     "TransitionNotPermittedError",
     "TransitionResult",
     "acknowledge_recommendation",
+    "apply_matcher_suppression",
     "apply_recommendation",
     "get_optimization_run",
     "get_recommendation",

@@ -129,6 +129,16 @@ class _Policy:
         return self._on
 
 
+class _RecordingRecorder:
+    """Captures what the S90 matcher-quality recorder would measure."""
+
+    def __init__(self) -> None:
+        self.edges = None
+
+    async def record(self, *, actor, edges, units) -> None:
+        self.edges = edges
+
+
 def _fixture():
     # Unit A: keyword 'marathon' -> goal-name candidate edge (single-signal).
     # Unit B: exact 'Long run' -> commitment CONFIRMED edge.
@@ -137,7 +147,7 @@ def _fixture():
     return (a_rec, b_rec), (a_facet, b_facet), (_goal(),)
 
 
-def _run(fixture, *, policy=None):
+def _run(fixture, *, policy=None, recorder=None):
     records, facets, goals = fixture
     ug = _FakeUnitGraph(records)
     n = asyncio.run(
@@ -147,6 +157,7 @@ def _run(fixture, *, policy=None):
             goal_graph=_FakeGoalGraph(goals),
             commitment_repository=_FakeCommitmentRepo(),
             suppression_policy=policy,
+            matcher_quality_recorder=recorder,
             actor=_actor(),
         )
     )
@@ -175,6 +186,19 @@ def test_flag_on_suppresses_single_signal_only() -> None:
     assert "commitment" in on_bases
     # exactly the single-signal edges were removed, nothing else
     assert [b for b in off_bases if b != WEAK_KEYWORD_BASIS] == on_bases
+
+
+def test_recorder_measures_zero_single_signal_after_suppression() -> None:
+    # The loop's re-measure: with the flag on, the recorder (S90's measurement,
+    # placed after suppression at the hook) sees no single-signal edges — so the
+    # next matcher-quality run reads single-signal share 0.
+    fixture = _fixture()
+    rec_off = _RecordingRecorder()
+    _run(fixture, policy=_Policy(False), recorder=rec_off)
+    rec_on = _RecordingRecorder()
+    _run(fixture, policy=_Policy(True), recorder=rec_on)
+    assert any(e.basis == WEAK_KEYWORD_BASIS for e in rec_off.edges)  # before
+    assert all(e.basis != WEAK_KEYWORD_BASIS for e in rec_on.edges)  # after: 0
 
 
 def test_matcher_does_not_import_optimization_or_policy_writer() -> None:
