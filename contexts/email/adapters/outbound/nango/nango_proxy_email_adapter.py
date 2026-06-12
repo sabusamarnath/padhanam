@@ -38,13 +38,16 @@ from contexts.email.domain.errors import (
 
 _DEFAULT_MAX_RESULTS = 250
 _DEFAULT_TIMEOUT = 30.0
-_DEFAULT_GET_CONCURRENCY = 10
+_DEFAULT_GET_CONCURRENCY = 4
 # Gmail enforces a per-user rate limit; a burst of full-message gets returns
-# 429 (S88 run). Retry 429/503 with exponential backoff held inside the
-# semaphore (so a backing-off slot also throttles the batch).
-_GET_RETRIES = 5
-_GET_BACKOFF_BASE = 0.5
-_GET_BACKOFF_MAX = 8.0
+# 429 (S88 run). Pace with low concurrency and retry 429/503 with exponential
+# backoff held inside the semaphore (so a backing-off slot also throttles the
+# batch). A message that still rate-limits after all retries is **skipped**
+# (returned as None, like a 404) rather than aborting the whole batch — the
+# store's idempotent upsert means a re-run fills the gap.
+_GET_RETRIES = 6
+_GET_BACKOFF_BASE = 0.8
+_GET_BACKOFF_MAX = 16.0
 
 
 class NangoProxyEmailAdapter:
@@ -148,6 +151,10 @@ class NangoProxyEmailAdapter:
             if resp.status_code == 404:
                 # Message vanished between list and get (trashed/deleted) —
                 # skip; set-diff handles its removal from the store.
+                return None
+            if resp.status_code in (429, 503):
+                # Still rate-limited after all retries: skip this one rather
+                # than abort the batch; the idempotent re-run fills the gap.
                 return None
             return _parse_message(self._ok_json(resp))
 
