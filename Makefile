@@ -254,6 +254,13 @@ sync-email-jobsearch: derive-env
 classify-job-search: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.classify_job_search
 
+# Surface the single-signal candidate edges for the ground-truth gate (S91a):
+# replay the matcher's edge computation, dump the goal-name keyword-on-name tier
+# to a LOCAL gitignored artefact (/tmp/s91_review) for operator review. Read-only;
+# counts only to stdout.
+review-single-signal: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.review_single_signal
+
 # Re-pull the personal tenant's calendar (D159 deployment smoke):
 # resolves the google_calendar connection and drives the D150 refresh
 # adapter (the D149 scoped full pull, sync_calendar) against live Nango.
