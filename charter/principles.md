@@ -177,3 +177,11 @@ This is a credibility precondition of "Assess, do not replace": a platform that 
 Binds every assessment surface and every future connector. Each new source widens coverage; until a source is connected and linked, the work it holds is invisible, and invisible work reads as a gap in coverage, never as a verdict on the user.
 
 Origin: the first dogfood correlate pass. Five of seven goals linked; the two dark goals (Strength, Get a job) were uncovered, not neglected, and the S70 coverage read (D171) rendered that distinction correctly on live data. The principle generalises the validated behaviour — D171 recorded the fix; this records the law it instances — so later connectors inherit it.
+
+### Quality is a process property, not a cleanup task
+
+The optimization layer (D108, D111) improves matching system-wide from structural and implicit signal read from producer contexts; the human approves rules, never edits rows. Per-item correction is rejected as the design centre: it makes the user a data-janitor and contradicts the platform's differentiator. A systematic matcher error is fixed once, as a rule that addresses the whole class — observed before and re-measured after — the human approving the process change rather than touching individual items.
+
+This extends "observability is foundation" and "optimization output is recommendation-shaped" to how the matcher itself is improved: the matcher is measured by a producer context (`matcher_evaluation`, D185), its quality read as structural metrics, and its systematic errors corrected through the same recommend → approve → apply loop the platform built for inference (D108/D111). The structural metrics are label-free proxies, to be anchored by a recurring ground-truth sample and by implicit feedback so they cannot be optimised away from the truth they stand for.
+
+Origin: D185 — pointing the Phase-1 optimization loop at the moat's matcher as its first non-inference target, the pivot from hand-correction to process improvement, dogfooded in the gate week.
