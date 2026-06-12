@@ -39,6 +39,12 @@ from contexts.email.domain.errors import (
 _DEFAULT_MAX_RESULTS = 250
 _DEFAULT_TIMEOUT = 30.0
 _DEFAULT_GET_CONCURRENCY = 10
+# Gmail enforces a per-user rate limit; a burst of full-message gets returns
+# 429 (S88 run). Retry 429/503 with exponential backoff held inside the
+# semaphore (so a backing-off slot also throttles the batch).
+_GET_RETRIES = 5
+_GET_BACKOFF_BASE = 0.5
+_GET_BACKOFF_MAX = 8.0
 
 
 class NangoProxyEmailAdapter:
@@ -122,12 +128,23 @@ class NangoProxyEmailAdapter:
         async def _one(mid: str) -> EmailMessage | None:
             url = f"{self._base_url}/proxy/gmail/v1/users/me/messages/{mid}"
             async with sem:
-                try:
-                    resp = await client.get(
-                        url, params={"format": "full"}, headers=headers
-                    )
-                except httpx.HTTPError as exc:
-                    raise EmailSourceError(f"email proxy get failed: {exc}") from exc
+                for attempt in range(_GET_RETRIES):
+                    try:
+                        resp = await client.get(
+                            url, params={"format": "full"}, headers=headers
+                        )
+                    except httpx.HTTPError as exc:
+                        raise EmailSourceError(
+                            f"email proxy get failed: {exc}"
+                        ) from exc
+                    # Back off on rate-limit / transient unavailability, holding
+                    # the slot so the whole batch throttles (D183/S88 run).
+                    if resp.status_code in (429, 503) and attempt < _GET_RETRIES - 1:
+                        await asyncio.sleep(
+                            min(_GET_BACKOFF_BASE * (2 ** attempt), _GET_BACKOFF_MAX)
+                        )
+                        continue
+                    break
             if resp.status_code == 404:
                 # Message vanished between list and get (trashed/deleted) —
                 # skip; set-diff handles its removal from the store.

@@ -183,3 +183,27 @@ def test_5xx_maps_to_retryable_error() -> None:
         asyncio.run(
             adapter.list_message_ids(connection=_connection(), newer_than_days=30)
         )
+
+
+def test_get_messages_retries_on_429_then_succeeds(monkeypatch) -> None:
+    # D183/S88: a 429 (Gmail rate limit) is retried with backoff, not surfaced.
+    import contexts.email.adapters.outbound.nango.nango_proxy_email_adapter as mod
+
+    async def _noop(_s):  # avoid real backoff sleeps in the test
+        return None
+
+    monkeypatch.setattr(mod.asyncio, "sleep", _noop)
+    calls = {"n": 0}
+
+    def _handler(req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, json={"error": {"code": "too_many_request"}})
+        return httpx.Response(200, json=_FULL_MESSAGE)
+
+    adapter, _ = _adapter(_handler)
+    msgs = asyncio.run(
+        adapter.get_messages(connection=_connection(), message_ids=["m1"])
+    )
+    assert len(msgs) == 1
+    assert calls["n"] == 2  # retried once, then 200
