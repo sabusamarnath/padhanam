@@ -67,6 +67,37 @@ def test_is_known_sender_spans_ats_and_aggregator_only():
     assert is_known_sender("recruiter@personal.example") is False  # unknown
 
 
+def test_high_signal_from_unknown_sender_needs_subject_corroboration():
+    # The calibrated bar (D184), subject-corroboration form: a high-signal kind
+    # (offer/interview) from an unknown sender is demoted unless the subject
+    # carries job-process context. A newsletter mentioning "offer"/"interview"
+    # has none and falls; the bare keyword does not corroborate itself.
+    assert classify("news@contentplatform.example", "How I got a job offer in 8 days") == (False, None)
+    assert classify("digest@news.example", "The Olivia Rodrigo interview") == (False, None)
+
+
+def test_corroborated_high_signal_from_unknown_sender_survives():
+    # The genuine cold cases: the subject is self-evidently job-process, so the
+    # unknown sender qualifies (Acme interview request, a scheduled interview, a
+    # screening for a role you applied to, next steps on your application).
+    assert classify("talent@acme.example", "Acme – Interview Request for Lead PM")[1] == "interview"
+    assert classify("noreply@screenloop.example", "You have an interview scheduled for Tuesday")[1] == "interview"
+    assert classify("careers@umbrella-pharma.example", "How was your screening experience for the role you applied to?")[1] == "interview"
+
+
+def test_corroboration_never_resurrects_a_triggerless_fake():
+    # Trigger-first, corroborate-second: the property thread lost its only
+    # trigger when "next step" left the subject-hit set (fix #2). "next steps"
+    # is a *corroborator*, not a trigger, so it cannot bring the thread back.
+    assert classify("agent@someestate.example", "Re: Next Steps | 18 Acacia Avenue") == (False, None)
+
+
+def test_known_sender_high_signal_needs_no_corroboration():
+    # A known ATS sender mints a high-signal kind on its own — the bar only
+    # rises for unknown senders.
+    assert classify("no-reply@lever.co", "Your offer")[1] == "offer"
+
+
 def test_kind_buckets():
     assert classify("x@lever.co", "Offer of employment — Acme")[1] == "offer"
     assert classify("x@lever.co", "Unfortunately we won't be moving forward")[1] == "rejection"
@@ -121,33 +152,19 @@ def test_use_case_classifies_and_persists():
     assert result.by_kind.get("none") == 2
 
 
-def test_high_signal_from_unknown_sender_without_thread_is_demoted():
-    # The calibrated evidence bar (D184): a high-signal kind (offer/interview)
-    # from an unknown, contextless sender does not reach the moat's top cells.
-    # Two instances of one failure mode — a newsletter "offer", a newsletter
-    # "interview" — both fall, with no sender denylist to maintain.
+def test_use_case_persists_the_calibrated_verdict():
+    # The use case is the simple per-email pass; the calibrated bar lives in
+    # classify. A newsletter "offer"/"interview" from an unknown sender is
+    # demoted (no corroboration); a corroborated interview and a plain
+    # application survive.
     store = _FakeStore([
-        _email("o1", "newsletter@contentplatform.example", "How I landed a job offer in 8 days"),
+        _email("o1", "news@contentplatform.example", "How I landed a job offer in 8 days"),
         _email("i1", "digest@news.example", "An interview with a musician"),
+        _email("i2", "talent@acme.example", "Acme – Interview Request for Lead PM"),
+        _email("a1", "careers@somecompany.example", "Your application to the role"),
     ])
     result = asyncio.run(
         classify_job_search_emails(tenant_context=object(), emails=store)
     )
-    assert store.written == {"o1": None, "i1": None}
-    assert result.confirmed == 0
-
-
-def test_high_signal_from_unknown_sender_with_job_context_thread_survives():
-    # The genuine cold case rides a thread: an application anchors the thread as
-    # job-context, so the unknown-sender interview reply on the same thread
-    # survives. (The recall edge the bar names — a brand-new unknown sender with
-    # NO prior thread — is the only genuine loss, and it is accepted.)
-    store = _FakeStore([
-        _email("a1", "careers@somecompany.example", "Your application to the role", thread_id="t1"),
-        _email("r1", "recruiter@personal.example", "Re: Interview request for the role", thread_id="t1"),
-    ])
-    result = asyncio.run(
-        classify_job_search_emails(tenant_context=object(), emails=store)
-    )
-    assert store.written == {"a1": "application", "r1": "interview"}
+    assert store.written == {"o1": None, "i1": None, "i2": "interview", "a1": "application"}
     assert result.confirmed == 2

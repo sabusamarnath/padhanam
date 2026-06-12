@@ -51,9 +51,26 @@ _SUBJECT_HITS = (
 # Kinds that carry the moat's highest signal weight (D171 honesty): an offer or
 # an interview is a strong positive on the goal. The calibrated evidence bar
 # (D184) requires that these never be minted by an unknown, contextless sender on
-# a bare subject keyword — the qualification gate lives in the use case, which
-# can see the thread context this pure function cannot.
+# a bare subject keyword.
 HIGH_SIGNAL_KINDS = frozenset({"offer", "interview"})
+
+# Job-process phrases that corroborate a high-signal verdict (D184 mechanism, S89
+# correction). When a high-signal kind comes from an *unknown* sender, the email
+# must carry job-process context in its own subject — the email's self-evident
+# context standing in for the thread context the scoped store cannot provide
+# (whole-thread corroboration is the post-week upgrade). This is job-process
+# vocabulary — bounded and stable — never the bare high-signal keyword itself
+# ("offer"/"interview" alone do not corroborate; a newsletter mentioning either
+# carries no process context). The set excludes "next step" deliberately: it is a
+# corroborator, not a trigger, so it can never resurrect the property thread that
+# fix #2 stripped of any trigger (the gate is trigger-first, corroborate-second).
+_CORROBORATING_PHRASES = (
+    "interview request", "interview invitation", "interview scheduled",
+    "interview confirmation", "invitation to interview", "schedule your interview",
+    "schedule an interview", "schedule a call", "screening", "phone screen",
+    "technical screen", "assessment", "next steps", "applied", "your application",
+    "your candidacy", "recruiter", "we'd like to", "we would like to",
+)
 # Alert/digest noise: a recommendation feed, not the operator's own activity.
 # Excluded even when a sender/subject otherwise matches (the precision boundary).
 _ALERT_EXCLUSIONS = (
@@ -84,8 +101,8 @@ def is_known_sender(from_address: str | None) -> bool:
 
     A *known* sender is the allowlist the platform maintains — finite and
     bounded. The calibrated evidence bar (D184) keys on this: a high-signal kind
-    from an *unknown* sender needs thread context to qualify; a known sender does
-    not. The bounded thing is this allowlist; a sender denylist would be the
+    from an *unknown* sender must corroborate in its own subject; a known sender
+    need not. The bounded thing is this allowlist; a sender denylist would be the
     unbounded thing (an infinite supply of content platforms), so it is not used.
     """
     domain = _domain(from_address)
@@ -94,22 +111,42 @@ def is_known_sender(from_address: str | None) -> bool:
     )
 
 
+def _kind_for(subj: str) -> str:
+    """The kind a qualifying subject triggers — the first matching pattern."""
+    for kind, patterns in _KIND_PATTERNS:
+        if any(p in subj for p in patterns):
+            return kind
+    return "application"
+
+
 def classify(from_address: str | None, subject: str | None) -> tuple[bool, str | None]:
-    """Return ``(is_job_search, kind)``. ``kind`` is None when not job-search."""
+    """Return ``(is_job_search, kind)``. ``kind`` is None when not job-search.
+
+    Trigger-first, corroborate-second (D184). A subject must first *trigger* —
+    an ATS sender, or a subject-hit keyword — to be job-search at all; only then
+    is the kind read. The calibrated evidence bar then applies: a high-signal
+    kind (offer/interview) minted from an *unknown* sender is demoted unless its
+    subject carries corroborating job-process context. Corroboration only ever
+    *demotes*; it never promotes, so a phrase like "next steps" can never
+    resurrect a fake (e.g. a property thread) that carried no trigger.
+    """
     subj = (subject or "").lower()
     if any(x in subj for x in _ALERT_EXCLUSIONS):
         return (False, None)
     domain = _domain(from_address)
-    # An ATS sender qualifies on its own; a noisy/aggregator or unknown sender
-    # qualifies only with a subject signal — sender alone is not job-search.
+    # Trigger: an ATS sender qualifies on its own; a noisy/aggregator or unknown
+    # sender qualifies only with a subject keyword — sender alone is not enough.
     ats_hit = any(s in domain for s in _ATS_SENDERS)
     subj_hit = any(w in subj for w in _SUBJECT_HITS)
     if not (ats_hit or subj_hit):
         return (False, None)
-    for kind, patterns in _KIND_PATTERNS:
-        if any(p in subj for p in patterns):
-            return (True, kind)
-    return (True, "application")
+    kind = _kind_for(subj)
+    # Corroborate: an unknown sender cannot mint the moat's highest cells on a
+    # bare keyword — the subject must show self-evident job-process context.
+    if kind in HIGH_SIGNAL_KINDS and not is_known_sender(from_address):
+        if not any(p in subj for p in _CORROBORATING_PHRASES):
+            return (False, None)
+    return (True, kind)
 
 
 __all__ = ["HIGH_SIGNAL_KINDS", "classify", "is_known_sender"]
