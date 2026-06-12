@@ -36,13 +36,18 @@ from contexts.daily_driver.domain.staleness import (
 
 
 class GoalStatus(str, Enum):
-    """The verdict per goal (D187)."""
+    """The verdict per goal (D187, D188).
+
+    ``ASLEEP`` (D188) is the progressive middle gear: recent activity, but the
+    practice commitment has lapsed — a paused practice, not a dead one.
+    """
 
     ON_TRACK = "on_track"
     BEHIND = "behind"
     STALLED = "stalled"
     DONE = "done"
     ACTIVE = "active"
+    ASLEEP = "asleep"
 
 
 @dataclass(frozen=True)
@@ -145,18 +150,32 @@ def compute_goal_status(
             ]
             return min(statuses, key=lambda s: _CADENCE_RANK[s])  # worst-wins
 
-    # Cadence-less (progressive / sequence-not-done / homeostatic-without-levers):
-    # active within the no-activity window of confirmed-edge activity, else stalled.
-    if latest_activity_at is not None:
-        if (
-            days_elapsed(since=latest_activity_at, now=now)
-            <= thresholds.no_activity_window_days
-        ):
-            return GoalStatus.ACTIVE
+    # Cadence-less (progressive / sequence-not-done / homeostatic-without-levers).
+    # 1. No recent confirmed activity in the window — at-risk, surfaced not
+    #    hidden (D187). Covers the no-signal fallback too (latest is None).
+    if (
+        latest_activity_at is None
+        or days_elapsed(since=latest_activity_at, now=now)
+        > thresholds.no_activity_window_days
+    ):
         return GoalStatus.STALLED
-
-    # No commitment signal and no activity — at-risk, surfaced not hidden (D187).
-    return GoalStatus.STALLED
+    # 2. A progressive goal with a lapsed practice commitment reads asleep (D188):
+    #    recent activity exists, but the intended practice is being skipped
+    #    (a lever missed >= K), so it is paused, not credited active.
+    if goal.mode is GoalMode.PROGRESSIVE:
+        practice = [
+            commitment_activities[cid]
+            for cid in _goal_lever_ids(goal)
+            if cid in commitment_activities
+        ]
+        if practice and any(
+            _commitment_status(a, now=now, thresholds=thresholds)
+            is GoalStatus.STALLED
+            for a in practice
+        ):
+            return GoalStatus.ASLEEP
+    # 3. Recent activity, no lapse — active.
+    return GoalStatus.ACTIVE
 
 
 __all__ = [

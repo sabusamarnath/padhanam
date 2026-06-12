@@ -59,11 +59,12 @@ def _homeostatic(lever_ids: tuple[UUID, ...]) -> Goal:
     )
 
 
-def _progressive() -> Goal:
+def _progressive(lever_id: UUID | None = None) -> Goal:
     return Goal(
         id=uuid4(), tenant_id=_TENANT, jurisdiction="eu-west", name="German",
         mode=GoalMode.PROGRESSIVE, control=ControlAxis.SELF, subject=Subject.SELF,
-        lever_commitment_id=uuid4(),
+        lever_commitment_id=lever_id or uuid4(),
+        lever_commitment_ids=(lever_id,) if lever_id else (),
         ladder=LevelLadder(levels=("A1", "A2", "B1"), current_target_level="A2"),
     )
 
@@ -141,11 +142,63 @@ def test_progressive_active_within_window_stalled_past() -> None:
     assert _status(goal, latest=_NOW - timedelta(days=20)) is GoalStatus.STALLED
 
 
-def test_progressive_ignores_commitment_cadence() -> None:
-    # a progressive goal's never-completed daily lever does NOT make it behind;
-    # it reads by edge activity only (cadence-less).
+def test_progressive_never_reads_behind() -> None:
+    # a progressive goal has no rhythm to slip: it never reads behind (only
+    # active / asleep / stalled).
     goal = _progressive()
-    assert _status(goal, latest=_NOW - timedelta(days=1)) is GoalStatus.ACTIVE
+    assert _status(goal, latest=_NOW - timedelta(days=1)) is not GoalStatus.BEHIND
+
+
+# --- D188: the asleep middle gear for progressive goals -------------------
+
+def test_progressive_with_lapsed_practice_reads_asleep() -> None:
+    # German: recent activity, but the daily practice commitment is lapsed
+    # (10 days missed >= K=3) -> asleep, not active.
+    cid = uuid4()
+    goal = _progressive(cid)
+    activities = {cid: _activity(_commitment(1, cid), last_days_ago=10)}
+    assert (
+        compute_goal_status(
+            goal=goal, commitment_activities=activities,
+            latest_activity_at=_NOW - timedelta(days=2), now=_NOW, thresholds=_TH,
+        )
+        is GoalStatus.ASLEEP
+    )
+
+
+def test_progressive_with_practice_on_rhythm_reads_active() -> None:
+    cid = uuid4()
+    goal = _progressive(cid)
+    activities = {cid: _activity(_commitment(1, cid), last_days_ago=1)}  # on rhythm
+    assert (
+        compute_goal_status(
+            goal=goal, commitment_activities=activities,
+            latest_activity_at=_NOW - timedelta(days=2), now=_NOW, thresholds=_TH,
+        )
+        is GoalStatus.ACTIVE
+    )
+
+
+def test_progressive_lapsed_but_no_activity_reads_stalled_not_asleep() -> None:
+    # precedence: no activity in the window wins over the lapse -> stalled.
+    cid = uuid4()
+    goal = _progressive(cid)
+    activities = {cid: _activity(_commitment(1, cid), last_days_ago=10)}
+    assert (
+        compute_goal_status(
+            goal=goal, commitment_activities=activities,
+            latest_activity_at=_NOW - timedelta(days=30), now=_NOW, thresholds=_TH,
+        )
+        is GoalStatus.STALLED
+    )
+
+
+def test_progressive_with_no_practice_commitment_unchanged_from_s92() -> None:
+    # no practice commitment provided -> active within window, stalled outside
+    # (D187 behaviour preserved).
+    goal = _progressive()  # lever id not in activities
+    assert _status(goal, latest=_NOW - timedelta(days=2)) is GoalStatus.ACTIVE
+    assert _status(goal, latest=_NOW - timedelta(days=20)) is GoalStatus.STALLED
 
 
 # --- sequence -------------------------------------------------------------
