@@ -4106,3 +4106,34 @@ metrics:
   corrects:
   corrected_by:
 ```
+
+## S87 — spike: de-risk email capture of the job search (spike, not a build)
+roles: analyst (the auth de-risk + the precision/recall measurement design), engineer (the throwaway scoped-fetch + rule classifier + the local-model pass)
+mode: **de-risk spike, not a build.** Throwaway code in `/tmp/s87_spike/` (imported by nothing, never wired into the domain); no D-entry, no charter, no production code. Deliverable: evidence + a go/no-go. Counts and rates only — no senders, subjects, or bodies in the repo or this log (entry written at the S88 charter-first commit, the spike having concluded into the build).
+
+The question: before spending the build on an email intake, does `gmail.readonly` work on the existing personal Google connection, and does rule-based job-search matching hit usable precision/recall on real mail. **Result: go, rules-only.**
+
+- **Auth — de-risked, three gates surfaced and cleared.** Step 0 corrected the prompt's premise: email is a **separate Nango `google-mail` connection** (D151), not a scope-add to calendar — so the calendar connection is **never touched** (the load-bearing guard satisfied by construction; the working calendar connection still read 200 throughout). The Nango→Gmail proxy plumbing transfers directly from the calendar adapter (same proxy, headers, just the gmail path). Three one-time setup gates surfaced, none architectural: (1) a **duplicate `google-mail` provider config** carried a narrow `gmail.addons.current.message.readonly` scope → 403 insufficient-scope; (2) the connection's **token had to be re-minted** by an actual re-authorize after the config fix (editing the config scope alone doesn't refresh an existing token); (3) the **Gmail API was disabled** in the GCP project → 403 "API not enabled." After all three cleared, `gmail.readonly` read mail **200 OK** on connection `7dae2931`.
+- **Volume.** The scoped job-search query (ATS/recruiter senders + application/interview/offer subjects, 90-day window) fetched **~195 emails** (≈65/month) — the slice the build's grouping/fold will carry.
+- **Rule classifier.** Flagged **187/195** as job-search (application 166, interview 8, acknowledgement 12, offer 1) across 23 sender domains.
+- **Local-model pass (qwen2.5:7b).** Rule/model **agreed 92%** (180/195); the model flagged **0** job-search emails the rules missed (**no recall gain**); 15 rows were rule=yes/model=no (contested precision). **→ The local-model candidate tier is rejected: it adds no recall and only disagreement.** Rules-only is the call.
+- **Precision/recall — labeling not completed.** The ground-truth step (operator marks the ~23 contested rows) was prepared (`/tmp/s87_spike/to_label.tsv`) but **not completed** before the operator proceeded to the S88 build. So the formal precision/recall numbers are **not measured**; the go/no-go rests on the model-pass finding (0 recall gain → rules-only) + the rule/model 92% agreement + the operator's call. The 23 labels are carried into S89 (the alert-boundary/precision tightening). This is recorded honestly: rules-only is the decision; the precision number is owed to S89 if the operator labels.
+- **Go/no-go: GO, rules-only.** Auth proven, volume tractable (~195/90d), rules suffice (the model tier earns nothing). The two estimate-affecting surprises were the Gmail-setup gates (config scope, token re-mint, GCP API enable) — friction, not architecture; the proxy path and the calendar-safety separation are proven. The build proceeds as S88 (intake, reconciled to extend the D151 substrate) + S89 (classification, facets, SERVES, render).
+- Carry-forward: the 23 spike labels → S89 precision tightening; the testing-mode 7-day re-auth on the google-mail connection is the standing cost; general email ingestion + the email signal layer stay post-week.
+
+```
+metrics:
+  classification: de-risk spike (email job-search capture) — not a build; throwaway code, no D-entry, no production code
+  spike_ran: 2026-06-11/12 (entry logged at the S88 charter-first commit)
+  auth: gmail.readonly 200 OK on the separate google-mail connection 7dae2931; calendar connection untouched + still reads 200
+  setup_gates_cleared: duplicate/narrow-scope Nango config; token re-mint via re-authorize; GCP Gmail-API enablement (all one-time, non-architectural)
+  volume: ~195 job-search emails / 90 days (≈65/month) via the scoped query
+  rule_classifier: 187/195 flagged (application 166, interview 8, acknowledgement 12, offer 1); 23 sender domains
+  model_pass: qwen2.5:7b — rule/model agreement 92% (180/195); 0 recall gain over rules; 15 rule=yes/model=no contested
+  precision_recall: NOT measured (ground-truth labeling not completed before the build); go/no-go rests on the 0-recall-gain finding + 92% agreement + operator call
+  decision: GO, rules-only (local-model candidate tier rejected — no recall gain, only disagreement)
+  pii: none committed (counts/rates only; the sample + labels stay local in /tmp/s87_spike, uncommitted)
+  carry_forward: 23 spike labels -> S89 precision tightening; 7-day re-auth standing cost; general email ingestion post-week
+  corrects:
+  corrected_by:
+```
