@@ -42,6 +42,9 @@ from contexts.optimization.application.apply_matcher_suppression import (
 from contexts.optimization.application.apply_recommendation import (
     apply_recommendation,
 )
+from contexts.optimization.application.revert_matcher_suppression import (
+    revert_matcher_suppression,
+)
 from contexts.optimization.application.evidence_context import EvidenceContext
 from contexts.optimization.application.get_optimization_run import (
     get_optimization_run,
@@ -77,5 +80,6 @@ __all__ = [
     "list_optimization_runs",
     "list_recommendations",
     "reject_recommendation",
+    "revert_matcher_suppression",
     "run_optimization",
 ]

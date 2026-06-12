@@ -55,6 +55,7 @@ from contexts.optimization.application import (
     acknowledge_recommendation,
     apply_matcher_suppression,
     apply_recommendation,
+    revert_matcher_suppression,
     get_optimization_run,
     get_recommendation,
     list_optimization_runs,
@@ -521,6 +522,45 @@ def cmd_optimization_apply_matcher(
             )
         finally:
             await audit_adapter.dispose()
+            await wiring.engine.dispose()
+
+    asyncio.run(_go())
+
+
+@optimization_app.command("revert-matcher")
+def cmd_optimization_revert_matcher(
+    tenant_id: Annotated[
+        str, typer.Option("--tenant-id", help="Tenant short label or UUID.")
+    ],
+) -> None:
+    """Revert matcher single-signal suppression (D186/S91b).
+
+    Writes the suppress-single-signal policy back to false — the clean whole-rule
+    revert, so the loop is not a one-way door. The matcher stops suppressing on
+    its next correlate run. Idempotent. (Per-edge override is the deferred
+    correction layer, not this.)
+    """
+    wiring = build_tenant_wiring(tenant_id)
+
+    async def _resolver(_tid):
+        return wiring.session_factory
+
+    policy_repository = PostgresMatcherPolicyRepository(
+        per_tenant_sessionmaker_resolver=_resolver,
+        bound_tenant_id=TenantId(str(wiring.tenant_context.tenant_id)),
+    )
+
+    async def _go() -> None:
+        try:
+            await revert_matcher_suppression(
+                tenant_context=wiring.tenant_context,
+                policy_repository=policy_repository,
+            )
+            typer.echo(
+                "suppress_single_signal policy reverted → inactive; the matcher "
+                "stops suppressing on its next run"
+            )
+        finally:
             await wiring.engine.dispose()
 
     asyncio.run(_go())

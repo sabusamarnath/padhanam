@@ -168,6 +168,44 @@ def test_apply_rejects_a_non_matcher_recommendation() -> None:
         )
 
 
+def test_revert_writes_the_flag_back_to_false() -> None:
+    from contexts.matcher_policy.domain import MatcherPolicy
+    from contexts.optimization.application import revert_matcher_suppression
+
+    policy_repo = _FakePolicyRepo()
+    # arm it, then revert
+    asyncio.run(
+        policy_repo.set_policy(
+            tenant_context=_ctx(),
+            policy=MatcherPolicy(suppress_single_signal=True),
+        )
+    )
+    asyncio.run(
+        revert_matcher_suppression(
+            tenant_context=_ctx(), policy_repository=policy_repo
+        )
+    )
+    assert policy_repo.policy == MatcherPolicy(suppress_single_signal=False)
+
+
+def test_revert_is_idempotent() -> None:
+    from contexts.matcher_policy.domain import MatcherPolicy
+    from contexts.optimization.application import revert_matcher_suppression
+
+    policy_repo = _FakePolicyRepo()
+    asyncio.run(
+        revert_matcher_suppression(
+            tenant_context=_ctx(), policy_repository=policy_repo
+        )
+    )
+    asyncio.run(
+        revert_matcher_suppression(
+            tenant_context=_ctx(), policy_repository=policy_repo
+        )
+    )
+    assert policy_repo.policy.suppress_single_signal is False
+
+
 def test_apply_unknown_recommendation_raises() -> None:
     repo, reader = _seed(_matcher_recommendation())
     with pytest.raises(RecommendationNotFoundError):
