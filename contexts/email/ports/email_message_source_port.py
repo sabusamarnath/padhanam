@@ -28,6 +28,7 @@ class EmailMessageSourcePort(Protocol):
         *,
         connection: Connection,
         newer_than_days: int,
+        query: str | None = None,
         page_token: str | None = None,
     ) -> EmailMessageIdPage:
         """One page of message-id stubs over the bounded window.
@@ -35,6 +36,13 @@ class EmailMessageSourcePort(Protocol):
         Carries the Gmail search bound (``q=newer_than:<N>d``) and excludes
         Trash/Spam by default (deletion is set-diff per D151). The final
         page has ``next_page_token=None``.
+
+        ``query`` is an optional opaque source-side scope ANDed into the
+        window bound (D183): when set, only matching messages are listed
+        (the job-search slice — ATS/recruiter senders + application subjects);
+        when ``None`` the whole window is listed (D151's general pull, the
+        signal-layer default). The caller, not the domain, supplies the
+        scope string; the adapter composes it into the vendor query.
         """
         ...
 

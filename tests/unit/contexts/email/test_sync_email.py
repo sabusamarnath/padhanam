@@ -46,8 +46,11 @@ class _FakeSource:
         self._messages = messages
         self.list_calls = 0
 
-    async def list_message_ids(self, *, connection, newer_than_days, page_token=None):
+    async def list_message_ids(
+        self, *, connection, newer_than_days, query=None, page_token=None
+    ):
         self.list_calls += 1
+        self.last_query = query
         return EmailMessageIdPage(
             message_ids=tuple(m.google_message_id for m in self._messages), next_page_token=None
         )
@@ -90,11 +93,12 @@ class _FakeEmailStore:
         return frozenset(self.by_id.keys())
 
 
-def _run(source, conns, store):
+def _run(source, conns, store, query=None):
     return asyncio.run(
         sync_email(
             tenant_context=_ctx(), connection_id=_CONN, trigger=EmailSyncTrigger.POLL,
-            message_source=source, connections=conns, emails=store, email_reader=store, now=_NOW,
+            message_source=source, connections=conns, emails=store, email_reader=store,
+            query=query, now=_NOW,
         )
     )
 
@@ -136,6 +140,34 @@ def test_set_diff_tombstones_removed_message() -> None:
     assert result.tombstoned == 1
     assert "m2" in store.tombstoned
     assert "m1" in store.by_id
+
+
+def test_scoped_pull_skips_set_diff_tombstone() -> None:
+    # D183: a scoped (job-search) pull is not authoritative over the window, so
+    # it must NOT tombstone the stored emails outside its scope. Same setup as
+    # the set-diff test (m1, m2 stored; pull returns only m1) but with a scope.
+    store = _FakeEmailStore()
+    for mid in ("m1", "m2"):
+        store.by_id[mid] = email_from_message(
+            _msg(mid), tenant_id=UUID(_TENANT), jurisdiction="eu-west", email_id=uuid4(), now=_NOW
+        )
+    source = _FakeSource(messages=[_msg("m1")])
+    result = _run(source, _FakeConnRepo(_connection()), store, query="from:greenhouse.io")
+    assert result.tombstoned == 0  # set-diff skipped under a scope
+    assert store.tombstoned == []  # m2 NOT tombstoned
+    assert "m1" in store.by_id and "m2" in store.by_id
+
+
+def test_scoped_query_threads_to_the_source() -> None:
+    source = _FakeSource(messages=[_msg("m1")])
+    _run(source, _FakeConnRepo(_connection()), _FakeEmailStore(), query="from:lever.co OR subject:interview")
+    assert source.last_query == "from:lever.co OR subject:interview"
+
+
+def test_whole_window_pull_passes_no_query() -> None:
+    source = _FakeSource(messages=[_msg("m1")])
+    _run(source, _FakeConnRepo(_connection()), _FakeEmailStore())
+    assert source.last_query is None  # D151 default unaffected
 
 
 def test_missing_connection_raises() -> None:

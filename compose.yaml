@@ -495,6 +495,10 @@ services:
       # operator-provisioned google-tasks (tasks.readonly) connection ref;
       # empty until provisioned, then the ops pull errors clearly. From .env.
       TASKS_CONNECTION_REF: ${TASKS_CONNECTION_REF:-}
+      # The operator-provisioned google-mail (gmail.readonly) connection ref
+      # for the job-search email sync (S88, D183); empty until provisioned.
+      # From .env. Read by EmailSettings (padhanam/config/email.py).
+      EMAIL_CONNECTION_REF: ${EMAIL_CONNECTION_REF:-}
       # Calendar-to-domain default tag (P16/S60, D159). Resolved at the read
       # seam; default 'work'. A personal dogfood calendar wants 'personal'.
       CALENDAR_DOMAIN_TAG: ${CALENDAR_DOMAIN_TAG:-work}

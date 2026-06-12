@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-email-jobsearch sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -242,6 +242,13 @@ seed-dogfood-goals: derive-env
 # (tasks.readonly) + set TASKS_CONNECTION_REF in .env first. Idempotent.
 pull-tasks: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.pull_tasks
+
+# Pull the job-search email slice (S88, D183): the scoped sync_email run
+# (ATS/recruiter senders + application subjects, 90-day window) into the
+# encrypted email store. Read-only; counts only; embedder skipped. Requires
+# EMAIL_CONNECTION_REF (the operator's google-mail connection) in .env.
+sync-email-jobsearch: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.sync_email_jobsearch
 
 # Re-pull the personal tenant's calendar (D159 deployment smoke):
 # resolves the google_calendar connection and drives the D150 refresh

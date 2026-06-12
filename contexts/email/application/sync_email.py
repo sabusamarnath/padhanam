@@ -72,9 +72,21 @@ async def sync_email(
     graph_index: EmailGraphIndexPort | None = None,
     chunks: EmailChunkRepository | None = None,
     window_days: int = 30,
+    query: str | None = None,
     now: datetime | None = None,
 ) -> EmailSyncResult:
-    """Pull, store, and set-diff-tombstone one email connection (full-pull, D151)."""
+    """Pull, store, and set-diff-tombstone one email connection (full-pull, D151).
+
+    ``query`` (D183) is an optional source-side scope. ``None`` is D151's
+    whole-window full pull: it lists every message in the window and **set-diff
+    tombstones** the stored-but-not-pulled ones (deletion detection). When a
+    scope is given (the job-search slice), the pull is **not authoritative over
+    the window** — it lists only matching messages — so the set-diff is
+    **skipped** (it would otherwise tombstone every non-job-search stored
+    email). Storage is idempotent (``upsert_email`` on ``(tenant_id,
+    message_id)``), so a later whole-window pull upserts the scoped rows rather
+    than double-storing them.
+    """
     del trigger  # recorded by the caller; no branch on it today
     now = now or datetime.now(timezone.utc)
 
@@ -89,7 +101,10 @@ async def sync_email(
     page_token: str | None = None
     for _ in range(_MAX_PAGES):
         page = await message_source.list_message_ids(
-            connection=connection, newer_than_days=window_days, page_token=page_token
+            connection=connection,
+            newer_than_days=window_days,
+            query=query,
+            page_token=page_token,
         )
         message_ids.extend(page.message_ids)
         if not page.next_page_token:
@@ -123,18 +138,22 @@ async def sync_email(
             changed.append(message.google_message_id)
             changed_emails.append(email)
 
-    # Set-diff deletion (D151): stored, non-deleted messages inside the
-    # pull window that the pull did not return are trashed/deleted upstream.
-    window_start = now - timedelta(days=window_days)
-    stored_live = await email_reader.list_live_message_ids_in_window(
-        tenant_context=tenant_context, window_start=window_start
-    )
+    # Set-diff deletion (D151): stored, non-deleted messages inside the pull
+    # window that the pull did not return are trashed/deleted upstream. Only
+    # the whole-window pull is authoritative over the window; a scoped pull
+    # (D183, ``query`` set) lists only its slice, so set-diff is skipped — it
+    # would otherwise tombstone every stored email outside the scope.
     tombstoned = 0
-    for message_id in stored_live - pulled_ids:
-        await emails.tombstone_email(
-            tenant_context=tenant_context, message_id=message_id, deleted_at=now
+    if query is None:
+        window_start = now - timedelta(days=window_days)
+        stored_live = await email_reader.list_live_message_ids_in_window(
+            tenant_context=tenant_context, window_start=window_start
         )
-        tombstoned += 1
+        for message_id in stored_live - pulled_ids:
+            await emails.tombstone_email(
+                tenant_context=tenant_context, message_id=message_id, deleted_at=now
+            )
+            tombstoned += 1
 
     # Index new-or-content-changed Emails into the inherited substrate when
     # the indexing tools are wired (apps/ composition): chunk the body,

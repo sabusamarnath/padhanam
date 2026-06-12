@@ -78,10 +78,17 @@ class NangoProxyEmailAdapter:
         *,
         connection: Connection,
         newer_than_days: int,
+        query: str | None = None,
         page_token: str | None = None,
     ) -> EmailMessageIdPage:
+        # D183: the optional scope is ANDed into the window bound (Gmail treats
+        # a space as AND), so the job-search slice is fetched, not the whole
+        # inbox. ``query`` is None for D151's general whole-window pull.
+        q = f"newer_than:{newer_than_days}d"
+        if query:
+            q = f"{q} ({query})"
         params: dict[str, str] = {
-            "q": f"newer_than:{newer_than_days}d",
+            "q": q,
             "maxResults": str(self._max_results),
         }
         if page_token:

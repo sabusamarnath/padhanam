@@ -80,6 +80,21 @@ def test_list_message_ids_window_and_bearer() -> None:
     assert page.next_page_token == "PAGE2"
 
 
+def test_list_message_ids_scoped_query_is_anded_into_the_window() -> None:
+    # D183: the optional scope is ANDed into the window bound (space = AND).
+    adapter, seen = _adapter(lambda req: httpx.Response(200, json={"messages": []}))
+    asyncio.run(
+        adapter.list_message_ids(
+            connection=_connection(),
+            newer_than_days=90,
+            query="from:greenhouse.io OR subject:interview",
+        )
+    )
+    assert dict(seen[0].url.params)["q"] == (
+        "newer_than:90d (from:greenhouse.io OR subject:interview)"
+    )
+
+
 _FULL_MESSAGE = {
     "id": "m1",
     "threadId": "t1",

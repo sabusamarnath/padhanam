@@ -22,3 +22,10 @@ class EmailSettings(PadhanamSettings):
 
     nango_base_url: str = "http://localhost:3003"
     nango_secret_key: str = ""
+    # The operator-provisioned google-mail connection (D183/S88): the opaque
+    # Nango connection reference (set in the gitignored .env) and the provider
+    # config key the proxy binds. Mirrors TasksSettings; the connection ref is
+    # an opaque id, not a secret. Empty ref means the scoped email run is
+    # unconfigured (the operator provisions the google-mail connection first).
+    email_connection_ref: str = ""
+    email_provider_config_key: str = "google-mail"
