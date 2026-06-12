@@ -267,6 +267,33 @@ layers =
     contexts.matcher_policy.domain
 
 # ---------------------------------------------------------------------------
+# The matcher apply seam (D186/S91b). The matcher (daily_driver) and the
+# optimization loop must never import each other at any layer — the neutral
+# matcher_policy surface is the only thing between them (optimization writes its
+# .ports on apply; the matcher reads its .ports on run via the apps bridge). The
+# per-layer independence contracts below do not catch cross-LAYER leaks (e.g.
+# daily_driver.application -> optimization.domain); this forbidden contract does.
+# ---------------------------------------------------------------------------
+
+[importlinter:contract:matcher-apply-seam-matcher-side]
+name = Matcher apply seam: the matcher does not import optimization
+type = forbidden
+source_modules =
+    contexts.daily_driver
+forbidden_modules =
+    contexts.optimization
+allow_indirect_imports = false
+
+[importlinter:contract:matcher-apply-seam-optimization-side]
+name = Matcher apply seam: optimization does not import the matcher
+type = forbidden
+source_modules =
+    contexts.optimization
+forbidden_modules =
+    contexts.daily_driver
+allow_indirect_imports = false
+
+# ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
 #

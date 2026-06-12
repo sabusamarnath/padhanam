@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contexts.daily_driver.domain.goal_assessment import (
     DEFAULT_GOAL_CONFIDENCE_FLOOR,
+    WEAK_KEYWORD_BASIS,
     dedup_goal_edges,
     infer_email_job_search_edges,
     infer_goal_edges,
@@ -28,6 +29,7 @@ from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from contexts.daily_driver.ports.matcher_quality_recorder import (
     MatcherQualityRecorder,
 )
+from contexts.daily_driver.ports.suppression_policy import SuppressionPolicy
 from contexts.daily_driver.ports.unit_graph import UnitGraphPort
 
 # The job-search emails serve this goal (D183). Named match against the seeded
@@ -51,6 +53,7 @@ async def correlate_goal_facets(
     actor: ActorContext,
     email_job_search_source: EmailJobSearchSource | None = None,
     matcher_quality_recorder: MatcherQualityRecorder | None = None,
+    suppression_policy: SuppressionPolicy | None = None,
     confidence_floor: float = DEFAULT_GOAL_CONFIDENCE_FLOOR,
 ) -> int:
     """Recompute and persist the tenant's unit→goal facet. Returns edge count."""
@@ -86,6 +89,16 @@ async def correlate_goal_facets(
                     views, target.id, confirmed_ids
                 )
                 edges = dedup_goal_edges(edges + email_edges)
+    # D186/S91b: apply active matcher policy before measuring + replacing. When
+    # single-signal suppression is active, the weak goal-name keyword-on-name
+    # candidate edges are not emitted — an applied recommendation re-applied on
+    # every run (D155), not a per-item edit. Flag off (or unwired) leaves the
+    # edge set identical to the S90 baseline. The recorder then measures the
+    # post-suppression set, so the re-measure reads single-signal share ~0.
+    if suppression_policy is not None and await suppression_policy.suppress_single_signal(
+        actor=actor
+    ):
+        edges = tuple(e for e in edges if e.basis != WEAK_KEYWORD_BASIS)
     # D185/S90: observe-only matcher-quality hook. The recorder measures the
     # final edge set + units and persists a quality run; it must not mutate the
     # edges. Placed before the replace so the measurement is exactly what gets

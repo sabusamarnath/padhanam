@@ -42,6 +42,7 @@ async def _correlate() -> None:
         FacetSourceAdapter,
         GoalGraphAdapter,
         MatcherQualityRecorderAdapter,
+        SuppressionPolicyAdapter,
         UnitGraphAdapter,
     )
     from apps.cli._runtime import build_tenant_wiring
@@ -81,6 +82,11 @@ async def _correlate() -> None:
     matcher_quality_recorder = MatcherQualityRecorderAdapter(
         session_factory_for_tenant=_session_factory_for_tenant
     )
+    # D186/S91b: read the active matcher policy at the correlate hook. Flag off
+    # (the default ship state) → no suppression, identical to the S90 baseline.
+    suppression_policy = SuppressionPolicyAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant
+    )
     unit_graph = UnitGraphAdapter(unit_graph=graph)
     goal_graph = GoalGraphAdapter(outcome_graph=graph)
     commitment_repository = PostgresCommitmentRepository(
@@ -112,6 +118,7 @@ async def _correlate() -> None:
         commitment_repository=commitment_repository,
         email_job_search_source=email_job_search_source,
         matcher_quality_recorder=matcher_quality_recorder,
+        suppression_policy=suppression_policy,
         actor=actor,
     )
     log.info("goal-facet correlation complete: %d SERVES edges written", edge_count)

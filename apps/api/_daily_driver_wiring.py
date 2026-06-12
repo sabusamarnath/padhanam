@@ -73,6 +73,9 @@ from contexts.matcher_evaluation.adapters.outbound.postgres import (
 )
 from contexts.matcher_evaluation.application import record_matcher_quality_run
 from contexts.matcher_evaluation.domain import EdgeSample, MatcherQualitySample
+from contexts.matcher_policy.adapters.outbound.postgres import (
+    PostgresMatcherPolicyReader,
+)
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchClassification,
 )
@@ -820,6 +823,45 @@ def build_matcher_quality_recorder(
 ) -> MatcherQualityRecorderAdapter:
     """Wire the matcher-quality recorder over the producer's store (D185)."""
     return MatcherQualityRecorderAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+class SuppressionPolicyAdapter:
+    """apps/ bridge implementing daily-driver's ``SuppressionPolicy`` over the
+    neutral ``matcher_policy`` reader (D186/S91b, D17). The matcher reads the
+    active policy at the correlate hook through this bridge — without the
+    daily-driver context importing the policy surface or optimization. Reads the
+    read half of the seam only; the write half is optimization's, on apply.
+    """
+
+    def __init__(self, *, session_factory_for_tenant: _SessionFactoryForTenant) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def suppress_single_signal(self, *, actor: ActorContext) -> bool:
+        sessionmaker = await self._session_factory_for_tenant(actor.tenant_context)
+        reader = PostgresMatcherPolicyReader(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        policy = await reader.get_policy(tenant_context=actor.tenant_context)
+        return policy.suppress_single_signal
+
+
+def build_suppression_policy(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> SuppressionPolicyAdapter:
+    """Wire the matcher suppression-policy read over the neutral surface (D186)."""
+    return SuppressionPolicyAdapter(
         session_factory_for_tenant=_session_factory_builder(
             tenant_registry=tenant_registry,
             session_factory_cache=session_factory_cache,
