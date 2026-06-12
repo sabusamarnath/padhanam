@@ -257,6 +257,15 @@ layers =
     contexts.matcher_evaluation.ports
     contexts.matcher_evaluation.domain
 
+[importlinter:contract:layers-matcher-policy]
+name = Matcher-policy layers (hexagonal)
+type = layers
+layers =
+    contexts.matcher_policy.adapters
+    contexts.matcher_policy.application
+    contexts.matcher_policy.ports
+    contexts.matcher_policy.domain
+
 # ---------------------------------------------------------------------------
 # Cross-context boundary (D17). Contexts are independent at all internal
 # layers. Cross-context reads go through the .api facade.
@@ -296,6 +305,7 @@ modules =
     contexts.calendar.domain
     contexts.daily_driver.domain
     contexts.matcher_evaluation.domain
+    contexts.matcher_policy.domain
 ignore_imports =
     contexts.inference.api -> contexts.inference.domain.**
     contexts.observability.api -> contexts.observability.domain.**
@@ -329,6 +339,7 @@ modules =
     contexts.calendar.application
     contexts.daily_driver.application
     contexts.matcher_evaluation.application
+    contexts.matcher_policy.application
 ignore_imports =
     contexts.inference.api -> contexts.inference.application.**
     contexts.observability.api -> contexts.observability.application.**
@@ -359,6 +370,7 @@ modules =
     contexts.calendar.adapters
     contexts.daily_driver.adapters
     contexts.matcher_evaluation.adapters
+    contexts.matcher_policy.adapters
 
 # ---------------------------------------------------------------------------
 # Platform isolation (D16, established in S5).
@@ -402,6 +414,7 @@ source_modules =
     contexts.calendar.domain
     contexts.daily_driver.domain
     contexts.matcher_evaluation.domain
+    contexts.matcher_policy.domain
 forbidden_modules =
     pydantic
     pydantic_settings
