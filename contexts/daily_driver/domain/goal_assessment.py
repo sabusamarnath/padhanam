@@ -24,6 +24,7 @@ units candidate-linking to a homeostatic goal rather than reading as orphan
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
@@ -195,12 +196,22 @@ class GroupedUnit:
 
 @dataclass(frozen=True)
 class GoalGroup:
-    """A goal gathering the units that SERVE it (D180)."""
+    """A goal gathering the units that SERVE it (D180).
+
+    ``email_activity`` (D183/S89) is the job-search email activity folded to a
+    **count by kind** — emails are seriesless, so the D175 series-fold can't
+    collapse them; a count is the right shape (not a row per email). The folded
+    email units do **not** appear in ``units``. ``active`` is whether that
+    activity is **recent** (within the recency window) — a goal reads active on
+    recent work, never on the mere presence of old units.
+    """
 
     outcome_id: UUID
     name: str
     domain: str | None
     units: tuple[GroupedUnit, ...]
+    email_activity: tuple[tuple[str, int], ...] = ()
+    active: bool = False
 
 
 @dataclass(frozen=True)
@@ -287,10 +298,26 @@ def _fold_units_to_rows(
     return tuple(rows)
 
 
+# D183/S89: a goal reads active on email activity no older than this.
+_EMAIL_ACTIVE_RECENCY_DAYS = 30
+
+
+def _email_facet_kind(
+    unit: UnitView, email_kinds: dict[UUID, str]
+) -> str | None:
+    """The job-search kind of the unit's confirmed email facet, if any."""
+    for f in unit.facets:
+        if f.facet_type is FacetType.EMAIL and f.present and f.facet_id in email_kinds:
+            return email_kinds[f.facet_id]
+    return None
+
+
 def group_units_by_goal(
     units: tuple[UnitView, ...],
     goals: tuple[Goal, ...],
     edges: tuple[GoalEdge, ...],
+    email_kinds: dict[UUID, str] | None = None,
+    now: datetime | None = None,
 ) -> GoalGroupedUnits:
     """Group units under the goal each SERVES; orphans under one unlinked group.
 
@@ -298,7 +325,14 @@ def group_units_by_goal(
     unit serving multiple goals appears under each. Groups follow the goals'
     given (canonical) order; the unlinked group is rendered last and is emitted
     only inside the coverage boundary (D171). The D175 fold runs before grouping.
+
+    ``email_kinds`` (D183/S89) maps a confirmed job-search email's facet_id to
+    its kind: a goal's units carrying such facets fold to a **count by kind**
+    (``email_activity``), not a row per email (emails are seriesless), and the
+    goal reads ``active`` when that activity is **recent** (within the recency
+    window of ``now``). Without it, behaviour is unchanged.
     """
+    email_kinds = email_kinds or {}
     goal_ids = {g.id for g in goals}
     units_with_edge = {e.unit_id for e in edges}
     goals_with_edge = {e.outcome_id for e in edges} & goal_ids
@@ -312,6 +346,11 @@ def group_units_by_goal(
     edges_by_goal: dict[UUID, list[GoalEdge]] = {}
     for e in edges:
         edges_by_goal.setdefault(e.outcome_id, []).append(e)
+    recency_cut = (
+        now.timestamp() - _EMAIL_ACTIVE_RECENCY_DAYS * 86400
+        if now is not None
+        else None
+    )
 
     groups: list[GoalGroup] = []
     for goal in goals:
@@ -319,9 +358,19 @@ def group_units_by_goal(
         if not g_edges:
             continue
         items: list[tuple[UnitView, bool]] = []
+        kind_counts: Counter[str] = Counter()
+        active = False
         for e in g_edges:
             unit = units_by_id.get(e.unit_id)
             if unit is None:
+                continue
+            kind = _email_facet_kind(unit, email_kinds)
+            if kind is not None:
+                # Seriesless job-search email: fold to a count by kind, not a row.
+                kind_counts[kind] += 1
+                t = _unit_time(unit)
+                if recency_cut is not None and t is not None and t.timestamp() >= recency_cut:
+                    active = True
                 continue
             items.append((unit, e.status is LinkStatus.CONFIRMED))
         groups.append(
@@ -330,6 +379,8 @@ def group_units_by_goal(
                 name=goal.name,
                 domain=goal.domain,
                 units=_fold_units_to_rows(items),
+                email_activity=tuple(sorted(kind_counts.items())),
+                active=active,
             )
         )
 

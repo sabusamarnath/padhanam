@@ -150,6 +150,11 @@ def get_facet_source(request: Request):
     return getattr(request.app.state, "daily_driver_facet_source", None)
 
 
+def get_email_job_search_source(request: Request):
+    """FastAPI dependency: the EmailJobSearchSource (D183/S89), if wired."""
+    return getattr(request.app.state, "daily_driver_email_job_search_source", None)
+
+
 def get_goal_graph_optional(request: Request):
     """FastAPI dependency: the GoalGraphPort if wired, else None (D169).
 
@@ -409,13 +414,17 @@ async def get_units_by_goal(
     unit_graph: Annotated[object | None, Depends(get_unit_graph)],
     facet_source: Annotated[object | None, Depends(get_facet_source)],
     goal_graph: Annotated[object | None, Depends(get_goal_graph_optional)],
+    email_job_search_source: Annotated[
+        object | None, Depends(get_email_job_search_source)
+    ],
 ) -> GoalGroupedUnitsDTO:
     """Return the moat view anchored on the goal served (D180).
 
     Units grouped under the ``:Outcome`` each ``SERVES``; orphan units under one
     unlinked group (coverage-gated, D171); the D175 fold applied before
-    grouping. A read-and-render projection — no graph write. Degrades to an
-    empty, zero-coverage view when the correlation seams are unconfigured.
+    grouping. Job-search email activity folds to a count by kind and reads
+    active on recency (D183/S89). A read-and-render projection — no graph write.
+    Degrades to an empty, zero-coverage view when the seams are unconfigured.
     """
     if unit_graph is None or facet_source is None or goal_graph is None:
         return _empty_grouped_units_dto()
@@ -424,6 +433,7 @@ async def get_units_by_goal(
         facet_source=facet_source,
         goal_graph=goal_graph,
         actor=actor,
+        email_job_search_source=email_job_search_source,
     )
     return grouped_units_to_dto(grouped)
 

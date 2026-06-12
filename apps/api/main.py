@@ -233,6 +233,7 @@ class AppCompositions:
     # three caches and the UnitGraphPort over the shared Neo4j. None when
     # unwired (the /units view degrades to an empty list).
     daily_driver_facet_source: object | None = None
+    daily_driver_email_job_search_source: object | None = None
     daily_driver_unit_graph: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
@@ -586,6 +587,7 @@ def _build_default_compositions() -> AppCompositions:
         build_calendar_events_reader,
         build_commitment_repository,
         build_day_repository,
+        build_email_job_search_source,
         build_facet_source,
         build_goal_graph,
         build_open_cases_reader,
@@ -638,6 +640,14 @@ def _build_default_compositions() -> AppCompositions:
     # S66 (D168): the work-unit correlation seams — the FacetSource over the
     # three caches and the UnitGraphPort over the shared Neo4j (process-shared).
     daily_driver_facet_source = build_facet_source(
+        tenant_registry=registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=sec,
+    )
+    # D183/S89: the rule-confirmed job-search emails (the persisted classifier
+    # verdict) — feeds the moat's count-by-kind fold + the active reading.
+    daily_driver_email_job_search_source = build_email_job_search_source(
         tenant_registry=registry,
         session_factory_cache=session_factory_cache,
         operator_principal=operator_principal,
@@ -719,6 +729,9 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_goal_graph=daily_driver_goal_graph,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
+        daily_driver_email_job_search_source=(
+            daily_driver_email_job_search_source
+        ),
         daily_driver_unit_graph=daily_driver_unit_graph,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
@@ -978,6 +991,10 @@ def create_app(
     # S66 (D168): the work-unit correlation seams.
     app.state.daily_driver_facet_source = (
         compositions.daily_driver_facet_source
+    )
+    # D183/S89: the rule-confirmed job-search email source for the moat view.
+    app.state.daily_driver_email_job_search_source = (
+        compositions.daily_driver_email_job_search_source
     )
     app.state.daily_driver_unit_graph = compositions.daily_driver_unit_graph
     app.state.connections_status_reader = (

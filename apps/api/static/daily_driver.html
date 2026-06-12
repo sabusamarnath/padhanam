@@ -404,10 +404,36 @@
           `${g.unlinked.length} not linked to any goal`, g.unlinked, true));
       }
     }
+    // Order email kinds by where they sit in the funnel — the outcome-bearing
+    // ones (offer, interview) lead, the high-volume base (application) follows.
+    const EMAIL_KIND_ORDER = ["offer", "interview", "application", "acknowledgement", "rejection"];
     function goalGroupEl(grp) {
       const d = DOMAINS[grp.domain] || DOMAINS.work;
       const n = grp.units.length;
-      return groupEl(grp.name, d.tier, d, `${n} unit${n === 1 ? "" : "s"}`, grp.units, false);
+      const wrap = groupEl(grp.name, d.tier, d, `${n} unit${n === 1 ? "" : "s"}`, grp.units, false);
+      // D183/S89: job-search email activity is folded to a count by kind (the
+      // emails are seriesless and high-volume — a count-for-seriesless fold,
+      // not the S83 series-fold). The goal reads "active" on recent activity,
+      // not on the mere presence of units.
+      const ea = grp.email_activity || {};
+      const kinds = Object.keys(ea);
+      if (kinds.length) {
+        const head = wrap.querySelector(".group-head");
+        if (grp.active && head) {
+          const badge = document.createElement("span");
+          badge.className = "pill"; badge.style.marginLeft = "6px";
+          badge.textContent = "active";
+          head.appendChild(badge);
+        }
+        const order = EMAIL_KIND_ORDER.filter((k) => ea[k]);
+        kinds.forEach((k) => { if (!order.includes(k)) order.push(k); });
+        const parts = order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`);
+        const line = document.createElement("div");
+        line.className = "sub"; line.style.margin = "2px 0 6px";
+        line.textContent = "Email activity: " + parts.join(" · ");
+        wrap.insertBefore(line, wrap.children[1] || null);
+      }
+      return wrap;
     }
     function groupEl(name, tier, domain, countLabel, units, unlinked) {
       const wrap = document.createElement("div");

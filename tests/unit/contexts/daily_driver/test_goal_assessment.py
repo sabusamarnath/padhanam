@@ -15,7 +15,7 @@ from contexts.daily_driver.domain.goal import (
     Terminal,
     TerminalState,
 )
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dataclasses import fields
 
@@ -597,3 +597,69 @@ def test_dedup_prefers_email_job_search_basis_over_title_match():
     # order-independent: email edge wins even when it comes first
     out2 = dedup_goal_edges((email_edge, title_edge))
     assert len(out2) == 1 and out2[0].basis == "email-job-search"
+
+
+# --- D183/S89: the count-by-kind fold + the recency-active reading -----------
+
+def _email_unit_at(facet_id, *, occurred_at):
+    return UnitView(
+        unit_id=uuid4(), title="job-search email",
+        facets=(UnitFacetView(
+            facet_type=FacetType.EMAIL, facet_id=facet_id, title="Your application",
+            occurred_at=occurred_at, status=LinkStatus.CONFIRMED, confidence=1.0,
+            basis="anchor", present=True),),
+    )
+
+
+def test_email_units_fold_to_a_count_by_kind_not_rows():
+    goal = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    f1, f2, f3 = uuid4(), uuid4(), uuid4()
+    units = (_email_unit(f1), _email_unit(f2), _email_unit(f3))
+    edges = tuple(_edge(u, goal, basis="email-job-search") for u in units)
+    grouped = group_units_by_goal(
+        units, (goal,), edges,
+        email_kinds={f1: "application", f2: "application", f3: "interview"},
+    )
+    grp = grouped.groups[0]
+    # the seriesless emails collapse — no per-email rows, a count by kind instead
+    assert grp.units == ()
+    assert dict(grp.email_activity) == {"application": 2, "interview": 1}
+
+
+def test_folded_count_equals_the_confirmed_email_total():
+    goal = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    fids = [uuid4() for _ in range(5)]
+    units = tuple(_email_unit(f) for f in fids)
+    edges = tuple(_edge(u, goal, basis="email-job-search") for u in units)
+    grouped = group_units_by_goal(
+        units, (goal,), edges, email_kinds={f: "application" for f in fids},
+    )
+    total = sum(c for _, c in grouped.groups[0].email_activity)
+    assert total == 5
+
+
+def test_goal_reads_active_on_recent_email_activity():
+    goal = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    now = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    f = uuid4()
+    recent = _email_unit_at(f, occurred_at=now - timedelta(days=3))
+    grouped = group_units_by_goal(
+        (recent,), (goal,), (_edge(recent, goal, basis="email-job-search"),),
+        email_kinds={f: "interview"}, now=now,
+    )
+    assert grouped.groups[0].active is True
+
+
+def test_goal_reads_inactive_when_email_activity_is_stale():
+    goal = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    now = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    f = uuid4()
+    stale = _email_unit_at(f, occurred_at=now - timedelta(days=120))
+    grouped = group_units_by_goal(
+        (stale,), (goal,), (_edge(stale, goal, basis="email-job-search"),),
+        email_kinds={f: "application"}, now=now,
+    )
+    # presence of 1 (or 335) units is not activity — recency is (the guard)
+    grp = grouped.groups[0]
+    assert dict(grp.email_activity) == {"application": 1}
+    assert grp.active is False

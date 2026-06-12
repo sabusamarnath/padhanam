@@ -410,6 +410,10 @@ class GoalGroupDTO(BaseModel):
     name: str
     domain: str | None
     units: list[GroupedUnitDTO]
+    # D183/S89: job-search email activity folded to a count by kind (emails are
+    # seriesless), and whether that activity is recent (the active reading).
+    email_activity: dict[str, int] = {}
+    active: bool = False
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -462,6 +466,8 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                 name=g.name,
                 domain=g.domain,
                 units=[_grouped_unit_dto(u) for u in g.units],
+                email_activity=dict(g.email_activity),
+                active=g.active,
             )
             for g in grouped.groups
         ],
