@@ -415,8 +415,10 @@ class GoalGroupDTO(BaseModel):
     email_activity: dict[str, int] = {}
     active: bool = False
     # D187/S92: the goal's one status (on_track / behind / stalled / done /
-    # active), or None when the status read is unavailable.
+    # active / asleep), or None when the status read is unavailable.
     status: str | None = None
+    # D189/S93: the one-phrase why for the folded verdict line.
+    status_why: str | None = None
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -472,6 +474,7 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                 email_activity=dict(g.email_activity),
                 active=g.active,
                 status=g.status.value if g.status is not None else None,
+                status_why=g.status_why,
             )
             for g in grouped.groups
         ],

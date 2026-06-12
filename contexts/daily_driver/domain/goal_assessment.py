@@ -37,7 +37,7 @@ from contexts.daily_driver.domain.goal_status import (
     DEFAULT_GOAL_STATUS_THRESHOLDS,
     GoalStatus,
     GoalStatusThresholds,
-    compute_goal_status,
+    compute_goal_verdict,
 )
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import (
@@ -224,8 +224,11 @@ class GoalGroup:
     email_activity: tuple[tuple[str, int], ...] = ()
     active: bool = False
     # D187/S92: the goal's one status — on-track / behind / stalled / done /
-    # active. None only on a group built without the status read (legacy/tests).
+    # active / asleep. None only on a group built without the status read.
     status: GoalStatus | None = None
+    # D189/S93: the one-phrase why drawn from the status's evidence, for the
+    # folded verdict line. None when status is None.
+    status_why: str | None = None
 
 
 @dataclass(frozen=True)
@@ -405,8 +408,8 @@ def group_units_by_goal(
                     active = True
                 continue
             items.append((unit, confirmed))
-        status = (
-            compute_goal_status(
+        verdict = (
+            compute_goal_verdict(
                 goal=goal,
                 commitment_activities=activities,
                 latest_activity_at=latest_activity_at,
@@ -424,7 +427,8 @@ def group_units_by_goal(
                 units=_fold_units_to_rows(items),
                 email_activity=tuple(sorted(kind_counts.items())),
                 active=active,
-                status=status,
+                status=verdict.status if verdict is not None else None,
+                status_why=verdict.why if verdict is not None else None,
             )
         )
 

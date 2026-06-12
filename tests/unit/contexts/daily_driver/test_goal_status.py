@@ -218,3 +218,35 @@ def test_sequence_pending_reads_by_activity() -> None:
 def test_no_commitments_and_no_activity_reads_stalled() -> None:
     goal = _progressive()  # cadence-less, no activity, no commitment signal read
     assert _status(goal, latest=None) is GoalStatus.STALLED
+
+
+# --- D189: the evidence-drawn why phrase ----------------------------------
+
+def _verdict(goal, activities=None, latest=None):
+    from contexts.daily_driver.domain.goal_status import compute_goal_verdict
+
+    return compute_goal_verdict(
+        goal=goal, commitment_activities=activities or {},
+        latest_activity_at=latest, now=_NOW, thresholds=_TH,
+    )
+
+
+def test_why_phrases_drawn_from_evidence() -> None:
+    c = _commitment(1)
+    goal = _homeostatic((c.id,))
+    assert _verdict(goal, {c.id: _activity(c, last_days_ago=1)}).why == "on rhythm"
+    # behind: worst lever's overdue days
+    assert _verdict(goal, {c.id: _activity(c, last_days_ago=3)}).why == "2d overdue"
+    # cadence-less active: days since latest activity
+    assert _verdict(_progressive(), latest=_NOW - timedelta(days=3)).why == "3d ago"
+    # cadence-less stalled: quiet days
+    assert _verdict(_progressive(), latest=_NOW - timedelta(days=20)).why == "quiet 20d"
+    # asleep
+    cid = uuid4()
+    asleep_goal = _progressive(cid)
+    assert _verdict(
+        asleep_goal, {cid: _activity(_commitment(1, cid), last_days_ago=10)},
+        latest=_NOW - timedelta(days=2),
+    ).why == "practice paused"
+    # done
+    assert _verdict(_sequence(reached=True)).why == "reached"

@@ -30,6 +30,9 @@
       --needs-bg: #eeedfe; --needs-fg: #534ab7;
       --behind-bg: #faeeda; --behind-fg: #854f0b;
       --done-bg: #f0efec; --done-fg: #888780;
+      --stalled-bg: #fcebeb; --stalled-fg: #a32d2d;
+      --asleep-bg: #e6f1fb; --asleep-fg: #185fa5;
+      --active-bg: #e8f7f5; --active-fg: #1a8070;
       --backdrop: rgba(0,0,0,0.2); --shadow-panel: 0 8px 28px rgba(0,0,0,0.18);
       --radius-row: 6px; --radius-card: 8px; --radius-input: 4px;
       --warm: #b0997e; --cool: #7a8190;
@@ -45,6 +48,9 @@
       --needs-bg: #211d44; --needs-fg: #9f9ad0;
       --behind-bg: #3a2409; --behind-fg: #d3a05a;
       --done-bg: #242422; --done-fg: #8a8980;
+      --stalled-bg: #3a1212; --stalled-fg: #e0a0a0;
+      --asleep-bg: #14233a; --asleep-fg: #85b7eb;
+      --active-bg: #0f2a26; --active-fg: #54c3ad;
       --backdrop: rgba(0,0,0,0.5); --shadow-panel: 0 8px 28px rgba(0,0,0,0.5);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -121,6 +127,19 @@
     .collapse-label { font-size: 13px; font-weight: 600; color: var(--ink-1); }
     .collapse-sub { font-size: 12px; color: var(--ink-3); }
     .collapse-body { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    /* D189: the folded verdict line — one per goal, verdict not dump */
+    .verdict-head { gap: 10px; }
+    .vpill { flex-shrink: 0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 3px 9px; border-radius: 9999px; white-space: nowrap; min-width: 62px; text-align: center; }
+    .vpill.st-on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
+    .vpill.st-behind { background: var(--behind-bg); color: var(--behind-fg); }
+    .vpill.st-stalled { background: var(--stalled-bg); color: var(--stalled-fg); }
+    .vpill.st-asleep { background: var(--asleep-bg); color: var(--asleep-fg); }
+    .vpill.st-active { background: var(--active-bg); color: var(--active-fg); }
+    .vpill.st-done { background: var(--done-bg); color: var(--done-fg); }
+    .verdict-head .collapse-label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vwhy { font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; padding-left: 8px; }
+    .evidence-note { font-size: 12px; color: var(--ink-3); font-style: italic; padding: 4px 2px; }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -339,7 +358,7 @@
         view.innerHTML = `
           <p class="sub">Two reads no tool holds — your work grouped under the goal it serves, and the facet a piece of goal-serving work is missing.</p>
           <div class="section-label">By goal</div>
-          <p class="sub">One row per unit, recurring work folded; work no goal claims sits under “unlinked”. Recommendations, not verdicts — meaningful once your goals are seeded.</p>
+          <p class="sub">One line per goal: the verdict and why. Tap a goal for the work behind it; work no goal claims folds to a single line. Meaningful once your goals are seeded.</p>
           <div class="goals" id="moat"></div>
           <div class="section-label">Suggestions</div>
           <p class="sub">The facet a piece of goal-serving work is missing — a time block, prep, a task. Surfaced only when Padhanam is confident; silence is the default.</p>
@@ -388,7 +407,7 @@
       box.innerHTML = "";
       // Lead with the coverage boundary — the read is only valid inside it (D171).
       const cline = document.createElement("div");
-      cline.className = "sub"; cline.style.margin = "0 0 8px";
+      cline.className = "sub"; cline.style.margin = "0 0 10px";
       cline.innerHTML = `<strong>Coverage:</strong> ${cov.goals_covered} of ${cov.goals_total} goals linked to ingested work · ${cov.units_linked} of ${cov.units_total} units linked.`;
       box.appendChild(cline);
       if (!cov.has_coverage) {
@@ -398,53 +417,75 @@
         box.appendChild(note);
         return;
       }
-      (g.groups || []).forEach((grp) => box.appendChild(goalGroupEl(grp)));
-      if (g.unlinked && g.unlinked.length) {
-        box.appendChild(groupEl("Unlinked", "work", null,
-          `${g.unlinked.length} not linked to any goal`, g.unlinked, true));
-      }
+      // D189: one folded verdict line per goal — the verdict, not the dump.
+      (g.groups || []).forEach((grp) => box.appendChild(verdictLineEl(grp)));
+      // D189: the unlinked units fold to a single summary line, not a pile.
+      if (g.unlinked && g.unlinked.length) box.appendChild(orphanFoldEl(g.unlinked));
     }
-    // Order email kinds by where they sit in the funnel — the outcome-bearing
-    // ones (offer, interview) lead, the high-volume base (application) follows.
+    // The S92/D188 status vocabulary -> label + pill class (design-language §2).
+    const STATUS_META = {
+      on_track: { label: "on track", cls: "st-on_track" },
+      behind:   { label: "behind",   cls: "st-behind" },
+      asleep:   { label: "asleep",   cls: "st-asleep" },
+      stalled:  { label: "stalled",  cls: "st-stalled" },
+      active:   { label: "active",   cls: "st-active" },
+      done:     { label: "done",     cls: "st-done" },
+    };
+    // Order email kinds by where they sit in the funnel — outcome-bearing first.
     const EMAIL_KIND_ORDER = ["offer", "interview", "application", "acknowledgement", "rejection"];
-    function goalGroupEl(grp) {
-      const d = DOMAINS[grp.domain] || DOMAINS.work;
-      const n = grp.units.length;
-      const wrap = groupEl(grp.name, d.tier, d, `${n} unit${n === 1 ? "" : "s"}`, grp.units, false);
-      // D183/S89: job-search email activity is folded to a count by kind (the
-      // emails are seriesless and high-volume — a count-for-seriesless fold,
-      // not the S83 series-fold). The goal reads "active" on recent activity,
-      // not on the mere presence of units.
-      const ea = grp.email_activity || {};
-      const kinds = Object.keys(ea);
-      if (kinds.length) {
-        const head = wrap.querySelector(".group-head");
-        if (grp.active && head) {
-          const badge = document.createElement("span");
-          badge.className = "pill"; badge.style.marginLeft = "6px";
-          badge.textContent = "active";
-          head.appendChild(badge);
-        }
-        const order = EMAIL_KIND_ORDER.filter((k) => ea[k]);
-        kinds.forEach((k) => { if (!order.includes(k)) order.push(k); });
-        const parts = order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`);
-        const line = document.createElement("div");
-        line.className = "sub"; line.style.margin = "2px 0 6px";
-        line.textContent = "Email activity: " + parts.join(" · ");
-        wrap.insertBefore(line, wrap.children[1] || null);
-      }
+    // D189: a folded collapse (reusing the D181 component) whose head is the
+    // verdict and whose body holds the evidence (read-only), built lazily on tap.
+    function makeFold(headHtml, buildBody) {
+      const wrap = document.createElement("div"); wrap.className = "collapse";
+      const head = document.createElement("button"); head.className = "collapse-head verdict-head";
+      head.innerHTML = headHtml;
+      const body = document.createElement("div"); body.className = "collapse-body"; body.style.display = "none";
+      let built = false;
+      head.addEventListener("click", () => {
+        const open = body.style.display !== "none";
+        if (!open && !built) { buildBody(body); built = true; }
+        body.style.display = open ? "none" : "flex";
+        const c = head.querySelector(".collapse-caret"); if (c) c.textContent = open ? "▸" : "▾";
+      });
+      wrap.appendChild(head); wrap.appendChild(body);
       return wrap;
     }
-    function groupEl(name, tier, domain, countLabel, units, unlinked) {
-      const wrap = document.createElement("div");
-      wrap.className = "group";
-      const head = document.createElement("div");
-      head.className = "group-head";
-      const cue = domain ? `<span class="cue" style="--tint:${domain.tint}">${domain.icon}</span>` : "";
-      head.innerHTML = `${cue}<span class="group-name">${escapeHtml(name)}</span><span class="group-count">${escapeHtml(countLabel)}</span>`;
-      wrap.appendChild(head);
-      units.forEach((u) => wrap.appendChild(moatRow(u, tier, unlinked)));
-      return wrap;
+    function verdictLineEl(grp) {
+      const meta = STATUS_META[grp.status] || STATUS_META.active;
+      const why = grp.status_why || "";
+      const head =
+        `<span class="collapse-caret">▸</span>` +
+        `<span class="vpill ${meta.cls}">${escapeHtml(meta.label)}</span>` +
+        `<span class="collapse-label">${escapeHtml(grp.name)}</span>` +
+        (why ? `<span class="vwhy">${escapeHtml(why)}</span>` : "");
+      const tier = (DOMAINS[grp.domain] || DOMAINS.work).tier;
+      return makeFold(head, (body) => {
+        const ea = grp.email_activity || {};
+        const kinds = Object.keys(ea);
+        if (kinds.length) {
+          const order = EMAIL_KIND_ORDER.filter((k) => ea[k]);
+          kinds.forEach((k) => { if (!order.includes(k)) order.push(k); });
+          const line = document.createElement("div");
+          line.className = "evidence-note";
+          line.textContent = "Email activity: " + order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`).join(" · ");
+          body.appendChild(line);
+        }
+        (grp.units || []).forEach((u) => body.appendChild(moatRow(u, tier, false)));
+        if (!kinds.length && !(grp.units || []).length) {
+          const note = document.createElement("div");
+          note.className = "evidence-note";
+          note.textContent = "No linked work yet — the verdict reads from your commitment cadence.";
+          body.appendChild(note);
+        }
+      });
+    }
+    function orphanFoldEl(unlinked) {
+      const head =
+        `<span class="collapse-caret">▸</span>` +
+        `<span class="collapse-label">${unlinked.length} item${unlinked.length === 1 ? "" : "s"} not yet linked</span>`;
+      return makeFold(head, (body) => {
+        unlinked.forEach((u) => body.appendChild(moatRow(u, "work", true)));
+      });
     }
     function moatRow(u, tier, unlinked) {
       const row = document.createElement("div");

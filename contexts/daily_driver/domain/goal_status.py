@@ -90,39 +90,54 @@ def _goal_lever_ids(goal: Goal) -> tuple[UUID, ...]:
     return tuple(ids)
 
 
+def _lever_verdict(
+    activity: CommitmentActivity,
+    *,
+    now: datetime,
+    thresholds: GoalStatusThresholds,
+) -> tuple[GoalStatus, int]:
+    """(status, overdue_days) for one lever, by cadence adherence."""
+    commitment = activity.commitment
+    last = activity.last_completed_at or commitment.created_at
+    interval = commitment.expected_interval_days
+    overdue = overdue_by_days(
+        last_activity_at=last, expected_interval_days=interval, now=now
+    )
+    if not is_overdue(
+        last_activity_at=last, expected_interval_days=interval, now=now
+    ):
+        return (GoalStatus.ON_TRACK, 0)
+    k = thresholds.daily_stalled_k if interval <= 1 else thresholds.weekly_stalled_k
+    status = GoalStatus.STALLED if overdue // interval >= k else GoalStatus.BEHIND
+    return (status, overdue)
+
+
 def _commitment_status(
     activity: CommitmentActivity,
     *,
     now: datetime,
     thresholds: GoalStatusThresholds,
 ) -> GoalStatus:
-    """on-track / behind / stalled for one lever, by cadence adherence."""
-    commitment = activity.commitment
-    last = activity.last_completed_at or commitment.created_at
-    interval = commitment.expected_interval_days
-    if not is_overdue(
-        last_activity_at=last, expected_interval_days=interval, now=now
-    ):
-        return GoalStatus.ON_TRACK
-    missed = (
-        overdue_by_days(
-            last_activity_at=last, expected_interval_days=interval, now=now
-        )
-        // interval
-    )
-    k = thresholds.daily_stalled_k if interval <= 1 else thresholds.weekly_stalled_k
-    return GoalStatus.STALLED if missed >= k else GoalStatus.BEHIND
+    return _lever_verdict(activity, now=now, thresholds=thresholds)[0]
 
 
-def compute_goal_status(
+@dataclass(frozen=True)
+class GoalVerdict:
+    """A goal's status plus the one-phrase why drawn from its evidence (D189)."""
+
+    status: GoalStatus
+    why: str
+
+
+def compute_goal_verdict(
     *,
     goal: Goal,
     commitment_activities: dict[UUID, CommitmentActivity],
     latest_activity_at: datetime | None,
     now: datetime,
     thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
-) -> GoalStatus:
-    """The goal's one status (D187).
+) -> GoalVerdict:
+    """The goal's status + a short evidence-drawn why (D187/D188/D189).
 
     ``commitment_activities`` maps a commitment id to its activity (cadence +
     last completion). ``latest_activity_at`` is the most recent confirmed-edge
@@ -134,7 +149,7 @@ def compute_goal_status(
         and goal.terminal is not None
         and goal.terminal.state is TerminalState.REACHED
     ):
-        return GoalStatus.DONE
+        return GoalVerdict(GoalStatus.DONE, "reached")
 
     # Cadence goal (homeostatic): the commitment completion log is the signal.
     if goal.mode is GoalMode.HOMEOSTATIC:
@@ -144,24 +159,28 @@ def compute_goal_status(
             if cid in commitment_activities
         ]
         if levers:
-            statuses = [
-                _commitment_status(a, now=now, thresholds=thresholds)
-                for a in levers
+            verdicts = [
+                _lever_verdict(a, now=now, thresholds=thresholds) for a in levers
             ]
-            return min(statuses, key=lambda s: _CADENCE_RANK[s])  # worst-wins
+            status, overdue = min(  # worst-status-wins (D177)
+                verdicts, key=lambda v: _CADENCE_RANK[v[0]]
+            )
+            why = "on rhythm" if status is GoalStatus.ON_TRACK else f"{overdue}d overdue"
+            return GoalVerdict(status, why)
 
     # Cadence-less (progressive / sequence-not-done / homeostatic-without-levers).
+    quiet = (
+        days_elapsed(since=latest_activity_at, now=now)
+        if latest_activity_at is not None
+        else None
+    )
     # 1. No recent confirmed activity in the window — at-risk, surfaced not
     #    hidden (D187). Covers the no-signal fallback too (latest is None).
-    if (
-        latest_activity_at is None
-        or days_elapsed(since=latest_activity_at, now=now)
-        > thresholds.no_activity_window_days
-    ):
-        return GoalStatus.STALLED
+    if quiet is None or quiet > thresholds.no_activity_window_days:
+        why = f"quiet {quiet}d" if quiet is not None else "no activity yet"
+        return GoalVerdict(GoalStatus.STALLED, why)
     # 2. A progressive goal with a lapsed practice commitment reads asleep (D188):
-    #    recent activity exists, but the intended practice is being skipped
-    #    (a lever missed >= K), so it is paused, not credited active.
+    #    recent activity exists, but the intended practice is being skipped.
     if goal.mode is GoalMode.PROGRESSIVE:
         practice = [
             commitment_activities[cid]
@@ -173,14 +192,35 @@ def compute_goal_status(
             is GoalStatus.STALLED
             for a in practice
         ):
-            return GoalStatus.ASLEEP
+            return GoalVerdict(GoalStatus.ASLEEP, "practice paused")
     # 3. Recent activity, no lapse — active.
-    return GoalStatus.ACTIVE
+    why = "today" if quiet == 0 else f"{quiet}d ago"
+    return GoalVerdict(GoalStatus.ACTIVE, why)
+
+
+def compute_goal_status(
+    *,
+    goal: Goal,
+    commitment_activities: dict[UUID, CommitmentActivity],
+    latest_activity_at: datetime | None,
+    now: datetime,
+    thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
+) -> GoalStatus:
+    """The goal's one status (D187/D188). Delegates to ``compute_goal_verdict``."""
+    return compute_goal_verdict(
+        goal=goal,
+        commitment_activities=commitment_activities,
+        latest_activity_at=latest_activity_at,
+        now=now,
+        thresholds=thresholds,
+    ).status
 
 
 __all__ = [
     "DEFAULT_GOAL_STATUS_THRESHOLDS",
     "GoalStatus",
     "GoalStatusThresholds",
+    "GoalVerdict",
     "compute_goal_status",
+    "compute_goal_verdict",
 ]
