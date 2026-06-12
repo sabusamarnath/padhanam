@@ -89,7 +89,7 @@ recommendations = sa.Table(
     sa.Column("last_transition_by_user_id", sa.Text, nullable=True),
     sa.CheckConstraint(
         "category IN ('retrieval_strategy', 'model_choice', "
-        "'prompt_revision', 'cost_optimization')",
+        "'prompt_revision', 'cost_optimization', 'matcher_suppression')",
         name="recommendations_category_check",
     ),
     sa.CheckConstraint(

@@ -1149,7 +1149,7 @@ runs from `contexts/evaluation/`) is Phase 2 territory.
 | `id`                            | `uuid`           | primary key; default `gen_random_uuid()`                                                   |
 | `tenant_id`                     | `uuid`           | not null; jurisdiction-bearing per D12                                                     |
 | `jurisdiction`                  | `text`           | not null; CHECK `jurisdiction <> ''`                                                       |
-| `category`                      | `text`           | not null; CHECK ∈ {`retrieval_strategy`, `model_choice`, `prompt_revision`, `cost_optimization`} |
+| `category`                      | `text`           | not null; CHECK ∈ {`retrieval_strategy`, `model_choice`, `prompt_revision`, `cost_optimization`, `matcher_suppression`} (matcher_suppression added 0036, D185/D186) |
 | `subject`                       | `text`           | not null                                                                                   |
 | `text`                          | `text`           | not null                                                                                   |
 | `evidence_citations`            | `jsonb`          | not null; discriminated union by category per D111 commitment 7                            |
