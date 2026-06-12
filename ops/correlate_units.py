@@ -41,6 +41,7 @@ async def _correlate() -> None:
         EmailJobSearchSourceAdapter,
         FacetSourceAdapter,
         GoalGraphAdapter,
+        MatcherQualityRecorderAdapter,
         UnitGraphAdapter,
     )
     from apps.cli._runtime import build_tenant_wiring
@@ -74,6 +75,12 @@ async def _correlate() -> None:
     email_job_search_source = EmailJobSearchSourceAdapter(
         session_factory_for_tenant=_session_factory_for_tenant
     )
+    # D185/S90: the observe-only matcher-quality recorder — measures the SERVES
+    # edges + units each correlate run and persists a quality run (the baseline,
+    # then S91's before/after). Edge output is unchanged.
+    matcher_quality_recorder = MatcherQualityRecorderAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant
+    )
     unit_graph = UnitGraphAdapter(unit_graph=graph)
     goal_graph = GoalGraphAdapter(outcome_graph=graph)
     commitment_repository = PostgresCommitmentRepository(
@@ -104,6 +111,7 @@ async def _correlate() -> None:
         goal_graph=goal_graph,
         commitment_repository=commitment_repository,
         email_job_search_source=email_job_search_source,
+        matcher_quality_recorder=matcher_quality_recorder,
         actor=actor,
     )
     log.info("goal-facet correlation complete: %d SERVES edges written", edge_count)

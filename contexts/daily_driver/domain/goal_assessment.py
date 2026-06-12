@@ -42,6 +42,10 @@ from contexts.daily_driver.domain.work_unit import (
 DEFAULT_GOAL_CONFIDENCE_FLOOR = 0.8
 _CONFIRMED_CONFIDENCE = 0.9
 _CANDIDATE_CONFIDENCE = 0.5
+# The weak keyword-on-name basis (a candidate edge from a goal-name token match,
+# D169/D172) — the single-signal category the matcher-quality producer measures
+# (D185, S90). Public so the apps bridge can classify edges from one source.
+WEAK_KEYWORD_BASIS = "goal-name"
 # A token carries a candidate keyword match unless it is a stopword (D172, the
 # tier-one stopword filter replacing the old four-character length guard). Length
 # is a bad proxy for signal: "job" is short and high-signal, "get" is short and
@@ -472,7 +476,7 @@ _EMAIL_RULE_BASIS = "email-job-search"
 # Tiebreak when a unit-goal pair is reached by more than one path: the
 # rule-confirmed basis wins (higher specificity), then commitment, then
 # goal-name (the D183 dedup requirement).
-_BASIS_PRIORITY = {_EMAIL_RULE_BASIS: 0, "commitment": 1, "goal-name": 2}
+_BASIS_PRIORITY = {_EMAIL_RULE_BASIS: 0, "commitment": 1, WEAK_KEYWORD_BASIS: 2}
 
 
 def infer_email_job_search_edges(
@@ -591,7 +595,7 @@ def infer_goal_edges(
                         outcome_id=goal.id,
                         confidence=_CANDIDATE_CONFIDENCE,
                         status=status,
-                        basis="goal-name",
+                        basis=WEAK_KEYWORD_BASIS,
                     )
                 )
     return tuple(edges)
@@ -742,6 +746,7 @@ __all__ = [
     "GoalGroupedUnits",
     "GroupedUnit",
     "UncoveredGoal",
+    "WEAK_KEYWORD_BASIS",
     "assess_goals",
     "commitment_domains_from_goals",
     "dedup_goal_edges",

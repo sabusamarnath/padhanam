@@ -25,6 +25,9 @@ from contexts.daily_driver.ports.email_job_search_source import (
 )
 from contexts.daily_driver.ports.facet_source import FacetSource
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
+from contexts.daily_driver.ports.matcher_quality_recorder import (
+    MatcherQualityRecorder,
+)
 from contexts.daily_driver.ports.unit_graph import UnitGraphPort
 
 # The job-search emails serve this goal (D183). Named match against the seeded
@@ -47,6 +50,7 @@ async def correlate_goal_facets(
     commitment_repository: CommitmentRepository,
     actor: ActorContext,
     email_job_search_source: EmailJobSearchSource | None = None,
+    matcher_quality_recorder: MatcherQualityRecorder | None = None,
     confidence_floor: float = DEFAULT_GOAL_CONFIDENCE_FLOOR,
 ) -> int:
     """Recompute and persist the tenant's unit→goal facet. Returns edge count."""
@@ -82,6 +86,14 @@ async def correlate_goal_facets(
                     views, target.id, confirmed_ids
                 )
                 edges = dedup_goal_edges(edges + email_edges)
+    # D185/S90: observe-only matcher-quality hook. The recorder measures the
+    # final edge set + units and persists a quality run; it must not mutate the
+    # edges. Placed before the replace so the measurement is exactly what gets
+    # written. Default-None keeps correlation unchanged when not wired.
+    if matcher_quality_recorder is not None:
+        await matcher_quality_recorder.record(
+            actor=actor, edges=edges, units=views
+        )
     await unit_graph.replace_goal_edges(
         tenant_context=actor.tenant_context, edges=edges
     )

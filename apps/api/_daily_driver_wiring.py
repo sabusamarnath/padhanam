@@ -57,13 +57,22 @@ from contexts.daily_driver.domain.today_item import (
     ItemKind,
     OpenCase,
 )
-from contexts.daily_driver.domain.goal_assessment import GoalEdge
+from contexts.daily_driver.domain.goal_assessment import (
+    WEAK_KEYWORD_BASIS,
+    GoalEdge,
+)
+from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import (
     FacetType,
     LinkStatus,
     WorkFacet,
     WorkUnit,
 )
+from contexts.matcher_evaluation.adapters.outbound.postgres import (
+    PostgresMatcherQualityRunRepository,
+)
+from contexts.matcher_evaluation.application import record_matcher_quality_run
+from contexts.matcher_evaluation.domain import EdgeSample, MatcherQualitySample
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchClassification,
 )
@@ -741,6 +750,76 @@ def build_email_job_search_source(
 ) -> EmailJobSearchSourceAdapter:
     """Wire the daily-driver EmailJobSearchSource over the email store (D183)."""
     return EmailJobSearchSourceAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+def _edge_to_sample(edge: GoalEdge) -> EdgeSample:
+    """Project one matcher SERVES edge to the producer's neutral sample.
+
+    The matcher's vocabulary (the weak ``goal-name`` basis, the CANDIDATE /
+    CONFIRMED status) is single-sourced from ``daily_driver`` here at the
+    composition root, so the producer (``matcher_evaluation``) stays independent
+    of it (D17). Status maps the confidence tiers: CANDIDATE is the 0.5 guess,
+    CONFIRMED the 0.9 / 0.95 settle.
+    """
+    return EdgeSample(
+        unit_id=edge.unit_id,
+        is_single_signal=edge.basis == WEAK_KEYWORD_BASIS,
+        is_candidate=edge.status is LinkStatus.CANDIDATE,
+        is_confirmed=edge.status is LinkStatus.CONFIRMED,
+    )
+
+
+class MatcherQualityRecorderAdapter:
+    """apps/ bridge implementing daily-driver's ``MatcherQualityRecorder`` over the
+    ``matcher_evaluation`` producer (D185/S90, D17). The observe-only correlate
+    hook calls ``record`` with the final SERVES edges + units; this projects them
+    to the producer's neutral, label-free sample and persists a quality run —
+    without the daily-driver context importing the producer. Counts and rates
+    only; nothing content-bearing crosses the seam.
+    """
+
+    def __init__(self, *, session_factory_for_tenant: _SessionFactoryForTenant) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def record(
+        self,
+        *,
+        actor: ActorContext,
+        edges: tuple[GoalEdge, ...],
+        units: tuple[UnitView, ...],
+    ) -> None:
+        sample = MatcherQualitySample(
+            edges=tuple(_edge_to_sample(e) for e in edges),
+            unit_ids=frozenset(u.unit_id for u in units),
+        )
+        sessionmaker = await self._session_factory_for_tenant(actor.tenant_context)
+        repository = PostgresMatcherQualityRunRepository(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        await record_matcher_quality_run(
+            tenant_context=actor.tenant_context,
+            sample=sample,
+            repository=repository,
+        )
+
+
+def build_matcher_quality_recorder(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> MatcherQualityRecorderAdapter:
+    """Wire the matcher-quality recorder over the producer's store (D185)."""
+    return MatcherQualityRecorderAdapter(
         session_factory_for_tenant=_session_factory_builder(
             tenant_registry=tenant_registry,
             session_factory_cache=session_factory_cache,
