@@ -254,6 +254,12 @@ sync-email-jobsearch: derive-env
 classify-job-search: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.classify_job_search
 
+# Per-goal status on the live corpus for the S92 sanity-check (D187): runs the
+# real list_units_by_goal projection, prints each goal's status + evidence
+# (dates/counts only). Read-only.
+goal-status-report: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.goal_status_report
+
 # Surface the single-signal candidate edges for the ground-truth gate (S91a):
 # replay the matcher's edge computation, dump the goal-name keyword-on-name tier
 # to a LOCAL gitignored artefact (/tmp/s91_review) for operator review. Read-only;
