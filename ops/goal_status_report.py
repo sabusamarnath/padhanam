@@ -89,6 +89,7 @@ async def _report() -> None:
     for grp in grouped.groups:
         goal = goals.get(grp.outcome_id)
         status = grp.status.value if grp.status is not None else "(none)"
+        why = grp.status_why or ""
         mode = goal.mode.value if goal is not None else "?"
         ev: list[str] = []
         if goal is not None and goal.mode is GoalMode.HOMEOSTATIC:
@@ -110,7 +111,10 @@ async def _report() -> None:
         n_units = len(grp.units)
         n_email = sum(c for _, c in grp.email_activity)
         ev.append(f"units={n_units} email={n_email}")
-        log.info("  %-26s [%s/%s]  %s", (goal.name if goal else "?"), mode, status, " ".join(ev))
+        log.info(
+            "  %-26s [%s]  %-9s · %-12s   %s",
+            (goal.name if goal else "?"), mode, status, why, " ".join(ev),
+        )
 
 
 def main() -> int:
