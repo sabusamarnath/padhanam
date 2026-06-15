@@ -127,10 +127,62 @@ def test_worst_status_wins_across_levers() -> None:
     assert _status(goal, activities) is GoalStatus.STALLED
 
 
-def test_never_completed_daily_habit_reads_stalled() -> None:
+def test_never_completed_daily_habit_reads_not_tracked() -> None:
+    # D191: a lever with no completion does not fabricate "overdue" from its
+    # age (created_at) — it reads not-tracked, the honest "the moat does not
+    # know." (This supersedes S92's created_at-fabricated stalled.)
     c = _commitment(1)  # created 365d ago, never completed
     goal = _homeostatic((c.id,))
-    assert _status(goal, {c.id: _activity(c, last_days_ago=None)}) is GoalStatus.STALLED
+    assert (
+        _status(goal, {c.id: _activity(c, last_days_ago=None)})
+        is GoalStatus.NOT_TRACKED
+    )
+
+
+def test_partial_tracking_verdict_from_tracked_levers_only() -> None:
+    # D191 partial-tracking rule: a goal reads not-tracked only when NO lever
+    # has any completion. With one tracked and one untracked lever, the real
+    # cadence verdict wins from the tracked lever; the untracked one neither
+    # fabricates overdue nor drags the goal to not-tracked.
+    tracked = _commitment(1)
+    untracked = _commitment(1)
+    goal = _homeostatic((tracked.id, untracked.id))
+    activities = {
+        tracked.id: _activity(tracked, last_days_ago=1),     # on rhythm
+        untracked.id: _activity(untracked, last_days_ago=None),  # no data
+    }
+    assert _status(goal, activities) is GoalStatus.ON_TRACK
+
+
+def test_all_levers_untracked_reads_not_tracked() -> None:
+    a = _commitment(1)
+    b = _commitment(1)
+    goal = _homeostatic((a.id, b.id))
+    activities = {
+        a.id: _activity(a, last_days_ago=None),
+        b.id: _activity(b, last_days_ago=None),
+    }
+    assert _status(goal, activities) is GoalStatus.NOT_TRACKED
+
+
+def test_compute_lever_status_tracked_vs_untracked() -> None:
+    from contexts.daily_driver.domain.goal_status import compute_lever_status
+
+    c = _commitment(1)
+    # untracked -> not_tracked
+    assert (
+        compute_lever_status(_activity(c, last_days_ago=None), now=_NOW, thresholds=_TH)
+        is GoalStatus.NOT_TRACKED
+    )
+    # tracked -> its cadence verdict (4d overdue daily, K=3 -> stalled)
+    assert (
+        compute_lever_status(_activity(c, last_days_ago=4), now=_NOW, thresholds=_TH)
+        is GoalStatus.STALLED
+    )
+    assert (
+        compute_lever_status(_activity(c, last_days_ago=1), now=_NOW, thresholds=_TH)
+        is GoalStatus.ON_TRACK
+    )
 
 
 # --- cadence-less (progressive) -------------------------------------------

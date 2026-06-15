@@ -403,6 +403,13 @@ class GroupedUnitDTO(BaseModel):
     series_id: str | None = None
 
 
+class GoalLeverStatusDTO(BaseModel):
+    """One lever commitment's name and status within a cadence goal (D191)."""
+
+    name: str
+    status: str
+
+
 class GoalGroupDTO(BaseModel):
     """A goal gathering the units that serve it (D180)."""
 
@@ -425,6 +432,9 @@ class GoalGroupDTO(BaseModel):
     units_more: int = 0
     suggestion_head: list[str] = []
     suggestion_total: int = 0
+    # D191/S96: per-lever status for a cadence goal — which levers have no
+    # completion data ("not_tracked") even when the goal reads a verdict.
+    levers: list[GoalLeverStatusDTO] = []
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -484,6 +494,10 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                 units_more=g.units_more,
                 suggestion_head=list(g.suggestion_head),
                 suggestion_total=g.suggestion_total,
+                levers=[
+                    GoalLeverStatusDTO(name=lv.name, status=lv.status.value)
+                    for lv in g.levers
+                ],
             )
             for g in grouped.groups
         ],

@@ -510,9 +510,11 @@ def test_group_sets_progressive_status_active_from_recent_edge():
     assert grouped.groups[0].status is GoalStatus.ACTIVE
 
 
-def test_group_emits_homeostatic_goal_with_no_edges_as_stalled():
-    # A dead habit (homeostatic, daily lever never completed, no ingested edges)
-    # surfaces with a stalled verdict, not hidden as uncovered (D187).
+def test_group_emits_homeostatic_goal_with_no_completions_as_not_tracked():
+    # D191: a homeostatic goal whose only lever has no completion surfaces with
+    # a not-tracked verdict (the moat doesn't know), not a stalled fabricated
+    # from the commitment's age — and still surfaces, not hidden as uncovered
+    # (D187). The per-lever evidence shows the lever as not tracked.
     from contexts.daily_driver.domain.commitment import (
         Commitment,
         CommitmentActivity,
@@ -539,8 +541,12 @@ def test_group_emits_homeostatic_goal_with_no_edges_as_stalled():
         },
     )
     assert len(grouped.groups) == 1
-    assert grouped.groups[0].status is GoalStatus.STALLED
+    assert grouped.groups[0].status is GoalStatus.NOT_TRACKED
     assert grouped.groups[0].units == ()
+    # D191: the lever surfaces as not-tracked in the per-lever evidence.
+    assert len(grouped.groups[0].levers) == 1
+    assert grouped.groups[0].levers[0].name == "Fitness"
+    assert grouped.groups[0].levers[0].status is GoalStatus.NOT_TRACKED
 
 
 def test_group_folds_a_recurring_series_to_one_row():

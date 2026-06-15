@@ -48,6 +48,10 @@ class GoalStatus(str, Enum):
     DONE = "done"
     ACTIVE = "active"
     ASLEEP = "asleep"
+    # D191: a cadence commitment with no completion evidence reads not-tracked —
+    # the honest "the moat does not know whether the work happened," never a
+    # verdict fabricated from the commitment's age (its ``created_at``).
+    NOT_TRACKED = "not_tracked"
 
 
 @dataclass(frozen=True)
@@ -121,6 +125,20 @@ def _commitment_status(
     return _lever_verdict(activity, now=now, thresholds=thresholds)[0]
 
 
+def compute_lever_status(
+    activity: CommitmentActivity,
+    *,
+    now: datetime,
+    thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
+) -> GoalStatus:
+    """One lever's status (D191) — ``NOT_TRACKED`` with no completion, else its
+    cadence verdict. Lets the evidence surface show which levers have no data
+    even while the goal as a whole reads a verdict (the partial-tracking rule)."""
+    if activity.last_completed_at is None:
+        return GoalStatus.NOT_TRACKED
+    return _lever_verdict(activity, now=now, thresholds=thresholds)[0]
+
+
 @dataclass(frozen=True)
 class GoalVerdict:
     """A goal's status plus the one-phrase why drawn from its evidence (D189)."""
@@ -159,8 +177,16 @@ def compute_goal_verdict(
             if cid in commitment_activities
         ]
         if levers:
+            # D191: read the cadence verdict from the *tracked* levers only —
+            # those with a real completion. A lever with no completion is not
+            # overdue (its age is not evidence); it never fabricates a verdict
+            # nor drags the goal down. The goal reads not-tracked only when NO
+            # lever has any completion (the partial-tracking rule).
+            tracked = [a for a in levers if a.last_completed_at is not None]
+            if not tracked:
+                return GoalVerdict(GoalStatus.NOT_TRACKED, "not tracked")
             verdicts = [
-                _lever_verdict(a, now=now, thresholds=thresholds) for a in levers
+                _lever_verdict(a, now=now, thresholds=thresholds) for a in tracked
             ]
             status, overdue = min(  # worst-status-wins (D177)
                 verdicts, key=lambda v: _CADENCE_RANK[v[0]]
@@ -223,4 +249,5 @@ __all__ = [
     "GoalVerdict",
     "compute_goal_status",
     "compute_goal_verdict",
+    "compute_lever_status",
 ]

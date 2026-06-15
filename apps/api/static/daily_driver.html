@@ -33,6 +33,7 @@
       --stalled-bg: #fcebeb; --stalled-fg: #a32d2d;
       --asleep-bg: #e6f1fb; --asleep-fg: #185fa5;
       --active-bg: #e8f7f5; --active-fg: #1a8070;
+      --not_tracked-bg: #f2f1ef; --not_tracked-fg: #6b6a64;
       --backdrop: rgba(0,0,0,0.2); --shadow-panel: 0 8px 28px rgba(0,0,0,0.18);
       --radius-row: 6px; --radius-card: 8px; --radius-input: 4px;
       --warm: #b0997e; --cool: #7a8190;
@@ -51,6 +52,7 @@
       --stalled-bg: #3a1212; --stalled-fg: #e0a0a0;
       --asleep-bg: #14233a; --asleep-fg: #85b7eb;
       --active-bg: #0f2a26; --active-fg: #54c3ad;
+      --not_tracked-bg: #232320; --not_tracked-fg: #908f87;
       --backdrop: rgba(0,0,0,0.5); --shadow-panel: 0 8px 28px rgba(0,0,0,0.5);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -137,6 +139,16 @@
     .vpill.st-asleep { background: var(--asleep-bg); color: var(--asleep-fg); }
     .vpill.st-active { background: var(--active-bg); color: var(--active-fg); }
     .vpill.st-done { background: var(--done-bg); color: var(--done-fg); }
+    .vpill.st-not_tracked { background: var(--not_tracked-bg); color: var(--not_tracked-fg);
+      border: 1px dashed var(--not_tracked-fg); }
+    /* D191: per-lever status in the expand — shows which levers have no data */
+    .lever-block { display: flex; flex-direction: column; gap: 3px; margin-top: 4px;
+      padding-top: 6px; border-top: 1px solid var(--hairline); }
+    .lever-row { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--ink-2); }
+    .lever-row .lever-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lever-row .lever-status { flex-shrink: 0; font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--ink-3); }
+    .lever-row.lv-not_tracked .lever-status { color: var(--not_tracked-fg); }
     .verdict-head .collapse-label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .vwhy { font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; padding-left: 8px; }
     .evidence-note { font-size: 12px; color: var(--ink-3); font-style: italic; padding: 4px 2px; }
@@ -431,6 +443,7 @@
       stalled:  { label: "stalled",  cls: "st-stalled" },
       active:   { label: "active",   cls: "st-active" },
       done:     { label: "done",     cls: "st-done" },
+      not_tracked: { label: "not tracked", cls: "st-not_tracked" },
     };
     // Order email kinds by where they sit in the funnel — outcome-bearing first.
     const EMAIL_KIND_ORDER = ["offer", "interview", "application", "acknowledgement", "rejection"];
@@ -461,6 +474,22 @@
         (why ? `<span class="vwhy">${escapeHtml(why)}</span>` : "");
       const tier = (DOMAINS[grp.domain] || DOMAINS.work).tier;
       return makeFold(head, (body) => {
+        // D191: per-lever status for a cadence goal — show which levers have no
+        // completion data, even when the goal as a whole reads a verdict.
+        const levers = grp.levers || [];
+        if (levers.length) {
+          const lb = document.createElement("div"); lb.className = "lever-block";
+          levers.forEach((lv) => {
+            const r = document.createElement("div");
+            r.className = "lever-row lv-" + lv.status;
+            const lm = STATUS_META[lv.status] || STATUS_META.active;
+            r.innerHTML =
+              `<span class="lever-name">${escapeHtml(lv.name)}</span>` +
+              `<span class="lever-status">${escapeHtml(lm.label)}</span>`;
+            lb.appendChild(r);
+          });
+          body.appendChild(lb);
+        }
         const ea = grp.email_activity || {};
         const kinds = Object.keys(ea);
         if (kinds.length) {
@@ -479,10 +508,12 @@
           more.textContent = `+ ${grp.units_more} more item${grp.units_more === 1 ? "" : "s"}`;
           body.appendChild(more);
         }
-        if (!kinds.length && !(grp.units || []).length) {
+        if (!kinds.length && !(grp.units || []).length && !levers.length) {
           const note = document.createElement("div");
           note.className = "evidence-note";
-          note.textContent = "No linked work yet — the verdict reads from your commitment cadence.";
+          note.textContent = grp.status === "not_tracked"
+            ? "Not tracked yet — no completions recorded, so the moat can't read this."
+            : "No linked work yet — the verdict reads from your commitment cadence.";
           body.appendChild(note);
         }
         // D190: suggestions ride the goal — distinct shown, a flood collapsed.

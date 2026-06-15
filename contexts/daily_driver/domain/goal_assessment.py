@@ -39,6 +39,7 @@ from contexts.daily_driver.domain.goal_status import (
     GoalStatus,
     GoalStatusThresholds,
     compute_goal_verdict,
+    compute_lever_status,
 )
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import (
@@ -241,6 +242,19 @@ class GoalGroup:
     # render to one "N suggested" line). Display only — no actions (S96).
     suggestion_head: tuple[str, ...] = ()
     suggestion_total: int = 0
+    # D191/S96: per-lever status for a cadence goal — each lever commitment with
+    # its own status, so the evidence shows which levers have no completion data
+    # ("not tracked") even when the goal as a whole reads a verdict from the
+    # tracked ones (the partial-tracking rule). Empty for cadence-less goals.
+    levers: tuple[GoalLeverStatus, ...] = ()
+
+
+@dataclass(frozen=True)
+class GoalLeverStatus:
+    """One lever commitment's name and status within a cadence goal (D191)."""
+
+    name: str
+    status: GoalStatus
 
 
 @dataclass(frozen=True)
@@ -453,6 +467,23 @@ def group_units_by_goal(
             if now is not None
             else None
         )
+        # D191/S96: per-lever status for a cadence goal — surfaces which levers
+        # have no completion data ("not tracked") even when the goal reads a
+        # verdict from the tracked ones.
+        levers = (
+            tuple(
+                GoalLeverStatus(
+                    name=activities[cid].commitment.name,
+                    status=compute_lever_status(
+                        activities[cid], now=now, thresholds=thresholds
+                    ),
+                )
+                for cid in _goal_commitment_ids(goal)
+                if cid in activities
+            )
+            if goal.mode is GoalMode.HOMEOSTATIC and now is not None
+            else ()
+        )
         # D190: itemise the distinct (the recent-few head), count the tail.
         folded = _fold_units_to_rows(items)
         head = folded[:_HEAD_DISTINCT]
@@ -470,6 +501,7 @@ def group_units_by_goal(
                 status_why=verdict.why if verdict is not None else None,
                 suggestion_head=s_head,
                 suggestion_total=s_total,
+                levers=levers,
             )
         )
 
@@ -829,6 +861,7 @@ __all__ = [
     "OrphanUnit",
     "GoalGroup",
     "GoalGroupedUnits",
+    "GoalLeverStatus",
     "GoalStatus",
     "GroupedUnit",
     "UncoveredGoal",

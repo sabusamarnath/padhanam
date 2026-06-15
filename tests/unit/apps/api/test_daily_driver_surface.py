@@ -105,12 +105,16 @@ def test_today_renders_list_and_history_only():
         assert cut not in today, f"{cut} must not render on Today (D182)"
 
 
-def test_dash_view_live_and_holds_moat_and_suggestions():
+def test_dash_view_live_and_holds_moat_with_in_goal_suggestions():
+    # D190/S94: suggestions ride the goal (the suggest-block in the expand),
+    # so the dash holds only the moat — the global suggestions section and its
+    # loader were removed.
     assert '{ id: "dash", label: "How am I doing", live: true }' in _HTML
     dash = _dash_template()
     assert 'id="moat"' in dash
-    assert 'id="suggestions"' in dash
+    assert 'id="suggestions"' not in dash
     assert "loadUnitsByGoal()" in dash
+    assert "function loadSuggestions" not in _HTML
 
 
 def test_raw_tasks_and_goal_readings_cut_from_the_surface():
