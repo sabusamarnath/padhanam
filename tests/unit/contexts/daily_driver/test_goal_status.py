@@ -414,3 +414,35 @@ def test_why_phrases_drawn_from_evidence() -> None:
     ).why == "practice paused"
     # done
     assert _verdict(_sequence(reached=True)).why == "reached"
+
+
+# --------------------------------------------------------------------------
+# Delta-4 precedence (D192, S97b): same-day did beats same-day reported_didnt.
+#
+# S97b's check-in makes a same-day (did, reported_didnt) collision reachable
+# (before it, the checkin store was empty). The precedence already holds by
+# construction in `_lever_verdict` via a strict `>` (`last_didnt >
+# last_did.date()`). These pin both sides of that boundary so a future refactor
+# flipping `>` to `>=` is caught: did-wins on the same day, reported-didn't-wins
+# the day after a did.
+# --------------------------------------------------------------------------
+
+from contexts.daily_driver.domain.goal_status import compute_lever_status  # noqa: E402
+
+
+def test_same_day_did_beats_same_day_reported_didnt() -> None:
+    c = _commitment(interval=1)
+    activity = _activity(c, last_days_ago=0, didnt_days_ago=0)  # both today
+    assert (
+        compute_lever_status(activity, now=_NOW, thresholds=_TH)
+        == GoalStatus.ON_TRACK
+    )
+
+
+def test_reported_didnt_the_day_after_a_did_wins() -> None:
+    c = _commitment(interval=1)
+    # did yesterday, reported-didn't today — a confirmed lapse since completion.
+    activity = _activity(c, last_days_ago=1, didnt_days_ago=0)
+    status = compute_lever_status(activity, now=_NOW, thresholds=_TH)
+    assert status != GoalStatus.ON_TRACK
+    assert status in (GoalStatus.BEHIND, GoalStatus.STALLED)
