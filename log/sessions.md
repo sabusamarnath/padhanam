@@ -4524,3 +4524,41 @@ metrics:
   corrected_by:
 ```
 
+## S98 — the unlinked coverage view, off the daily surface (D193) (build mode)
+roles: analyst (Step-0 against the live tree — the 208-row unlinked breakdown, email-dominated; confirming type+date queryable), architect (the coverage view as a sibling, not a new app; the no-linking stance tied to the matcher-improves-not-the-operator principle; D193 refining D189), engineer (the coverage view + loadUnlinked/coverageRow; the DTO occurred_at; the dash pile removal + the coverage-link; tests), technical writer (D193, this entry)
+mode: build session — the unlinked view, moving the orphan pile off the daily surface into its own coverage view. Charter-first (D193 + S98 marker). **No content — unit titles are the operator's own and render only on their private surface; the log carries counts only.**
+
+S98 addresses the operator's live-read complaint from S93: a pile of half the corpus the matcher couldn't link is a coverage problem, not a daily read.
+
+- **Step 0 (no conflict).** D192/S97a highest → D193/S98. The orphan pile sits on the dash via `orphanFoldEl(g.unlinked)` (post-S94/S96/S97a, unchanged in placement). The unlinked units are queryable with type + date: the domain `GroupedUnit` carries `facet_types` + `occurred_at`, though the DTO dropped `occurred_at` (added this session). **Live coverage gap: 669 of 1359 units linked; 208 folded unlinked rows** (the D175 series-fold collapses ~690 raw units), by type **email 169, meeting 36, task 3**; 207/208 carry a date. No manual-link affordance exists anywhere (confirmed); none added.
+- **The view (Commit 1, folded with Commit 2 — one coherent change in one file).** A new live **Coverage** view, a sibling of the goals view in `NAV`, reusing the existing `/daily-driver/units-by-goal` endpoint's `unlinked` payload (the DTO gains `occurred_at`). `loadUnlinked` groups the rows by primary type in funnel order (email/meeting/task), each under a count header, each row showing title + a formatted date via a read-only `coverageRow` (no click handler). The framing: "Items the matcher couldn't yet tie to a goal… coverage to close, not a to-do list" and "These close as the matcher improves — you don't link them by hand." No link-to-goal control.
+- **The daily surface (Commit 2).** The dash drops the orphan fold (`orphanFoldEl` removed as dead) and shows at most a **small count linking to the coverage view** ("N items not yet linked — see coverage" → `goto("coverage")`). The "How am I doing" surface is goals alone.
+- **Verification.** Surface tests guard the structure (coverage view is a live sibling; lists by type with dates; no link affordance / no click handler on coverage rows; the dash no longer carries the pile). The production DTO path in-container confirms `occurred_at` now rides every unlinked row (207/208) and the by-type split (169/36/3). Full browser-interactive confirmation (clicking the tab) is the operator's, the surface being login-gated — consistent with prior surface sessions.
+- Reflection — **does the daily surface read cleaner with the pile gone?** Structurally yes: "How am I doing" is now eight verdict lines and a one-line coverage pointer, where it previously ended in a 208-item fold. The operator's S93 complaint — a coverage pile on a goal-health surface — is addressed; the live browser confirm is theirs.
+- Reflection — **does the unlinked view read as coverage you inspect, not a chore?** The framing and the absence of any link control are the whole point: there is nothing to *do* on the view, only something to *see*. It reads as the matcher's frontier, not the operator's inbox.
+- Reflection — **what the coverage gap actually looks like (the substantive paragraph).** It is overwhelmingly **email: 169 of 208 rows (81%)**, against 36 meetings and 3 tasks. That lopsidedness is the input to the coverage frontier: the next matcher coverage loop should aim at email, almost certainly the unmatched job-search/digest/correspondence the goal-name and commitment bases never tie to a goal. Meetings (36) are a distant second and tasks (3) are nearly fully covered already. So "close the coverage gap" is, concretely, "link more email" — and the honest read is that the matcher's email-to-goal bridge is where the 0.5 coverage lives. That tells the next loop where to spend, rather than chasing a long tail across types.
+- **methodology:** the live-surface principle fired a second time on a *placement* the model had endorsed — S93 folded the orphans to a line believing that sufficient; the operator reading it live found the placement wrong, not the fold. D193 records that as the principle working again (D188's progressive-active was the first such catch). The pattern: a design can be locally correct (fold the pile) and globally wrong (on the wrong surface), and only the live read surfaces the latter.
+- Carry-forward: the **matcher coverage loop** (closes the gap — aim at email per the 81% finding); the **suggestion-gate series-fold** (D175 applied to `suggest_missing_facets` so Health generates one suggestion not ~496); **correction actions** (accept/dismiss/move feeding the loop, never hand-editing) after the gate; **S97b** the check-in capture (reserved, needs the Twilio round-trip).
+- Close state: **the unlinked pile lives in its own Coverage view as real items by type with dates, framed as the matcher's gap to close; the daily surface is goals alone with a one-line pointer.** No manual linking. Suite green (2258 unit), import-linter 47/0, no content committed.
+
+```
+metrics:
+  classification: build session (S98 — the unlinked coverage view off the daily surface; D193 refines D189; the legibility block resumes after the completion arc)
+  session_started: 2026-06-15
+  session_closed: 2026-06-15
+  step0: no conflict — D192/S97a highest -> D193/S98; orphan pile on dash via orphanFoldEl; unlinked queryable by type+date (GroupedUnit.occurred_at + facet_types; DTO lacked occurred_at, added); no link affordance exists
+  live_coverage_gap: 669/1359 units linked; 208 folded unlinked rows (D175 fold of ~690 raw); by type email 169 / meeting 36 / task 3; 207/208 carry a date
+  d193: unlinked units live in their own coverage view, off the daily surface; listed as real items by type with title+date; framed as coverage the matcher closes; NO manual-link action (matcher-improves-not-the-operator, per D185/D186); daily surface drops the pile, keeps a small count linking to the view; refines D189; live-surface principle working again
+  view: new live "Coverage" NAV sibling; reuses /daily-driver/units-by-goal unlinked payload; loadUnlinked groups by primary type (email/meeting/task funnel order) under count headers; coverageRow = title + fmtDate(occurred_at), read-only (no click handler); GroupedUnitDTO += occurred_at
+  daily_surface: orphanFoldEl removed (dead); replaced by a coverage-link count -> goto("coverage"); dash is goals + the pointer only
+  reflection_coverage_shape: the gap is 81% email (169/208) — the next matcher coverage loop's aim; meetings a distant second (36), tasks near-covered (3)
+  verification: surface regression tests (live sibling; by-type with dates; no link affordance/no click handler; dash pile gone); production DTO path in-container confirms occurred_at on 207/208 unlinked + the 169/36/3 split; browser-interactive confirm is the operator's (login-gated)
+  pii: none committed (unit titles are the operator's own; counts only)
+  tests_passing: 2258 unit passed (3 new surface guards); import-linter 47/0
+  commits: 2edc673 (charter D193 + S98 marker), bf66c62 (coverage view + dash pile removal + DTO occurred_at + tests)
+  charter_touchpoints: charter/decisions.md (D193 + ToC); charter/current-package.md (S98 marker); log/sessions.md (this entry); apps/api/routers/_daily_driver_dto.py (GroupedUnitDTO.occurred_at); apps/api/static/daily_driver.html (Coverage view + loadUnlinked/coverageRow + dash pile removal + CSS); tests/unit/apps/api/test_daily_driver_surface.py
+  numbering: D193, S98 (drafted as S95 before the completion arc; the arc ran S96/S97a, so this is S98; log not strictly ascending — S97b reserved, appends later)
+  corrects: D189's placement of the orphan summary on the daily surface (relocated to the coverage view — live-read refinement, logged)
+  corrected_by:
+```
+
