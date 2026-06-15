@@ -1,8 +1,11 @@
 """commitment_checkin_responses: unique (tenant, commitment, beat_date)
 
-Revision ID: 0039_checkin_responses_unique_beat
+Revision ID: 0039_checkin_unique_beat
 Revises: 0038_target_cell_checkin
 Create Date: 2026-06-15
+
+NOTE: the revision id is kept <= 32 chars — ``alembic_version.version_num`` is
+``varchar(32)`` (the cap 0023 flagged); the descriptive filename may be longer.
 
 S97b's check-in write must be idempotent on (tenant, commitment, beat day)
 (D192 Delta-4): a re-confirm or duplicate reply must not write a second
@@ -26,7 +29,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0039_checkin_responses_unique_beat"
+revision: str = "0039_checkin_unique_beat"
 down_revision: Union[str, None] = "0038_target_cell_checkin"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
