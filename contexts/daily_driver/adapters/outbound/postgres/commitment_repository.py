@@ -17,12 +17,17 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from contexts.daily_driver.adapters.outbound.postgres._tables import (
+    commitment_checkin_responses as checkin_responses_table,
+)
+from contexts.daily_driver.adapters.outbound.postgres._tables import (
     commitment_completions as completions_table,
 )
 from contexts.daily_driver.adapters.outbound.postgres._tables import (
     commitments as commitments_table,
 )
 from contexts.daily_driver.domain.commitment import (
+    CheckinOutcome,
+    CheckinResponse,
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
@@ -118,6 +123,28 @@ class PostgresCommitmentRepository:
                     )
                 )
 
+    async def add_checkin_response(
+        self,
+        *,
+        tenant_context: TenantContext,
+        response: CheckinResponse,
+    ) -> None:
+        """Append one check-in response (the negative store; D192)."""
+        self._assert_bound(tenant_context)
+        sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
+        async with sessionmaker() as session:
+            async with session.begin():
+                await session.execute(
+                    sa.insert(checkin_responses_table).values(
+                        id=str(response.id),
+                        commitment_id=str(response.commitment_id),
+                        tenant_id=str(response.tenant_id),
+                        jurisdiction=response.jurisdiction,
+                        beat_date=response.beat_date,
+                        outcome=response.outcome.value,
+                    )
+                )
+
     async def get_commitment(
         self, *, tenant_context: TenantContext, commitment_id: UUID
     ) -> Commitment | None:
@@ -200,13 +227,39 @@ class PostgresCommitmentRepository:
                     .group_by(completions_table.c.commitment_id)
                 )
             ).all()
+            # D192 (Option B): dids come ONLY from completions (above); the
+            # negative comes ONLY from the sibling store, filtered to
+            # reported_didnt — so no outcome is read from two stores.
+            didnt_rows = (
+                await session.execute(
+                    sa.select(
+                        checkin_responses_table.c.commitment_id,
+                        sa.func.max(checkin_responses_table.c.beat_date).label(
+                            "last_reported_didnt"
+                        ),
+                    )
+                    .where(
+                        sa.and_(
+                            checkin_responses_table.c.tenant_id
+                            == str(self._bound_tenant_id),
+                            checkin_responses_table.c.outcome
+                            == CheckinOutcome.REPORTED_DIDNT.value,
+                        )
+                    )
+                    .group_by(checkin_responses_table.c.commitment_id)
+                )
+            ).all()
         last_by_commitment = {
             r.commitment_id: r.last_completed_at for r in last_rows
+        }
+        didnt_by_commitment = {
+            r.commitment_id: r.last_reported_didnt for r in didnt_rows
         }
         return tuple(
             CommitmentActivity(
                 commitment=self._row_to_commitment(row),
                 last_completed_at=last_by_commitment.get(row.id),
+                last_reported_didnt=didnt_by_commitment.get(row.id),
             )
             for row in commitment_rows
         )

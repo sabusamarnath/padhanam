@@ -35,6 +35,7 @@ from contexts.daily_driver.adapters.outbound.postgres.day_repository import (
 )
 from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
 from contexts.daily_driver.domain.commitment import (
+    CheckinResponse,
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
@@ -174,6 +175,17 @@ class CommitmentRepositoryRouter:
         repo = await self._build(tenant_context)
         await repo.add_completion(
             tenant_context=tenant_context, completion=completion
+        )
+
+    async def add_checkin_response(
+        self,
+        *,
+        tenant_context: TenantContext,
+        response: CheckinResponse,
+    ) -> None:
+        repo = await self._build(tenant_context)
+        await repo.add_checkin_response(
+            tenant_context=tenant_context, response=response
         )
 
     async def get_commitment(

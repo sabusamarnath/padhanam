@@ -22,6 +22,8 @@ from contexts.daily_driver.application import (
     set_today_order,
 )
 from contexts.daily_driver.domain.commitment import (
+    CheckinOutcome,
+    CheckinResponse,
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
@@ -63,12 +65,16 @@ class FakeCommitmentRepository:
     def __init__(self) -> None:
         self.commitments: dict[UUID, Commitment] = {}
         self.completions: list[CommitmentCompletion] = []
+        self.checkin_responses: list[CheckinResponse] = []
 
     async def add_commitment(self, *, tenant_context, commitment) -> None:
         self.commitments[commitment.id] = commitment
 
     async def add_completion(self, *, tenant_context, completion) -> None:
         self.completions.append(completion)
+
+    async def add_checkin_response(self, *, tenant_context, response) -> None:
+        self.checkin_responses.append(response)
 
     async def get_commitment(self, *, tenant_context, commitment_id):
         return self.commitments.get(commitment_id)
@@ -104,7 +110,21 @@ class FakeCommitmentRepository:
                 for comp in self.completions
                 if comp.commitment_id == c.id
             ]
-            out.append(CommitmentActivity(c, max(times) if times else None))
+            # D192 (Option B): negatives come ONLY from reported_didnt responses,
+            # never from dids — mirroring the Postgres adapter's two reads.
+            didnt = [
+                r.beat_date
+                for r in self.checkin_responses
+                if r.commitment_id == c.id
+                and r.outcome is CheckinOutcome.REPORTED_DIDNT
+            ]
+            out.append(
+                CommitmentActivity(
+                    c,
+                    max(times) if times else None,
+                    last_reported_didnt=max(didnt) if didnt else None,
+                )
+            )
         return tuple(out)
 
 
@@ -415,6 +435,76 @@ def test_backfilled_completion_round_trips_and_max_wins() -> None:
     )
     activity = next(a for a in activities if a.commitment.id == commitment.id)
     assert activity.last_completed_at == newer
+
+
+def test_checkin_response_did_and_reported_didnt_round_trip_distinguishable() -> None:
+    # D192: a did and a reported-didn't are both recorded and distinguishable;
+    # the did surfaces as last_completed_at (from the completion log), the
+    # reported-didn't as last_reported_didnt (from the sibling store).
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    tc = _actor().tenant_context
+    asyncio.run(
+        repo.add_completion(
+            tenant_context=tc,
+            completion=CommitmentCompletion(
+                id=uuid4(), commitment_id=c.id, tenant_id=UUID(_TENANT),
+                jurisdiction="eu-west",
+                completed_at=datetime(2026, 6, 14, 9, 0, tzinfo=timezone.utc),
+            ),
+        )
+    )
+    asyncio.run(
+        repo.add_checkin_response(
+            tenant_context=tc,
+            response=CheckinResponse(
+                id=uuid4(), commitment_id=c.id, tenant_id=UUID(_TENANT),
+                jurisdiction="eu-west", beat_date=date(2026, 6, 15),
+                outcome=CheckinOutcome.REPORTED_DIDNT,
+            ),
+        )
+    )
+    activity = next(
+        a for a in asyncio.run(repo.list_with_activity(tenant_context=tc))
+        if a.commitment.id == c.id
+    )
+    assert activity.last_completed_at == datetime(2026, 6, 14, 9, 0, tzinfo=timezone.utc)
+    assert activity.last_reported_didnt == date(2026, 6, 15)
+
+
+def test_silence_leaves_no_checkin_record() -> None:
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    activity = next(
+        a for a in asyncio.run(repo.list_with_activity(tenant_context=_actor().tenant_context))
+        if a.commitment.id == c.id
+    )
+    assert activity.last_completed_at is None
+    assert activity.last_reported_didnt is None
+
+
+def test_did_in_checkin_store_is_not_a_did_source() -> None:
+    # D192 Option B invariant: dids are read ONLY from the completion log. A
+    # 'did' written to the sibling store does not surface as last_completed_at,
+    # so no outcome is read from two stores.
+    repo = FakeCommitmentRepository()
+    c = _seed_overdue(repo)
+    asyncio.run(
+        repo.add_checkin_response(
+            tenant_context=_actor().tenant_context,
+            response=CheckinResponse(
+                id=uuid4(), commitment_id=c.id, tenant_id=UUID(_TENANT),
+                jurisdiction="eu-west", beat_date=date(2026, 6, 15),
+                outcome=CheckinOutcome.DID,
+            ),
+        )
+    )
+    activity = next(
+        a for a in asyncio.run(repo.list_with_activity(tenant_context=_actor().tenant_context))
+        if a.commitment.id == c.id
+    )
+    assert activity.last_completed_at is None  # not sourced from the sibling store
+    assert activity.last_reported_didnt is None  # a did is not a reported-didn't
 
 
 def test_logging_completion_unknown_commitment_returns_none() -> None:

@@ -69,6 +69,38 @@ commitment_completions = sa.Table(
 )
 
 
+commitment_checkin_responses = sa.Table(
+    # D192 (S97a): the sibling store carrying the check-in negative. Under the
+    # Option-B did-source, dids stay in commitment_completions (the single
+    # authoritative did-source); this table holds reported_didnt rows the
+    # cadence read consults for last_reported_didnt. ``beat_date`` is the day
+    # the outcome refers to (backfillable). Migration 0037 ships this.
+    "commitment_checkin_responses",
+    metadata,
+    sa.Column("id", pg.UUID(as_uuid=False), primary_key=True),
+    sa.Column(
+        "commitment_id",
+        pg.UUID(as_uuid=False),
+        sa.ForeignKey("commitments.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("tenant_id", pg.UUID(as_uuid=False), nullable=False),
+    sa.Column("jurisdiction", sa.Text, nullable=False),
+    sa.Column("beat_date", sa.Date, nullable=False),
+    sa.Column("outcome", sa.Text, nullable=False),
+    sa.Column(
+        "recorded_at",
+        sa.TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=sa.text("now()"),
+    ),
+    sa.CheckConstraint(
+        "outcome IN ('did', 'reported_didnt')",
+        name="commitment_checkin_responses_outcome_check",
+    ),
+)
+
+
 day_item_states = sa.Table(
     "day_item_states",
     metadata,
@@ -100,4 +132,9 @@ day_item_states = sa.Table(
 )
 
 
-__all__ = ["commitment_completions", "commitments", "day_item_states"]
+__all__ = [
+    "commitment_checkin_responses",
+    "commitment_completions",
+    "commitments",
+    "day_item_states",
+]

@@ -25,7 +25,7 @@ Domain code is framework-free per D16 — stdlib only.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from uuid import UUID
 
@@ -92,20 +92,61 @@ class CommitmentCompletion:
             raise ValueError("jurisdiction must be non-empty")
 
 
+class CheckinOutcome(str, Enum):
+    """A per-commitment check-in outcome (D192).
+
+    ``DID`` is a completion (the beat is hit); ``REPORTED_DIDNT`` is a
+    tracked negative (the beat is missed *with evidence*). Silence is the
+    absence of a response, never a value here.
+    """
+
+    DID = "did"
+    REPORTED_DIDNT = "reported_didnt"
+
+
+@dataclass(frozen=True)
+class CheckinResponse:
+    """One check-in response against a commitment for a beat date (D192).
+
+    The sibling-store record that makes the negative first-class. Under the
+    Option-B did-source (D192), dids keep flowing to the ``CommitmentCompletion``
+    log; this store carries the ``REPORTED_DIDNT`` negatives the cadence read
+    consults for ``last_reported_didnt``. ``beat_date`` is the day the outcome
+    refers to (backfillable — a past date is accepted).
+    """
+
+    id: UUID
+    commitment_id: UUID
+    tenant_id: UUID
+    jurisdiction: str
+    beat_date: date
+    outcome: CheckinOutcome
+
+    def __post_init__(self) -> None:
+        if not self.jurisdiction.strip():
+            raise ValueError("jurisdiction must be non-empty")
+
+
 @dataclass(frozen=True)
 class CommitmentActivity:
-    """A Commitment paired with its most recent completion time.
+    """A Commitment paired with its most recent completion and reported miss.
 
     ``last_completed_at`` is ``None`` when the commitment has never been
-    completed; the staleness rule then measures elapsed time from
-    ``commitment.created_at``.
+    completed. ``last_reported_didnt`` (D192) is the most recent beat the
+    operator reported *not* doing — a tracked negative, distinct from silence
+    (also ``None``). The three-state cadence read consults both: a did reads
+    the cadence verdict, a more-recent reported-didn't reads behind/stalled with
+    evidence, neither reads not-tracked.
     """
 
     commitment: Commitment
     last_completed_at: datetime | None
+    last_reported_didnt: date | None = None
 
 
 __all__ = [
+    "CheckinOutcome",
+    "CheckinResponse",
     "Commitment",
     "CommitmentActivity",
     "CommitmentCompletion",

@@ -1796,6 +1796,34 @@ commitment's `created_at` when the log is empty). Indexes
 `ix_commitment_completions_commitment_id` on `(commitment_id)` and
 `ix_commitment_completions_tenant_id` on `(tenant_id)`.
 
+This is the **single authoritative did-source** under the Option-B did-source
+decision (D192): the cadence read consults `MAX(completed_at)` here for a
+commitment's last completion; reported-not-done negatives live in
+`commitment_checkin_responses` and are never read as dids.
+
+### `commitment_checkin_responses`
+
+| Column          | Type          | Constraints                                                |
+|-----------------|---------------|------------------------------------------------------------|
+| `id`            | `uuid`        | primary key; default `gen_random_uuid()`                   |
+| `commitment_id` | `uuid`        | not null; FK → `commitments.id` ON DELETE CASCADE          |
+| `tenant_id`     | `uuid`        | not null; jurisdiction-bearing per D12                     |
+| `jurisdiction`  | `text`        | not null                                                   |
+| `beat_date`     | `date`        | not null; the day the outcome refers to (backfillable)     |
+| `outcome`       | `text`        | not null; CHECK in (`did`, `reported_didnt`)               |
+| `recorded_at`   | `timestamptz` | not null; default `now()`                                  |
+
+The check-in negative sibling store (D192, migration 0037). Makes Padhanam's
+daily completion **three-state**: a `reported_didnt` row is a tracked negative
+(the beat is missed *with evidence*); silence writes no row. The cadence read
+sources `last_reported_didnt` as `MAX(beat_date)` per commitment WHERE
+`outcome = 'reported_didnt'`. Under Option B (D192), dids stay in
+`commitment_completions`; the `outcome` CHECK admits `did` for S97b write-path
+flexibility, but S97a reads dids only from the completion log, so no outcome is
+read from two stores. Indexes
+`ix_commitment_checkin_responses_commitment_id` on `(commitment_id)` and
+`ix_commitment_checkin_responses_tenant_id` on `(tenant_id)`.
+
 ### `day_item_states`
 
 | Column         | Type          | Constraints                                                |

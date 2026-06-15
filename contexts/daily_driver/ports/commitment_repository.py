@@ -12,6 +12,7 @@ from typing import Protocol
 from uuid import UUID
 
 from contexts.daily_driver.domain.commitment import (
+    CheckinResponse,
     Commitment,
     CommitmentActivity,
     CommitmentCompletion,
@@ -36,6 +37,19 @@ class CommitmentRepository(Protocol):
         completion: CommitmentCompletion,
     ) -> None:
         """Append one entry to a Commitment's completion log."""
+        ...
+
+    async def add_checkin_response(
+        self,
+        *,
+        tenant_context: TenantContext,
+        response: CheckinResponse,
+    ) -> None:
+        """Append one check-in response — the negative store (D192).
+
+        Under the Option-B did-source, dids flow to the completion log; this
+        records the ``reported_didnt`` negatives the cadence read consults.
+        """
         ...
 
     async def get_commitment(

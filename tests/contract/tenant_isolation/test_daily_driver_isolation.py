@@ -72,6 +72,35 @@ def test_commitment_adapter_rejects_cross_tenant_list() -> None:
         asyncio.run(adapter.list_with_activity(tenant_context=_ctx("tenant-b")))
 
 
+def test_commitment_adapter_rejects_cross_tenant_checkin_response() -> None:
+    # D192 (S97a): the check-in negative write is bound-tenant too.
+    import datetime as _dt
+
+    from contexts.daily_driver.domain.commitment import (
+        CheckinOutcome,
+        CheckinResponse,
+    )
+
+    adapter = PostgresCommitmentRepository(
+        per_tenant_sessionmaker_resolver=_unreachable_resolver,
+        bound_tenant_id=TenantId("tenant-a"),
+    )
+    response = CheckinResponse(
+        id=uuid4(),
+        commitment_id=uuid4(),
+        tenant_id=uuid4(),
+        jurisdiction="eu-west",
+        beat_date=_dt.date(2026, 6, 15),
+        outcome=CheckinOutcome.REPORTED_DIDNT,
+    )
+    with pytest.raises(ValueError, match="does not match adapter's bound tenant"):
+        asyncio.run(
+            adapter.add_checkin_response(
+                tenant_context=_ctx("tenant-b"), response=response
+            )
+        )
+
+
 def test_commitment_adapter_rejects_cross_tenant_observed_outcome() -> None:
     # S61 (D162): the observed-outcome write is bound-tenant too.
     import datetime as _dt
