@@ -388,6 +388,35 @@ def test_logging_completion_clears_overdue() -> None:
     assert view.items[0].status == ItemStatus.ON_TRACK
 
 
+def test_backfilled_completion_round_trips_and_max_wins() -> None:
+    """A past-dated completion is accepted and retained; the most recent
+    of a backfilled history wins ``last_completed_at`` (D157 store, the
+    capability S97's capture channel relies on — D191)."""
+    repo = FakeCommitmentRepository()
+    commitment = _seed_overdue(repo)
+    older = datetime(2026, 5, 20, 9, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
+    # Append out of order to prove ordering is by completed_at, not insert order.
+    for at in (newer, older):
+        asyncio.run(
+            repo.add_completion(
+                tenant_context=_actor().tenant_context,
+                completion=CommitmentCompletion(
+                    id=uuid4(),
+                    commitment_id=commitment.id,
+                    tenant_id=UUID(_TENANT),
+                    jurisdiction="eu-west",
+                    completed_at=at,
+                ),
+            )
+        )
+    activities = asyncio.run(
+        repo.list_with_activity(tenant_context=_actor().tenant_context)
+    )
+    activity = next(a for a in activities if a.commitment.id == commitment.id)
+    assert activity.last_completed_at == newer
+
+
 def test_logging_completion_unknown_commitment_returns_none() -> None:
     repo = FakeCommitmentRepository()
     result = asyncio.run(
