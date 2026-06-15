@@ -13,9 +13,15 @@ per-context wiring file keeps each cross-context seam grep-able.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from shared_kernel import ActorContext
+from shared_kernel.structured_output import (
+    StructuredOutputParseFailure,
+    StructuredOutputPort,
+    StructuredOutputRequest,
+)
 
 from contexts.daily_driver.application.log_checkin_outcomes import (
     CheckinOutcomeInput,
@@ -26,7 +32,15 @@ from contexts.daily_driver.ports.commitment_repository import (
 )
 
 from contexts.checkin.application.ports.checkin_writer import CheckinWriteResult
+from contexts.checkin.domain.lever import EligibleLever
 from contexts.checkin.domain.outcome import CheckinState, ParsedLeverOutcome
+from contexts.checkin.domain.reply_parse import (
+    PARSE_SCHEMA,
+    build_parse_prompt,
+    map_parsed_outcomes,
+)
+
+_logger = logging.getLogger(__name__)
 
 
 class CheckinWriterAdapter:
@@ -68,4 +82,44 @@ class CheckinWriterAdapter:
         )
 
 
-__all__ = ["CheckinWriterAdapter"]
+class CheckinReplyParserAdapter:
+    """apps/ adapter implementing the check-in context's CheckinReplyParser port.
+
+    Maps a free-text reply to per-lever outcomes through the provider-agnostic
+    StructuredOutputPort (the inference LiteLLM adapter — the litellm SDK stays
+    confined there, never in apps/ or the checkin context). The D184 pattern:
+    this adapter assembles the lever context the model needs; the pure
+    domain helpers build the prompt/schema and map the response, holding the
+    silence-is-not-a-miss semantic."""
+
+    def __init__(
+        self, *, structured_output_port: StructuredOutputPort
+    ) -> None:
+        self._structured_output = structured_output_port
+
+    async def parse(
+        self,
+        *,
+        reply_text: str,
+        levers: tuple[EligibleLever, ...],
+        actor: ActorContext,
+    ) -> tuple[ParsedLeverOutcome, ...]:
+        if not levers or not reply_text.strip():
+            return ()
+        request = StructuredOutputRequest(
+            prompt=build_parse_prompt(reply_text=reply_text, levers=levers),
+            schema=PARSE_SCHEMA,
+        )
+        try:
+            response = await self._structured_output.generate_structured(
+                request
+            )
+        except StructuredOutputParseFailure:
+            # An unparseable reply yields no outcomes; the cell re-prompts
+            # rather than writing a guess.
+            _logger.info("check-in parse produced no schema-conforming output")
+            return ()
+        return map_parsed_outcomes(response.value, levers)
+
+
+__all__ = ["CheckinReplyParserAdapter", "CheckinWriterAdapter"]
