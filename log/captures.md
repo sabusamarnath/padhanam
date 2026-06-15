@@ -1371,3 +1371,13 @@ Source: the S66 live `make correlate-units` against the personal tenant's real c
 
   - triaged: 2026-06-08
   - resolution: fixed in-build (`contexts/daily_driver/domain/work_unit.py` — `_units_from_title_group`, at-most-one-facet-per-type + nearest-time cross-type pairing) with `tests/unit/contexts/daily_driver/test_work_unit.py` gaining the recurring-same-type + cross-type-nearest cases; live-re-verified at `docs/smoke/p18_s66_unit_correlation.md`. The live-substrate-verification-gate candidate (Phase 2-A close audit) gains the real-data-distribution clause.
+
+## 2026-06-15 — [S97b] Dogfood-deployment state lives outside the committed repo (second instance — pattern threshold)
+
+Source: S97b Step-0 + the trigger-fork investigation. Two pieces of the personal (dogfood) tenant's live state are not reconstructable from committed files: (1) the **Health-regimen inline seed** (S80, "titles passed inline, in no committed file" — the four medication levers), and (2) the **`DAILY_SCHEDULED` schedule itself**, which is external by design (the triggers endpoint is hit by an operator-owned cron/systemd/CronJob; nothing in `deploy/`, `ops/`, or the code carries a fire time — only `operator_timezone` + the look-back window).
+
+- **Second instance of dogfood-state-outside-repo** — the project's own threshold for naming a pattern (per the structural-promotion convention). Acceptable for a personal dogfood tenant (not a multi-tenant product gap), so this is a **note/defer**, not a failure mode: the tenant works; it just can't be rebuilt from `git` alone.
+- **Proposed consolidation:** a small `dogfood-deployment-state` doc capturing the external schedule + the inline seeds (Health regimen, and any others), so the next rebuild doesn't rediscover them the hard way — the same shape as the brief-preservation-lapse lesson (live state the committed record doesn't capture). The next **phase audit** is the right place to write it, not a build session.
+
+  - triaged: defer → next phase audit (consolidate the dogfood-deployment-state doc there)
+  - resolution: queued; flagged by the operator at S97b as "for the next audit, not for now."
