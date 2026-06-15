@@ -401,6 +401,9 @@ class GroupedUnitDTO(BaseModel):
     facet_types: list[str] = []
     instance_count: int = 1
     series_id: str | None = None
+    # D193/S98: the row's representative time, so the unlinked coverage view can
+    # list items with a date (not just a count). None when the unit has none.
+    occurred_at: datetime | None = None
 
 
 class GoalLeverStatusDTO(BaseModel):
@@ -455,6 +458,7 @@ def _grouped_unit_dto(u) -> "GroupedUnitDTO":
         facet_types=list(u.facet_types),
         instance_count=u.instance_count,
         series_id=u.series_id,
+        occurred_at=u.occurred_at,
     )
 
 

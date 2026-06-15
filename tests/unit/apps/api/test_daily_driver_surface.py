@@ -93,6 +93,12 @@ def _today_template() -> str:
 
 def _dash_template() -> str:
     start = _HTML.index('else if (activeView === "dash")')
+    end = _HTML.index('else if (activeView === "coverage")', start)
+    return _HTML[start:end]
+
+
+def _coverage_template() -> str:
+    start = _HTML.index('else if (activeView === "coverage")')
     end = _HTML.index("} else {", start)
     return _HTML[start:end]
 
@@ -115,6 +121,46 @@ def test_dash_view_live_and_holds_moat_with_in_goal_suggestions():
     assert 'id="suggestions"' not in dash
     assert "loadUnitsByGoal()" in dash
     assert "function loadSuggestions" not in _HTML
+
+
+def test_coverage_view_is_a_live_sibling_of_the_goals_view():
+    # D193/S98: the unlinked pile lives in its own coverage view, a live sibling.
+    assert '{ id: "coverage", label: "Coverage", live: true }' in _HTML
+    cov = _coverage_template()
+    assert 'id="coverage-list"' in cov
+    assert "loadUnlinked()" in cov
+
+
+def test_coverage_view_lists_items_by_type_with_dates_no_linking():
+    # AC1/AC2: the view groups unlinked units by type and shows a date, framed as
+    # coverage; it offers NO manual link-to-goal action.
+    cov = _coverage_template()
+    # the coverage framing (matcher's job, not the operator's hand)
+    assert "matcher" in cov.lower()
+    assert "don't link them by hand" in cov
+    # the renderer groups by type and shows a formatted date
+    assert "function loadUnlinked" in _HTML
+    assert "function coverageRow" in _HTML
+    assert "fmtDate(u.occurred_at)" in _HTML
+    assert "FACET_LABEL" in _HTML
+    # no manual-link action affordance: coverage rows carry no link handler,
+    # no "link to goal" button, no link endpoint call.
+    assert "function coverageRow" in _HTML
+    assert "linkToGoal" not in _HTML
+    assert "data-link-goal" not in _HTML
+    assert ">Link</" not in _HTML
+    # the coverage row renderer attaches no click handler (read-only items)
+    cov_row = _HTML[_HTML.index("function coverageRow") : _HTML.index("async function loadUnlinked")]
+    assert "addEventListener" not in cov_row
+    assert ".onclick" not in cov_row
+
+
+def test_daily_surface_no_longer_carries_the_orphan_pile():
+    # AC3: the dash drops the orphan fold; a small count links to the coverage
+    # view instead.
+    assert "function orphanFoldEl" not in _HTML  # the pile renderer is gone
+    assert '"coverage-link"' in _HTML  # the small pointer's class
+    assert 'goto("coverage")' in _HTML
 
 
 def test_raw_tasks_and_goal_readings_cut_from_the_surface():

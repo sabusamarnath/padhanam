@@ -157,6 +157,9 @@
       padding-top: 6px; border-top: 1px solid var(--hairline); }
     .suggest-row { font-size: 12.5px; color: var(--ink-2); }
     .suggest-row.suggest-count { color: var(--ink-3); font-style: italic; }
+    /* D193: the small pointer from the daily surface to the coverage view */
+    .coverage-link { font-size: 12.5px; color: var(--ink-3); padding: 10px 2px 2px; }
+    .coverage-link a { color: var(--navy); cursor: pointer; text-decoration: underline; }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -304,6 +307,7 @@
       dash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14a4 4 0 1 0-4-4"/><path d="M5 19a9 9 0 1 1 14 0"/></svg>',
       journal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><line x1="8" y1="8" x2="15" y2="8"/><line x1="8" y1="12" x2="15" y2="12"/></svg>',
       map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8 7l8 1.5M8 16l1-7"/></svg>',
+      coverage: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>',
       connections: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12a3 3 0 0 1 3-3h3a3 3 0 0 1 0 6h-1"/><path d="M15 12a3 3 0 0 1-3 3H9a3 3 0 0 1 0-6h1"/></svg>',
       settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-5l-.3 2.5a7 7 0 0 0-1.7 1l-2.4-1-2 3.5L3.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h5l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5a7 7 0 0 0 .1-1z"/></svg>',
     };
@@ -311,6 +315,7 @@
       { id: "today", label: "Today", live: true },
       { id: "week", label: "Week", placeholder: "The week matrix and week-range surfaces land after the dogfooding week informs their shape." },
       { id: "dash", label: "How am I doing", live: true },
+      { id: "coverage", label: "Coverage", live: true },
       { id: "journal", label: "Journal", placeholder: "The journal is a later P16 / Phase 2-B surface." },
       { id: "map", label: "Map & Flow", placeholder: "The causal Map and Flow graph views are Phase 2-B." },
     ];
@@ -378,6 +383,15 @@
           <p class="sub">One line per goal: the verdict and why. Tap for the work behind it (and any suggestions); work no goal claims folds to a single line. Meaningful once your goals are seeded.</p>
           <div class="goals" id="moat"></div>`;
         loadUnitsByGoal();
+      } else if (activeView === "coverage") {
+        // D193/S98: the unlinked pile lives here, off the daily surface — items
+        // the matcher couldn't tie to a goal, framed as coverage, not a chore.
+        left.innerHTML = `<h1>Coverage</h1>`;
+        view.innerHTML = `
+          <p class="sub">Items the matcher couldn't yet tie to a goal. This is coverage to close, not a to-do list.</p>
+          <p class="sub">These close as the matcher improves — you don't link them by hand.</p>
+          <div class="goals" id="coverage-list"></div>`;
+        loadUnlinked();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -432,8 +446,15 @@
       }
       // D189: one folded verdict line per goal — the verdict, not the dump.
       (g.groups || []).forEach((grp) => box.appendChild(verdictLineEl(grp)));
-      // D189: the unlinked units fold to a single summary line, not a pile.
-      if (g.unlinked && g.unlinked.length) box.appendChild(orphanFoldEl(g.unlinked));
+      // D193/S98: the unlinked pile no longer sits on the daily surface — it is
+      // coverage, not goal health. At most a small count linking to its view.
+      if (g.unlinked && g.unlinked.length) {
+        const link = document.createElement("div");
+        link.className = "coverage-link";
+        link.innerHTML = `${g.unlinked.length} item${g.unlinked.length === 1 ? "" : "s"} not yet linked — <a>see coverage</a>`;
+        link.querySelector("a").onclick = () => goto("coverage");
+        box.appendChild(link);
+      }
     }
     // The S92/D188 status vocabulary -> label + pill class (design-language §2).
     const STATUS_META = {
@@ -534,12 +555,62 @@
         }
       });
     }
-    function orphanFoldEl(unlinked) {
-      const head =
-        `<span class="collapse-caret">▸</span>` +
-        `<span class="collapse-label">${unlinked.length} item${unlinked.length === 1 ? "" : "s"} not yet linked</span>`;
-      return makeFold(head, (body) => {
-        unlinked.forEach((u) => body.appendChild(moatRow(u, "work", true)));
+    // D193/S98: the unlinked coverage view — the orphan units as real items,
+    // grouped by type, with title + date. No link-to-goal control: closing the
+    // gap is the matcher's coverage loop, never the operator's hand.
+    const FACET_LABEL = { email: "Email", meeting: "Meetings", task: "Tasks" };
+    function fmtDate(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return "";
+      return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+    function coverageRow(u) {
+      const row = document.createElement("div");
+      row.className = "row"; row.dataset.tier = "work";
+      const glyphs = (u.facet_types || []).map((t) => FACET_GLYPH[t] || "•").join(" ");
+      const when = fmtDate(u.occurred_at);
+      const bits = [];
+      if (u.instance_count > 1) bits.push(`×${u.instance_count}`);
+      if (when) bits.push(when);
+      row.innerHTML = `<span class="facet-cue">${glyphs || "•"}</span><div class="main-c">` +
+        `<div class="title">${escapeHtml(u.title)}</div>` +
+        `<div class="meta">${escapeHtml(bits.join(" · "))}</div></div>`;
+      return row;
+    }
+    async function loadUnlinked() {
+      const box = document.getElementById("coverage-list"); if (!box) return;
+      let g;
+      try { g = await api("/daily-driver/units-by-goal"); } catch { box.innerHTML = ""; return; }
+      const cov = g.coverage || { units_total: 0, units_linked: 0 };
+      const unlinked = g.unlinked || [];
+      box.innerHTML = "";
+      const cline = document.createElement("div");
+      cline.className = "sub"; cline.style.margin = "0 0 10px";
+      cline.innerHTML = `<strong>${cov.units_linked} of ${cov.units_total}</strong> units linked to a goal · <strong>${unlinked.length}</strong> not yet linked, below.`;
+      box.appendChild(cline);
+      if (!unlinked.length) {
+        const note = document.createElement("div");
+        note.className = "empty"; note.textContent = "Nothing unlinked — the matcher has tied everything to a goal.";
+        box.appendChild(note); return;
+      }
+      // Group by primary type, in funnel order; unknown types last.
+      const order = ["email", "meeting", "task"];
+      const groups = {};
+      unlinked.forEach((u) => {
+        const t = (u.facet_types || [])[0] || "other";
+        (groups[t] = groups[t] || []).push(u);
+      });
+      const keys = order.filter((t) => groups[t]).concat(
+        Object.keys(groups).filter((t) => !order.includes(t)).sort()
+      );
+      keys.forEach((t) => {
+        const rows = groups[t];
+        const label = document.createElement("div");
+        label.className = "section-label";
+        label.textContent = `${FACET_LABEL[t] || t} (${rows.length})`;
+        box.appendChild(label);
+        rows.forEach((u) => box.appendChild(coverageRow(u)));
       });
     }
     function moatRow(u, tier, unlinked) {
