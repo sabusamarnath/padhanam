@@ -140,6 +140,11 @@
     .verdict-head .collapse-label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .vwhy { font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; padding-left: 8px; }
     .evidence-note { font-size: 12px; color: var(--ink-3); font-style: italic; padding: 4px 2px; }
+    /* D190: in-goal suggestions (display only) */
+    .suggest-block { display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+      padding-top: 6px; border-top: 1px solid var(--hairline); }
+    .suggest-row { font-size: 12.5px; color: var(--ink-2); }
+    .suggest-row.suggest-count { color: var(--ink-3); font-style: italic; }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -356,15 +361,11 @@
       } else if (activeView === "dash") {
         left.innerHTML = `<h1>How am I doing</h1>`;
         view.innerHTML = `
-          <p class="sub">Two reads no tool holds — your work grouped under the goal it serves, and the facet a piece of goal-serving work is missing.</p>
+          <p class="sub">Your work grouped under the goal it serves — one verdict line per goal. Tap a goal for the work behind it and the facets it is missing.</p>
           <div class="section-label">By goal</div>
-          <p class="sub">One line per goal: the verdict and why. Tap a goal for the work behind it; work no goal claims folds to a single line. Meaningful once your goals are seeded.</p>
-          <div class="goals" id="moat"></div>
-          <div class="section-label">Suggestions</div>
-          <p class="sub">The facet a piece of goal-serving work is missing — a time block, prep, a task. Surfaced only when Padhanam is confident; silence is the default.</p>
-          <div class="goals" id="suggestions"></div>`;
+          <p class="sub">One line per goal: the verdict and why. Tap for the work behind it (and any suggestions); work no goal claims folds to a single line. Meaningful once your goals are seeded.</p>
+          <div class="goals" id="moat"></div>`;
         loadUnitsByGoal();
-        loadSuggestions();
       } else {
         const n = NAV.concat(NAV_FOOT).find((x) => x.id === activeView);
         left.innerHTML = `<h1>${escapeHtml(n.label)}</h1>`;
@@ -470,12 +471,35 @@
           line.textContent = "Email activity: " + order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`).join(" · ");
           body.appendChild(line);
         }
+        // D190: itemise the distinct (the head rows), count the tail.
         (grp.units || []).forEach((u) => body.appendChild(moatRow(u, tier, false)));
+        if (grp.units_more > 0) {
+          const more = document.createElement("div");
+          more.className = "evidence-note";
+          more.textContent = `+ ${grp.units_more} more item${grp.units_more === 1 ? "" : "s"}`;
+          body.appendChild(more);
+        }
         if (!kinds.length && !(grp.units || []).length) {
           const note = document.createElement("div");
           note.className = "evidence-note";
           note.textContent = "No linked work yet — the verdict reads from your commitment cadence.";
           body.appendChild(note);
+        }
+        // D190: suggestions ride the goal — distinct shown, a flood collapsed.
+        const total = grp.suggestion_total || 0;
+        const sHead = grp.suggestion_head || [];
+        if (total > 0) {
+          const sl = document.createElement("div"); sl.className = "suggest-block";
+          if (total <= sHead.length) {
+            sHead.forEach((s) => {
+              const r = document.createElement("div"); r.className = "suggest-row";
+              r.textContent = "Suggested: " + s; sl.appendChild(r);
+            });
+          } else {
+            const r = document.createElement("div"); r.className = "suggest-row suggest-count";
+            r.textContent = `${total} similar suggested`; sl.appendChild(r);
+          }
+          body.appendChild(sl);
         }
       });
     }
@@ -505,26 +529,9 @@
     // (D180: the former flat "Units of work" panel and the coverage-stats "How
     // am I doing" panel are collapsed into loadUnitsByGoal above — the moat read
     // anchored on the goal served. Coverage + uncovered ride the coverage line.)
-    // --- Suggestions (S68, D170: missing-facet, credulity-gated, recommendation-shaped) ---
-    const SUGGEST_GLYPH = { block: "⧗", satellite_work: "✎", candidate_task: "✓" };
-    async function loadSuggestions() {
-      const box = document.getElementById("suggestions"); if (!box) return;
-      let items;
-      try { items = await api("/daily-driver/suggestions"); } catch { box.innerHTML = ""; return; }
-      if (!items.length) {
-        box.innerHTML = '<div class="empty">Nothing to suggest right now. (Suggestions surface only for goal-serving work missing a facet — silence is the default.)</div>';
-        return;
-      }
-      box.innerHTML = "";
-      items.forEach((s) => {
-        const card = document.createElement("div");
-        card.className = "row"; card.dataset.tier = "work";
-        card.style.flexDirection = "column"; card.style.alignItems = "stretch"; card.style.gap = "2px";
-        const glyph = SUGGEST_GLYPH[s.kind] || "·";
-        card.innerHTML = `<div class="sub" style="margin:0">${glyph} ${escapeHtml(s.suggestion)}</div>`;
-        box.appendChild(card);
-      });
-    }
+    // (D190/S94: the global suggestion list is gone — missing-facet suggestions
+    // now ride the goal they concern, inside its expand, a flood collapsed to a
+    // count. The /daily-driver/suggestions endpoint stays for debugging.)
     function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }
     // The attention statuses lead the surface; on-track is the quiet remainder.
     // (No at-risk status exists; the head set is {needs-you, behind}.)
