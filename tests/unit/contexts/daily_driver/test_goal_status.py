@@ -46,9 +46,31 @@ def _commitment(interval: int, cid: UUID | None = None) -> Commitment:
     )
 
 
-def _activity(commitment: Commitment, *, last_days_ago: int | None) -> CommitmentActivity:
+def _activity(
+    commitment: Commitment,
+    *,
+    last_days_ago: int | None,
+    didnt_days_ago: int | None = None,
+    didnt_count: int | None = None,
+) -> CommitmentActivity:
     last = None if last_days_ago is None else _NOW - timedelta(days=last_days_ago)
-    return CommitmentActivity(commitment=commitment, last_completed_at=last)
+    didnt = (
+        None
+        if didnt_days_ago is None
+        else (_NOW - timedelta(days=didnt_days_ago)).date()
+    )
+    # default the count to 1 when a reported miss date is given (a single miss)
+    count = (
+        didnt_count
+        if didnt_count is not None
+        else (1 if didnt_days_ago is not None else 0)
+    )
+    return CommitmentActivity(
+        commitment=commitment,
+        last_completed_at=last,
+        last_reported_didnt=didnt,
+        reported_didnt_count=count,
+    )
 
 
 def _homeostatic(lever_ids: tuple[UUID, ...]) -> Goal:
@@ -182,6 +204,96 @@ def test_compute_lever_status_tracked_vs_untracked() -> None:
     assert (
         compute_lever_status(_activity(c, last_days_ago=1), now=_NOW, thresholds=_TH)
         is GoalStatus.ON_TRACK
+    )
+
+
+# --- D192: the three-state cadence reading (did / reported-didn't / silent) -
+
+def test_k_reported_misses_no_did_reads_stalled_with_evidence() -> None:
+    # A daily lever never completed, with K=3 reported misses -> stalled WITH
+    # evidence. The magnitude is the count of confirmed misses, never the silent
+    # days between them (D192 — silence is not a miss).
+    from contexts.daily_driver.domain.goal_status import compute_lever_status
+
+    c = _commitment(1)
+    a = _activity(c, last_days_ago=None, didnt_days_ago=0, didnt_count=3)
+    assert compute_lever_status(a, now=_NOW, thresholds=_TH) is GoalStatus.STALLED
+
+
+def test_one_reported_didnt_no_did_reads_behind_not_not_tracked() -> None:
+    # A single reported miss (no did) is one confirmed miss -> behind, never
+    # not-tracked (silence) and never on-track; it does not fabricate a stalled
+    # streak from the silent beats since.
+    from contexts.daily_driver.domain.goal_status import compute_lever_status
+
+    c = _commitment(1)
+    a = _activity(c, last_days_ago=None, didnt_days_ago=0, didnt_count=1)
+    assert compute_lever_status(a, now=_NOW, thresholds=_TH) is GoalStatus.BEHIND
+
+
+def test_did_on_rhythm_then_reported_didnt_reads_behind() -> None:
+    # Completed yesterday (on rhythm by cadence), but reported a miss today ->
+    # a confirmed lapse since completion overrides on-track to behind.
+    from contexts.daily_driver.domain.goal_status import compute_lever_status
+
+    c = _commitment(1)
+    a = _activity(c, last_days_ago=1, didnt_days_ago=0)
+    assert compute_lever_status(a, now=_NOW, thresholds=_TH) is GoalStatus.BEHIND
+
+
+def test_homeostatic_goal_with_only_reported_misses_reads_stalled() -> None:
+    # Goal-level: a homeostatic goal whose single lever has K reported misses
+    # (no completion) reads stalled with evidence, not not-tracked.
+    c = _commitment(1)
+    goal = _homeostatic((c.id,))
+    activities = {
+        c.id: _activity(c, last_days_ago=None, didnt_days_ago=1, didnt_count=3)
+    }
+    assert _status(goal, activities) is GoalStatus.STALLED
+
+
+def test_homeostatic_silent_lever_still_reads_not_tracked() -> None:
+    # Neither a did nor a reported miss -> not-tracked (silence).
+    c = _commitment(1)
+    goal = _homeostatic((c.id,))
+    activities = {c.id: _activity(c, last_days_ago=None, didnt_days_ago=None)}
+    assert _status(goal, activities) is GoalStatus.NOT_TRACKED
+
+
+# --- D192: the progressive not-tracked fix (the S96 residual) --------------
+
+def test_progressive_untracked_practice_no_longer_reads_asleep() -> None:
+    # The S96 residual: a progressive goal with recent edge activity but a
+    # practice lever that has NO completion and NO reported miss no longer reads
+    # asleep-from-created_at — it reads active (the fabrication is gone).
+    cid = uuid4()
+    goal = _progressive(cid)
+    activities = {cid: _activity(_commitment(1, cid), last_days_ago=None)}
+    assert (
+        compute_goal_status(
+            goal=goal, commitment_activities=activities,
+            latest_activity_at=_NOW - timedelta(days=2), now=_NOW, thresholds=_TH,
+        )
+        is GoalStatus.ACTIVE
+    )
+
+
+def test_progressive_practice_reported_miss_reads_asleep_with_evidence() -> None:
+    # But an *evidenced* lapse (a reported miss on the practice lever) still
+    # reads asleep — the asleep tier now fires on evidence, not on age.
+    cid = uuid4()
+    goal = _progressive(cid)
+    activities = {
+        cid: _activity(
+            _commitment(1, cid), last_days_ago=None, didnt_days_ago=1, didnt_count=3
+        )
+    }
+    assert (
+        compute_goal_status(
+            goal=goal, commitment_activities=activities,
+            latest_activity_at=_NOW - timedelta(days=2), now=_NOW, thresholds=_TH,
+        )
+        is GoalStatus.ASLEEP
     )
 
 

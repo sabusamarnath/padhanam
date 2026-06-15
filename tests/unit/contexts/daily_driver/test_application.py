@@ -123,6 +123,7 @@ class FakeCommitmentRepository:
                     c,
                     max(times) if times else None,
                     last_reported_didnt=max(didnt) if didnt else None,
+                    reported_didnt_count=len(didnt),
                 )
             )
         return tuple(out)

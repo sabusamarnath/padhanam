@@ -237,6 +237,7 @@ class PostgresCommitmentRepository:
                         sa.func.max(checkin_responses_table.c.beat_date).label(
                             "last_reported_didnt"
                         ),
+                        sa.func.count().label("reported_didnt_count"),
                     )
                     .where(
                         sa.and_(
@@ -253,13 +254,15 @@ class PostgresCommitmentRepository:
             r.commitment_id: r.last_completed_at for r in last_rows
         }
         didnt_by_commitment = {
-            r.commitment_id: r.last_reported_didnt for r in didnt_rows
+            r.commitment_id: (r.last_reported_didnt, r.reported_didnt_count)
+            for r in didnt_rows
         }
         return tuple(
             CommitmentActivity(
                 commitment=self._row_to_commitment(row),
                 last_completed_at=last_by_commitment.get(row.id),
-                last_reported_didnt=didnt_by_commitment.get(row.id),
+                last_reported_didnt=didnt_by_commitment.get(row.id, (None, 0))[0],
+                reported_didnt_count=didnt_by_commitment.get(row.id, (None, 0))[1],
             )
             for row in commitment_rows
         )

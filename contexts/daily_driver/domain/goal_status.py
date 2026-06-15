@@ -22,8 +22,9 @@ is post-week. Pure domain (D16): stdlib + the daily-driver value objects only.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time, timezone
 from enum import Enum
+from typing import NamedTuple
 from uuid import UUID
 
 from contexts.daily_driver.domain.commitment import CommitmentActivity
@@ -94,35 +95,74 @@ def _goal_lever_ids(goal: Goal) -> tuple[UUID, ...]:
     return tuple(ids)
 
 
+class LeverVerdict(NamedTuple):
+    """One lever's verdict: status, overdue days, and whether a reported miss
+    drove it (``evidenced`` — a tracked negative, not an inference)."""
+
+    status: GoalStatus
+    overdue_days: int
+    evidenced: bool
+
+
+def _staleness(last: datetime, interval: int, now: datetime) -> tuple[bool, int]:
+    """(is_overdue, overdue_days) for an activity time against the interval."""
+    return (
+        is_overdue(last_activity_at=last, expected_interval_days=interval, now=now),
+        overdue_by_days(
+            last_activity_at=last, expected_interval_days=interval, now=now
+        ),
+    )
+
+
 def _lever_verdict(
     activity: CommitmentActivity,
     *,
     now: datetime,
     thresholds: GoalStatusThresholds,
-) -> tuple[GoalStatus, int]:
-    """(status, overdue_days) for one lever, by cadence adherence."""
+) -> LeverVerdict:
+    """The three-state cadence verdict for one lever (D192).
+
+    A recent **did** reads the existing cadence verdict (on-track / behind /
+    stalled by overdue). A **reported-didn't** is a tracked negative — a
+    confirmed miss can never read on-track, so it reads behind or stalled *with
+    evidence*. **Neither** (silence) reads not-tracked — the lever's age never
+    fabricates a verdict (D191; the ``created_at`` fallback is gone)."""
     commitment = activity.commitment
-    last = activity.last_completed_at or commitment.created_at
     interval = commitment.expected_interval_days
-    overdue = overdue_by_days(
-        last_activity_at=last, expected_interval_days=interval, now=now
-    )
-    if not is_overdue(
-        last_activity_at=last, expected_interval_days=interval, now=now
-    ):
-        return (GoalStatus.ON_TRACK, 0)
     k = thresholds.daily_stalled_k if interval <= 1 else thresholds.weekly_stalled_k
-    status = GoalStatus.STALLED if overdue // interval >= k else GoalStatus.BEHIND
-    return (status, overdue)
+    last_did = activity.last_completed_at
+    last_didnt = activity.last_reported_didnt  # a beat date | None
 
+    if last_did is None and last_didnt is None:
+        return LeverVerdict(GoalStatus.NOT_TRACKED, 0, False)
 
-def _commitment_status(
-    activity: CommitmentActivity,
-    *,
-    now: datetime,
-    thresholds: GoalStatusThresholds,
-) -> GoalStatus:
-    return _lever_verdict(activity, now=now, thresholds=thresholds)[0]
+    # Case A — a completion exists: read its cadence, but a reported miss after
+    # the last did is a confirmed lapse since completion (never on-track).
+    if last_did is not None:
+        overdue_now, overdue = _staleness(last_did, interval, now)
+        didnt_after_did = last_didnt is not None and last_didnt > last_did.date()
+        if not overdue_now:
+            if didnt_after_did:
+                return LeverVerdict(GoalStatus.BEHIND, interval, True)
+            return LeverVerdict(GoalStatus.ON_TRACK, 0, False)
+        status = (
+            GoalStatus.STALLED if overdue // interval >= k else GoalStatus.BEHIND
+        )
+        return LeverVerdict(status, overdue, didnt_after_did)
+
+    # Case B — no completion ever, but reported misses exist: confirmed misses,
+    # never on-track. With no completion baseline the magnitude is the *count*
+    # of confirmed misses (K reads stalled), never the silent days between them
+    # (D192 — silence is not a miss). ``overdue_days`` carries days since the
+    # latest reported beat for the why.
+    didnt_dt = datetime.combine(last_didnt, time.min, tzinfo=timezone.utc)
+    days_since = days_elapsed(since=didnt_dt, now=now)
+    status = (
+        GoalStatus.STALLED
+        if activity.reported_didnt_count >= k
+        else GoalStatus.BEHIND
+    )
+    return LeverVerdict(status, days_since, True)
 
 
 def compute_lever_status(
@@ -131,12 +171,11 @@ def compute_lever_status(
     now: datetime,
     thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
 ) -> GoalStatus:
-    """One lever's status (D191) — ``NOT_TRACKED`` with no completion, else its
-    cadence verdict. Lets the evidence surface show which levers have no data
-    even while the goal as a whole reads a verdict (the partial-tracking rule)."""
-    if activity.last_completed_at is None:
-        return GoalStatus.NOT_TRACKED
-    return _lever_verdict(activity, now=now, thresholds=thresholds)[0]
+    """One lever's status (D191/D192) — ``NOT_TRACKED`` when there is neither a
+    completion nor a reported miss (silence), else its three-state cadence
+    verdict. Lets the evidence surface show which levers have no data even while
+    the goal as a whole reads a verdict (the partial-tracking rule)."""
+    return _lever_verdict(activity, now=now, thresholds=thresholds).status
 
 
 @dataclass(frozen=True)
@@ -177,22 +216,34 @@ def compute_goal_verdict(
             if cid in commitment_activities
         ]
         if levers:
-            # D191: read the cadence verdict from the *tracked* levers only —
-            # those with a real completion. A lever with no completion is not
-            # overdue (its age is not evidence); it never fabricates a verdict
-            # nor drags the goal down. The goal reads not-tracked only when NO
-            # lever has any completion (the partial-tracking rule).
-            tracked = [a for a in levers if a.last_completed_at is not None]
-            if not tracked:
+            # D191/D192: read the cadence verdict from the *evidenced* levers
+            # only — those with a completion or a reported miss. A silent lever
+            # (neither) never fabricates a verdict (its age is not evidence) nor
+            # drags the goal down. The goal reads not-tracked only when NO lever
+            # has any evidence (the partial-tracking rule).
+            evidenced = [
+                a
+                for a in levers
+                if a.last_completed_at is not None
+                or a.last_reported_didnt is not None
+            ]
+            if not evidenced:
                 return GoalVerdict(GoalStatus.NOT_TRACKED, "not tracked")
             verdicts = [
-                _lever_verdict(a, now=now, thresholds=thresholds) for a in tracked
+                _lever_verdict(a, now=now, thresholds=thresholds)
+                for a in evidenced
             ]
-            status, overdue = min(  # worst-status-wins (D177)
-                verdicts, key=lambda v: _CADENCE_RANK[v[0]]
+            worst = min(  # worst-status-wins (D177)
+                verdicts, key=lambda v: _CADENCE_RANK[v.status]
             )
-            why = "on rhythm" if status is GoalStatus.ON_TRACK else f"{overdue}d overdue"
-            return GoalVerdict(status, why)
+            if worst.status is GoalStatus.ON_TRACK:
+                why = "on rhythm"
+            elif worst.evidenced:
+                # a confirmed miss (reported), not an inference from absence
+                why = f"missed {worst.overdue_days}d (reported)"
+            else:
+                why = f"{worst.overdue_days}d overdue"
+            return GoalVerdict(worst.status, why)
 
     # Cadence-less (progressive / sequence-not-done / homeostatic-without-levers).
     quiet = (
@@ -207,6 +258,11 @@ def compute_goal_verdict(
         return GoalVerdict(GoalStatus.STALLED, why)
     # 2. A progressive goal with a lapsed practice commitment reads asleep (D188):
     #    recent activity exists, but the intended practice is being skipped.
+    #    D192: the lapse must be *evidenced* — a practice lever with no
+    #    completion and no reported miss reads not-tracked (compute_lever_status),
+    #    so it no longer fabricates asleep from the commitment's age (the S96
+    #    residual, now fixed); only a real lapse (stale did, or reported miss)
+    #    drives asleep.
     if goal.mode is GoalMode.PROGRESSIVE:
         practice = [
             commitment_activities[cid]
@@ -214,7 +270,7 @@ def compute_goal_verdict(
             if cid in commitment_activities
         ]
         if practice and any(
-            _commitment_status(a, now=now, thresholds=thresholds)
+            compute_lever_status(a, now=now, thresholds=thresholds)
             is GoalStatus.STALLED
             for a in practice
         ):

@@ -134,14 +134,18 @@ class CommitmentActivity:
     ``last_completed_at`` is ``None`` when the commitment has never been
     completed. ``last_reported_didnt`` (D192) is the most recent beat the
     operator reported *not* doing — a tracked negative, distinct from silence
-    (also ``None``). The three-state cadence read consults both: a did reads
-    the cadence verdict, a more-recent reported-didn't reads behind/stalled with
-    evidence, neither reads not-tracked.
+    (also ``None``); ``reported_didnt_count`` is how many such misses are on
+    record (used to distinguish a behind from a stalled when there is no
+    completion baseline — K confirmed misses read stalled). The three-state
+    cadence read consults all three: a did reads the cadence verdict, a
+    more-recent reported-didn't reads behind/stalled with evidence, neither
+    reads not-tracked. Silence is never counted as a miss.
     """
 
     commitment: Commitment
     last_completed_at: datetime | None
     last_reported_didnt: date | None = None
+    reported_didnt_count: int = 0
 
 
 __all__ = [
