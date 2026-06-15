@@ -27,6 +27,7 @@ from contexts.daily_driver.application.log_checkin_outcomes import (
     CheckinOutcomeInput,
     log_checkin_outcomes,
 )
+from contexts.daily_driver.domain.goal import GoalMode
 from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
@@ -41,6 +42,58 @@ from contexts.checkin.domain.reply_parse import (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+class EligibleLeversReaderAdapter:
+    """apps/ adapter implementing the check-in context's EligibleLeversReader.
+
+    The Step-0 eligibility predicate spans two stores: a goal's ``mode`` is a
+    Neo4j ``:Outcome`` property (read via the goals reader's ``list_goals``),
+    its cadence is the Postgres ``expected_interval_days`` (read via the
+    commitment repository). Eligible = homeostatic goals' levers with interval
+    at or under ``max_interval_days`` (default 1 — daily). A progressive
+    interval-1 goal (e.g. German) is excluded by the mode filter."""
+
+    def __init__(
+        self,
+        *,
+        goals_reader: "object",
+        commitment_repository: CommitmentRepository,
+        max_interval_days: int = 1,
+    ) -> None:
+        self._goals_reader = goals_reader
+        self._repository = commitment_repository
+        self._max_interval_days = max_interval_days
+
+    async def list_eligible(
+        self, *, actor: ActorContext
+    ) -> tuple[EligibleLever, ...]:
+        tenant_context = actor.tenant_context
+        goals = await self._goals_reader.list_goals(
+            tenant_context=tenant_context
+        )
+        eligible: list[EligibleLever] = []
+        for goal in goals:
+            if goal.mode is not GoalMode.HOMEOSTATIC:
+                continue
+            for commitment_id in goal.lever_commitment_ids:
+                commitment = await self._repository.get_commitment(
+                    tenant_context=tenant_context,
+                    commitment_id=commitment_id,
+                )
+                if commitment is None:
+                    continue
+                if commitment.expected_interval_days > self._max_interval_days:
+                    continue
+                eligible.append(
+                    EligibleLever(
+                        commitment_id=commitment_id,
+                        name=commitment.name,
+                        goal_id=goal.id,
+                        goal_name=goal.name,
+                    )
+                )
+        return tuple(eligible)
 
 
 class CheckinWriterAdapter:
@@ -122,4 +175,8 @@ class CheckinReplyParserAdapter:
         return map_parsed_outcomes(response.value, levers)
 
 
-__all__ = ["CheckinReplyParserAdapter", "CheckinWriterAdapter"]
+__all__ = [
+    "CheckinReplyParserAdapter",
+    "CheckinWriterAdapter",
+    "EligibleLeversReaderAdapter",
+]
