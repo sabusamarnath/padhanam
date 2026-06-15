@@ -447,6 +447,57 @@ def test_group_yields_one_group_of_n_not_n_flat_rows():
 
 # --- D187/S92: per-goal status flows through group_units_by_goal ----------
 
+def test_distinct_units_cap_to_a_head_plus_a_counted_tail():
+    # D190: a long list of distinct units → a recent-few head + a counted tail.
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    units = tuple(_served_unit(f"u{i}") for i in range(9))  # 9 distinct
+    edges = tuple(_edge(u, goal) for u in units)
+    grouped = group_units_by_goal(units, (goal,), edges)
+    grp = grouped.groups[0]
+    assert len(grp.units) == 6          # the head (_HEAD_DISTINCT)
+    assert grp.units_more == 3          # the counted tail
+
+
+def test_suggestions_map_into_the_goal_and_a_flood_counts():
+    from contexts.daily_driver.domain.facet_suggestion import (
+        FacetSuggestion,
+        SuggestionKind,
+    )
+
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    units = tuple(_served_unit(f"u{i}") for i in range(5))
+    edges = tuple(_edge(u, goal) for u in units)
+    sugg = tuple(
+        FacetSuggestion(
+            unit_id=u.unit_id, kind=SuggestionKind.BLOCK,
+            subject=f"u{i}", suggestion=f"block time for u{i}?",
+        )
+        for i, u in enumerate(units)
+    )
+    grouped = group_units_by_goal(units, (goal,), edges, suggestions=sugg)
+    grp = grouped.groups[0]
+    assert grp.suggestion_total == 5      # all five map to the goal via edges
+    assert len(grp.suggestion_head) == 3  # head capped (_SUGGESTION_HEAD)
+
+
+def test_suggestion_for_an_unrelated_unit_does_not_attach():
+    from contexts.daily_driver.domain.facet_suggestion import (
+        FacetSuggestion,
+        SuggestionKind,
+    )
+
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    served = _served_unit("served")
+    other = _served_unit("other")  # no edge to the goal
+    edges = (_edge(served, goal),)
+    sugg = (
+        FacetSuggestion(unit_id=other.unit_id, kind=SuggestionKind.BLOCK,
+                        subject="other", suggestion="block?"),
+    )
+    grouped = group_units_by_goal((served, other), (goal,), edges, suggestions=sugg)
+    assert grouped.groups[0].suggestion_total == 0  # the unrelated suggestion stays out
+
+
 def test_group_sets_progressive_status_active_from_recent_edge():
     from contexts.daily_driver.domain.goal_assessment import GoalStatus
 

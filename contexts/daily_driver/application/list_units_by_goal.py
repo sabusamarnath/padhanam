@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from contexts.daily_driver.domain.facet_suggestion import suggest_missing_facets
 from contexts.daily_driver.domain.goal_assessment import (
     GoalGroupedUnits,
     group_units_by_goal,
@@ -71,11 +72,16 @@ async def list_units_by_goal(
             tenant_context=actor.tenant_context
         ):
             commitment_activities[a.commitment.id] = a
+    # D190/S94: the missing-facet suggestions (D170), placed in-goal by the same
+    # SERVES edges — the global suggestion list is gone; they ride the goal.
+    goal_served = frozenset(e.unit_id for e in edges)
+    suggestions = suggest_missing_facets(views, goal_served)
     return group_units_by_goal(
         views, goals, edges,
         email_kinds=email_kinds,
         now=now or datetime.now(timezone.utc),
         commitment_activities=commitment_activities,
+        suggestions=suggestions,
     )
 
 

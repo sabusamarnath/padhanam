@@ -32,6 +32,7 @@ from uuid import UUID
 
 from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
 from contexts.daily_driver.domain.commitment import CommitmentActivity
+from contexts.daily_driver.domain.facet_suggestion import FacetSuggestion
 from contexts.daily_driver.domain.goal import Goal, GoalMode
 from contexts.daily_driver.domain.goal_status import (
     DEFAULT_GOAL_STATUS_THRESHOLDS,
@@ -229,6 +230,17 @@ class GoalGroup:
     # D189/S93: the one-phrase why drawn from the status's evidence, for the
     # folded verdict line. None when status is None.
     status_why: str | None = None
+    # D190/S94: distinct-vs-repeated — ``units`` is the recent-few head of
+    # distinct rows; ``units_more`` is the counted tail beyond it (0 when all
+    # fit). Repeated instances already fold within a row (D175 instance_count)
+    # and emails to ``email_activity``; this caps a long head of distinct rows.
+    units_more: int = 0
+    # D190/S94: the goal's missing-facet suggestions (D170), placed in-goal by
+    # the SERVES edges. ``suggestion_head`` is up to a few distinct suggestion
+    # prose lines; ``suggestion_total`` the full count (a flood collapses in the
+    # render to one "N suggested" line). Display only — no actions (S96).
+    suggestion_head: tuple[str, ...] = ()
+    suggestion_total: int = 0
 
 
 @dataclass(frozen=True)
@@ -317,6 +329,11 @@ def _fold_units_to_rows(
 
 # D183/S89: a goal reads active on email activity no older than this.
 _EMAIL_ACTIVE_RECENCY_DAYS = 30
+# D190/S94: the recent-few head of distinct evidence rows shown before the tail
+# is counted ("M more"), and the head of distinct suggestion lines before a
+# flood collapses to a single count.
+_HEAD_DISTINCT = 6
+_SUGGESTION_HEAD = 3
 
 
 def _email_facet_kind(
@@ -329,6 +346,22 @@ def _email_facet_kind(
     return None
 
 
+def _goal_suggestions(
+    outcome_id: UUID,
+    g_edges: list[GoalEdge],
+    suggestions: tuple[FacetSuggestion, ...] | None,
+) -> tuple[tuple[str, ...], int]:
+    """The goal's missing-facet suggestions (D170/D190), placed in-goal by the
+    SERVES edges. Returns (head prose ≤ _SUGGESTION_HEAD, total) — a flood is
+    counted, not enumerated (the render collapses it to one line)."""
+    if not suggestions:
+        return ((), 0)
+    unit_ids = {e.unit_id for e in g_edges}
+    matched = [s for s in suggestions if s.unit_id in unit_ids]
+    head = tuple(s.suggestion for s in matched[:_SUGGESTION_HEAD])
+    return (head, len(matched))
+
+
 def group_units_by_goal(
     units: tuple[UnitView, ...],
     goals: tuple[Goal, ...],
@@ -337,6 +370,7 @@ def group_units_by_goal(
     now: datetime | None = None,
     commitment_activities: dict[UUID, CommitmentActivity] | None = None,
     thresholds: GoalStatusThresholds = DEFAULT_GOAL_STATUS_THRESHOLDS,
+    suggestions: tuple[FacetSuggestion, ...] | None = None,
 ) -> GoalGroupedUnits:
     """Group units under the goal each SERVES; orphans under one unlinked group.
 
@@ -419,16 +453,23 @@ def group_units_by_goal(
             if now is not None
             else None
         )
+        # D190: itemise the distinct (the recent-few head), count the tail.
+        folded = _fold_units_to_rows(items)
+        head = folded[:_HEAD_DISTINCT]
+        s_head, s_total = _goal_suggestions(goal.id, g_edges, suggestions)
         groups.append(
             GoalGroup(
                 outcome_id=goal.id,
                 name=goal.name,
                 domain=goal.domain,
-                units=_fold_units_to_rows(items),
+                units=head,
+                units_more=len(folded) - len(head),
                 email_activity=tuple(sorted(kind_counts.items())),
                 active=active,
                 status=verdict.status if verdict is not None else None,
                 status_why=verdict.why if verdict is not None else None,
+                suggestion_head=s_head,
+                suggestion_total=s_total,
             )
         )
 

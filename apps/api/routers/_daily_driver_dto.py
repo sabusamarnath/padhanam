@@ -419,6 +419,12 @@ class GoalGroupDTO(BaseModel):
     status: str | None = None
     # D189/S93: the one-phrase why for the folded verdict line.
     status_why: str | None = None
+    # D190/S94: distinct-vs-repeated — units is the head; units_more is the
+    # counted tail. The in-goal suggestions: a head of prose + the full total
+    # (the render collapses a flood to one "N suggested" line).
+    units_more: int = 0
+    suggestion_head: list[str] = []
+    suggestion_total: int = 0
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -475,6 +481,9 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                 active=g.active,
                 status=g.status.value if g.status is not None else None,
                 status_why=g.status_why,
+                units_more=g.units_more,
+                suggestion_head=list(g.suggestion_head),
+                suggestion_total=g.suggestion_total,
             )
             for g in grouped.groups
         ],
