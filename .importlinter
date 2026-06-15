@@ -196,6 +196,13 @@ layers =
     contexts.email_conversation.application
     contexts.email_conversation.domain
 
+[importlinter:contract:layers-checkin]
+name = Check-in layers (hexagonal)
+type = layers
+layers =
+    contexts.checkin.application
+    contexts.checkin.domain
+
 [importlinter:contract:layers-daily-briefing]
 name = Daily-briefing layers (hexagonal)
 type = layers
@@ -328,6 +335,7 @@ modules =
     contexts.intent_classification_evaluation.domain
     contexts.audit_conversation.domain
     contexts.mirror_conversation.domain
+    contexts.checkin.domain
     contexts.daily_briefing.domain
     contexts.calendar.domain
     contexts.daily_driver.domain
@@ -362,6 +370,7 @@ modules =
     contexts.intent_classification_evaluation.application
     contexts.audit_conversation.application
     contexts.mirror_conversation.application
+    contexts.checkin.application
     contexts.daily_briefing.application
     contexts.calendar.application
     contexts.daily_driver.application

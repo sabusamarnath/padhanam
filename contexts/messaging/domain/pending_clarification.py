@@ -50,6 +50,8 @@ class PendingClarificationStatus(str, Enum):
 # D140: target_cell identifiers the dispatch_inbound use case consults
 # at active-pending routing. Four identifiers at P14 close; future
 # ConversationFlow implementers at P15+ extend the set additively.
+# ``checkin`` (D194, S97b) is the pending-only cell — it owns a pending
+# but is never meta-routed.
 KNOWN_TARGET_CELLS: frozenset[str] = frozenset(
     {
         "manual_entry",
@@ -58,6 +60,7 @@ KNOWN_TARGET_CELLS: frozenset[str] = frozenset(
         "calendar_conversation",
         "email_conversation",
         "dispatch_clarification",
+        "checkin",
     }
 )
 

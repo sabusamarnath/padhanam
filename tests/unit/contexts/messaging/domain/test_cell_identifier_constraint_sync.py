@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from contexts.messaging.domain.cell_identifier import CellIdentifier
 
-# The set the live DB constraint admits (alembic 0032). Keep in lockstep.
+# The set the live DB constraint admits (alembic 0038). Keep in lockstep.
 _DB_CONSTRAINT_TARGET_CELLS = {
     "manual_entry",
     "audit_conversation",
@@ -23,6 +23,7 @@ _DB_CONSTRAINT_TARGET_CELLS = {
     "calendar_conversation",
     "email_conversation",
     "dispatch_clarification",
+    "checkin",
 }
 
 

@@ -1471,7 +1471,7 @@ do not carry implementer-specific extension fields.
 | `proposed_intent`            | `jsonb`        | not null; the cell's structured best-guess intent                                                                    |
 | `proposed_action_summary`    | `text`         | not null; CHECK `proposed_action_summary <> ''`                                                                      |
 | `status`                     | `text`         | not null; CHECK ∈ {`PENDING`, `RESOLVED`, `EXPIRED`}                                                                 |
-| `target_cell`                | `text`         | not null after Alembic 0023 backfill; CHECK ∈ {`manual_entry`, `audit_conversation`, `mirror_conversation`, `dispatch_clarification`} |
+| `target_cell`                | `text`         | not null after Alembic 0023 backfill; CHECK ∈ {`manual_entry`, `audit_conversation`, `mirror_conversation`, `calendar_conversation`, `email_conversation`, `dispatch_clarification`, `checkin`} (widened at 0032, then 0038) |
 | `created_at`                 | `timestamptz`  | not null                                                                                                             |
 | `expires_at`                 | `timestamptz`  | not null; CHECK `expires_at > created_at`                                                                            |
 | `resolved_at`                | `timestamptz`  | nullable; CHECK `(status = 'PENDING' AND resolved_at IS NULL) OR (status <> 'PENDING' AND resolved_at IS NOT NULL)`  |
@@ -1501,6 +1501,13 @@ consults this field on active-pending routing per D140's dispatch
 flow Step 2. The meta-classification PendingClarification created
 at low-confidence dispatch carries `target_cell='dispatch_clarification'`
 for implementer-side handling at the dispatch layer.
+`0032_pending_clar_target_cell_calendar_email` (S60/S56) widened the
+CHECK to admit the calendar and email cells; `0038_pending_clar_target_cell_checkin`
+(S97b, D194) widened it to admit the **pending-only** `checkin` cell —
+outbound-initiated (the DAILY_SCHEDULED composer creates its pending),
+so it owns a `target_cell` but is never meta-routed. The allowed set is
+kept in lockstep with `CellIdentifier` by the constraint-sync tripwire
+(`test_cell_identifier_constraint_sync`).
 
 ### PendingClarification (messaging multi-turn state)
 
