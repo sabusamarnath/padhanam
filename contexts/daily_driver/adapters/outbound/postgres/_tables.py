@@ -98,6 +98,14 @@ commitment_checkin_responses = sa.Table(
         "outcome IN ('did', 'reported_didnt')",
         name="commitment_checkin_responses_outcome_check",
     ),
+    # S97b (migration 0039): idempotency backstop for the check-in write —
+    # at most one response per (tenant, commitment, beat day).
+    sa.UniqueConstraint(
+        "tenant_id",
+        "commitment_id",
+        "beat_date",
+        name="ux_checkin_responses_tenant_commitment_beat",
+    ),
 )
 
 

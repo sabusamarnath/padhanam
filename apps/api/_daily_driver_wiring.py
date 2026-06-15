@@ -188,6 +188,34 @@ class CommitmentRepositoryRouter:
             tenant_context=tenant_context, response=response
         )
 
+    async def completion_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        day: date,
+    ) -> bool:
+        repo = await self._build(tenant_context)
+        return await repo.completion_exists_on_day(
+            tenant_context=tenant_context,
+            commitment_id=commitment_id,
+            day=day,
+        )
+
+    async def checkin_response_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        beat_date: date,
+    ) -> bool:
+        repo = await self._build(tenant_context)
+        return await repo.checkin_response_exists_on_day(
+            tenant_context=tenant_context,
+            commitment_id=commitment_id,
+            beat_date=beat_date,
+        )
+
     async def get_commitment(
         self, *, tenant_context: TenantContext, commitment_id: UUID
     ) -> Commitment | None:

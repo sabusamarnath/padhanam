@@ -7,7 +7,7 @@ is pure per D16 — no SQLAlchemy, no asyncpg.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -50,6 +50,30 @@ class CommitmentRepository(Protocol):
         Under the Option-B did-source, dids flow to the completion log; this
         records the ``reported_didnt`` negatives the cadence read consults.
         """
+        ...
+
+    async def completion_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        day: date,
+    ) -> bool:
+        """True when a completion is logged for the commitment on ``day`` (UTC).
+
+        The check-in write's completion-side idempotency guard (S97b); catches a
+        prior check-in did and a Today "mark done" did alike."""
+        ...
+
+    async def checkin_response_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        beat_date: date,
+    ) -> bool:
+        """True when a check-in response is recorded for the commitment on
+        ``beat_date`` (S97b idempotency guard for the negative store)."""
         ...
 
     async def get_commitment(

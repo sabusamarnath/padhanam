@@ -9,11 +9,12 @@ commitments in Python.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Protocol
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from contexts.daily_driver.adapters.outbound.postgres._tables import (
@@ -129,13 +130,18 @@ class PostgresCommitmentRepository:
         tenant_context: TenantContext,
         response: CheckinResponse,
     ) -> None:
-        """Append one check-in response (the negative store; D192)."""
+        """Append one check-in response (the negative store; D192).
+
+        Idempotent by ``(tenant, commitment, beat_date)`` (migration 0039) via
+        ``ON CONFLICT DO NOTHING`` — the race-safe backstop behind the check-in
+        write use case's exists-check (S97b)."""
         self._assert_bound(tenant_context)
         sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
         async with sessionmaker() as session:
             async with session.begin():
                 await session.execute(
-                    sa.insert(checkin_responses_table).values(
+                    pg.insert(checkin_responses_table)
+                    .values(
                         id=str(response.id),
                         commitment_id=str(response.commitment_id),
                         tenant_id=str(response.tenant_id),
@@ -143,7 +149,76 @@ class PostgresCommitmentRepository:
                         beat_date=response.beat_date,
                         outcome=response.outcome.value,
                     )
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            "tenant_id",
+                            "commitment_id",
+                            "beat_date",
+                        ]
+                    )
                 )
+
+    async def completion_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        day: date,
+    ) -> bool:
+        """True when a completion is already logged for the commitment on ``day``
+        (UTC). Catches both a check-in did and a Today "mark done" did, so the
+        check-in write does not double-log (S97b)."""
+        self._assert_bound(tenant_context)
+        sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
+        start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        async with sessionmaker() as session:
+            count = (
+                await session.execute(
+                    sa.select(sa.func.count())
+                    .select_from(completions_table)
+                    .where(
+                        sa.and_(
+                            completions_table.c.tenant_id
+                            == str(self._bound_tenant_id),
+                            completions_table.c.commitment_id
+                            == str(commitment_id),
+                            completions_table.c.completed_at >= start,
+                            completions_table.c.completed_at < end,
+                        )
+                    )
+                )
+            ).scalar_one()
+        return count > 0
+
+    async def checkin_response_exists_on_day(
+        self,
+        *,
+        tenant_context: TenantContext,
+        commitment_id: UUID,
+        beat_date: date,
+    ) -> bool:
+        """True when a check-in response is already recorded for the commitment
+        on ``beat_date`` (S97b idempotency guard)."""
+        self._assert_bound(tenant_context)
+        sessionmaker = await self._resolve_per_tenant(self._bound_tenant_id)
+        async with sessionmaker() as session:
+            count = (
+                await session.execute(
+                    sa.select(sa.func.count())
+                    .select_from(checkin_responses_table)
+                    .where(
+                        sa.and_(
+                            checkin_responses_table.c.tenant_id
+                            == str(self._bound_tenant_id),
+                            checkin_responses_table.c.commitment_id
+                            == str(commitment_id),
+                            checkin_responses_table.c.beat_date == beat_date,
+                        )
+                    )
+                )
+            ).scalar_one()
+        return count > 0
 
     async def get_commitment(
         self, *, tenant_context: TenantContext, commitment_id: UUID
