@@ -470,6 +470,8 @@ Drift events caught and corrected during sessions. Each entry captures what drif
 
 Per the change-failure-rate metric's v4 honesty fix, this section and that metric are one ledger: each entry here is booked through a corrective-classified session (the correcting session carries `classification: corrective` with `corrects:`/`corrected_by` populated) so the narrative failure record and the computed metric cannot drift apart. Entries that predate the mechanism are marked pre-mechanism.
 
+**Scope.** This one-ledger coupling binds code- and schema-output drift: the failed changes CFR is built to count. Process-discipline lapses (preservation, tagging, or convention-application gaps that ship no failed code or schema change) are recorded in this section narratively, with no CFR booking and no corrective-session backreference, because CFR cannot count a change that shipped no failure. A code or schema reversion is never a process-discipline lapse and books through CFR as before.
+
 ### 2026-05-06 — Silently-deferred package drift uncaught from S4 forward
 
 *What drifted.* D3 (Phase 1 strategic decisions, `charter/decisions.md`) committed identity-as-Keycloak-in-V1-Docker-Compose with OIDC + SAML + SCIM. P2 was named "Identity foundation" in `charter/packages.md` and the `charter/roadmap.md` RICE table. What actually shipped under P2 across S4–S8 was "First LLM call" (Langfuse 3 in Compose, the security baseline, Ollama and LiteLLM, the FastAPI skeleton, the S8 platform rebrand). No Keycloak service in the Compose stack at P2 close; no SAML SP, no SCIM endpoint built. Auth middleware shipped at S7 per D23 with a dev signed-token backend and a Keycloak-shaped production backend stubbed — sufficient evidence the architecture is identity-ready, not the identity foundation D3 committed. The mismatch carried forward through P3 close, the P3→P4 boundary strategic session, P4 open, P4 close, and the P4-post between-packages state. No D-entry, no roadmap version, no PRD edit named the deferral.
@@ -499,6 +501,18 @@ Per the change-failure-rate metric's v4 honesty fix, this section and that metri
 *How corrected.* USD-only is defensible scope for Phase 1 single-jurisdiction dev; the correction is making the scope explicit rather than refactoring now. A deferred-decisions entry committing the multi-currency evolution to Phase 2 lands alongside this entry, naming the activation condition and the evolution shape (amount-plus-currency at every cost-bearing surface). Phase 2 migration cost is small per D49's analogous OTel-namespace-drift migration argument.
 
 *Discipline addition.* At framing, currency-bearing fields (and other implicit-default fields generally) get reviewed against D12's by-construction posture before they land. The check: any field whose default is a single-jurisdiction or single-locale value should have an explicit D-entry making the scope choice deliberate, or a deferred-decisions entry committing the evolution shape. Mechanical-enforcement upgrade candidate: an AST test that flags currency-name-suffixed fields (`*_usd`, `*_eur`, etc.) without an associated D-entry or deferred-decisions entry referencing them. Tracked alongside the existing methodology mechanical-enforcement upgrades section in `charter/deferred-decisions.md`.
+
+### 2026-06-15 — Brief-preservation discipline lapsed across S96–S98
+
+*What drifted.* The brief-preservation discipline (D43-precedented; the "Session brief preservation" sub-section, "from S17b forward") lapsed across S96, S97a, and S98 — three Phase 2-B build sessions produced build work with no brief preserved to `briefs/`. The last preserved brief before the lapse was `p16/s60c`; no `p2b/` folder existed.
+
+*When caught.* 2026-06-15, during the S97b strategic framing session. Preserving the S97b brief surfaced that `briefs/` had no entries for the three preceding Phase 2-B sessions.
+
+*How corrected.* Preservation resumed at `briefs/p2b/s97b.md` (`docs(p2b/s97b): preserve build-session brief`). The three lapsed briefs were deliberately **not** reconstructed: a brief written from the current-package entry and session log is sourced *from* the as-built record, so it carries zero delta by construction and would fabricate "brief and build agreed perfectly" for three sessions where no brief existed — a reverse feature for the audit record, falsifying the pre-build state against the append-only and originals-never-erased disciplines. The honest make-whole is this entry: the record shows the discipline slipped and recovered.
+
+*Discipline addition.* Two. First, brief preservation needs a check at build-session close, not only the operator's framing habit — a promotion candidate for the mechanical-enforcement upgrades section in `charter/deferred-decisions.md` (compare each closed build session against a preserved `briefs/<package>/<session>.md`, flag the gap). Second, the do-not-reconstruct rule: a lapsed audit artefact is recorded as a lapse, never backfilled from the record it was meant to check, because a zero-delta backfill carries the discipline's appearance without its substance.
+
+**CFR booking.** None. This is a process-discipline lapse, not a code- or schema-output failure; it is recorded narratively per the line-471 scope note added in this commit. No corrective session is booked, because no change shipped a failure for CFR to count and the lapse is, by the do-not-reconstruct decision, uncorrected rather than remediated.
 
 ## What Padhanam does not do
 
