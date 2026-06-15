@@ -4372,3 +4372,36 @@ metrics:
   corrects: D187 (its progressive rule — too coarse, refined by D188's asleep state; logged as a live-read refinement, D187 not rewritten)
   corrected_by:
 ```
+
+## S93 — the verdict line, one line per goal (D189) (build mode)
+roles: analyst (the Step-0 confirming S92's goal_status as the single verdict source), architect (the folded-verdict surface shape; the evidence-drawn why; reuse of the D181 collapse component), engineer (compute_goal_verdict + status_why, the verdict-line + orphan-fold render, the goal-status-report why), technical writer (D189, this entry)
+mode: build session — the **render**: the "How am I doing" goal section folded to one verdict line per goal. Charter-first (D189 + S93 marker). **No content — goal names are the operator's own labels; counts only; the surface shows verdicts, the evidence on tap.**
+
+S93 makes the operator read the S92 status: the surface's job is to be read in five seconds, not a wall of weak links.
+
+- **Commit 1 + 2 — the folded verdict surface.** The goal section renders one folded line per goal: a status pill (the S92/D188 verdict), the goal name, and a one-phrase evidence-drawn why; **collapsed by default**, tap reveals the work behind it (the unit rows + email activity) **read-only**, reusing the D181 collapse component. The unlinked units fold to a single "N items not yet linked" summary line. The verdict reads from S92's `goal_status` — **one source**: `goal_status` gained `compute_goal_verdict` (status + a why: "on rhythm", "2d overdue", "quiet 20d", "practice paused", "3d ago", "reached"); `compute_goal_status` delegates to it (S92 tests unchanged); `GoalGroup` + the DTO carry `status_why`. Status pill colours reuse the design-language vocabulary (on-track green / behind amber / stalled red / done grey / active teal / asleep dormant-blue); no new visual system.
+- **Browser-verified — and the verification drove the next two sessions.** Deployed; the live API serves status + status_why; the 8 verdict lines render (Voice on-track·on rhythm, Health behind·1d overdue, German asleep·practice paused, Strength/Stretch/Litany stalled·3d overdue, Brighton/Get-a-job active·today). The operator, reading it live, confirmed the fold works **and** caught two refinements — the expanded evidence mixed summaries and single items with no rule, and suggestions sat in a global list at the bottom (→ **S94**); and the orphan pile, even folded to a line, is a coverage concern that doesn't belong on the daily goal-health surface (→ **S95**).
+- Reflection — **does it read in seconds now (browser-confirmed)?** Yes — eight goals, eight verdicts, the evidence one tap away; the thing the surface failed at when the operator called it a dump. The live read is what surfaced the residual clutter (the expand's internal rule, the global suggestions, the orphan placement), which is exactly the legibility block's remaining work.
+- Reflection — **is one phrase enough to trust the verdict without expanding? (the substantive paragraph).** Mostly, with one tell the next session inherits: an aggregate verdict's one phrase can hide the shape underneath. "Health regimen behind · 1d overdue" is one of four levers lagging while three are done today — the phrase is true but flattens a four-part habit to its worst part; to trust it without expanding you sometimes want "3 of 4 on track, 1 lagging." Where one phrase flattens a multi-part goal is where the expanded-evidence design has to carry the shape — which is precisely S94's distinct-versus-repeated work on the expand.
+- **methodology:** the browser-verification discipline (the live-surface principle's first instance) did exactly its job — the surface shipped, the operator read it on real data, and the reading produced two concrete, well-scoped follow-on sessions (S94, S95) rather than a vague "it's better." Reading the real surface is generative, not just confirmatory.
+- Carry-forward: **S94** (the distinct-versus-repeated rule for the expand evidence + suggestions moved in-goal, display-only) and **S95** (the unlinked pile to its own coverage view, off the daily surface) — both the operator's live-read findings. Correction actions stay S96; the suggestion gate and the adaptive loop stay later/post-week.
+- Close state: **the "How am I doing" surface reads as folded verdict lines — one goal, one verdict, one phrase, evidence on tap — replacing the cross-product dump.** Browser-verified on the real 8 goals; the verdict reads from S92's single source; the D181 collapse + the design-language status vocabulary reused, no new visual system. The live read scoped the block's next two sessions. Suite green, import-linter 47/0, no content committed.
+
+```
+metrics:
+  classification: build session (S93 — the verdict-line render; the legibility block's read surface; D189)
+  session_started: 2026-06-12
+  session_closed: 2026-06-12
+  d189: the How-am-I-doing goal section folds to one verdict line per goal (status pill + name + one-phrase why), collapsed by default, evidence read-only on tap; unlinked folded to one summary line; read shape only (correction actions + suggestion gate are separate)
+  one_source: the verdict reads from S92's goal_status — compute_goal_verdict (status + evidence-drawn why) added, compute_goal_status delegates (S92 tests unchanged); GoalGroup + DTO carry status_why; render recomputes nothing
+  design_language: reuses the D181 collapse component + the status pill vocabulary (on-track green / behind amber / stalled red / done grey / active teal / asleep dormant-blue); no new visual system
+  browser_verified: deployed; live API serves status + status_why; 8 verdict lines render (Voice on-track, Health behind, German asleep, Strength/Stretch/Litany stalled, Brighton/Get-a-job active); operator confirmed it reads in seconds
+  live_read_scoped_next: the operator's live read caught the expand's mixed-evidence rule + global suggestions (-> S94) and the orphan-pile placement (-> S95)
+  one_phrase_tell: an aggregate verdict's one phrase can flatten a multi-part goal (Health behind·1d overdue hides 3-of-4-levers-done) — the expanded evidence carries the shape (S94)
+  pii: none committed (goal names are the operator's labels; counts only; the 8 verdicts shown are status words)
+  tests_passing: daily_driver suite green incl. compute_goal_verdict why phrases; S92 status cases unchanged via delegation; import-linter 47/0
+  commits: e508c68 (charter D189 + marker), f56bb43 (the folded verdict surface + status_why backend), fa0b1b2 (deploy pin + report why); + this log
+  charter_touchpoints: charter/decisions.md (D189 + ToC); charter/current-package.md (S93 marker); log/sessions.md (this entry); contexts/daily_driver/domain/{goal_status.py (compute_goal_verdict + why),goal_assessment.py (GoalGroup.status_why)}; apps/api/routers/_daily_driver_dto.py (status_why); apps/api/static/daily_driver.html (the verdict-line render + status pill CSS + orphan fold); ops/goal_status_report.py (why in the report); tests/unit/contexts/daily_driver/test_goal_status.py
+  corrects: D189's own surface placement of the orphan pile (caught live -> S95) and the expand's evidence shape (-> S94) — live-read refinements, logged
+  corrected_by:
+```
