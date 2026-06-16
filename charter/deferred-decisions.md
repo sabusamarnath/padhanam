@@ -92,6 +92,10 @@ Activates when public Padhanam needs scheduled agent execution (potentially P11 
 
 **The specific D-entry lands when implementation begins**, capturing the choice with reasoning about operator-deployment ergonomics, multi-tenant fairness under shared scheduling load, and the failure-mode boundary (a scheduled run that fails: who notices, who retries, where the audit lands). Premature commitment ahead of a real consumer is paper architecture.
 
+### Configurable per-surface daily schedule (heartbeat plus config model)
+
+Daily-surface fire times currently live in an external scheduler hitting the trigger endpoint, outside the committed repo. Direction: demote the external scheduler to a frequent heartbeat and move timing into in-app per-surface schedule configuration, one entry per daily surface (briefing, check-in, future surfaces) carrying time, timezone, and enabled, with a dispatcher firing due surfaces on each tick. Surfaces stay peers in a shared daily-surface settings layer, never nested, since nesting re-welds what the (c) trigger-per-surface split decoupled. Closes the dogfood-state-outside-repo audit flag (b067eee) by making fire times reconstructable in-app config rather than external cron. Forward-compatible with S97b's (c) / D195: the `CHECKIN_SCHEDULED` trigger is fired by an external entry now and by the config-reading dispatcher later, unchanged. Framing-altitude direction only; the config schema, tick interval, and dispatcher shape are brief-altitude for the implementing session. Activation: a dedicated session once a second configurable surface makes the shared layer worth building, or pulled at the next phase audit alongside the dogfood-deployment-state consolidation.
+
 ### API mediation layer at the consumer boundary
 
 Activates at Phase 2 framing if any of the following surface: heterogeneous consumer surfaces (mobile alongside web alongside partner integrations), third-party API consumers, or scale where systematic demand-supply visibility across producers and consumers becomes operationally useful.
