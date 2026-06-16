@@ -4562,3 +4562,38 @@ metrics:
   corrected_by:
 ```
 
+
+## S99 — the suggestion gate: relevance-gate the homeostatic flood at the source (D196) (build mode)
+
+roles: analyst (the Step-0 that confirmed the engine predicate matches D170 and measured the live baseline exactly — 669 goal-serving = 500 homeostatic/496 Health + 169 non-homeostatic, 0 mixed-serve), architect (the gate-not-fold call settling D190's fork; the mode-keyed predicate; the all-homeostatic multi-serve rule; the D184 use-case-computes-context shape), engineer (the homeostatic_only gate param, the use-case mode-mapping via goal_graph, the router thread, the domain+route tests), PM (the credulity-discipline framing; the over-gating edge named-and-accepted), technical writer (D196, this entry)
+
+- Reflection — **the over-gating check (the recall edge D196 named).** The blanket homeostatic gate suppresses 500 homeostatic-served units' suggestions (496 of them Health doses). Did it suppress anything worth keeping? On this corpus, no: the other four homeostatic levers (Strength/Voice/Stretch/Litany, one unit each) are the same maintenance-rhythm shape as the doses — a planning nudge on them is exactly the redundant-with-the-check-in case D196 accepted, not a wanted suggestion. The gym-block edge D196 named did not appear (no gym-shaped block-able lever in the live homeostatic set). So the recall edge is theoretical-not-bitten this week; a real wanted-suggestion on a homeostatic lever would be the second-instance signal earning a finer block-able-vs-maintenance predicate (a future decision), recorded here not acted on. The 0-mixed-serve finding makes the gate clean: no unit serves both a homeostatic and a non-homeostatic outcome, so nothing non-homeostatic is collaterally suppressed (AC4 holds by construction, not just by measurement).
+
+- Reflection — **the credulity-discipline check.** With the gate live the suggestion surface drops from 669 goal-serving units to 169 non-homeostatic — a ~75% cut, almost all of it the single Health flood. That is D170's rare-and-right promise restored: the surface now fires on work being *planned* (progressive/sequence), not rhythms being *maintained*. Residual the gate doesn't reach: a sequence goal with many seriesless units could still over-suggest — but that is the deferred general source-fold's job, and D190's display-fold collapses any residual count meanwhile.
+
+- methodology: the Step-0 live read confirmed the prompt's ~669/~496 baseline **exactly** (not approximately) against the real corpus, and turned the prompt's accepted multi-serve edge case into a **proven non-case** (0 mixed-serve), so the all-homeostatic rule is correct-and-moot on this corpus — the live read promoting an accepted-edge to a proven-non-edge is the live-surface principle paying off at framing-altitude.
+
+- Carry-forward: the **matcher coverage loop** (next — the 208 unlinked rows, email-dominated); **correction actions** (after the loop); the **general source-fold** (on a non-homeostatic second flood); a **finer block-able-vs-maintenance predicate** (a future decision, on a real over-gating second instance); **S97b's live round-trip** (the Twilio sandbox pass). Note the next free decision slot (D197) is now contended by both the over-gating finer predicate and the S97b round-trip surprise — sequential, whichever surfaces first takes D197, the other D198.
+
+- Close state: **the homeostatic flood is gated at the source — Health's 496 per-dose suggestions read zero, the suggestion surface drops 669→169 non-homeostatic, no non-homeostatic suggestion lost (0-mixed-serve proves it by construction).** Read-time engine change, no migration, no persistence. Suite green (2604 unit+contract), import-linter 48/0, no content committed. The exact engine suggestion-count via the `/suggestions` endpoint lands at the next image re-pin (read-time change, baked image); the unit-eligibility re-measure — the level the gate operates on — is confirmed live now.
+
+```
+metrics:
+  classification: build session (S99 — the suggestion gate: relevance-gate the homeostatic flood at the source; D196; settles D190's fold-vs-gate fork; the legibility block's last suggestion touch)
+  session_started: 2026-06-16
+  session_closed: 2026-06-16
+  step0: no conflict — D195 highest -> D196/S99; suggest_missing_facets predicate matches D170; served-outcome mode reachable via goal_graph.list_goals (outcome_id->Goal.mode) at suggestion time; router already wires goal_graph
+  live_baseline: 669 goal-serving units = 500 homeostatic (Health regimen 496 + Strength/Voice/Stretch/Litany 1 each) + 2 progressive + 167 sequence; 0 mixed-mode multi-serve units
+  d196: the recommendation engine gates on relevance not volume — no facet suggestion for a unit whose served outcomes are all homeostatic; gate-not-fold (zero is right for a maintained rhythm, not one); corrects D170's predicate to its own credulity intent; S97b check-in makes the nudge redundant; over-gating edge named+accepted (two-threshold rule); general source-fold deferred
+  gate: domain suggest_missing_facets gains homeostatic_only_unit_ids (skip); use-case list_facet_suggestions computes the set from goal_graph modes + SERVES edges (all-homeostatic only); router threads goal_graph (degrades to [] unwired); D184 use-case-sees-context shape
+  re_measure: live unit-eligibility — gated (homeostatic-only) 500 / preserved (serves non-homeostatic) 169; Health 496 -> 0 by construction; AC4 (no non-homeostatic lost) provable: 0-mixed + all-homeostatic predicate -> no non-homeostatic unit touched; exact /suggestions count lands at next image re-pin (read-time change, baked image)
+  over_gating_recall_edge: theoretical-not-bitten (no gym-shaped block-able homeostatic lever live; the 4 non-Health homeostatic levers are the same maintenance shape as the doses); a real wanted-suggestion on a homeostatic lever is the second-instance signal earning a finer predicate (future decision; next slot contended with the S97b round-trip surprise, sequential first-come)
+  verification: domain tests (homeostatic-only -> zero; progressive/sequence -> block kept); route tests (homeostatic served -> []; progressive served -> block kept); D190 display-fold tests unchanged+green; live graph re-measure (500 gated / 169 preserved, 0 mixed)
+  pii: none committed (unit titles are the operator's own; counts only)
+  tests_passing: 2604 unit+contract passed (2 domain + 1 route gate tests added); import-linter 48/0
+  commits: 44e5a3b (charter D196 + S99 marker), f881190 (the relevance gate + tests)
+  charter_touchpoints: charter/decisions.md (D196 + ToC); charter/current-package.md (S99 entry); contexts/daily_driver/domain/facet_suggestion.py; contexts/daily_driver/application/list_facet_suggestions.py; apps/api/routers/daily_driver.py; tests (domain + router); log/sessions.md (this entry)
+  numbering: D196, S99; D196 takes the slot D195 reserved for the S97b round-trip, which now lands at D197 (sequential reshuffle, the prompt's own posture)
+  corrects:
+  corrected_by:
+```
