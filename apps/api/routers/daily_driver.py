@@ -448,17 +448,22 @@ async def get_suggestions(
     actor: Annotated[ActorContext, Depends(get_actor_context)],
     unit_graph: Annotated[object | None, Depends(get_unit_graph)],
     facet_source: Annotated[object | None, Depends(get_facet_source)],
+    goal_graph: Annotated[object | None, Depends(get_goal_graph_optional)],
 ) -> list[FacetSuggestionDTO]:
-    """Return the missing-facet suggestions (D170, D166).
+    """Return the missing-facet suggestions (D170, D166, D196).
 
     Selective and confident or silent — credulity-gated on goal-serving units,
-    never auto-applied, never written back. Degrades to an empty list when the
-    correlation seams are unconfigured.
+    relevance-gated so a homeostatic maintenance rhythm gets no planning nudge
+    (D196), never auto-applied, never written back. Degrades to an empty list
+    when the correlation seams are unconfigured.
     """
-    if unit_graph is None or facet_source is None:
+    if unit_graph is None or facet_source is None or goal_graph is None:
         return []
     suggestions = await list_facet_suggestions(
-        unit_graph=unit_graph, facet_source=facet_source, actor=actor
+        unit_graph=unit_graph,
+        facet_source=facet_source,
+        goal_graph=goal_graph,
+        actor=actor,
     )
     return [facet_suggestion_to_dto(s) for s in suggestions]
 

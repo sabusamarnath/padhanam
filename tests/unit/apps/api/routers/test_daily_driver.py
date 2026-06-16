@@ -682,16 +682,71 @@ def test_suggestions_route_returns_goal_served_missing_facet_suggestions() -> No
     # Only the served unit has a SERVES edge → only it can be suggested.
     edges = [GoalEdge(served_unit, goal_id, 0.9, LinkStatus.CONFIRMED, "commitment")]
 
+    # The served goal is PROGRESSIVE (non-homeostatic), so the D196 relevance
+    # gate does not fire — the served unit keeps its block suggestion.
+    from contexts.daily_driver.domain.goal import (
+        ControlAxis, Goal, GoalMode, LevelLadder, Subject,
+    )
+
+    progressive_goal = Goal(
+        id=goal_id, tenant_id=UUID(_TENANT), jurisdiction="eu-west",
+        name="Learn German", mode=GoalMode.PROGRESSIVE,
+        control=ControlAxis.SELF, subject=Subject.SELF,
+        lever_commitment_id=uuid4(),
+        ladder=LevelLadder(levels=("A1", "A2"), current_target_level="A2"),
+    )
+
     client = _client(
         _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
         unit_graph=_FakeUnitGraph(records, goal_edges=edges),
         facet_source=_FakeFacetSource(facets),
+        goal_graph=_FakeGoalGraph(progressive_goal),
     )
     res = client.get("/api/v1/daily-driver/suggestions")
     assert res.status_code == 200, res.text
     body = res.json()
     assert [s["unit_id"] for s in body] == [str(served_unit)]
     assert body[0]["kind"] == "block"
+
+
+def test_suggestions_route_gates_a_homeostatic_served_unit_D196() -> None:
+    """D196 at the route: a unit whose served outcome is homeostatic (a
+    maintenance rhythm, e.g. a medication dose) produces no suggestion — the
+    live Health-regimen flood reads zero."""
+    from contexts.daily_driver.domain.goal import (
+        ControlAxis, Goal, GoalMode, Subject,
+    )
+    from contexts.daily_driver.domain.goal_assessment import GoalEdge
+    from contexts.daily_driver.domain.work_unit import (
+        FacetType, LinkStatus, WorkFacet,
+    )
+    from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
+
+    served_unit, served_task, goal_id = uuid4(), uuid4(), uuid4()
+    records = [
+        UnitRecord(served_unit, (UnitFacetRef(
+            FacetType.TASK, served_task, 1.0, LinkStatus.CONFIRMED, "anchor"),)),
+    ]
+    due = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    facets = [WorkFacet(FacetType.TASK, served_task, "Lansoprazole", due)]
+    edges = [GoalEdge(served_unit, goal_id, 0.9, LinkStatus.CONFIRMED, "commitment")]
+
+    homeostatic_goal = Goal(
+        id=goal_id, tenant_id=UUID(_TENANT), jurisdiction="eu-west",
+        name="Health regimen", mode=GoalMode.HOMEOSTATIC,
+        control=ControlAxis.SELF, subject=Subject.SELF,
+        lever_commitment_id=uuid4(),
+    )
+
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        unit_graph=_FakeUnitGraph(records, goal_edges=edges),
+        facet_source=_FakeFacetSource(facets),
+        goal_graph=_FakeGoalGraph(homeostatic_goal),
+    )
+    res = client.get("/api/v1/daily-driver/suggestions")
+    assert res.status_code == 200, res.text
+    assert res.json() == []
 
 
 def test_suggestions_route_empty_when_seams_unwired() -> None:

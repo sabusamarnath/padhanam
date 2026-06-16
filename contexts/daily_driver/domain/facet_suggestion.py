@@ -111,6 +111,7 @@ def _suggest_for_unit(unit: UnitView) -> FacetSuggestion | None:
 def suggest_missing_facets(
     units: tuple[UnitView, ...],
     goal_served_unit_ids: frozenset[UUID],
+    homeostatic_only_unit_ids: frozenset[UUID] = frozenset(),
 ) -> tuple[FacetSuggestion, ...]:
     """Compute the missing-facet suggestions (D170), credulity-gated.
 
@@ -118,11 +119,23 @@ def suggest_missing_facets(
     facet) are considered, so the surface stays quiet on orphan work. Each
     qualifying unit yields at most one suggestion. Ordered by unit id for a
     deterministic result.
+
+    **The relevance gate (D196).** A unit in ``homeostatic_only_unit_ids`` — one
+    whose served outcomes are *all* homeostatic — gets no suggestion: a
+    maintenance rhythm gets no planning nudge (the block remedy was built for
+    work being *planned*, not rhythms being *maintained*, and the S97b check-in
+    already tracks those rhythms). The use case supplies this set (it reads the
+    served-outcome modes the pure function is kept blind to, the D184 shape); a
+    unit also serving a progressive or sequence outcome is *not* in the set and
+    keeps its suggestion. Empty by default — older callers gate on goal-serving
+    alone.
     """
     suggestions: list[FacetSuggestion] = []
     for unit in units:
         if unit.unit_id not in goal_served_unit_ids:
             continue
+        if unit.unit_id in homeostatic_only_unit_ids:
+            continue  # D196 — a maintenance rhythm gets no planning nudge
         suggestion = _suggest_for_unit(unit)
         if suggestion is not None:
             suggestions.append(suggestion)

@@ -101,3 +101,36 @@ def test_removed_facet_does_not_count_as_present():
     )
     out = suggest_missing_facets((u,), frozenset({u.unit_id}))
     assert out == ()
+
+
+# --------------------------------------------------------------------------
+# D196 (S99) — the relevance gate: a maintenance rhythm gets no planning nudge.
+# A unit whose served outcomes are all homeostatic is gated at the source; a
+# unit serving any progressive/sequence outcome is untouched (precision guard).
+# --------------------------------------------------------------------------
+
+
+def test_homeostatic_served_unit_gets_no_suggestion_the_relevance_gate():
+    # A substantial task that would otherwise earn a BLOCK — but its served
+    # outcome is homeostatic (a medication dose), so D196 gates it to zero.
+    u = _unit("Lansoprazole", (_fv(FacetType.TASK, occurred_at=_NOW),))
+    out = suggest_missing_facets(
+        (u,),
+        frozenset({u.unit_id}),
+        frozenset({u.unit_id}),  # homeostatic-only
+    )
+    assert out == ()
+
+
+def test_non_homeostatic_served_unit_keeps_its_suggestion():
+    # Same substantial task, but serving a progressive/sequence outcome (absent
+    # from the homeostatic-only set) — the nudge is untouched. The precision
+    # guard against over-gating beyond homeostatic.
+    u = _unit("Ship Q3 report", (_fv(FacetType.TASK, occurred_at=_NOW),))
+    out = suggest_missing_facets(
+        (u,),
+        frozenset({u.unit_id}),
+        frozenset(),  # not homeostatic-only
+    )
+    assert len(out) == 1
+    assert out[0].kind is SuggestionKind.BLOCK
