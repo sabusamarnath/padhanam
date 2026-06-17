@@ -1381,3 +1381,13 @@ Source: S97b Step-0 + the trigger-fork investigation. Two pieces of the personal
 
   - triaged: defer → next phase audit (consolidate the dogfood-deployment-state doc there)
   - resolution: queued; flagged by the operator at S97b as "for the next audit, not for now."
+
+## 2026-06-17 — [S100] Third dogfood-state-outside-repo instance: email embeddings never generated
+
+Source: S100 Step-0 live read. `email_chunks` is empty (0 rows) for the personal tenant — the 335 emails arrived via the scoped `sync_email_jobsearch` path (D183/S89), which persists `emails` for classification but never calls `index_email` (D151). `index_email` IS wired (`sync_email.py` → `index_email`, mirroring `sync_calendar` → `index_meeting`, which populated 1013 meeting vectors), so this is a **miss** (wired-but-untriggered), not a deliberate deferral — the genuine **third instance** of dogfood-state not reconstructable from committed files, alongside the Health inline seed and the external schedule.
+
+- **Categorisation:** miss → belongs in the dogfood-deployment-state audit consolidation (the same doc the first two instances queue). Not a multi-tenant product gap.
+- **Do not fix now:** the S100 email ground-truth sample does not need embeddings; `index_email` finds its natural trigger when tier three or an email-signal layer becomes a real consumer (the two-threshold rule), not as a mid-decision patch.
+
+  - triaged: defer → next phase audit (fold into the dogfood-deployment-state doc with instances #1/#2)
+  - resolution: queued; confirmed a miss (not a deferral) by the S100 wiring read at the operator's request.
