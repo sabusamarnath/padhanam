@@ -49,7 +49,7 @@ log = logging.getLogger("ops.s100_sample_email_residual")
 
 
 async def _sample() -> None:
-    from apps.api._daily_driver_wiring import UnitGraphAdapter
+    from apps.api._daily_driver_wiring import GoalGraphAdapter, UnitGraphAdapter
     from apps.cli._runtime import build_tenant_wiring
     from contexts.daily_driver.domain.work_unit import FacetType
     from contexts.email.adapters.outbound.postgres.email_store import (
@@ -70,6 +70,16 @@ async def _sample() -> None:
 
     graph = Neo4jGraphRepository.from_settings(Neo4jSettings())
     unit_graph = UnitGraphAdapter(unit_graph=graph)
+    goal_graph = GoalGraphAdapter(outcome_graph=graph)
+
+    # The seeded goal set — the reference each email is judged against.
+    goals = await goal_graph.list_goals(tenant_context=tenant_context)
+    goal_lines = [
+        "#   - {name} ({aliases})".format(
+            name=g.name, aliases=", ".join(g.aliases) if g.aliases else "—"
+        )
+        for g in sorted(goals, key=lambda g: g.name)
+    ]
 
     # Unlinked units = units with no goal (SERVES) edge; keep their email facets.
     records = await unit_graph.list_units(tenant_context=tenant_context)
@@ -104,9 +114,14 @@ async def _sample() -> None:
     matched = sum(1 for eid in sampled if eid in subject_by_id)
     with open(_OUT_PATH, "w", encoding="utf-8") as fh:
         fh.write(
-            "# S100 email-residual ground-truth sample. Tag each row in the TAG "
-            "column with ONE of:\n"
-            "#   G  = genuine-orphan (serves none of the 8 seeded goals)\n"
+            "# S100 email-residual ground-truth sample.\n"
+            "#\n"
+            "# Judge each email against THESE seeded goals (name + aliases):\n"
+            + "\n".join(goal_lines)
+            + "\n#\n"
+            "# Fill TWO columns per row:\n"
+            "#  TAG (one of):\n"
+            "#   G  = genuine-orphan (serves none of the seeded goals)\n"
             "#   Md = missed-link, DIRECT (the email is about the goal itself; a "
             "semantic/embedding tier would likely catch it)\n"
             "#   Mi = missed-link, INTERMEDIATED (serves the goal through an "
@@ -115,6 +130,10 @@ async def _sample() -> None:
             "#   Mu = missed-link, UNSURE (can't tell direct from intermediated "
             "— leave it to the embedding check to bucket)\n"
             "#   L  = latent-goal (coherent work serving an UNseeded goal)\n"
+            "#  GOAL (which goal it relates to):\n"
+            "#   for Md/Mi/Mu — the seeded goal name from the list above\n"
+            "#   for L        — a short name for the UNseeded goal you infer\n"
+            "#   for G        — leave blank\n"
             "#\n"
             "# NB: Md/Mi is your STRUCTURAL HYPOTHESIS. A later sample-embedding "
             "pass is the empirical TEST of which M's embeddings actually recover;\n"
@@ -124,12 +143,12 @@ async def _sample() -> None:
             "Md=tier-three (flat reach), Mi=causal depth, L=goal discovery.\n"
             "# Then save. This file is local-only; nothing here enters the repo "
             "or log.\n"
-            "# idx\tTAG\temail_id\tsubject\n"
+            "# idx\tTAG\tGOAL\temail_id\tsubject\n"
         )
         for i, eid in enumerate(sampled, start=1):
             subject = subject_by_id.get(eid, "(subject not found)")
             subject = " ".join(str(subject).split())  # single line
-            fh.write(f"{i}\t?\t{eid}\t{subject}\n")
+            fh.write(f"{i}\t?\t-\t{eid}\t{subject}\n")
 
     # Counts only to stdout — no content.
     print(
