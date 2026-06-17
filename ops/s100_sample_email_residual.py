@@ -9,7 +9,13 @@ validate itself (the S91 operator-as-oracle pattern).
 
 This script draws a representative sample of the unlinked-email residual and
 writes the subjects to a **local, uncommitted** file for the operator to tag
-into genuine-orphan / missed-link / latent-goal. The script carries no content
+across the three orthogonal axes the residual actually spans: genuine-orphan
+(G), missed-link split into direct (Md, flat semantic reach / tier-three D174)
+vs intermediated (Mi, causal depth D156/D162) vs unsure (Mu), and latent-goal
+(L, goal discovery). The Md/Mi tag is the operator's structural hypothesis; a
+later sample-embedding pass is the empirical test of which M's embeddings
+recover (D174 rests on that rate, depth's nomination on the M's it misses). The
+script carries no content
 (D21); the output file holds the operator's own email subjects and is written
 **outside the repo** (``/tmp``) — never committed, never logged. Stdout is
 counts and the file path only.
@@ -99,11 +105,23 @@ async def _sample() -> None:
     with open(_OUT_PATH, "w", encoding="utf-8") as fh:
         fh.write(
             "# S100 email-residual ground-truth sample. Tag each row in the TAG "
-            "column:\n"
-            "#   G = genuine-orphan (serves none of the 8 seeded goals)\n"
-            "#   M = missed-link (relates to a seeded goal; the matcher missed "
-            "it)\n"
-            "#   L = latent-goal (coherent work serving an UNseeded goal)\n"
+            "column with ONE of:\n"
+            "#   G  = genuine-orphan (serves none of the 8 seeded goals)\n"
+            "#   Md = missed-link, DIRECT (the email is about the goal itself; a "
+            "semantic/embedding tier would likely catch it)\n"
+            "#   Mi = missed-link, INTERMEDIATED (serves the goal through an "
+            "activity that doesn't name it — e.g. 'buy flashcards' → German; "
+            "only causal depth catches it)\n"
+            "#   Mu = missed-link, UNSURE (can't tell direct from intermediated "
+            "— leave it to the embedding check to bucket)\n"
+            "#   L  = latent-goal (coherent work serving an UNseeded goal)\n"
+            "#\n"
+            "# NB: Md/Mi is your STRUCTURAL HYPOTHESIS. A later sample-embedding "
+            "pass is the empirical TEST of which M's embeddings actually recover;\n"
+            "# D174 rests on that recovery rate, depth's nomination on the M's "
+            "embeddings MISS, and the tag-vs-recovery disagreement is the signal.\n"
+            "# The four tags map to the three orthogonal axes: G=orphan, "
+            "Md=tier-three (flat reach), Mi=causal depth, L=goal discovery.\n"
             "# Then save. This file is local-only; nothing here enters the repo "
             "or log.\n"
             "# idx\tTAG\temail_id\tsubject\n"
@@ -120,7 +138,7 @@ async def _sample() -> None:
         f"  sampled (even stride, step={step}): {len(sampled)}\n"
         f"  subjects resolved for sample: {matched}/{len(sampled)}\n"
         f"  tagging file written: {_OUT_PATH}\n"
-        "  (local-only; tag the TAG column G/M/L and hand back the counts)"
+        "  (local-only; tag the TAG column G/Md/Mi/Mu/L and hand back the counts)"
     )
 
 
