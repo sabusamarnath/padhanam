@@ -1002,6 +1002,20 @@ deferred edges/traversal + the two conditions), D163 (the `control` flag the ext
 extension supersedes), D174 (the flat-reach axis), D137 (the eval substrate gating depth), S100 (the
 diagnostic feeding the split), the two-threshold rule.
 
+**Depth nomination is mode-level, not single-goal (S100, second-instance).** S100's email ground
+truth nominates depth for a *mode*, not a goal: a live **sequence-mode** goal generates
+pipeline-intermediated work — the apply / interview / offer-style steps that serve the goal without
+naming it — that flat matching misses. The second instance is already in hand: Get-a-job, plus the
+latent "House purchase" (mortgage / survey / solicitor / offer is the same intermediated shape once it
+goes live), so by the build-at-second-instance rule this stands as a claim about
+**sequence-mode-while-active**, stronger than a single-goal observation. Whether depth lands
+intermediate nodes on *every* sequence goal or only on the *divergent pipeline steps* within them is a
+predicate the phase-boundary refines at build — not part of the nomination, which only points depth at
+sequence-mode-while-active as where it pays off. The supporting *rates* (missed-link share, latent
+share, the Mi-dominance) are time-varying snapshot reads held in the S100 checkpoint, deliberately not
+recorded here: structure to the charter, rates to the checkpoint, so the phase-boundary never inherits
+a stale number as a finding.
+
 ### Task-tool ingestion (multi-adapter, bring-your-own)
 
 Users arrive with heterogeneous task tools, so Padhanam ingests from many, as it does message channels, behind the existing intake-source and Nango seam, the same pattern as CALENDAR_READ and EMAIL_READ. Each task tool is a new adapter behind a seam that already exists, read-only, per the D148 and D155 external-cache model.
