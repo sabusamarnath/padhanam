@@ -1016,6 +1016,21 @@ share, the Mi-dominance) are time-varying snapshot reads held in the S100 checkp
 recorded here: structure to the charter, rates to the checkpoint, so the phase-boundary never inherits
 a stale number as a finding.
 
+**OVERTURNED at S100 close (2026-06-17, D197) — kept as an append, not erased.** The clean instrument
+refuted this depth nomination. Re-running the recovery on the full subject+body chunk embeddings (after
+reindexing the emails through `index_email`) recovered the missed-link residual **32/32** — flat
+semantic matching closes it. The `Mi` signal was **subject-obscuring, not causal-depth**: the email
+body carries the goal's vocabulary; the terse subject simply did not surface it, and that is exactly
+what tier-three reads. Genuine depth-signature work (semantically distant from the goal even in full
+text) was **absent** from the residual, so S100 nominates **tier-three** (D197), not depth. The durable
+method lesson stands above the verdict: **apparent intermediation judged on subjects is not a depth
+signal — test it on full text before nominating depth.** The **depth axis itself remains a committed
+future possibility** (D156/D162) for the genuine-divergence case S100 did not find; only this S100
+*nomination* of it is withdrawn. The "House purchase" second-instance projection falls with it (it was
+the same email-shaped, subject-judged inference); if a future live sequence goal shows depth-signature
+work that survives a full-text recovery test, that earns the nomination then, on evidence. This is the
+deferral working as designed — a nomination corrected before it became a decision.
+
 ### Task-tool ingestion (multi-adapter, bring-your-own)
 
 Users arrive with heterogeneous task tools, so Padhanam ingests from many, as it does message channels, behind the existing intake-source and Nango seam, the same pattern as CALENDAR_READ and EMAIL_READ. Each task tool is a new adapter behind a seam that already exists, read-only, per the D148 and D155 external-cache model.
