@@ -961,6 +961,47 @@ propagation with magnitudes).
 **Activation trigger.** Dogfooding evidence that qualitative ripple narratives are insufficient to
 drive decisions, per the two-threshold rule. References D156, D9 (recommendation-shaped output).
 
+### Causal-model activation: three orthogonal axes, not one "do proper CDD"
+
+Surfaced at S100 by a CDD-flatness critique (the model isn't doing Decision-Intelligence-style
+lever→intermediary→outcome chaining). The critique is right about what is *built* but not about what
+is *decided*: D156 already commits the Causal Decision Diagram core (factor nodes typed lever /
+intermediate / outcome; directed causal edges), and D162 defers the edges + traversal on the
+two-threshold rule. The load-bearing clarification is that what looked like one "do proper CDD" move
+decomposes into **three orthogonal axes**, which the phase-boundary decision must keep separate or it
+will re-conflate them:
+
+- **Flat semantic reach** — tier-three embeddings (D174). Better matching on the *same* unit→outcome
+  edge: still two-layer, no intermediate nodes, just semantic instead of lexical. **S100-decidable
+  now** (a within-S100 D-entry).
+- **Causal depth** — intermediate factor nodes between lever and outcome (D156's committed typing,
+  D162's deferred edges/traversal), **plus externals as first-class nodes** (the genuine extension:
+  D163's `control` axis only carries external influence as a *flag on the outcome*, not as nodes
+  feeding the intermediaries). A **phase-boundary** decision, gated on **both** of D162's conditions:
+  flat-insufficient evidence *and* a gap-analysis evaluation substrate (D137).
+- **Goal discovery** — new *outcome* nodes for coherent unseeded work (the S100 latent-goal reframe).
+  Neither reach (not better matching to existing goals) nor depth (not intermediaries on existing
+  goals): surfacing goals the user has not set.
+
+**The mechanism that separates reach from depth** (why they are not one strain): a flat semantic
+matcher recovers a unit that resembles the *goal*, and misses **by construction** a unit that
+resembles an *intermediate activity the goal does not name* ("buy flashcards" → German via vocabulary
+practice). Only an intermediate node — a target semantically nearer the unit than the outcome is —
+recovers the latter. So tier-three and depth catch different residual, and a large missed-link count
+argues for one or the other only once the two are distinguished.
+
+**What defers.** The causal-depth axis (intermediate nodes + externals-as-nodes + traversal) and the
+goal-discovery axis. **Activation trigger.** The phase-boundary decision, owning the depth call.
+S100 *feeds* it — its G / Md / Mi / L tags map onto the four outcomes (G = orphan / no axis,
+Md = tier-three reach, Mi = causal depth, L = goal discovery), and the Mi-that-embeddings-miss mass
+plus the L mass are evidence for depth's and discovery's first activation condition respectively —
+but S100 **does not trigger** either: D162's second condition (the eval substrate) is unmet, and the
+Md/Mi tag is a structural hypothesis whose empirical test is the sample-embedding recovery pass (D174
+rests on the recovery rate, not the Md count). References D156 (the CDD core + node typing), D162 (the
+deferred edges/traversal + the two conditions), D163 (the `control` flag the externals-as-nodes
+extension supersedes), D174 (the flat-reach axis), D137 (the eval substrate gating depth), S100 (the
+diagnostic feeding the split), the two-threshold rule.
+
 ### Task-tool ingestion (multi-adapter, bring-your-own)
 
 Users arrive with heterogeneous task tools, so Padhanam ingests from many, as it does message channels, behind the existing intake-source and Nango seam, the same pattern as CALENDAR_READ and EMAIL_READ. Each task tool is a new adapter behind a seam that already exists, read-only, per the D148 and D155 external-cache model.
