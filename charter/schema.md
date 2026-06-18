@@ -862,7 +862,7 @@ becomes nullable**, and the authored properties are added:
 | `lever_id`          | `String`/absent | stable identity for an authored lever; absent on a legacy matcher lever        |
 | `commitment_id`     | `String`/absent | **now nullable** — the Postgres `commitments.id`; absent on an LLM-drafted lever with no commitment yet |
 | `outcome_id`        | `String`        | the goal whose CDD this authored lever belongs to (authored levers only)       |
-| `name`              | `String`/absent | the authored lever's label when it has no commitment yet; absent when commitment-backed |
+| `label`             | `String`/absent | the authored lever's display text; absent when commitment-backed (the matcher lever reads its name from the commitment) |
 | `provenance_origin` | `String`/absent | `llm_drafted` / `user_authored` / `system_suggested`; absent on a legacy lever |
 | `proof_state`       | `String`/absent | `pending` / `accepted`; absent on a legacy lever                               |
 

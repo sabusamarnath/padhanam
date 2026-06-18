@@ -25,7 +25,10 @@ from __future__ import annotations
 from typing import Sequence
 from uuid import UUID
 
-from contexts.ingestion.ports.outcome_graph_port import OutcomeGraphRecord
+from contexts.ingestion.ports.outcome_graph_port import (
+    AuthoredCddRecord,
+    OutcomeGraphRecord,
+)
 from contexts.ingestion.ports.unit_graph_port import (
     GoalEdgeRecord,
     GoalEdgeWrite,
@@ -251,6 +254,141 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.list_outcomes()
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    # --- Authored CDD layer (S102, D200) -----------------------------------
+
+    async def merge_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        element_kind: str,
+        element_id: UUID,
+        label: str,
+        provenance_origin: str,
+        proof_state: str,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_authored_element(
+                    outcome_id=outcome_id,
+                    element_kind=element_kind,
+                    element_id=element_id,
+                    label=label,
+                    provenance_origin=provenance_origin,
+                    proof_state=proof_state,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def merge_authored_edge(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_authored_edge(
+                    edge_type=edge_type,
+                    source_kind=source_kind,
+                    source_id=source_id,
+                    target_kind=target_kind,
+                    target_id=target_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def read_authored_cdd(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+    ) -> AuthoredCddRecord:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.read_authored_cdd(outcome_id=outcome_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_authored_proof_state(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        proof_state: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_authored_proof_state(
+                    element_kind=element_kind,
+                    element_id=element_id,
+                    proof_state=proof_state,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_authored_label(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        label: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_authored_label(
+                    element_kind=element_kind,
+                    element_id=element_id,
+                    label=label,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def delete_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.delete_authored_element(
+                    element_kind=element_kind, element_id=element_id
+                )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

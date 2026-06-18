@@ -82,6 +82,51 @@ class OutcomeGraphRecord:
     domain: str | None = None
 
 
+@dataclass(frozen=True)
+class AuthoredElementRecord:
+    """One authored CDD element as read from the graph (S102, D200).
+
+    ``element_kind`` is ``lever`` / ``intermediary`` / ``external`` (the node
+    label, lower-cased). ``element_id`` is the element's stable id (an authored
+    lever's ``lever_id``; an intermediary's / external's ``element_id``).
+    ``outcome_id`` is the goal whose CDD this element belongs to. ``label`` is
+    the human-readable text; ``provenance_origin`` and ``proof_state`` carry the
+    D200 authored signal.
+    """
+
+    element_kind: str
+    element_id: UUID
+    outcome_id: UUID
+    label: str
+    provenance_origin: str
+    proof_state: str
+
+
+@dataclass(frozen=True)
+class AuthoredEdgeRecord:
+    """One authored causal edge as read from the graph (S102, D200).
+
+    ``edge_type`` is ``FEEDS`` or ``INFLUENCES``; ``source_kind`` / ``target_kind``
+    are the endpoint labels lower-cased (``lever`` / ``intermediary`` /
+    ``external`` / ``outcome``); the ids are the endpoints' stable ids.
+    """
+
+    edge_type: str
+    source_kind: str
+    source_id: UUID
+    target_kind: str
+    target_id: UUID
+
+
+@dataclass(frozen=True)
+class AuthoredCddRecord:
+    """A goal's authored CDD as read from the graph (S102, D200)."""
+
+    outcome_id: UUID
+    elements: tuple[AuthoredElementRecord, ...]
+    edges: tuple[AuthoredEdgeRecord, ...]
+
+
 class OutcomeGraphPort(Protocol):
     """Typed goal-graph capability on the shared Neo4j instance (D163)."""
 
@@ -154,4 +199,101 @@ class OutcomeGraphPort(Protocol):
         ...
 
 
-__all__ = ["LeverEdgeRecord", "OutcomeGraphPort", "OutcomeGraphRecord"]
+    # --- Authored CDD layer (S102, D200) -----------------------------------
+
+    async def merge_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        element_kind: str,
+        element_id: UUID,
+        label: str,
+        provenance_origin: str,
+        proof_state: str,
+    ) -> None:
+        """Idempotently MERGE an authored CDD element (S102, D200).
+
+        ``element_kind`` is ``lever`` / ``intermediary`` / ``external`` — the
+        node label, drawn from a whitelist (Neo4j labels are not parameterisable,
+        so the wrapper composes the literal label from the whitelist, never from
+        free input). An authored lever identifies by ``lever_id`` and may have no
+        ``commitment_id`` yet; an intermediary/external identifies by
+        ``element_id``. ``provenance_origin`` and ``proof_state`` carry the D200
+        authored signal.
+        """
+        ...
+
+    async def merge_authored_edge(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        """Idempotently MERGE an authored causal edge (``FEEDS`` / ``INFLUENCES``,
+        S102, D200) between two authored elements (or to the ``:Outcome``). Kinds
+        and edge type are whitelisted; endpoints must already exist."""
+        ...
+
+    async def read_authored_cdd(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+    ) -> AuthoredCddRecord:
+        """Read a goal's authored CDD — its elements (with origin + proof state)
+        and authored edges — for proof review (S102, D200)."""
+        ...
+
+    async def set_authored_proof_state(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        proof_state: str,
+    ) -> bool:
+        """Set an authored element's ``proof_state`` (the accept path, S102).
+        Returns ``True`` when an element was updated, ``False`` when absent or
+        cross-tenant."""
+        ...
+
+    async def set_authored_label(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        label: str,
+    ) -> bool:
+        """Edit an authored element's ``label`` and flip its
+        ``provenance_origin`` to ``user_authored`` (the correct path, S102/D200).
+        Returns ``True`` when updated, ``False`` when absent or cross-tenant."""
+        ...
+
+    async def delete_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+    ) -> bool:
+        """Remove an authored element and its authored edges (the reject path,
+        S102) — a user-initiated delete (allowed; the no-auto-deletion invariant
+        forbids *auto* deletion, not user-asked removal). Returns ``True`` when an
+        element was removed."""
+        ...
+
+
+__all__ = [
+    "AuthoredCddRecord",
+    "AuthoredEdgeRecord",
+    "AuthoredElementRecord",
+    "LeverEdgeRecord",
+    "OutcomeGraphPort",
+    "OutcomeGraphRecord",
+]

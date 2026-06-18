@@ -39,6 +39,9 @@ from neo4j import AsyncDriver, AsyncSession
 from contexts.ingestion.domain.entity import Entity
 from contexts.ingestion.domain.relationship import EntityRef, Relationship
 from contexts.ingestion.ports.outcome_graph_port import (
+    AuthoredCddRecord,
+    AuthoredEdgeRecord,
+    AuthoredElementRecord,
     LeverEdgeRecord,
     OutcomeGraphRecord,
 )
@@ -211,6 +214,125 @@ RETURN o.outcome_id AS outcome_id,
        r.step_order AS step_order,
        r.step_state AS step_state
 ORDER BY o.name ASC, r.step_order ASC
+"""
+
+
+# --- Authored CDD templates (S102, D200) -----------------------------------
+# The authored layer: the LLM drafts each goal's levers, intermediaries,
+# externals, and authored causal edges, the user proofs. Distinct from the
+# matcher's derived SERVES/LEVER_FOR. Neo4j node labels and relationship types
+# are not parameterisable, so the wrapper composes the literal label/type from a
+# whitelist (kind -> (label, id_property)); the whitelist keeps it injection-safe
+# (the LEVER_FOR-literal precedent). An authored :Lever identifies by lever_id
+# (commitment_id stays the matcher lever's key); :Intermediary / :External
+# identify by element_id; the :Outcome (an edge endpoint only) by outcome_id.
+_AUTHORED_NODE = {
+    "lever": ("Lever", "lever_id"),
+    "intermediary": ("Intermediary", "element_id"),
+    "external": ("External", "element_id"),
+}
+# Edge endpoints additionally allow the outcome node as a target.
+_AUTHORED_ENDPOINT = {**_AUTHORED_NODE, "outcome": ("Outcome", "outcome_id")}
+_AUTHORED_EDGE_TYPES = frozenset({"FEEDS", "INFLUENCES"})
+
+
+def _authored_node(kind: str) -> tuple[str, str]:
+    try:
+        return _AUTHORED_NODE[kind]
+    except KeyError:
+        raise ValueError(f"unknown authored element kind: {kind!r}") from None
+
+
+def _authored_endpoint(kind: str) -> tuple[str, str]:
+    try:
+        return _AUTHORED_ENDPOINT[kind]
+    except KeyError:
+        raise ValueError(f"unknown authored endpoint kind: {kind!r}") from None
+
+
+def _merge_authored_element_cypher(label: str, id_prop: str) -> str:
+    return f"""
+MERGE (n:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+ON CREATE SET
+    n.jurisdiction = $jurisdiction,
+    n.created_at = $created_at
+SET
+    n.outcome_id = $outcome_id,
+    n.label = $label,
+    n.provenance_origin = $provenance_origin,
+    n.proof_state = $proof_state
+"""
+
+
+def _merge_authored_edge_cypher(
+    edge_type: str, slabel: str, sid: str, tlabel: str, tid: str
+) -> str:
+    return f"""
+MATCH (s:{slabel} {{tenant_id: $tenant_id, {sid}: $source_id}})
+MATCH (t:{tlabel} {{tenant_id: $tenant_id, {tid}: $target_id}})
+MERGE (s)-[r:{edge_type} {{tenant_id: $tenant_id}}]->(t)
+ON CREATE SET
+    r.jurisdiction = $jurisdiction,
+    r.created_at = $created_at
+"""
+
+
+def _set_authored_proof_state_cypher(label: str, id_prop: str) -> str:
+    return f"""
+MATCH (n:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+SET n.proof_state = $proof_state
+RETURN n.{id_prop} AS element_id
+"""
+
+
+def _set_authored_label_cypher(label: str, id_prop: str) -> str:
+    return f"""
+MATCH (n:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+SET n.label = $label,
+    n.provenance_origin = 'user_authored'
+RETURN n.{id_prop} AS element_id
+"""
+
+
+def _delete_authored_element_cypher(label: str, id_prop: str) -> str:
+    # Deletion is detected from the result summary's nodes_deleted counter, so
+    # no RETURN is needed (a no-match MATCH simply deletes nothing).
+    return f"""
+MATCH (n:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+DETACH DELETE n
+"""
+
+
+# Read a goal's authored elements (each kind keyed by its own id property) and
+# the authored causal edges within the goal's CDD. Every authored node carries
+# outcome_id = the goal, so the edge read scopes by either endpoint's outcome_id.
+_LIST_AUTHORED_LEVERS = """
+MATCH (n:Lever {tenant_id: $tenant_id, outcome_id: $outcome_id})
+WHERE n.lever_id IS NOT NULL
+RETURN n.lever_id AS element_id, n.label AS label,
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+ORDER BY n.label ASC
+"""
+_LIST_AUTHORED_INTERMEDIARIES = """
+MATCH (n:Intermediary {tenant_id: $tenant_id, outcome_id: $outcome_id})
+RETURN n.element_id AS element_id, n.label AS label,
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+ORDER BY n.label ASC
+"""
+_LIST_AUTHORED_EXTERNALS = """
+MATCH (n:External {tenant_id: $tenant_id, outcome_id: $outcome_id})
+RETURN n.element_id AS element_id, n.label AS label,
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+ORDER BY n.label ASC
+"""
+_LIST_AUTHORED_EDGES = """
+MATCH (s)-[r:FEEDS|INFLUENCES {tenant_id: $tenant_id}]->(t)
+WHERE s.outcome_id = $outcome_id OR t.outcome_id = $outcome_id
+RETURN type(r) AS edge_type,
+       labels(s)[0] AS source_kind,
+       coalesce(s.lever_id, s.element_id, s.outcome_id) AS source_id,
+       labels(t)[0] AS target_kind,
+       coalesce(t.lever_id, t.element_id, t.outcome_id) AS target_id
 """
 
 
@@ -673,6 +795,142 @@ class TenantScopedNeo4jSession:
                     existing, levers=existing.levers + (lever,)
                 )
         return [by_outcome[oid] for oid in order]
+
+    # --- Authored CDD layer (S102, D200) -----------------------------------
+
+    async def merge_authored_element(
+        self,
+        *,
+        outcome_id: UUID,
+        element_kind: str,
+        element_id: UUID,
+        label: str,
+        provenance_origin: str,
+        proof_state: str,
+    ) -> None:
+        """MERGE an authored CDD element node (S102, D200). The label is composed
+        from the whitelist (Neo4j labels are not parameterisable)."""
+        node_label, id_prop = _authored_node(element_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "outcome_id": str(outcome_id),
+            "element_id": str(element_id),
+            "label": label,
+            "provenance_origin": provenance_origin,
+            "proof_state": proof_state,
+            "created_at": _now_utc(),
+        }
+        await session.run(
+            _merge_authored_element_cypher(node_label, id_prop), params
+        )
+
+    async def merge_authored_edge(
+        self,
+        *,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        """MERGE an authored causal edge (FEEDS / INFLUENCES, S102, D200)."""
+        if edge_type not in _AUTHORED_EDGE_TYPES:
+            raise ValueError(f"unknown authored edge type: {edge_type!r}")
+        slabel, sid = _authored_endpoint(source_kind)
+        tlabel, tid = _authored_endpoint(target_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "source_id": str(source_id),
+            "target_id": str(target_id),
+            "created_at": _now_utc(),
+        }
+        await session.run(
+            _merge_authored_edge_cypher(edge_type, slabel, sid, tlabel, tid),
+            params,
+        )
+
+    async def read_authored_cdd(self, *, outcome_id: UUID) -> AuthoredCddRecord:
+        """Read a goal's authored elements + edges for proof review (S102)."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        elements: list[AuthoredElementRecord] = []
+        for kind, cypher in (
+            ("lever", _LIST_AUTHORED_LEVERS),
+            ("intermediary", _LIST_AUTHORED_INTERMEDIARIES),
+            ("external", _LIST_AUTHORED_EXTERNALS),
+        ):
+            result = await session.run(cypher, params)
+            for row in await result.data():
+                elements.append(
+                    AuthoredElementRecord(
+                        element_kind=kind,
+                        element_id=UUID(row["element_id"]),
+                        outcome_id=outcome_id,
+                        label=row["label"],
+                        provenance_origin=row["provenance_origin"],
+                        proof_state=row["proof_state"],
+                    )
+                )
+        edge_result = await session.run(_LIST_AUTHORED_EDGES, params)
+        edges = tuple(
+            AuthoredEdgeRecord(
+                edge_type=row["edge_type"],
+                source_kind=str(row["source_kind"]).lower(),
+                source_id=UUID(row["source_id"]),
+                target_kind=str(row["target_kind"]).lower(),
+                target_id=UUID(row["target_id"]),
+            )
+            for row in await edge_result.data()
+        )
+        return AuthoredCddRecord(
+            outcome_id=outcome_id, elements=tuple(elements), edges=edges
+        )
+
+    async def set_authored_proof_state(
+        self, *, element_kind: str, element_id: UUID, proof_state: str
+    ) -> bool:
+        node_label, id_prop = _authored_node(element_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "element_id": str(element_id),
+            "proof_state": proof_state,
+        }
+        result = await session.run(
+            _set_authored_proof_state_cypher(node_label, id_prop), params
+        )
+        return await result.single() is not None
+
+    async def set_authored_label(
+        self, *, element_kind: str, element_id: UUID, label: str
+    ) -> bool:
+        node_label, id_prop = _authored_node(element_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "element_id": str(element_id),
+            "label": label,
+        }
+        result = await session.run(
+            _set_authored_label_cypher(node_label, id_prop), params
+        )
+        return await result.single() is not None
+
+    async def delete_authored_element(
+        self, *, element_kind: str, element_id: UUID
+    ) -> bool:
+        node_label, id_prop = _authored_node(element_kind)
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "element_id": str(element_id)}
+        result = await session.run(
+            _delete_authored_element_cypher(node_label, id_prop), params
+        )
+        summary = await result.consume()
+        return summary.counters.nodes_deleted > 0
 
     async def replace_units(self, units: Sequence[UnitWrite]) -> None:
         """Replace the bound tenant's work-unit subgraph (D168, D166).
