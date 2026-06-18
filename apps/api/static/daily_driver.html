@@ -203,7 +203,9 @@
     .cdd-evidence { color: var(--teal); background: var(--surface-2); border: 1px solid var(--hairline); cursor: pointer; }
     /* D203/S103c: the bound-units expand with relink/unlink */
     .cdd-bindings { margin: 2px 0 8px 14px; border-left: 2px solid var(--hairline); padding-left: 10px; }
+    .cdd-triage { display: flex; align-items: center; gap: 12px; padding: 4px 0 6px; flex-wrap: wrap; }
     .cdd-binding { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+    .cdd-pick { flex-shrink: 0; }
     .cdd-binding-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
     .cdd-tier { color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--hairline); }
     .cdd-owned { color: var(--teal); border: 1px solid var(--teal); }
@@ -531,6 +533,7 @@
     // the unbound bucket, read-only.
     let cddEvidence = { counts: {}, bound_units: 0, unbound_units: 0, total_units: 0 };
     let cddBindings = [];  // D203/S103c: unit→element bindings for relink/unlink
+    let cddWeakOnly = false;  // S103c-fix: triage filter — weak matches only
     async function renderAssessCdd(box, g) {
       box.innerHTML = "";
       const cov = appendCoverageLine(box, g);
@@ -673,9 +676,16 @@
         try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
         await reload();
       };
+      // S103c-fix: a sub-local refresh re-renders the bound-units list in place,
+      // so an unlink/relink keeps the list expanded instead of collapsing it.
+      const subRefresh = async () => {
+        try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
+        try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+        renderBindings(sub, grp, el, cdd, subRefresh);
+      };
       if (ec) {
         row.querySelector(".cdd-evidence").onclick = () => {
-          if (sub.style.display === "none") { renderBindings(sub, grp, el, cdd, refresh); sub.style.display = "block"; }
+          if (sub.style.display === "none") { renderBindings(sub, grp, el, cdd, subRefresh); sub.style.display = "block"; }
           else sub.style.display = "none";
         };
       }
@@ -705,11 +715,36 @@
       wrap.appendChild(row); wrap.appendChild(sub);
       return wrap;
     }
+    // S103c-fix: triage — order weakest match first, optionally show only weak.
+    const _STRENGTH_RANK = { weak: 0, medium: 1, strong: 2 };
     // D203/S103c: the bound units under an element, each with relink + unlink.
     function renderBindings(sub, grp, el, cdd, refresh) {
       sub.innerHTML = "";
-      const mine = (cddBindings || []).filter((b) => b.element_id === el.element_id);
+      let mine = (cddBindings || []).filter((b) => b.element_id === el.element_id);
       if (!mine.length) { sub.innerHTML = `<div class="evidence-note">No bound units.</div>`; return; }
+      // Triage (S103c-fix): weakest match first; optional weak-only filter, so the
+      // operator works the shaky bindings, not every binding.
+      mine = mine.slice().sort((a, b) => (_STRENGTH_RANK[a.strength] ?? 9) - (_STRENGTH_RANK[b.strength] ?? 9));
+      const triage = document.createElement("div"); triage.className = "cdd-triage";
+      const lbl = document.createElement("label"); lbl.className = "sub";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!cddWeakOnly;
+      cb.onchange = () => { cddWeakOnly = cb.checked; renderBindings(sub, grp, el, cdd, refresh); };
+      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(" weak matches only (triage)"));
+      triage.appendChild(lbl);
+      // S103c-fix: bulk unlink — select several, unlink together (one record each).
+      const selected = new Set();
+      const bulk = document.createElement("button"); bulk.className = "btn-ghost cdd-btn cdd-reject"; bulk.textContent = "Unlink selected"; bulk.disabled = true;
+      bulk.onclick = async () => {
+        bulk.disabled = true;
+        for (const uid of selected) {
+          try { await api("/daily-driver/cdd/evidence/unlink", { method: "POST", body: JSON.stringify({ unit_id: uid, kind: el.kind, element_id: el.element_id }) }); } catch {}
+        }
+        await refresh();  // re-render the sub in place, staying expanded
+      };
+      triage.appendChild(bulk);
+      sub.appendChild(triage);
+      if (cddWeakOnly) mine = mine.filter((b) => b.strength === "weak");
+      if (!mine.length) { const e = document.createElement("div"); e.className = "evidence-note"; e.textContent = "No weak matches here."; sub.appendChild(e); return; }
       // Relink targets: the goal's other authored elements + its outcome.
       const targets = (cdd.elements || [])
         .filter((t) => t.element_id !== el.element_id)
@@ -718,14 +753,19 @@
         targets.push({ kind: "outcome", id: grp.outcome_id, label: "expected outcome" });
       mine.slice(0, 50).forEach((b) => {
         const r = document.createElement("div"); r.className = "cdd-binding";
+        const pick = document.createElement("input"); pick.type = "checkbox"; pick.className = "cdd-pick";
+        pick.onchange = () => { if (pick.checked) selected.add(b.unit_id); else selected.delete(b.unit_id); bulk.disabled = selected.size === 0; };
+        r.appendChild(pick);
         const strength = b.strength || "";  // S103c-fix: lexical match strength (not correctness)
         const why = b.matched_term ? `matched on “${escapeHtml(b.matched_term)}”` : "";
-        r.innerHTML =
+        const meta = document.createElement("span"); meta.style.cssText = "flex:1 1 auto;display:flex;gap:8px;align-items:center;overflow:hidden;";
+        meta.innerHTML =
           `<span class="cdd-binding-title">${escapeHtml(b.title)}</span>` +
           (why ? `<span class="cdd-why" title="what the matcher matched on — string match, not correctness">${why}</span>` : "") +
           (strength ? `<span class="cdd-badge cdd-strength s-${strength}" title="lexical match strength, not a trust score">${strength}</span>` : "") +
           `<span class="cdd-badge cdd-tier">${escapeHtml(b.tier.replace("_", " "))}</span>` +
           (b.user_owned ? `<span class="cdd-badge cdd-owned" title="you have corrected this unit">yours</span>` : "");
+        r.appendChild(meta);
         const acts = document.createElement("span"); acts.className = "cdd-actions";
         if (targets.length) {
           const mv = document.createElement("select"); mv.className = "cdd-btn cdd-reclass";
