@@ -514,6 +514,22 @@ Per the change-failure-rate metric's v4 honesty fix, this section and that metri
 
 **CFR booking.** None. This is a process-discipline lapse, not a code- or schema-output failure; it is recorded narratively per the line-471 scope note added in this commit. No corrective session is booked, because no change shipped a failure for CFR to count and the lapse is, by the do-not-reconstruct decision, uncorrected rather than remediated.
 
+## Charter and log retention (living-state versus ledger)
+
+The charter and log files split into two classes, and each class is bounded by a different mechanism. Confusing the two is what let the living-state files grow until the read-at-start ritual no longer fit one context window — the failure this rule prevents. The rule operationalises D107 (session-log archival cadence is per-package on close) rather than inventing a scheme; rule and decision agree, and the same per-package-on-close cadence governs both classes.
+
+**Living-state files hold current truth and are bounded by their own contract.**
+- `charter/current-package.md` holds exactly **one** package, the open one. Every package archives a verbatim snapshot to `docs/archive/packages/` at its close — per-package where the content buckets cleanly (the `pN.md` epic-snapshot pattern), a single dated verbatim snapshot where pre-rule transition content cannot bucket without rewriting it (the governing principle for any edge case: per-package where it buckets verbatim, a dated snapshot where it cannot).
+- `charter/schema.md` is current-truth reference, not a ledger; it grows with the build and is not an archive candidate.
+
+**Append-only ledgers hold history and are windowed into a hot file plus cold archives.**
+- `log/sessions.md` holds only the **open package's** sessions; on each package close its entries move to `docs/archive/sessions/`, per-package (`pN.md`), continuing the p1–p10 series to the letter of D107. The hot file ends with an archive pointer block naming each archive file and the session range it holds, so the scan-back path and audits resolve any S-number.
+- `charter/decisions.md` stays **whole** behind its top-of-file index. The index is the navigation that lets the file stay one piece; the body split into era files (the `docs/archive/decisions/phase-N.md` per-phase precedent) waits for the two-threshold trigger — when the index-only read demonstrably blocks a session *and* the file has crossed a second size bound — because the cross-reference risk of splitting decision bodies is real and is not paid before it must be.
+
+**Archives are append-only and never pruned.** Nothing is deleted; everything moves. Full history stays recoverable from the hot files by pointer, and the audit posture (compare charter to built across sessions) runs against the archives unchanged.
+
+**A size check runs at every package close** and flags any living-state file over its bound. It is the mechanical form of this discipline, sibling to the `make doctor` operational-drift check and to the charter-versus-archive consistency check named in the Failure-modes section (the package-close sanity pass comparing description to archived scope). Until a file trips its bound the check is silent; when it trips, the close walkthrough windows it before the next session inherits the cost.
+
 ## What Padhanam does not do
 
 The reverse-Kano list. Each item looks like an improvement and is not. Named explicitly so that capacity pressure does not reintroduce them as "small improvements."
