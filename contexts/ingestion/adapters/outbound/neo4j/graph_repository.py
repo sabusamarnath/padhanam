@@ -446,6 +446,26 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def reclassify_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        from_kind: str,
+        to_kind: str,
+        element_id: UUID,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.reclassify_authored_element(
+                    from_kind=from_kind, to_kind=to_kind, element_id=element_id
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     # --- UnitGraphPort (D168): the typed work-unit-graph capability --------
 
     async def replace_units(

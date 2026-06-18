@@ -46,6 +46,7 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     AddCddElementRequest,
     AddedCddElementDTO,
+    ReclassifyCddElementRequest,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
     CorrectCddElementRequest,
@@ -82,7 +83,10 @@ from contexts.daily_driver.application import (
     record_observed_outcome,
     set_today_order,
 )
-from contexts.daily_driver.application.author_cdd import add_cdd_element
+from contexts.daily_driver.application.author_cdd import (
+    add_cdd_element,
+    reclassify_cdd_element,
+)
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.application.proof_goal_cdd import (
     accept_cdd_element,
@@ -505,6 +509,35 @@ async def post_reject_cdd_element(
     )
     if not ok:
         raise HTTPException(status_code=404, detail="authored element not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/elements/{kind}/{element_id}/reclassify", status_code=204)
+async def post_reclassify_cdd_element(
+    kind: ElementKind,
+    element_id: UUID,
+    body: ReclassifyCddElementRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Reclassify an authored element across types (D201, S103a). ``kind`` is the
+    current type; the body's ``to_kind`` is the new one. Preserves identity, flips
+    origin to user_authored, flags now-invalid incident edges (never drops them)."""
+    try:
+        to_kind = ElementKind(body.to_kind)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail=f"unknown element kind: {body.to_kind}"
+        )
+    ok = await reclassify_cdd_element(
+        goal_graph=goal_graph, actor=actor, from_kind=kind, to_kind=to_kind,
+        element_id=element_id,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="authored element not found or no-op reclassify",
+        )
     return Response(status_code=204)
 
 

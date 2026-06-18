@@ -64,4 +64,29 @@ async def add_cdd_element(
     return element_id
 
 
-__all__ = ["add_cdd_element"]
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def reclassify_cdd_element(
+    *,
+    goal_graph: GoalGraphPort,
+    actor: ActorContext,
+    from_kind: ElementKind,
+    to_kind: ElementKind,
+    element_id: UUID,
+) -> bool:
+    """Reclassify an authored element across the lever/intermediary/external
+    boundary (D201, S103a). A no-op reclassify (same from/to kind) is rejected as
+    a bad request by returning ``False`` without touching the graph. The graph
+    layer preserves the node + stable id, flips the origin to user_authored, and
+    flags (never drops) any now-ungrammatical incident edge.
+    """
+    if from_kind is to_kind:
+        return False
+    return await goal_graph.reclassify_authored_element(
+        tenant_context=actor.tenant_context,
+        from_kind=from_kind,
+        to_kind=to_kind,
+        element_id=element_id,
+    )
+
+
+__all__ = ["add_cdd_element", "reclassify_cdd_element"]

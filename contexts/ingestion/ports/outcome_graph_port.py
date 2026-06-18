@@ -109,6 +109,8 @@ class AuthoredEdgeRecord:
     ``edge_type`` is ``FEEDS`` or ``INFLUENCES``; ``source_kind`` / ``target_kind``
     are the endpoint labels lower-cased (``lever`` / ``intermediary`` /
     ``external`` / ``outcome``); the ids are the endpoints' stable ids.
+    ``needs_review`` is set when a reclassify (D201, S103a) made the edge
+    ungrammatical for the new source kind — flagged for the user, never dropped.
     """
 
     edge_type: str
@@ -116,6 +118,7 @@ class AuthoredEdgeRecord:
     source_id: UUID
     target_kind: str
     target_id: UUID
+    needs_review: bool = False
 
 
 @dataclass(frozen=True)
@@ -327,6 +330,20 @@ class OutcomeGraphPort(Protocol):
         S102) — a user-initiated delete (allowed; the no-auto-deletion invariant
         forbids *auto* deletion, not user-asked removal). Returns ``True`` when an
         element was removed."""
+        ...
+
+    async def reclassify_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        from_kind: str,
+        to_kind: str,
+        element_id: UUID,
+    ) -> bool:
+        """Reclassify an authored element across types (D201, S103a): swap the
+        type-label preserving the node and its stable id, flip the origin to
+        ``user_authored``, and flag (never drop) any incident edge the new kind
+        makes ungrammatical. Returns ``False`` when absent or cross-tenant."""
         ...
 
 

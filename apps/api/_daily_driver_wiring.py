@@ -597,6 +597,7 @@ class GoalGraphAdapter:
                 source_id=edge.source_id,
                 target_kind=edge.target_kind,
                 target_id=edge.target_id,
+                needs_review=edge.needs_review,
             )
             for edge in record.edges
         )
@@ -641,6 +642,14 @@ class GoalGraphAdapter:
         return await self._outcome_graph.delete_authored_element(
             tenant_context=tenant_context, element_kind=kind.value,
             element_id=element_id,
+        )
+
+    async def reclassify_authored_element(
+        self, *, tenant_context, from_kind, to_kind, element_id,
+    ) -> bool:
+        return await self._outcome_graph.reclassify_authored_element(
+            tenant_context=tenant_context, from_kind=from_kind.value,
+            to_kind=to_kind.value, element_id=element_id,
         )
 
 

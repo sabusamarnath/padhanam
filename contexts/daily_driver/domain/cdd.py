@@ -81,13 +81,18 @@ class AuthoredElement:
 
 @dataclass(frozen=True)
 class AuthoredEdgeView:
-    """One authored causal edge as read for proof (S102)."""
+    """One authored causal edge as read for proof (S102).
+
+    ``needs_review`` is set when a reclassify (D201, S103a) left the edge
+    ungrammatical for its new source kind — surfaced for the user, never dropped.
+    """
 
     edge_type: str
     source_kind: str
     source_id: UUID
     target_kind: str
     target_id: UUID
+    needs_review: bool = False
 
 
 @dataclass(frozen=True)

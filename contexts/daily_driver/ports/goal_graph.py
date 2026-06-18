@@ -150,5 +150,19 @@ class GoalGraphPort(Protocol):
         delete, allowed under the no-auto-deletion invariant, S102)."""
         ...
 
+    async def reclassify_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        from_kind: ElementKind,
+        to_kind: ElementKind,
+        element_id: UUID,
+    ) -> bool:
+        """Reclassify an authored element across types (D201, S103a): preserve the
+        node and its stable id, flip the origin to ``user_authored``, and flag
+        (never drop) any now-ungrammatical incident edge. Returns ``False`` when
+        absent or cross-tenant."""
+        ...
+
 
 __all__ = ["GoalGraphPort"]

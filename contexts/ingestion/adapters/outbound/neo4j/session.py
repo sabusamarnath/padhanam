@@ -236,6 +236,13 @@ _AUTHORED_ENDPOINT = {**_AUTHORED_NODE, "outcome": ("Outcome", "outcome_id")}
 _AUTHORED_EDGE_TYPES = frozenset({"FEEDS", "INFLUENCES"})
 
 
+def _required_edge_type(kind: str) -> str:
+    """The edge type an element of this kind uses as a source (D198/D201): an
+    external INFLUENCES (it is not controlled); a lever/intermediary FEEDS. Used
+    by the reclassify flagger to detect now-ungrammatical incident edges."""
+    return "INFLUENCES" if kind == "external" else "FEEDS"
+
+
 def _authored_node(kind: str) -> tuple[str, str]:
     try:
         return _AUTHORED_NODE[kind]
@@ -303,6 +310,50 @@ DETACH DELETE n
 """
 
 
+def _reclassify_authored_element_cypher(
+    from_label: str,
+    from_idprop: str,
+    to_label: str,
+    to_idprop: str,
+    *,
+    drop_commitment: bool,
+) -> str:
+    """Swap an authored element's type-label, preserving the node and its stable
+    id (D201, S103a). The label swap also flips provenance_origin to
+    user_authored (the correction signal). When the kinds key by different id
+    properties (lever's lever_id vs intermediary/external's element_id), the id
+    value moves between them so the new kind's read finds the node; the SET reads
+    the old property before the REMOVE drops it. Leaving the lever kind drops the
+    lever-only commitment_id. RETURN detects success (no row = absent/cross-tenant).
+    """
+    set_parts = [f"n:{to_label}", "n.provenance_origin = 'user_authored'"]
+    remove_parts = [f"n:{from_label}"]
+    if from_idprop != to_idprop:
+        set_parts.append(f"n.{to_idprop} = n.{from_idprop}")
+        remove_parts.append(f"n.{from_idprop}")
+    if drop_commitment:
+        remove_parts.append("n.commitment_id")
+    return f"""
+MATCH (n:{from_label} {{tenant_id: $tenant_id, {from_idprop}: $element_id}})
+SET {", ".join(set_parts)}
+REMOVE {", ".join(remove_parts)}
+RETURN n.{to_idprop} AS element_id
+"""
+
+
+def _flag_reclassified_edges_cypher(to_label: str, to_idprop: str) -> str:
+    """Flag (never drop) the reclassified node's outgoing authored edges whose
+    type no longer fits the new kind (D201): an external INFLUENCES, a
+    lever/intermediary FEEDS. The id value is preserved by the swap, so the same
+    ``$element_id`` matches the node under its new id property."""
+    return f"""
+MATCH (n:{to_label} {{tenant_id: $tenant_id, {to_idprop}: $element_id}})
+      -[r:FEEDS|INFLUENCES {{tenant_id: $tenant_id}}]->()
+WHERE type(r) <> $required_type
+SET r.needs_review = true
+"""
+
+
 # Read a goal's authored elements (each kind keyed by its own id property) and
 # the authored causal edges within the goal's CDD. Every authored node carries
 # outcome_id = the goal, so the edge read scopes by either endpoint's outcome_id.
@@ -332,7 +383,8 @@ RETURN type(r) AS edge_type,
        labels(s)[0] AS source_kind,
        coalesce(s.lever_id, s.element_id, s.outcome_id) AS source_id,
        labels(t)[0] AS target_kind,
-       coalesce(t.lever_id, t.element_id, t.outcome_id) AS target_id
+       coalesce(t.lever_id, t.element_id, t.outcome_id) AS target_id,
+       coalesce(r.needs_review, false) AS needs_review
 """
 
 # The authored stance on the outcome — the measurable result that means the goal
@@ -916,6 +968,7 @@ class TenantScopedNeo4jSession:
                 source_id=UUID(row["source_id"]),
                 target_kind=str(row["target_kind"]).lower(),
                 target_id=UUID(row["target_id"]),
+                needs_review=bool(row["needs_review"]),
             )
             for row in await edge_result.data()
         )
@@ -1012,6 +1065,33 @@ class TenantScopedNeo4jSession:
         )
         summary = await result.consume()
         return summary.counters.nodes_deleted > 0
+
+    async def reclassify_authored_element(
+        self, *, from_kind: str, to_kind: str, element_id: UUID
+    ) -> bool:
+        """Reclassify an authored element across types (D201, S103a): swap the
+        type-label preserving the node + stable id, flip the origin to
+        user_authored, and flag (never drop) any now-ungrammatical incident edge.
+        Returns ``False`` when the element is absent or cross-tenant."""
+        from_label, from_idprop = _authored_node(from_kind)
+        to_label, to_idprop = _authored_node(to_kind)
+        drop_commitment = from_kind == "lever" and to_kind != "lever"
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "element_id": str(element_id)}
+        result = await session.run(
+            _reclassify_authored_element_cypher(
+                from_label, from_idprop, to_label, to_idprop,
+                drop_commitment=drop_commitment,
+            ),
+            params,
+        )
+        if await result.single() is None:
+            return False
+        await session.run(
+            _flag_reclassified_edges_cypher(to_label, to_idprop),
+            {**params, "required_type": _required_edge_type(to_kind)},
+        )
+        return True
 
     async def replace_units(self, units: Sequence[UnitWrite]) -> None:
         """Replace the bound tenant's work-unit subgraph (D168, D166).

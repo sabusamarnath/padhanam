@@ -554,13 +554,18 @@ class AuthoredElementDTO(BaseModel):
 
 
 class AuthoredEdgeDTO(BaseModel):
-    """One authored causal edge for proof (S102, D200)."""
+    """One authored causal edge for proof (S102, D200).
+
+    ``needs_review`` flags an edge a reclassify left ungrammatical (D201, S103a) —
+    surfaced for the user to resolve, never silently dropped.
+    """
 
     edge_type: str
     source_kind: str
     source_id: UUID
     target_kind: str
     target_id: UUID
+    needs_review: bool = False
 
 
 class GoalCddDTO(BaseModel):
@@ -604,6 +609,14 @@ class AddedCddElementDTO(BaseModel):
     element_id: UUID | None = None
 
 
+class ReclassifyCddElementRequest(BaseModel):
+    """Reclassify an authored element to a new type (D201, S103a). ``to_kind`` is
+    ``lever`` / ``intermediary`` / ``external`` (the outcome is not a reclassify
+    target — it is the goal's single terminal, D199)."""
+
+    to_kind: str
+
+
 def goal_cdd_to_dto(view) -> "GoalCddDTO":
     return GoalCddDTO(
         outcome_id=view.outcome_id,
@@ -635,6 +648,7 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
                 source_id=edge.source_id,
                 target_kind=edge.target_kind,
                 target_id=edge.target_id,
+                needs_review=edge.needs_review,
             )
             for edge in view.edges
         ],
