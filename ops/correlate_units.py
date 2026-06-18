@@ -121,7 +121,11 @@ async def _correlate() -> None:
         suppression_policy=suppression_policy,
         actor=actor,
     )
-    log.info("goal-facet correlation complete: %d SERVES edges written", edge_count)
+    log.info(
+        "element-evidence correlation complete: %d EVIDENCES edges written "
+        "(D202; goal level derived on read, SERVES retired)",
+        edge_count,
+    )
 
 
 def main() -> int:
