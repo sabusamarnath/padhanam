@@ -47,6 +47,46 @@ metrics:
   corrected_by:
 ```
 
+## S102m — Charter and log compaction: bound the living-state files, window the ledgers
+roles: PM (the retention policy and its placement under D113), architect (the living-state-vs-ledger split and the size-check shape), technical writer (the methodology rule, the archive snapshots, the pointer block, this entry), analyst (the Step 0 reconciliation that caught the D107 conflict)
+mode: maintenance and methodology, markdown only — no code, no graph, no vendor deploy. Numbered S102m (maintenance suffix, the a/b idiom): the product sequence stays S103+ untouched; the S102 marker's "(S103)" forward-ref stays verbatim per the v8 drift-safety rule and now resolves to the matcher product session under the split.
+
+The charter and log totalled ~645k tokens and the read-at-start ritual no longer fit one context window. Two living-state files drove it: `log/sessions.md` at ~312k (half the total) and `charter/current-package.md` at ~72k against a one-package contract. This session bounds both and writes the rule that keeps them bounded — the rule first, ahead of the surgery, so policy precedes action.
+
+- **Step 0 finding (corrected premise).** The session prompt assumed a new `log/archive/` directory, one file per phase. Reconciliation against the live tree found the established D107 archive convention already in place: `docs/archive/sessions/` (per-package, p1–p10), `docs/archive/packages/` (per-package snapshots), `docs/archive/decisions/` (per-phase `phase-1.md`), README-documented. Creating `log/archive/` would have forked a parallel scheme — the exact charter-vs-archive inconsistency the new rule prevents, and a conflict with a binding decision (D107) that CLAUDE.md says to surface before building. Surfaced; the operator confirmed the destination (`docs/archive/sessions/`, no `log/archive/`), overruled my per-phase lean to **per-package** (continue p1–p10 to the letter of D107), and confirmed the governing principle for edge cases: per-package where content buckets verbatim, a dated snapshot where it cannot. A second reconciliation: D107's literal cadence is **per-package-on-close**, so the hot window tightened from the phase boundary (S74) to the **open package** (S102 only), aligning "current" for both living-state files. No D-entry minted — resolving a conflict by complying with D107 is not a new decision (D113: operating-model discipline lives in methodology.md).
+
+- **Reflection 1 — did the cut land cleanly?** The cut is by open-package, not by a phase-header parse, so no audit reads an entry under the wrong phase: each archived entry's home is documented in the pointer block. One entry was genuinely ambiguous — **S64** (the test-integrity / clock-seam slice), numbered in the P16 range, themed like Phase-2-B clock-seam work, but actually the Phase-2-A gate test-integrity precondition (roadmap v8) that ran during the dogfood-gate sprint. Bucketed to p19 by *when it ran*, recorded in p19's note. The other surprise the cut exposed: the hot file held the entire inter-phase **Phase-2-design 7-Step arc** (~13 entries, no package of its own), folded into p12 — the close-audit period that launched it — rather than minting a third file type.
+
+- **Reflection 2 — post-compaction read-at-start cost (measured).** The two compacted files: **387k → 3.5k tokens** (−99.1%) — current-package 72.5k→0.8k, sessions 314.5k→2.7k. The read-at-start ritual (bet, principles, decisions-index, current-package, hot sessions): **~490k → ~106k tokens**, now fitting one window. Charter+log overall: ~645k → ~261k. `decisions.md` (92k) is now the dominant remaining read-at-start cost.
+
+- **Reflection 3 — is decisions.md the next pressure point, and its trigger?** Yes — at 92k tokens it is now the single largest read-at-start file. Its body split into era files behind the index waits for the **two-threshold trigger**: (a) the index-only read *demonstrably blocks* a session — a session needs decision **bodies** and the 92k whole-file read no longer fits alongside the rest of the ritual — **and** (b) the file crosses a second size bound (~150k tokens). Until both fire, the index resolves every D-number to a title and the file stays whole, because the cross-reference risk of splitting bodies (D-entries reference and supersede each other by number; a split risks a cross-file reference going stale — the v3 charter-vs-archive drift class) is real and not paid before it must be.
+
+- **AC verdicts.** AC1 (current-package = one package, fraction of 72k) ✓ — 783 tok, 1 marker, grep clean. AC2 (closed markers archived verbatim, session list intact) ✓ — 753 lines moved, diff byte-clean. AC3 (sessions.md open-package only, fraction of 312k; prior archived verbatim) ✓ — 2,690 tok; line multiset byte-identical to the pre-window file. AC4 (pointer block names each file + range, resolves any S-number) ✓ — verified S43→p13, S55a→p15, S74→phase2b. AC5 (decisions.md byte-unchanged) ✓ — `git diff` empty; index already complete through D200, no correction needed. AC6 (retention rule present, committed charter-first ahead of the moves) ✓ — commit `0fd6a03` precedes the three move commits. AC7 (size check runs, reports every file, no external dep) ✓ — stdlib-only, `make charter-size` green. AC8 (no content deleted; counts conserved) ✓ — 4659 archived + 48 kept = 4707 lines; 110 archived + 1 hot = 111 entries; multiset byte-identical.
+
+- **methodology:** Step 0 paid for itself again — the prompt's load-bearing premise (a new `log/archive/`) was wrong against the live tree, and catching it turned the rule from a fork of D107 into an operationalisation of it. The pattern worth naming: a maintenance prompt that proposes new structure must reconcile against the existing archive tree first, because the cheapest place to catch a charter-vs-archive fork is before the file surgery, not after. The operator's per-phase→per-package override is the same lesson from the other side: consistency with the established scheme beats a smaller file count for a session whose entire purpose is consistency.
+
+- Close state: **four commits — the methodology rule first (`0fd6a03`), then archive-current-package (`7275cab`), window-sessions (`6a509b1`), size-check (`4f1f180`).** current-package holds one open package; sessions holds the open package's one session (S102) plus this entry; S38b–S101 live under `docs/archive/sessions/` per-package (p11–p20) plus the Phase-2-B snapshot (phase2b.md); the closed current-package journal lives at `docs/archive/packages/current-package-history-through-s101.md`. Nothing deleted; full history pointer-reachable. The size check guards the bound at every future package close.
+
+```
+metrics:
+  classification: maintenance + methodology session (S102m — charter and log compaction; operationalises D107, no D-entry)
+  session_started: 2026-06-18
+  session_closed: 2026-06-18
+  retention_rule: charter/methodology.md "Charter and log retention (living-state versus ledger)" — living-state files bounded by contract (current-package = one package; schema.md = current-truth reference), ledgers windowed (sessions.md = open package, archived per-package on close per D107; decisions.md whole behind index until two-threshold trigger); archives append-only never pruned; size check at package close
+  compaction: current-package.md 290,009B/~72.5k tok -> 3,149B/~0.8k tok; log/sessions.md 1,258,030B/~314.5k tok -> 10,881B/~2.7k tok; read-at-start ~490k -> ~106k tok
+  destination: docs/archive/ tree (NOT a new log/archive/) — sessions per-package p11-p20 + phase2b.md snapshot (S74-S101, no P-numbers); packages snapshot current-package-history-through-s101.md
+  conservation: 4659 archived + 48 kept = 4707 lines; 110 archived + 1 hot = 111 entries; line multiset byte-identical to pre-window file (verbatim, nothing deleted)
+  size_check: ops/charter_size_check.py + `make charter-size` (stdlib-only; ARGS=--check gates); bounds current-package 20k / sessions 60k tok; decisions.md 92k surfaced as next pressure point
+  next_pressure_point: charter/decisions.md ~92k tok — body split waits for the two-threshold trigger (index-only read blocks AND ~150k second bound)
+  step0: corrected premise — prompt's log/archive/ per-phase forked from the live D107 docs/archive/sessions/ per-package tree; reconciled to docs/archive/ + per-package (operator-confirmed); D107 cadence per-package-on-close tightened hot window to the open package; ambiguous entry S64 bucketed to p19 by when it ran; Phase-2-design arc folded into p12
+  ac: AC1-AC8 all ✓
+  commits: 0fd6a03 (methodology rule, charter-first), 7275cab (archive current-package tail), 6a509b1 (window sessions.md), 4f1f180 (size check)
+  charter_touchpoints: charter/methodology.md (retention rule); charter/current-package.md (windowed to S102); log/sessions.md (windowed to S102 + pointer block + this entry); docs/archive/packages/current-package-history-through-s101.md; docs/archive/sessions/p11.md..p20.md + phase2b.md; ops/charter_size_check.py; Makefile (charter-size target). decisions.md byte-unchanged.
+  numbering: S102m (maintenance suffix); product sequence S103+ untouched; S102 marker's "(S103)" forward-ref left verbatim per v8 drift-safety
+  corrects:
+  corrected_by:
+```
+
 ---
 
 ## Archive pointer
