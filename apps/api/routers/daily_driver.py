@@ -46,7 +46,9 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     AddCddElementRequest,
     AddedCddElementDTO,
+    ElementEvidenceSummaryDTO,
     ReclassifyCddElementRequest,
+    element_evidence_summary_to_dto,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
     CorrectCddElementRequest,
@@ -86,6 +88,9 @@ from contexts.daily_driver.application import (
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
     reclassify_cdd_element,
+)
+from contexts.daily_driver.application.read_element_evidence import (
+    read_element_evidence,
 )
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.application.proof_goal_cdd import (
@@ -447,6 +452,20 @@ async def post_add_cdd_element(
         kind=kind, label=body.label,
     )
     return AddedCddElementDTO(element_id=element_id)
+
+
+@router.get("/cdd/evidence", response_model=ElementEvidenceSummaryDTO)
+async def get_cdd_evidence(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+) -> ElementEvidenceSummaryDTO:
+    """Read-only element-evidence summary (D202, S103b): per-element unit counts +
+    the unbound bucket. Degrades to zeros when the unit graph is unwired. Declared
+    before ``/cdd/{outcome_id}`` so ``evidence`` is not parsed as an outcome id."""
+    if unit_graph is None:
+        return ElementEvidenceSummaryDTO()
+    summary = await read_element_evidence(unit_graph=unit_graph, actor=actor)
+    return element_evidence_summary_to_dto(summary)
 
 
 @router.get("/cdd/{outcome_id}", response_model=GoalCddDTO)

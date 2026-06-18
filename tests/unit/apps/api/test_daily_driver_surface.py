@@ -209,6 +209,14 @@ def test_cdd_edit_affordance_is_inline_over_the_existing_correct_path():
     assert 'window.prompt("Edit' not in _HTML
 
 
+def test_cdd_lens_shows_element_evidence_and_the_unbound_bucket():
+    # S103b/D202: the lens shows per-element unit counts (where signal landed) and
+    # the unbound bucket (units matching no element), read-only from /cdd/evidence.
+    assert '"/daily-driver/cdd/evidence"' in _HTML
+    assert "cdd-evidence" in _HTML
+    assert "unbound" in _HTML.lower()
+
+
 def test_draft_missing_has_a_clear_empty_state():
     # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
     # flag and shows a clear "all already have a CDD" state, not a silent zero.

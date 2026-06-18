@@ -706,6 +706,42 @@ def dedup_goal_edges(edges: tuple[GoalEdge, ...]) -> tuple[GoalEdge, ...]:
 
 
 @dataclass(frozen=True)
+class ElementEvidenceSummary:
+    """Per-element unit counts plus the unbound-bucket size (D202, S103b display).
+
+    ``counts`` maps an ``element_id`` to the number of distinct units that evidence
+    it; ``unbound_units`` is how many units bound no element (the emergent loop's
+    queue, S104); ``total_units`` is the corpus size. Read-only — the surface shows
+    where signal landed so the unbound rate is legible (reflection 1)."""
+
+    counts: tuple[tuple[UUID, int], ...]
+    bound_units: int
+    unbound_units: int
+    total_units: int
+
+
+def summarise_element_evidence(
+    evidence: tuple[ElementEvidence, ...], *, total_units: int
+) -> ElementEvidenceSummary:
+    """Count distinct units per element and the unbound bucket (pure, D202)."""
+    by_element: dict[UUID, set[UUID]] = {}
+    bound: set[UUID] = set()
+    for ev in evidence:
+        by_element.setdefault(ev.element_id, set()).add(ev.unit_id)
+        bound.add(ev.unit_id)
+    counts = tuple(
+        sorted(((eid, len(units)) for eid, units in by_element.items()),
+               key=lambda c: str(c[0]))
+    )
+    return ElementEvidenceSummary(
+        counts=counts,
+        bound_units=len(bound),
+        unbound_units=max(0, total_units - len(bound)),
+        total_units=total_units,
+    )
+
+
+@dataclass(frozen=True)
 class ElementTarget:
     """One authored element a unit can bind to (D202): its kind, id, and label."""
 
@@ -1119,12 +1155,15 @@ __all__ = [
     "GoalAssessment",
     "GoalCoverage",
     "ElementEvidence",
+    "ElementEvidenceSummary",
     "ElementTarget",
     "GoalEdge",
     "GoalElementTargets",
     "derive_goal_edges",
+    "dedup_element_evidence",
     "infer_element_evidence",
     "infer_email_job_search_evidence",
+    "summarise_element_evidence",
     "LinkedGoal",
     "OrphanUnit",
     "GoalGroup",

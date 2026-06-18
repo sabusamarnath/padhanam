@@ -609,6 +609,28 @@ class AddedCddElementDTO(BaseModel):
     element_id: UUID | None = None
 
 
+class ElementEvidenceSummaryDTO(BaseModel):
+    """Read-only element-evidence summary for the CDD lens (D202, S103b).
+
+    ``counts`` maps each authored element's id (string) to the number of distinct
+    units that evidence it; ``unbound_units`` is the bucket of units matching no
+    element (the emergent loop's queue, S104)."""
+
+    counts: dict[str, int] = {}
+    bound_units: int = 0
+    unbound_units: int = 0
+    total_units: int = 0
+
+
+def element_evidence_summary_to_dto(summary) -> "ElementEvidenceSummaryDTO":
+    return ElementEvidenceSummaryDTO(
+        counts={str(eid): n for eid, n in summary.counts},
+        bound_units=summary.bound_units,
+        unbound_units=summary.unbound_units,
+        total_units=summary.total_units,
+    )
+
+
 class ReclassifyCddElementRequest(BaseModel):
     """Reclassify an authored element to a new type (D201, S103a). ``to_kind`` is
     ``lever`` / ``intermediary`` / ``external`` (the outcome is not a reclassify
