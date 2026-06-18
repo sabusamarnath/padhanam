@@ -848,6 +848,29 @@ intermediary or the outcome (the inbound the user did not initiate, D198). Same
 shape as `:Intermediary`. Uniqueness constraint: `external_unique_per_tenant` on
 `(tenant_id, element_id)`; index `external_tenant_id` on `tenant_id`.
 
+#### Authored outcome stance on `:Outcome` (S102, D200; proofable at S103a)
+
+The goal's authored expected outcome — the measurable result that means the goal
+is met — is a stance stored on the existing `:Outcome` node (D199's two faces, no
+separate node), not an authored element node. S102 stored only the text; **S103a
+makes it a proofable terminal element** with the same accept / edit / reject the
+other elements carry, so the outcome stops being a static header. Three properties
+carry it (all schemaless — no constraint, so no migration; the eight S102-drafted
+outcomes carry the text alone and the read coalesces a missing proof_state to
+`pending` and a missing origin to `llm_drafted`, since they were LLM-drafted):
+
+| Property                        | Type            | Notes                                                              |
+|---------------------------------|-----------------|--------------------------------------------------------------------|
+| `authored_expected_outcome`     | `String`/absent | the measurable result (LLM-drafted or user-authored); reject clears it |
+| `authored_outcome_origin`       | `String`/absent | `llm_drafted` / `user_authored` / `system_suggested`; absent ⇒ `llm_drafted` |
+| `authored_outcome_proof_state`  | `String`/absent | `pending` / `accepted`; absent ⇒ `pending`                         |
+
+Accept sets `authored_outcome_proof_state = accepted`; edit sets the text and flips
+the origin to `user_authored`; reject clears the text and its proof/origin (the
+`:Outcome` node itself is the goal and is never deleted). The outcome is **not** a
+reclassify target (D201): it is the goal's single terminal, not one of the
+lever/intermediary/external types.
+
 #### `:Lever` extension (S102, D200)
 
 The authored layer **extends** the existing `:Lever` rather than forking a
@@ -890,6 +913,7 @@ intermediary feeds the outcome). `INFLUENCES`:
 | `tenant_id`   | `String`  | not empty; matches both endpoints              |
 | `jurisdiction`| `String`  | matches both endpoints                         |
 | `created_at`  | `DateTime`| set on initial MERGE                           |
+| `needs_review`| `Bool`/absent | set `true` when a reclassify (D201, S103a) makes the edge ungrammatical for the new source kind; absent ⇒ valid. Schemaless, no constraint, no migration. Surfaced on the proof read; never auto-cleared, never auto-deleted |
 
 Uniqueness via the MERGE pattern keyed on `(tenant_id, source, target)` (Community
 Edition has no declarative relationship-property uniqueness), the `SERVES`/
@@ -897,6 +921,29 @@ Edition has no declarative relationship-property uniqueness), the `SERVES`/
 process-versus-CDD boundary the authored levers/intermediaries/externals
 instantiate), D199 (the read-only slice whose dogfood surfaced the pivot), and the
 "graph's meaning is authored" principle.
+
+#### Authoring completion (S103a, D201)
+
+S102 drafted and proofed; **S103a closes the authoring loop** so the model is fully
+authorable — all over the `0005` shapes, no migration (the only new persisted state
+is the schemaless outcome-stance proof/origin properties and the edge `needs_review`
+flag documented above). Three write paths land, all behind `DAILY_DRIVER_CDD_WRITE`
+(D126), tenant-scoped through the wrapper:
+
+- **Add** a user-authored element of any of the four types. A lever / intermediary /
+  external is a fresh node (`provenance_origin = user_authored`, `proof_state =
+  accepted` — authored is proofed by the act) wired with a default edge to the
+  outcome (lever/intermediary `FEEDS`, external `INFLUENCES`, the drafter's fallback
+  shape) so it joins the causal chain; this is how externals enter the model at all,
+  given the zero-externals draft. An "outcome" add sets the authored outcome stance
+  above (`user_authored` / `accepted`).
+- **Reclassify** an element across the lever/intermediary/external boundary per
+  **D201**: preserve the node and its stable id (moving the id value between
+  `lever_id` and `element_id` as the kind requires), flip the origin to
+  `user_authored`, and flag — never drop — any incident edge the new kind makes
+  ungrammatical (`needs_review = true`).
+- **Surface the outcome** as a proofable terminal element (accept / edit / reject the
+  authored outcome stance).
 
 ## Agent tables (per-tenant)
 
