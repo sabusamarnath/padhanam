@@ -800,6 +800,104 @@ two reads are computed from the unit set, the outcome set, and these edges:
 **orphan work** = a `:Unit` with no outgoing `SERVES`; **neglected goal** = an
 `:Outcome` with no incoming `SERVES`.
 
+### The authored CDD layer (S102, D200)
+
+The per-goal Causal Decision Diagram is **authored**, not only derived (the
+"graph's meaning is authored" principle, D200). The LLM drafts each goal's causal
+structure — its levers, intermediaries, externals, and expected outcome — and the
+user proofs it. This is distinct from the matcher's derived `SERVES`/`LEVER_FOR`
+layer: the authored layer carries per-goal *meaning* (what each element is *for
+this goal*), and every authored element carries a **provenance origin** and a
+**proof state**. The goal-and-outcome node reuses `:Outcome` (D199's two faces, the
+aim `name` and the measurable `mode`/`ladder`/`current_target_level`/
+`terminal_target`, already sit on one node). Two new node types land —
+`:Intermediary` and `:External` (the intermediary layer is the uniformly-absent
+layer S101 rendered as a broken link; the external is the inbound the user did not
+initiate, D198). Lands via `migrations/neo4j/0005_authored_cdd.cypher`. Matcher
+untouched (S102 scope); the matcher rewrite from goal-linking to element-evidence
+is S103.
+
+**Provenance origin** (every authored element) is drawn from exactly three values:
+`llm_drafted`, `user_authored`, `system_suggested`. D200 makes origin first-class
+optimization signal, so it is present from the first migration. **Proof state** is
+`pending` or `accepted`; a rejected element is **removed** (user-initiated
+rejection is a delete the user asked for — allowed under the no-auto-deletion
+posture, which forbids *auto*-deletion, not user-initiated removal).
+
+#### `:Intermediary` nodes (S102, D200)
+
+An authored intermediary factor between the levers/externals and the outcome.
+
+| Property            | Type            | Notes                                                              |
+|---------------------|-----------------|--------------------------------------------------------------------|
+| `tenant_id`         | `String`        | not empty; tenant-isolation predicate at every Cypher query        |
+| `jurisdiction`      | `String`        | first-class per D12                                                 |
+| `element_id`        | `String`        | the intermediary's UUID (identity)                                 |
+| `outcome_id`        | `String`        | the goal whose CDD this element belongs to (the authored scope)    |
+| `label`             | `String`        | short human-readable label (LLM-drafted or user-authored)          |
+| `provenance_origin` | `String`        | `llm_drafted` / `user_authored` / `system_suggested`               |
+| `proof_state`       | `String`        | `pending` / `accepted`                                             |
+| `created_at`        | `DateTime`      | set on initial MERGE                                                |
+
+Uniqueness constraint: `intermediary_unique_per_tenant` on `(tenant_id, element_id)`; index `intermediary_tenant_id` on `tenant_id`.
+
+#### `:External` nodes (S102, D200)
+
+An authored external factor — another party's action that influences an
+intermediary or the outcome (the inbound the user did not initiate, D198). Same
+shape as `:Intermediary`. Uniqueness constraint: `external_unique_per_tenant` on
+`(tenant_id, element_id)`; index `external_tenant_id` on `tenant_id`.
+
+#### `:Lever` extension (S102, D200)
+
+The authored layer **extends** the existing `:Lever` rather than forking a
+parallel authored-lever concept — the lever is the one element that already binds
+to its evidence (`commitment_id`), and forking would force the S103 matcher to
+reconcile two lever concepts. A stable `lever_id` carries identity so an
+LLM-drafted lever can exist before it binds to a commitment, so **`commitment_id`
+becomes nullable**, and the authored properties are added:
+
+| Property            | Type            | Notes                                                                          |
+|---------------------|-----------------|--------------------------------------------------------------------------------|
+| `lever_id`          | `String`/absent | stable identity for an authored lever; absent on a legacy matcher lever        |
+| `commitment_id`     | `String`/absent | **now nullable** — the Postgres `commitments.id`; absent on an LLM-drafted lever with no commitment yet |
+| `outcome_id`        | `String`        | the goal whose CDD this authored lever belongs to (authored levers only)       |
+| `name`              | `String`/absent | the authored lever's label when it has no commitment yet; absent when commitment-backed |
+| `provenance_origin` | `String`/absent | `llm_drafted` / `user_authored` / `system_suggested`; absent on a legacy lever |
+| `proof_state`       | `String`/absent | `pending` / `accepted`; absent on a legacy lever                               |
+
+**Constraint reconciliation (brief-altitude per D200).** A new uniqueness
+constraint `lever_id_unique_per_tenant` on `(tenant_id, lever_id)` carries authored
+identity. The existing `lever_unique_per_tenant` on `(tenant_id, commitment_id)`
+**stays** and continues to govern commitment-backed levers: Neo4j node uniqueness
+constraints exempt nodes missing a constraint property, so an LLM-drafted lever
+with no `commitment_id` is exempt from the commitment constraint, and a legacy
+matcher lever with no `lever_id` is exempt from the authored constraint. The two
+identities coexist without collision; no constraint is dropped.
+
+#### `FEEDS` and `INFLUENCES` edges (S102, D200)
+
+Authored causal edges, distinct from the matcher's `SERVES` and the existing
+`LEVER_FOR`. `FEEDS`: `(:Lever)-[:FEEDS]->(:Intermediary)` and
+`(:Intermediary)-[:FEEDS]->(:Outcome)` (a controllable action feeds an
+intermediary feeds the outcome). `INFLUENCES`:
+`(:External)-[:INFLUENCES]->(:Intermediary)` or `(:External)-[:INFLUENCES]->(:Outcome)`
+(an external influences but is not controlled). Each carries `tenant_id`,
+`jurisdiction`, and `created_at` matching both endpoints.
+
+| Property      | Type      | Notes                                          |
+|---------------|-----------|------------------------------------------------|
+| `tenant_id`   | `String`  | not empty; matches both endpoints              |
+| `jurisdiction`| `String`  | matches both endpoints                         |
+| `created_at`  | `DateTime`| set on initial MERGE                           |
+
+Uniqueness via the MERGE pattern keyed on `(tenant_id, source, target)` (Community
+Edition has no declarative relationship-property uniqueness), the `SERVES`/
+`LEVER_FOR` precedent. References D200 (the authored-CDD pivot), D198 (the
+process-versus-CDD boundary the authored levers/intermediaries/externals
+instantiate), D199 (the read-only slice whose dogfood surfaced the pivot), and the
+"graph's meaning is authored" principle.
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
