@@ -51,8 +51,14 @@ consistent with that precedent and with S58/S59/S97b.
 
 ## Operator procedure for the live pass (≈60 seconds, at the next re-pin)
 
-1. `docker compose build padhanam-api && docker compose up -d padhanam-api`
-   (re-pin the baked image; no migration to run).
+1. **`make build-api`** then **`docker compose up -d --force-recreate padhanam-api`**
+   (no migration to run). Do **not** use `docker compose build padhanam-api && up -d`:
+   `compose.yaml` pins `padhanam-api` to a `sha256` digest (treated as immutable),
+   so `up` reruns the *old* pinned digest and the freshly built image sits unused
+   — the digest-pin trap (S41/S42/S60). `make build-api` advances the pin; the
+   `--force-recreate` replaces the running container. Verify with
+   `curl -s localhost:8000/app | grep -c assess-toggle` (expect non-zero) before
+   opening the browser.
 2. Sign in at `/login`, open **How am I doing**, click the **Map** segment.
 3. Confirm on the real 8-goal corpus:
    - all 8 goals render as outcome nodes, each with a verdict pill (from
