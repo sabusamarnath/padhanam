@@ -165,6 +165,12 @@ def get_goal_graph(request: Request) -> GoalGraphPort:
     return _state(request, "daily_driver_goal_graph")  # type: ignore[return-value]
 
 
+def get_cdd_audit_port(request: Request):
+    """FastAPI dependency: the audit port for CDD-correction capture (D203,
+    S103c), if wired. None degrades to mutate-without-capture."""
+    return getattr(request.app.state, "daily_driver_audit_port", None)
+
+
 def get_cdd_drafter(request: Request):
     """FastAPI dependency: the daily-driver CddDrafterPort (S102, D200)."""
     return _state(request, "daily_driver_cdd_drafter")
@@ -479,6 +485,7 @@ async def post_unlink_cdd_evidence(
     body: UnlinkCddEvidenceRequest,
     actor: Annotated[ActorContext, Depends(get_actor_context)],
     unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    audit_port: Annotated[object | None, Depends(get_cdd_audit_port)],
 ) -> Response:
     """Remove one of a unit's element bindings; mark the unit user-owned (D203)."""
     if unit_graph is None:
@@ -489,7 +496,7 @@ async def post_unlink_cdd_evidence(
         raise HTTPException(status_code=422, detail=f"unknown kind: {body.kind}")
     ok = await unlink_cdd_evidence(
         unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
-        kind=kind, element_id=body.element_id,
+        kind=kind, element_id=body.element_id, audit_port=audit_port,
     )
     if not ok:
         raise HTTPException(status_code=404, detail="binding not found")
@@ -501,6 +508,7 @@ async def post_relink_cdd_evidence(
     body: RelinkCddEvidenceRequest,
     actor: Annotated[ActorContext, Depends(get_actor_context)],
     unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    audit_port: Annotated[object | None, Depends(get_cdd_audit_port)],
 ) -> Response:
     """Retarget one of a unit's element bindings to a different element; mark it
     user-corrected and the unit user-owned (D203)."""
@@ -514,7 +522,7 @@ async def post_relink_cdd_evidence(
     ok = await relink_cdd_evidence(
         unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
         from_kind=from_kind, from_element_id=body.from_element_id,
-        to_kind=to_kind, to_element_id=body.to_element_id,
+        to_kind=to_kind, to_element_id=body.to_element_id, audit_port=audit_port,
     )
     if not ok:
         raise HTTPException(

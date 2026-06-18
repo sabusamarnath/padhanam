@@ -236,6 +236,9 @@ class AppCompositions:
     daily_driver_facet_source: object | None = None
     daily_driver_email_job_search_source: object | None = None
     daily_driver_unit_graph: object | None = None
+    # S103c (D203): the audit port for capturing CDD-evidence corrections
+    # (relink/unlink) as the append-only learning signal. None when unwired.
+    daily_driver_audit_port: object | None = None
     # S60 (D159): the Connections page status reader (design-language §9).
     connections_status_reader: object | None = None
     # S60b (D160): the login verifier (token-exchange seam; dev wired,
@@ -741,6 +744,7 @@ def _build_default_compositions() -> AppCompositions:
             daily_driver_email_job_search_source
         ),
         daily_driver_unit_graph=daily_driver_unit_graph,
+        daily_driver_audit_port=audit_adapter,
         connections_status_reader=connections_status_reader,
         login_verifier=login_verifier,
         google_oidc=google_oidc,
