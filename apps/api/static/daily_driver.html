@@ -523,8 +523,11 @@
         btn.disabled = true; btn.textContent = "Drafting…";
         try {
           const r = await api("/daily-driver/cdd/draft", { method: "POST" });
-          const n = (r.results || []).filter((x) => x.drafted).length;
-          toast(`Drafted ${n} goal${n === 1 ? "" : "s"}`);
+          const results = r.results || [];
+          const n = results.filter((x) => x.drafted).length;
+          if (n > 0) toast(`Drafted ${n} goal${n === 1 ? "" : "s"}`);
+          else if (results.length && results.every((x) => x.skipped_existing)) toast("All goals already have a CDD");
+          else toast("No goals to draft");
         } catch { toast("Draft failed", true); }
         btn.disabled = false; btn.textContent = "Draft missing CDDs";
         renderAssess();
