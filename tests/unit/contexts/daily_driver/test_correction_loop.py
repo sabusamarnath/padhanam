@@ -39,7 +39,11 @@ from contexts.daily_driver.domain.goal import (
     LevelLadder,
     Subject,
 )
-from contexts.daily_driver.domain.goal_assessment import ElementEvidence
+from contexts.daily_driver.domain.goal_assessment import (
+    ElementEvidence,
+    binding_rationale,
+    element_token_counts,
+)
 from contexts.daily_driver.domain.work_unit import (
     FacetType,
     LinkStatus,
@@ -136,6 +140,58 @@ def test_no_capture_when_the_binding_is_absent():
         kind=ElementKind.LEVER, element_id=uuid4(), audit_port=audit,
     ))
     assert ok is False and audit.events == []  # no record for a no-op
+
+
+def test_bulk_unlink_emits_one_correction_record_per_binding():
+    # S103c-fix: bulk unlink is batching — N bindings unlinked is N use-case calls,
+    # each emitting its own correction record (signal unchanged in kind, larger).
+    ug = _RecordingUnitGraph()
+    audit = _RecordingAudit()
+    units = [uuid4(), uuid4(), uuid4()]
+    for u in units:  # the front-end loops the single-unlink path per selected binding
+        asyncio.run(unlink_cdd_evidence(
+            unit_graph=ug, actor=_actor(), unit_id=u,
+            kind=ElementKind.LEVER, element_id=uuid4(), audit_port=audit,
+        ))
+    assert len(audit.events) == len(units)  # one record each
+    assert {e.resource_id for e in audit.events} == {str(u) for u in units}
+
+
+# --- S103c-fix: binding rationale + match strength (recompute on read) -------
+
+def test_binding_rationale_exact_is_strong():
+    term, strength = binding_rationale(
+        unit_title="Apply to roles", element_label="Apply to roles",
+        tier="lexical_exact", token_element_counts={},
+    )
+    assert strength == "strong" and term == "Apply to roles"
+
+
+def test_binding_rationale_distinctive_keyword_is_medium():
+    counts = element_token_counts(("Network", "Apply to roles"))  # 'network' unique
+    term, strength = binding_rationale(
+        unit_title="Network with Sam", element_label="Network",
+        tier="lexical_keyword", token_element_counts=counts,
+    )
+    assert term == "network" and strength == "medium"
+
+
+def test_binding_rationale_incidental_shared_token_is_weak():
+    # 'review' appears across multiple element labels -> incidental. The only token
+    # this unit shares with the element is the incidental one -> weak (the trap).
+    counts = element_token_counts(("Review applications", "Review interviews"))
+    term, strength = binding_rationale(
+        unit_title="Review notes", element_label="Review interviews",
+        tier="lexical_keyword", token_element_counts=counts,
+    )
+    assert term == "review" and strength == "weak"  # high string match, incidental
+
+
+def test_binding_rationale_alias_is_weak():
+    _, strength = binding_rationale(
+        unit_title="x", element_label="y", tier="alias", token_element_counts={},
+    )
+    assert strength == "weak"
 
 
 # --- re-match: idempotence, ownership, coverage recovery --------------------

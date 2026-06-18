@@ -228,6 +228,22 @@ def test_cdd_lens_is_interactive_relink_unlink_rematch():
     assert "Re-match" in _HTML
 
 
+def test_cdd_bindings_show_rationale_and_match_strength():
+    # S103c-fix: each binding shows the why (matched term) + a match-strength band
+    # labelled as strength (not correctness); recomputed on read.
+    assert "matched on" in _HTML            # the why
+    assert "cdd-strength" in _HTML          # the strength badge
+    assert "match strength, not" in _HTML   # the honest framing in a tooltip
+
+
+def test_cdd_bindings_are_triageable_and_unlink_stays_expanded():
+    # S103c-fix: weakest-first triage with a weak-only filter; an unlink re-renders
+    # the list in place (subRefresh) rather than collapsing the body; bulk unlink.
+    assert "weak matches only" in _HTML
+    assert "function subRefresh" in _HTML or "subRefresh = async" in _HTML
+    assert "Unlink selected" in _HTML  # bulk path
+
+
 def test_draft_missing_has_a_clear_empty_state():
     # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
     # flag and shows a clear "all already have a CDD" state, not a silent zero.
