@@ -160,6 +160,36 @@
     /* D193: the small pointer from the daily surface to the coverage view */
     .coverage-link { font-size: 12.5px; color: var(--ink-3); padding: 10px 2px 2px; }
     .coverage-link a { color: var(--navy); cursor: pointer; text-decoration: underline; }
+    /* D199/S101: the List/Map toggle + the goal-anchored depth-two Map. Teal is
+       interactive-only (design-language §1): the active segment reads teal. */
+    .assess-toggle { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2);
+      border: 1px solid var(--hairline); border-radius: 9999px; margin: 0 0 14px; }
+    .seg { font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); background: none;
+      border: none; border-radius: 9999px; padding: 5px 16px; cursor: pointer; }
+    .seg:hover { color: var(--ink-1); }
+    .seg.on { background: var(--surface-work); color: var(--teal); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+    .map-platform-note { font-size: 12px; color: var(--ink-2); background: var(--surface-2);
+      border: 1px solid var(--hairline); border-radius: var(--radius-card); padding: 9px 12px; margin: 0 0 12px; }
+    .mapnode { margin: 6px 0; }
+    .mapnode .collapse-head { align-items: center; }
+    .map-outcome-chip { flex-shrink: 0; margin-left: auto; font-size: 11px; color: var(--ink-2);
+      background: var(--page); border: 1px solid var(--hairline); border-radius: 9999px; padding: 3px 10px; white-space: nowrap; }
+    .map-outcome-chip .map-aim { font-size: 9.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 5px; }
+    .map-feeders { display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+    .feeder-label { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+    .feeder-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .feeder { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 12.5px; color: var(--ink-1);
+      background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 8px; padding: 6px 11px; text-align: left; }
+    button.feeder { cursor: pointer; }
+    button.feeder:hover { border-color: var(--hairline-strong); }
+    .feeder.lever { border-left: 3px solid var(--teal); }   /* the controllable action (D198 lever) */
+    .feeder .f-status { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+    .feeder .f-count { color: var(--ink-3); }
+    /* the missing intermediary layer: a broken link to the outcome (D198/D162/D171) */
+    .map-gap { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-3);
+      border-top: 1px dashed var(--hairline-strong); margin-top: 2px; padding-top: 9px; }
+    .map-gap .gap-glyph { color: var(--ink-3); letter-spacing: 1px; }
+    .map-gap em { font-style: italic; }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -338,6 +368,9 @@
 
     // --- nav + view switching ---
     let activeView = "today";
+    // D199/S101: the assess surface's List/Map toggle. One source (assessData,
+    // the units-by-goal read) behind both renderings — no second data path.
+    let assessMode = "list", assessData = null;
     function renderNav() {
       const nav = document.getElementById("nav"), foot = document.getElementById("nav-foot");
       const item = (n) => `<div class="navitem ${n.id === activeView ? "on" : ""}" data-nav="${n.id}">${ICONS[n.id] || ""}${escapeHtml(n.label)}</div>`;
@@ -378,11 +411,18 @@
       } else if (activeView === "dash") {
         left.innerHTML = `<h1>How am I doing</h1>`;
         view.innerHTML = `
-          <p class="sub">Your work grouped under the goal it serves — one verdict line per goal. Tap a goal for the work behind it and the facets it is missing.</p>
-          <div class="section-label">By goal</div>
-          <p class="sub">One line per goal: the verdict and why. Tap for the work behind it (and any suggestions); work no goal claims folds to a single line. Meaningful once your goals are seeded.</p>
+          <p class="sub">Your work under the goal it serves. <strong>List</strong> is one verdict line per goal; <strong>Map</strong> shows each goal as a causal node with the levers and work feeding it.</p>
+          <div class="assess-toggle" id="assess-toggle" role="tablist">
+            <button class="seg ${assessMode === "list" ? "on" : ""}" data-mode="list" type="button" role="tab">List</button>
+            <button class="seg ${assessMode === "map" ? "on" : ""}" data-mode="map" type="button" role="tab">Map</button>
+          </div>
           <div class="goals" id="moat"></div>`;
-        loadUnitsByGoal();
+        document.querySelectorAll("#assess-toggle .seg").forEach((b) => b.onclick = () => {
+          assessMode = b.dataset.mode;
+          document.querySelectorAll("#assess-toggle .seg").forEach((x) => x.classList.toggle("on", x === b));
+          renderAssess();  // re-render from the cached source — no refetch (D199)
+        });
+        loadAssess();
       } else if (activeView === "coverage") {
         // D193/S98: the unlinked pile lives here, off the daily surface — items
         // the matcher couldn't tie to a goal, framed as coverage, not a chore.
@@ -426,28 +466,36 @@
     // the group (colour + category icon); each unit row carries one signal per
     // channel (design-language §2): colour = tier, icon = facet category, no
     // initials (no cluster yet), status in one pill, meta bare.
-    async function loadUnitsByGoal() {
+    // D199: fetch the grouped read once into assessData, then render whichever
+    // mode is active. The toggle re-renders from this cache — one source, no
+    // second data path.
+    async function loadAssess() {
       const box = document.getElementById("moat"); if (!box) return;
-      let g;
-      try { g = await api("/daily-driver/units-by-goal"); } catch { box.innerHTML = ""; return; }
+      try { assessData = await api("/daily-driver/units-by-goal"); }
+      catch { assessData = null; box.innerHTML = ""; return; }
+      renderAssess();
+    }
+    function renderAssess() {
+      const box = document.getElementById("moat"); if (!box || !assessData) return;
+      (assessMode === "map" ? renderAssessMap : renderAssessList)(box, assessData);
+    }
+    // Both renderings lead with the coverage boundary (the read is valid only
+    // inside it, D171) and keep the unlinked pile off the surface (D193).
+    function appendCoverageLine(box, g) {
       const cov = g.coverage || {goals_total:0, goals_covered:0, units_total:0, units_linked:0, has_coverage:false};
-      box.innerHTML = "";
-      // Lead with the coverage boundary — the read is only valid inside it (D171).
       const cline = document.createElement("div");
       cline.className = "sub"; cline.style.margin = "0 0 10px";
       cline.innerHTML = `<strong>Coverage:</strong> ${cov.goals_covered} of ${cov.goals_total} goals linked to ingested work · ${cov.units_linked} of ${cov.units_total} units linked.`;
       box.appendChild(cline);
-      if (!cov.has_coverage) {
-        const note = document.createElement("div");
-        note.className = "empty";
-        note.textContent = "No goals are linked to ingested work yet, so the grouped read is unproven and withheld. Connect where the work lives (pull tasks, then correlate) — or tune the lever names to match how you title it.";
-        box.appendChild(note);
-        return;
-      }
-      // D189: one folded verdict line per goal — the verdict, not the dump.
-      (g.groups || []).forEach((grp) => box.appendChild(verdictLineEl(grp)));
-      // D193/S98: the unlinked pile no longer sits on the daily surface — it is
-      // coverage, not goal health. At most a small count linking to its view.
+      return cov;
+    }
+    function appendNoCoverage(box) {
+      const note = document.createElement("div");
+      note.className = "empty";
+      note.textContent = "No goals are linked to ingested work yet, so the grouped read is unproven and withheld. Connect where the work lives (pull tasks, then correlate) — or tune the lever names to match how you title it.";
+      box.appendChild(note);
+    }
+    function appendCoveragePointer(box, g) {
       if (g.unlinked && g.unlinked.length) {
         const link = document.createElement("div");
         link.className = "coverage-link";
@@ -455,6 +503,158 @@
         link.querySelector("a").onclick = () => goto("coverage");
         box.appendChild(link);
       }
+    }
+    // The List render (D189): one folded verdict line per goal — verdict, not dump.
+    function renderAssessList(box, g) {
+      box.innerHTML = "";
+      const cov = appendCoverageLine(box, g);
+      if (!cov.has_coverage) { appendNoCoverage(box); return; }
+      (g.groups || []).forEach((grp) => box.appendChild(verdictLineEl(grp)));
+      appendCoveragePointer(box, g);
+    }
+    // The Map render (D199): each goal a goal-anchored, depth-two, read-only
+    // causal node — its outcome carrying the verdict + the measurable outcome,
+    // its levers and its serving work as sibling feeders. The intermediary layer
+    // between feeders and outcome is not modelled (D162), shown as one broken
+    // link with a single platform-limit note — never a per-goal "no path" alarm.
+    function renderAssessMap(box, g) {
+      box.innerHTML = "";
+      const cov = appendCoverageLine(box, g);
+      if (!cov.has_coverage) { appendNoCoverage(box); return; }
+      const note = document.createElement("div");
+      note.className = "map-platform-note";
+      note.textContent = "Each goal's outcome shows the levers and work that feed it. The intermediary steps between feeders and outcome aren't modelled yet, so that link reads broken — a limit of the Map today, not a gap in your work.";
+      box.appendChild(note);
+      (g.groups || []).forEach((grp) => box.appendChild(mapNodeEl(grp)));
+      appendCoveragePointer(box, g);
+    }
+    // The measurable outcome (D163/D199) — the result, distinct from the goal
+    // (the aim). Derived from the carried mode + target fields, recomputed nowhere.
+    function measurableOutcome(grp) {
+      if (grp.mode === "progressive") {
+        const lvl = grp.current_target_level, ladder = grp.ladder || [];
+        if (lvl && ladder.length) {
+          const pos = ladder.indexOf(lvl);
+          return pos >= 0 ? `aiming ${lvl} · level ${pos + 1} of ${ladder.length}` : `aiming ${lvl}`;
+        }
+        return lvl ? `aiming ${lvl}` : "progressive";
+      }
+      if (grp.mode === "sequence") {
+        const t = grp.terminal_target, s = grp.terminal_state;
+        return t ? (s ? `${t} · ${s}` : t) : "sequence";
+      }
+      return "rhythm held";  // homeostatic: the measure is the rhythm, read from the verdict
+    }
+    function mapNodeEl(grp) {
+      const meta = STATUS_META[grp.status] || STATUS_META.active;
+      const tier = (DOMAINS[grp.domain] || DOMAINS.work).tier;
+      const head =
+        `<span class="collapse-caret">▸</span>` +
+        `<span class="vpill ${meta.cls}">${escapeHtml(meta.label)}</span>` +
+        `<span class="collapse-label">${escapeHtml(grp.name)}</span>` +
+        `<span class="map-outcome-chip"><span class="map-aim">outcome</span>${escapeHtml(measurableOutcome(grp))}</span>`;
+      const fold = makeFold(head, (body) => buildMapFeeders(body, grp, tier));
+      fold.classList.add("mapnode");
+      return fold;
+    }
+    function feederGroup(label, cards) {
+      const g = document.createElement("div");
+      const l = document.createElement("div"); l.className = "feeder-label"; l.textContent = label;
+      const row = document.createElement("div"); row.className = "feeder-row";
+      cards.forEach((c) => row.appendChild(c));
+      g.appendChild(l); g.appendChild(row);
+      return g;
+    }
+    function feederCard(kind, labelHtml, statusHtml, onClick) {
+      const el = document.createElement(onClick ? "button" : "div");
+      el.className = "feeder " + kind;
+      if (onClick) { el.type = "button"; el.onclick = onClick; }
+      el.innerHTML = `<span>${labelHtml}</span>${statusHtml || ""}`;
+      return el;
+    }
+    function mapWorkDetail(items) {
+      return items.map((u) => {
+        const cnt = u.instance_count > 1 ? ` ×${u.instance_count}` : "";
+        return `<div class="field-value">${escapeHtml(u.title)}${escapeHtml(cnt)}</div>`;
+      }).join("") || `<div class="evidence-note">No detail.</div>`;
+    }
+    // The serving work, folded by source type (D175/D190) into sibling feeder
+    // cards. NOT nested under a lever: the graph links work to the outcome via
+    // SERVES, not to a specific lever (Step-0 decisive) — so work feeds the
+    // outcome as a sibling of the levers, never a child of one.
+    function servingWorkFeeders(grp, tier) {
+      const cards = [];
+      const ea = grp.email_activity || {};
+      const ekinds = Object.keys(ea);
+      if (ekinds.length) {
+        const total = ekinds.reduce((n, k) => n + ea[k], 0);
+        const order = EMAIL_KIND_ORDER.filter((k) => ea[k]).concat(ekinds.filter((k) => !EMAIL_KIND_ORDER.includes(k)));
+        const detail = order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`).join(" · ");
+        cards.push(feederCard("work", `Emails <span class="f-count">×${total}</span>`, "",
+          () => openNodePanel("Email activity", tier, `<div class="field-value">${escapeHtml(detail)}</div>`)));
+      }
+      const byType = {};
+      (grp.units || []).forEach((u) => {
+        const t = (u.facet_types || [])[0] || "other";
+        const e = byType[t] || (byType[t] = { instances: 0, items: [] });
+        e.instances += (u.instance_count || 1); e.items.push(u);
+      });
+      ["task", "meeting", "other"].forEach((t) => {
+        const e = byType[t]; if (!e) return;
+        const label = FACET_LABEL[t] || (t[0].toUpperCase() + t.slice(1));
+        cards.push(feederCard("work", `${escapeHtml(label)} <span class="f-count">×${e.instances}</span>`, "",
+          () => openNodePanel(`${label} serving ${grp.name}`, tier, mapWorkDetail(e.items))));
+      });
+      if (grp.units_more > 0) {
+        cards.push(feederCard("work", `+ ${grp.units_more} more <span class="f-count">distinct</span>`, "", null));
+      }
+      return cards;
+    }
+    function buildMapFeeders(body, grp, tier) {
+      const wrap = document.createElement("div"); wrap.className = "map-feeders";
+      // Levers — the controllable actions (D198), each with its cadence status.
+      const levers = grp.levers || [];
+      if (levers.length) {
+        wrap.appendChild(feederGroup("Levers — you act", levers.map((lv) => {
+          const lm = STATUS_META[lv.status] || STATUS_META.active;
+          return feederCard("lever", escapeHtml(lv.name),
+            `<span class="f-status">${escapeHtml(lm.label)}</span>`,
+            () => openNodePanel(lv.name, tier,
+              `<div><div class="field-label">Lever status</div><div class="field-value">${escapeHtml(lm.label)}</div></div>` +
+              `<p class="sub">A lever is an action you control; its status reads from your commitment cadence (D191).</p>`));
+        })));
+      }
+      // Serving work — sibling feeders of the outcome, folded by source type.
+      const workCards = servingWorkFeeders(grp, tier);
+      if (workCards.length) wrap.appendChild(feederGroup("Serving work — Padhanam sees", workCards));
+      if (!levers.length && !workCards.length) {
+        const e = document.createElement("div"); e.className = "evidence-note";
+        e.textContent = grp.status === "not_tracked"
+          ? "Not tracked yet — no completions recorded, so the Map can't read a feeder."
+          : "No linked work yet — the verdict reads from your commitment cadence.";
+        wrap.appendChild(e);
+      }
+      // The broken link to the outcome through the (un-modelled) intermediaries.
+      const gap = document.createElement("div"); gap.className = "map-gap";
+      gap.innerHTML = `<span class="gap-glyph">┄┄✕┄┄▸</span>` +
+        `<span>feeders → <em>intermediaries not modelled</em> → <strong>${escapeHtml(grp.name)}</strong></span>`;
+      wrap.appendChild(gap);
+      body.appendChild(wrap);
+    }
+    // A read-only node drawer (design-language §3: the ~420px panel, the 220ms
+    // slide). Reuses the item panel chrome; no foot actions — the Map writes
+    // nothing.
+    function openNodePanel(title, tier, bodyHtml) {
+      const panel = document.getElementById("panel");
+      panel.dataset.tier = tier || "work";
+      const cue = document.getElementById("panel-cue");
+      cue.style.setProperty("--tint", tier === "personal" ? "var(--warm)" : "var(--cool)");
+      cue.innerHTML = tier === "personal" ? DOMAINS.personal.icon : DOMAINS.work.icon;
+      document.getElementById("panel-title").textContent = title;
+      document.getElementById("panel-body").innerHTML = bodyHtml;
+      document.getElementById("panel-foot").style.display = "none";
+      panel.classList.add("open");
+      document.getElementById("backdrop").classList.add("open");
     }
     // The S92/D188 status vocabulary -> label + pill class (design-language §2).
     const STATUS_META = {
