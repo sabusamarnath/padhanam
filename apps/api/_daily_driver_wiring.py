@@ -110,7 +110,6 @@ from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
 from contexts.ingestion.ports.unit_graph_port import (
     ElementEvidenceWrite,
     FacetLinkWrite,
-    GoalEdgeWrite,
     UnitWrite,
 )
 from contexts.tasks.adapters.outbound.postgres.task_store import (
@@ -839,23 +838,6 @@ class UnitGraphAdapter:
                 ),
             )
             for record in records
-        )
-
-    async def replace_goal_edges(
-        self, *, tenant_context: TenantContext, edges: Any
-    ) -> None:
-        writes = [
-            GoalEdgeWrite(
-                unit_id=edge.unit_id,
-                outcome_id=edge.outcome_id,
-                confidence=edge.confidence,
-                status=edge.status.value,
-                basis=edge.basis,
-            )
-            for edge in edges
-        ]
-        await self._unit_graph.replace_goal_edges(
-            tenant_context=tenant_context, edges=writes
         )
 
     async def replace_element_evidence(

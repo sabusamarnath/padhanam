@@ -11,6 +11,8 @@ import asyncio
 from uuid import uuid4
 
 from contexts.daily_driver.application import correlate_goal_facets
+from contexts.daily_driver.domain.cdd import GoalCddView
+from contexts.daily_driver.domain.goal_assessment import derive_goal_edges
 from contexts.daily_driver.domain.goal import (
     ControlAxis,
     Goal,
@@ -67,8 +69,8 @@ class _FakeUnitGraph:
     async def list_units(self, *, tenant_context):
         return self._records
 
-    async def replace_goal_edges(self, *, tenant_context, edges):
-        self.replaced = tuple(edges)
+    async def replace_element_evidence(self, *, tenant_context, evidence):
+        self.replaced = tuple(evidence)
 
 
 class _FakeFacetSource:
@@ -80,11 +82,19 @@ class _FakeFacetSource:
 
 
 class _FakeGoalGraph:
+    """Goals with empty CDDs (S103b): a unit keyword-matching the goal name binds
+    to the goal's outcome element at the alias tier, so an edge still forms."""
+
     def __init__(self, goals):
         self._goals = goals
 
     async def list_goals(self, *, tenant_context):
         return self._goals
+
+    async def read_goal_cdd(self, *, tenant_context, outcome_id):
+        return GoalCddView(
+            outcome_id=outcome_id, expected_outcome="", elements=(), edges=()
+        )
 
 
 class _FakeCommitmentRepo:
@@ -164,5 +174,7 @@ def test_recorder_receives_exactly_the_replaced_edges_and_units() -> None:
     rec = _RecordingRecorder()
     _, ug = _run(_fixture(), recorder=rec)
     assert rec.calls == 1
-    assert rec.edges == ug.replaced  # measured exactly what was written
+    # The producer is goal-shaped: the recorder measures the goal-level rollup
+    # derived from exactly the element evidence that was written (D202, S103b).
+    assert rec.edges == derive_goal_edges(ug.replaced)
     assert rec.units is not None and len(rec.units) == 1

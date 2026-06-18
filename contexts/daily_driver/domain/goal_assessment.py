@@ -705,6 +705,170 @@ def dedup_goal_edges(edges: tuple[GoalEdge, ...]) -> tuple[GoalEdge, ...]:
     return tuple(best[k] for k in order)
 
 
+@dataclass(frozen=True)
+class ElementTarget:
+    """One authored element a unit can bind to (D202): its kind, id, and label."""
+
+    kind: str
+    element_id: UUID
+    label: str
+
+
+@dataclass(frozen=True)
+class GoalElementTargets:
+    """A goal's authored elements plus the goal-level alias targets (D202, S103b).
+
+    ``elements`` are the levers / intermediaries / externals (each an
+    ``ElementTarget``); ``expected_outcome`` is the outcome element's label (bound
+    by ``element_kind="outcome"`` at ``outcome_id``); ``name`` + ``aliases`` are
+    the goal-level alias-tier targets that, failing any element match, bind to the
+    outcome element (preserving the pre-S103b goal-name/alias recall).
+    """
+
+    outcome_id: UUID
+    name: str
+    aliases: tuple[str, ...]
+    elements: tuple[ElementTarget, ...]
+    expected_outcome: str
+
+
+# Match tiers (D202): strongest first. A unit-facet title equal to an element
+# label is lexical_exact (confirmed); a keyword overlap is lexical_keyword
+# (candidate); a goal-name/alias keyword match with no element hit is alias
+# (candidate), bound to the outcome element. No embedding tier (S100 empty corpus).
+_TIER_RANK = {"lexical_exact": 2, "lexical_keyword": 1, "alias": 0}
+
+
+def dedup_element_evidence(
+    evidence: list[ElementEvidence],
+) -> tuple[ElementEvidence, ...]:
+    """One evidence row per ``(unit, element)``, keeping the strongest tier.
+    Order-preserving on first appearance — multi-attach across *distinct* elements
+    is preserved; only duplicate bindings to the *same* element collapse."""
+    best: dict[tuple[UUID, UUID], ElementEvidence] = {}
+    order: list[tuple[UUID, UUID]] = []
+    for ev in evidence:
+        key = (ev.unit_id, ev.element_id)
+        cur = best.get(key)
+        if cur is None:
+            best[key] = ev
+            order.append(key)
+        elif _TIER_RANK[ev.tier] > _TIER_RANK[cur.tier]:
+            best[key] = ev
+    return tuple(best[k] for k in order)
+
+
+def infer_element_evidence(
+    units: tuple[UnitView, ...],
+    goal_targets: tuple[GoalElementTargets, ...],
+) -> tuple[ElementEvidence, ...]:
+    """Bind each unit to the authored elements it evidences (D202, S103b).
+
+    For each (unit, goal): a unit-facet title equal to an element label is
+    **lexical_exact** (confirmed) evidence to that element; a keyword overlap is
+    **lexical_keyword** (candidate). The outcome element is matched the same way
+    against ``expected_outcome``. A unit may bind **more than one** element
+    (multi-attach). Only when a unit matches **no** element in a goal does a
+    goal-name/alias keyword hit bind it to that goal's outcome element at the
+    **alias** tier (candidate) — preserving the pre-S103b recall. A unit binding no
+    element anywhere produces no row and parks unbound. Lexical-and-alias only.
+    """
+    evidence: list[ElementEvidence] = []
+    for unit in units:
+        titles = _unit_titles(unit)
+        if not titles:
+            continue
+        for goal in goal_targets:
+            matched_in_goal = False
+            targets = list(goal.elements)
+            if goal.expected_outcome:
+                targets.append(
+                    ElementTarget(
+                        kind="outcome",
+                        element_id=goal.outcome_id,
+                        label=goal.expected_outcome,
+                    )
+                )
+            for el in targets:
+                label = normalise_title(el.label)
+                if not label:
+                    continue
+                if any(t == label for t in titles):
+                    evidence.append(
+                        ElementEvidence(
+                            unit_id=unit.unit_id, element_kind=el.kind,
+                            element_id=el.element_id, outcome_id=goal.outcome_id,
+                            tier="lexical_exact", status=LinkStatus.CONFIRMED,
+                            basis="element-exact",
+                        )
+                    )
+                    matched_in_goal = True
+                elif any(_keyword_match(t, label) for t in titles):
+                    evidence.append(
+                        ElementEvidence(
+                            unit_id=unit.unit_id, element_kind=el.kind,
+                            element_id=el.element_id, outcome_id=goal.outcome_id,
+                            tier="lexical_keyword", status=LinkStatus.CANDIDATE,
+                            basis="element-keyword",
+                        )
+                    )
+                    matched_in_goal = True
+            if not matched_in_goal:
+                alias_targets = [normalise_title(goal.name)]
+                alias_targets.extend(
+                    normalise_title(a) for a in goal.aliases if normalise_title(a)
+                )
+                if any(
+                    _keyword_match(t, target)
+                    for t in titles
+                    for target in alias_targets
+                    if target
+                ):
+                    evidence.append(
+                        ElementEvidence(
+                            unit_id=unit.unit_id, element_kind="outcome",
+                            element_id=goal.outcome_id, outcome_id=goal.outcome_id,
+                            # tier=alias is the weak goal-name signal; the basis
+                            # stays WEAK_KEYWORD_BASIS so the matcher-quality and
+                            # single-signal-suppression hooks (D185/D186) read it.
+                            tier="alias", status=LinkStatus.CANDIDATE,
+                            basis=WEAK_KEYWORD_BASIS,
+                        )
+                    )
+    return dedup_element_evidence(evidence)
+
+
+def infer_email_job_search_evidence(
+    units: tuple[UnitView, ...],
+    outcome_id: UUID,
+    confirmed_facet_ids: frozenset[UUID],
+) -> tuple[ElementEvidence, ...]:
+    """Element-evidence analog of the D183 classifier-fed edge (S103b): a unit
+    carrying a rule-confirmed job-search email binds to the Get-a-job **outcome**
+    element at high confidence (the ``email-job-search`` basis)."""
+    evidence: list[ElementEvidence] = []
+    seen: set[UUID] = set()
+    for unit in units:
+        if unit.unit_id in seen:
+            continue
+        if any(
+            f.facet_type is FacetType.EMAIL
+            and f.present
+            and f.facet_id in confirmed_facet_ids
+            for f in unit.facets
+        ):
+            evidence.append(
+                ElementEvidence(
+                    unit_id=unit.unit_id, element_kind="outcome",
+                    element_id=outcome_id, outcome_id=outcome_id,
+                    tier="lexical_exact", status=LinkStatus.CONFIRMED,
+                    basis=_EMAIL_RULE_BASIS,
+                )
+            )
+            seen.add(unit.unit_id)
+    return tuple(evidence)
+
+
 def derive_goal_edges(
     evidence: tuple[ElementEvidence, ...]
 ) -> tuple[GoalEdge, ...]:
@@ -955,8 +1119,12 @@ __all__ = [
     "GoalAssessment",
     "GoalCoverage",
     "ElementEvidence",
+    "ElementTarget",
     "GoalEdge",
+    "GoalElementTargets",
     "derive_goal_edges",
+    "infer_element_evidence",
+    "infer_email_job_search_evidence",
     "LinkedGoal",
     "OrphanUnit",
     "GoalGroup",
