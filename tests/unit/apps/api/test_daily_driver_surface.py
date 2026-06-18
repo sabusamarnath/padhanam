@@ -188,6 +188,34 @@ def test_daily_surface_no_longer_carries_the_orphan_pile():
     assert 'goto("coverage")' in _HTML
 
 
+# --- S103a / S103a-fix: the authored-CDD lens affordances -------------------
+
+
+def test_cdd_lens_carries_add_and_reclassify_affordances():
+    # S103a: the add control and the reclassify select render on the CDD lens.
+    assert "function cddAddControl" in _HTML
+    assert "cdd-reclass" in _HTML and "Move to" in _HTML
+
+
+def test_cdd_edit_affordance_is_inline_over_the_existing_correct_path():
+    # S103a-fix AC1: a clear in-place edit control on each element AND the
+    # outcome, wired to the existing S102 correct path (no new write path).
+    assert "function cddBeginEdit(" in _HTML
+    assert 'edit.textContent = "Edit"' in _HTML
+    assert "cddBeginEdit(row, el.label," in _HTML          # element edit
+    assert "cddBeginEdit(row, cdd.expected_outcome," in _HTML  # outcome edit
+    assert "/correct" in _HTML
+    # in place, not a blocking prompt dialog (the unrecognisable old affordance)
+    assert 'window.prompt("Edit' not in _HTML
+
+
+def test_draft_missing_has_a_clear_empty_state():
+    # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
+    # flag and shows a clear "all already have a CDD" state, not a silent zero.
+    assert "All goals already have a CDD" in _HTML
+    assert "x.skipped_existing" in _HTML
+
+
 def test_raw_tasks_and_goal_readings_cut_from_the_surface():
     # The raw ingested-tasks dump and the standalone goal-readings block are cut
     # from every user-facing view (their endpoints stay; this is render-only).
