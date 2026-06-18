@@ -543,7 +543,7 @@
         const t = grp.terminal_target, s = grp.terminal_state;
         return t ? (s ? `${t} · ${s}` : t) : "sequence";
       }
-      return "rhythm held";  // homeostatic: the measure is the rhythm, read from the verdict
+      return "rhythm";  // homeostatic: the aim is a maintained rhythm; whether it's *held* is the verdict pill's job, not the outcome label (coverage honesty — never assert "held" on a not_tracked goal)
     }
     function mapNodeEl(grp) {
       const meta = STATUS_META[grp.status] || STATUS_META.active;
