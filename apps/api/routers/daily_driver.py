@@ -48,6 +48,8 @@ from apps.api.routers._daily_driver_dto import (
     AddedCddElementDTO,
     ElementEvidenceSummaryDTO,
     ReclassifyCddElementRequest,
+    RelinkCddEvidenceRequest,
+    UnlinkCddEvidenceRequest,
     element_evidence_summary_to_dto,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
@@ -91,6 +93,10 @@ from contexts.daily_driver.application.author_cdd import (
 )
 from contexts.daily_driver.application.read_element_evidence import (
     read_element_evidence,
+)
+from contexts.daily_driver.application.correct_cdd_evidence import (
+    relink_cdd_evidence,
+    unlink_cdd_evidence,
 )
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.application.proof_goal_cdd import (
@@ -466,6 +472,55 @@ async def get_cdd_evidence(
         return ElementEvidenceSummaryDTO()
     summary = await read_element_evidence(unit_graph=unit_graph, actor=actor)
     return element_evidence_summary_to_dto(summary)
+
+
+@router.post("/cdd/evidence/unlink", status_code=204)
+async def post_unlink_cdd_evidence(
+    body: UnlinkCddEvidenceRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+) -> Response:
+    """Remove one of a unit's element bindings; mark the unit user-owned (D203)."""
+    if unit_graph is None:
+        raise HTTPException(status_code=503, detail="unit graph not configured")
+    try:
+        kind = ElementKind(body.kind)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"unknown kind: {body.kind}")
+    ok = await unlink_cdd_evidence(
+        unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
+        kind=kind, element_id=body.element_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="binding not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/evidence/relink", status_code=204)
+async def post_relink_cdd_evidence(
+    body: RelinkCddEvidenceRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+) -> Response:
+    """Retarget one of a unit's element bindings to a different element; mark it
+    user-corrected and the unit user-owned (D203)."""
+    if unit_graph is None:
+        raise HTTPException(status_code=503, detail="unit graph not configured")
+    try:
+        from_kind = ElementKind(body.from_kind)
+        to_kind = ElementKind(body.to_kind)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="unknown element kind")
+    ok = await relink_cdd_evidence(
+        unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
+        from_kind=from_kind, from_element_id=body.from_element_id,
+        to_kind=to_kind, to_element_id=body.to_element_id,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=404, detail="binding or target element not found"
+        )
+    return Response(status_code=204)
 
 
 @router.get("/cdd/{outcome_id}", response_model=GoalCddDTO)

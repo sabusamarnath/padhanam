@@ -526,9 +526,19 @@ ORDER BY u.unit_id ASC, o.outcome_id ASC
 # target is an authored element (Lever/Intermediary/External by their id, or the
 # Outcome goal node) — the _AUTHORED_ENDPOINT whitelist from 0005. Derived state:
 # replaced each correlation run, and the retired SERVES set is deleted alongside.
+# S103c (D203): the delete skips user-owned units — a unit the user has corrected
+# is never re-derived, so the re-runnable re-match respects correction precedence.
 _DELETE_ELEMENT_EVIDENCE = """
-MATCH (:Unit {tenant_id: $tenant_id})-[r:EVIDENCES {tenant_id: $tenant_id}]->()
+MATCH (u:Unit {tenant_id: $tenant_id})-[r:EVIDENCES {tenant_id: $tenant_id}]->()
+WHERE coalesce(u.user_owned, false) = false
 DELETE r
+"""
+
+# S103c (D203): the user-ownership read for the re-match to skip.
+_LIST_USER_OWNED_UNITS = """
+MATCH (u:Unit {tenant_id: $tenant_id})
+WHERE u.user_owned = true
+RETURN u.unit_id AS unit_id
 """
 
 
@@ -561,6 +571,40 @@ RETURN u.unit_id AS unit_id,
        r.status AS status,
        r.basis AS basis
 ORDER BY u.unit_id ASC, element_id ASC
+"""
+
+
+# S103c (D203): single-edge correction mutations + user-ownership. A relink
+# retargets one EVIDENCES edge to a different element (both endpoints matched
+# before any write, so a bad target leaves the edge intact); an unlink removes
+# one edge. Both mark the unit user-owned and the new edge user-corrected — the
+# user's binding outranks the matcher's tiers. Multi-attach safe: each touches
+# exactly the one (unit, element) edge named, not all of a unit's bindings.
+def _unlink_element_evidence_cypher(label: str, id_prop: str) -> str:
+    return f"""
+MATCH (u:Unit {{tenant_id: $tenant_id, unit_id: $unit_id}})
+      -[r:EVIDENCES {{tenant_id: $tenant_id}}]->
+      (:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+DELETE r
+SET u.user_owned = true
+RETURN u.unit_id AS unit_id
+"""
+
+
+def _relink_element_evidence_cypher(
+    flabel: str, fid: str, tlabel: str, tid: str
+) -> str:
+    return f"""
+MATCH (u:Unit {{tenant_id: $tenant_id, unit_id: $unit_id}})
+      -[r:EVIDENCES {{tenant_id: $tenant_id}}]->
+      (:{flabel} {{tenant_id: $tenant_id, {fid}: $from_id}})
+MATCH (e:{tlabel} {{tenant_id: $tenant_id, {tid}: $to_id}})
+DELETE r
+MERGE (u)-[nr:EVIDENCES {{tenant_id: $tenant_id}}]->(e)
+ON CREATE SET nr.jurisdiction = $jurisdiction, nr.created_at = $created_at
+SET nr.tier = 'user', nr.status = 'confirmed', nr.basis = 'user-corrected',
+    u.user_owned = true
+RETURN u.unit_id AS unit_id
 """
 
 
@@ -1313,6 +1357,61 @@ class TenantScopedNeo4jSession:
             )
             for row in await result.data()
         ]
+
+    async def list_user_owned_unit_ids(self) -> set[UUID]:
+        """Unit ids the user has corrected (user_owned), for the re-match to skip
+        (D203, S103c)."""
+        session = self._bound_session
+        result = await session.run(
+            _LIST_USER_OWNED_UNITS, {"tenant_id": self._tenant_id}
+        )
+        return {UUID(row["unit_id"]) for row in await result.data()}
+
+    async def unlink_element_evidence(
+        self, *, unit_id: UUID, element_kind: str, element_id: UUID
+    ) -> bool:
+        """Remove one unit→element EVIDENCES edge and mark the unit user-owned
+        (D203). Returns ``False`` when the edge is absent or cross-tenant."""
+        label, id_prop = _authored_endpoint(element_kind)
+        session = self._bound_session
+        result = await session.run(
+            _unlink_element_evidence_cypher(label, id_prop),
+            {
+                "tenant_id": self._tenant_id,
+                "unit_id": str(unit_id),
+                "element_id": str(element_id),
+            },
+        )
+        return await result.single() is not None
+
+    async def relink_element_evidence(
+        self,
+        *,
+        unit_id: UUID,
+        from_kind: str,
+        from_element_id: UUID,
+        to_kind: str,
+        to_element_id: UUID,
+    ) -> bool:
+        """Retarget one unit→element EVIDENCES edge to a different element, mark it
+        user-corrected and the unit user-owned (D203). Both endpoints are matched
+        before any write, so a missing from-edge or to-element is a no-op (returns
+        ``False``)."""
+        flabel, fid = _authored_endpoint(from_kind)
+        tlabel, tid = _authored_endpoint(to_kind)
+        session = self._bound_session
+        result = await session.run(
+            _relink_element_evidence_cypher(flabel, fid, tlabel, tid),
+            {
+                "tenant_id": self._tenant_id,
+                "jurisdiction": self._jurisdiction,
+                "unit_id": str(unit_id),
+                "from_id": str(from_element_id),
+                "to_id": str(to_element_id),
+                "created_at": _now_utc(),
+            },
+        )
+        return await result.single() is not None
 
 
 def _to_python_datetime(value: object) -> datetime | None:

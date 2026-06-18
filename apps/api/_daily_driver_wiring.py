@@ -886,6 +886,31 @@ class UnitGraphAdapter:
         evidence = await self.list_element_evidence(tenant_context=tenant_context)
         return derive_goal_edges(evidence)
 
+    async def list_user_owned_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set:
+        return await self._unit_graph.list_user_owned_unit_ids(
+            tenant_context=tenant_context
+        )
+
+    async def unlink_element_evidence(
+        self, *, tenant_context: TenantContext, unit_id, element_kind, element_id
+    ) -> bool:
+        return await self._unit_graph.unlink_element_evidence(
+            tenant_context=tenant_context, unit_id=unit_id,
+            element_kind=element_kind.value, element_id=element_id,
+        )
+
+    async def relink_element_evidence(
+        self, *, tenant_context: TenantContext, unit_id, from_kind,
+        from_element_id, to_kind, to_element_id,
+    ) -> bool:
+        return await self._unit_graph.relink_element_evidence(
+            tenant_context=tenant_context, unit_id=unit_id,
+            from_kind=from_kind.value, from_element_id=from_element_id,
+            to_kind=to_kind.value, to_element_id=to_element_id,
+        )
+
 
 def build_facet_source(
     *,

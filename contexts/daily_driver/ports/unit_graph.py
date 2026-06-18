@@ -19,7 +19,9 @@ SQLAlchemy, no neo4j.
 from __future__ import annotations
 
 from typing import Protocol, Sequence
+from uuid import UUID
 
+from contexts.daily_driver.domain.cdd import ElementKind
 from contexts.daily_driver.domain.goal_assessment import (
     ElementEvidence,
     GoalEdge,
@@ -82,6 +84,40 @@ class UnitGraphPort(Protocol):
         """Return the tenant's unit→goal edges — **derived on read** from element
         evidence (D202, S103b), no longer the written ``SERVES`` edge. The shape
         is unchanged so the coverage/grouping readers are untouched."""
+        ...
+
+    async def list_user_owned_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set[UUID]:
+        """Return the unit ids the user has corrected (D203, S103c) — the re-match
+        skips these so a correction is never overwritten."""
+        ...
+
+    async def unlink_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+        unit_id: UUID,
+        element_kind: ElementKind,
+        element_id: UUID,
+    ) -> bool:
+        """Remove one unit→element binding and mark the unit user-owned (D203).
+        Returns ``False`` when the binding is absent or cross-tenant."""
+        ...
+
+    async def relink_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+        unit_id: UUID,
+        from_kind: ElementKind,
+        from_element_id: UUID,
+        to_kind: ElementKind,
+        to_element_id: UUID,
+    ) -> bool:
+        """Retarget one unit→element binding to a different element, mark it
+        user-corrected and the unit user-owned (D203). Returns ``False`` when the
+        from-binding or the to-element is absent."""
         ...
 
 

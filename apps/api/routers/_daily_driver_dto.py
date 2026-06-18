@@ -631,6 +631,24 @@ def element_evidence_summary_to_dto(summary) -> "ElementEvidenceSummaryDTO":
     )
 
 
+class UnlinkCddEvidenceRequest(BaseModel):
+    """Remove one of a unit's element bindings (D203, S103c)."""
+
+    unit_id: UUID
+    kind: str
+    element_id: UUID
+
+
+class RelinkCddEvidenceRequest(BaseModel):
+    """Retarget one of a unit's element bindings to a different element (D203)."""
+
+    unit_id: UUID
+    from_kind: str
+    from_element_id: UUID
+    to_kind: str
+    to_element_id: UUID
+
+
 class ReclassifyCddElementRequest(BaseModel):
     """Reclassify an authored element to a new type (D201, S103a). ``to_kind`` is
     ``lever`` / ``intermediary`` / ``external`` (the outcome is not a reclassify

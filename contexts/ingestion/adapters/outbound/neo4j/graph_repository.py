@@ -562,3 +562,61 @@ class Neo4jGraphRepository:
             raise GraphRepositoryConfigurationError(str(e)) from e
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_user_owned_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set[UUID]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.list_user_owned_unit_ids()
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def unlink_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+        unit_id: UUID,
+        element_kind: str,
+        element_id: UUID,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.unlink_element_evidence(
+                    unit_id=unit_id, element_kind=element_kind,
+                    element_id=element_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def relink_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+        unit_id: UUID,
+        from_kind: str,
+        from_element_id: UUID,
+        to_kind: str,
+        to_element_id: UUID,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.relink_element_evidence(
+                    unit_id=unit_id, from_kind=from_kind,
+                    from_element_id=from_element_id, to_kind=to_kind,
+                    to_element_id=to_element_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
