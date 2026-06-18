@@ -776,17 +776,22 @@ def binding_rationale(
     unit_title: str,
     element_label: str,
     tier: str,
+    basis: str = "",
     token_element_counts: dict[str, int],
 ) -> tuple[str, str]:
     """Recompute the *why* (matched term) + the lexical match-strength band for a
     binding (S103c-fix), deterministically from the unit title, the element label,
-    the tier, and how many elements share each token (discriminativeness).
+    the tier, the basis, and how many elements share each token (discriminativeness).
 
     ``token_element_counts`` maps a significant token to the number of authored
     element labels containing it. An exact tier is strong; a keyword match on a
     token unique to one element is medium; a keyword match on a widely-shared
     (incidental) token, or an alias match, is weak — the trap the why exposes.
     """
+    # The classifier-fed (D183) binding is a rule verdict, not a string match —
+    # show the rule honestly rather than the outcome label (S103c-fix live find).
+    if basis == _EMAIL_RULE_BASIS:
+        return ("job-search classifier", _STRENGTH_STRONG)
     if tier == "lexical_exact":
         return (element_label, _STRENGTH_STRONG)
     if tier == "alias":

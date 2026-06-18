@@ -89,6 +89,7 @@ async def read_element_bindings(
             unit_title=title,
             element_label=label,
             tier=e.tier,
+            basis=e.basis,
             token_element_counts=token_counts,
         )
         bindings.append(
