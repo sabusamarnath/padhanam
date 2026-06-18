@@ -8,6 +8,8 @@ import pytest
 
 from shared_kernel import ActorContext, TenantContext
 from shared_kernel.authorisation import (
+    DAILY_DRIVER_CDD_READ,
+    DAILY_DRIVER_CDD_WRITE,
     DAILY_DRIVER_COMMITMENT_COMPLETE,
     DAILY_DRIVER_COMMITMENT_CREATE,
     DAILY_DRIVER_COMMITMENT_OBSERVE,
@@ -63,8 +65,9 @@ def test_operator_role_grants_the_phase_2a_permissions() -> None:
     """The operator role grants the five portfolio permissions, the
     three intake permissions (D127, S44b), the four messaging
     permissions (D129, S45), the three PendingClarification
-    permissions (D134, S47), and the five daily-driver permissions
-    (D157, S58; D162, S61) — twenty in total."""
+    permissions (D134, S47), and the daily-driver permissions
+    (D157, S58; D162, S61; ...; the two authored-CDD permissions
+    D200, S102)."""
     granted = authorisations_for_roles(frozenset({ROLE_OPERATOR}))
     assert granted == frozenset(
         {
@@ -94,6 +97,8 @@ def test_operator_role_grants_the_phase_2a_permissions() -> None:
             DAILY_DRIVER_UNITS_CORRELATE,
             DAILY_DRIVER_ASSESSMENT_READ,
             DAILY_DRIVER_SUGGESTIONS_READ,
+            DAILY_DRIVER_CDD_READ,
+            DAILY_DRIVER_CDD_WRITE,
         }
     )
 

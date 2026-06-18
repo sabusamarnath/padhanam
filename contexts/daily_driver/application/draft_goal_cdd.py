@@ -26,7 +26,7 @@ from contexts.daily_driver.ports.commitment_repository import CommitmentReposito
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
-    DAILY_DRIVER_ASSESSMENT_READ,
+    DAILY_DRIVER_CDD_WRITE,
     requires_authorisation,
 )
 
@@ -58,7 +58,7 @@ def _goal_commitment_ids(goal: Goal) -> tuple[UUID, ...]:
     return tuple(ids)
 
 
-@requires_authorisation(DAILY_DRIVER_ASSESSMENT_READ)
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
 async def draft_goal_cdds(
     *,
     goal_graph: GoalGraphPort,

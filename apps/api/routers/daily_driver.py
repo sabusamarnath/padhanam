@@ -46,6 +46,9 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
+    CorrectCddElementRequest,
+    GoalCddDTO,
+    goal_cdd_to_dto,
     FacetSuggestionDTO,
     GoalAssessmentDTO,
     GoalGroupedUnitsDTO,
@@ -78,6 +81,13 @@ from contexts.daily_driver.application import (
     set_today_order,
 )
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
+from contexts.daily_driver.application.proof_goal_cdd import (
+    accept_cdd_element,
+    correct_cdd_element,
+    read_goal_cdd,
+    reject_cdd_element,
+)
+from contexts.daily_driver.domain.cdd import ElementKind
 from contexts.daily_driver.domain.commitment import Commitment
 from contexts.daily_driver.ports import (
     CalendarEventsReader,
@@ -391,6 +401,69 @@ async def post_draft_cdd(
             for r in results
         ]
     )
+
+
+@router.get("/cdd/{outcome_id}", response_model=GoalCddDTO)
+async def get_goal_cdd(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> GoalCddDTO:
+    """Read a goal's drafted CDD for proof review (S102, D200)."""
+    view = await read_goal_cdd(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id
+    )
+    return goal_cdd_to_dto(view)
+
+
+@router.post("/cdd/elements/{kind}/{element_id}/accept", status_code=204)
+async def post_accept_cdd_element(
+    kind: ElementKind,
+    element_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Accept an authored element (proof_state -> accepted, S102)."""
+    ok = await accept_cdd_element(
+        goal_graph=goal_graph, actor=actor, kind=kind, element_id=element_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="authored element not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/elements/{kind}/{element_id}/correct", status_code=204)
+async def post_correct_cdd_element(
+    kind: ElementKind,
+    element_id: UUID,
+    body: CorrectCddElementRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Edit an element's label and flip its origin to user_authored (S102, D200)."""
+    ok = await correct_cdd_element(
+        goal_graph=goal_graph, actor=actor, kind=kind, element_id=element_id,
+        label=body.label,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="authored element not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/elements/{kind}/{element_id}/reject", status_code=204)
+async def post_reject_cdd_element(
+    kind: ElementKind,
+    element_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Remove an authored element — the user-initiated delete (S102)."""
+    ok = await reject_cdd_element(
+        goal_graph=goal_graph, actor=actor, kind=kind, element_id=element_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="authored element not found")
+    return Response(status_code=204)
 
 
 @router.get("/tasks", response_model=list[TaskDTO])

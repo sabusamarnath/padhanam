@@ -572,6 +572,12 @@ class GoalCddDTO(BaseModel):
     edges: list[AuthoredEdgeDTO]
 
 
+class CorrectCddElementRequest(BaseModel):
+    """Edit an authored element's label (the proof correct path, S102)."""
+
+    label: str
+
+
 def goal_cdd_to_dto(view) -> "GoalCddDTO":
     return GoalCddDTO(
         outcome_id=view.outcome_id,

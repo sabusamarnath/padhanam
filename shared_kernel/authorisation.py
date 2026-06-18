@@ -87,6 +87,11 @@ DAILY_DRIVER_UNITS_CORRELATE = "daily_driver.units.correlate"
 DAILY_DRIVER_ASSESSMENT_READ = "daily_driver.assessment.read"
 # --- Phase 2-A missing-facet suggestion permission (D170, S68) ------
 DAILY_DRIVER_SUGGESTIONS_READ = "daily_driver.suggestions.read"
+# --- Phase 2-B authored CDD permissions (D200, S102) ----------------
+# The authored CDD layer: CDD_READ for the proof read; CDD_WRITE for the LLM
+# draft and the accept/reject/correct proof actions (authoring writes).
+DAILY_DRIVER_CDD_READ = "daily_driver.cdd.read"
+DAILY_DRIVER_CDD_WRITE = "daily_driver.cdd.write"
 
 # --- Phase 2-A role-to-authorisation policy ------------------------
 ROLE_OPERATOR = "operator"
@@ -120,6 +125,8 @@ _ROLE_AUTHORISATIONS: dict[str, frozenset[str]] = {
             DAILY_DRIVER_UNITS_CORRELATE,
             DAILY_DRIVER_ASSESSMENT_READ,
             DAILY_DRIVER_SUGGESTIONS_READ,
+            DAILY_DRIVER_CDD_READ,
+            DAILY_DRIVER_CDD_WRITE,
         }
     ),
 }
@@ -202,6 +209,8 @@ __all__ = [
     "DAILY_DRIVER_COMMITMENT_COMPLETE",
     "DAILY_DRIVER_COMMITMENT_CREATE",
     "DAILY_DRIVER_COMMITMENT_OBSERVE",
+    "DAILY_DRIVER_CDD_READ",
+    "DAILY_DRIVER_CDD_WRITE",
     "DAILY_DRIVER_GOAL_RAISE_TARGET",
     "DAILY_DRIVER_GOAL_READ",
     "DAILY_DRIVER_TODAY_READ",
