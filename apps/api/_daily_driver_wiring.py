@@ -78,7 +78,9 @@ from contexts.daily_driver.domain.today_item import (
 )
 from contexts.daily_driver.domain.goal_assessment import (
     WEAK_KEYWORD_BASIS,
+    ElementEvidence,
     GoalEdge,
+    derive_goal_edges,
 )
 from contexts.daily_driver.domain.unit_view import UnitView
 from contexts.daily_driver.domain.work_unit import (
@@ -106,6 +108,7 @@ from contexts.portfolio.adapters.outbound.postgres.portfolio_reader import (
     PostgresPortfolioReader,
 )
 from contexts.ingestion.ports.unit_graph_port import (
+    ElementEvidenceWrite,
     FacetLinkWrite,
     GoalEdgeWrite,
     UnitWrite,
@@ -855,22 +858,51 @@ class UnitGraphAdapter:
             tenant_context=tenant_context, edges=writes
         )
 
-    async def list_goal_edges(
+    async def replace_element_evidence(
+        self, *, tenant_context: TenantContext, evidence: Any
+    ) -> None:
+        writes = [
+            ElementEvidenceWrite(
+                unit_id=ev.unit_id,
+                element_kind=ev.element_kind,
+                element_id=ev.element_id,
+                tier=ev.tier,
+                status=ev.status.value,
+                basis=ev.basis,
+            )
+            for ev in evidence
+        ]
+        await self._unit_graph.replace_element_evidence(
+            tenant_context=tenant_context, evidence=writes
+        )
+
+    async def list_element_evidence(
         self, *, tenant_context: TenantContext
-    ) -> tuple[GoalEdge, ...]:
-        records = await self._unit_graph.list_goal_edges(
+    ) -> tuple[ElementEvidence, ...]:
+        records = await self._unit_graph.list_element_evidence(
             tenant_context=tenant_context
         )
         return tuple(
-            GoalEdge(
+            ElementEvidence(
                 unit_id=record.unit_id,
+                element_kind=record.element_kind,
+                element_id=record.element_id,
                 outcome_id=record.outcome_id,
-                confidence=record.confidence,
+                tier=record.tier,
                 status=LinkStatus(record.status),
                 basis=record.basis,
             )
             for record in records
         )
+
+    async def list_goal_edges(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[GoalEdge, ...]:
+        # Derive the goal level on read from element evidence (D202, S103b): the
+        # written SERVES edge is retired, so the goal rollup comes from the units'
+        # element bindings, leaving the coverage/grouping readers untouched.
+        evidence = await self.list_element_evidence(tenant_context=tenant_context)
+        return derive_goal_edges(evidence)
 
 
 def build_facet_source(

@@ -98,6 +98,40 @@ class GoalEdgeRecord:
     basis: str
 
 
+@dataclass(frozen=True)
+class ElementEvidenceWrite:
+    """One unit→authored-element ``EVIDENCES`` edge to write (D202, S103b).
+
+    ``element_kind`` is ``lever`` / ``intermediary`` / ``external`` / ``outcome``
+    (the authored-endpoint whitelist from 0005); ``element_id`` is the endpoint's
+    id (``lever_id`` / ``element_id`` / ``outcome_id``). No direction this session.
+    """
+
+    unit_id: UUID
+    element_kind: str
+    element_id: UUID
+    tier: str
+    status: str
+    basis: str
+
+
+@dataclass(frozen=True)
+class ElementEvidenceRecord:
+    """One unit→authored-element ``EVIDENCES`` edge as read back (D202, S103b).
+
+    ``outcome_id`` is the goal whose CDD the element belongs to (every authored
+    element carries it), so the goal level can be derived on read.
+    """
+
+    unit_id: UUID
+    element_kind: str
+    element_id: UUID
+    outcome_id: UUID
+    tier: str
+    status: str
+    basis: str
+
+
 class UnitGraphPort(Protocol):
     """Typed work-unit-graph capability on the shared Neo4j instance (D168)."""
 
@@ -153,8 +187,33 @@ class UnitGraphPort(Protocol):
         (unit id, outcome id). Cross-tenant rows never surface."""
         ...
 
+    async def replace_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+        evidence: Sequence[ElementEvidenceWrite],
+    ) -> None:
+        """Replace the tenant's ``(:Unit)-[:EVIDENCES]->(authored element)`` edges
+        (D202, S103b). Derived state (D155): deletes the tenant's ``EVIDENCES``
+        **and** the retired ``SERVES`` edges, then MERGEs the new evidence set (an
+        edge whose unit or element is absent is silently skipped). The goal level
+        is no longer written — it is derived on read from this evidence."""
+        ...
+
+    async def list_element_evidence(
+        self,
+        *,
+        tenant_context: TenantContext,
+    ) -> Sequence[ElementEvidenceRecord]:
+        """Return every unit→element ``EVIDENCES`` edge for the bound tenant, each
+        carrying the element's ``outcome_id`` for the goal-level derive, ordered by
+        (unit id, element id). Cross-tenant rows never surface."""
+        ...
+
 
 __all__ = [
+    "ElementEvidenceRecord",
+    "ElementEvidenceWrite",
     "FacetLinkRecord",
     "FacetLinkWrite",
     "GoalEdgeRecord",

@@ -46,6 +46,8 @@ from contexts.ingestion.ports.outcome_graph_port import (
     OutcomeGraphRecord,
 )
 from contexts.ingestion.ports.unit_graph_port import (
+    ElementEvidenceRecord,
+    ElementEvidenceWrite,
     FacetLinkRecord,
     GoalEdgeRecord,
     GoalEdgeWrite,
@@ -516,6 +518,49 @@ RETURN u.unit_id AS unit_id,
        r.status AS status,
        r.basis AS basis
 ORDER BY u.unit_id ASC, o.outcome_id ASC
+"""
+
+
+# --- Element-evidence templates (D202, S103b): the unit→authored-element edge ---
+# The primary evidence write, replacing the goal-level SERVES write (retired). The
+# target is an authored element (Lever/Intermediary/External by their id, or the
+# Outcome goal node) — the _AUTHORED_ENDPOINT whitelist from 0005. Derived state:
+# replaced each correlation run, and the retired SERVES set is deleted alongside.
+_DELETE_ELEMENT_EVIDENCE = """
+MATCH (:Unit {tenant_id: $tenant_id})-[r:EVIDENCES {tenant_id: $tenant_id}]->()
+DELETE r
+"""
+
+
+def _merge_element_evidence_cypher(tlabel: str, tid: str) -> str:
+    return f"""
+MATCH (u:Unit {{tenant_id: $tenant_id, unit_id: $unit_id}})
+MATCH (e:{tlabel} {{tenant_id: $tenant_id, {tid}: $element_id}})
+MERGE (u)-[r:EVIDENCES {{tenant_id: $tenant_id}}]->(e)
+ON CREATE SET
+    r.jurisdiction = $jurisdiction,
+    r.created_at = $created_at
+SET
+    r.tier = $tier,
+    r.status = $status,
+    r.basis = $basis
+"""
+
+
+# Every authored element carries outcome_id (the goal), so the goal level derives
+# from either endpoint's outcome_id. The element id coalesces the kind's id prop.
+_LIST_ELEMENT_EVIDENCE = """
+MATCH (u:Unit {tenant_id: $tenant_id})
+      -[r:EVIDENCES {tenant_id: $tenant_id}]->(e)
+WHERE e.outcome_id IS NOT NULL
+RETURN u.unit_id AS unit_id,
+       labels(e)[0] AS element_kind,
+       coalesce(e.lever_id, e.element_id, e.outcome_id) AS element_id,
+       e.outcome_id AS outcome_id,
+       r.tier AS tier,
+       r.status AS status,
+       r.basis AS basis
+ORDER BY u.unit_id ASC, element_id ASC
 """
 
 
@@ -1214,6 +1259,59 @@ class TenantScopedNeo4jSession:
                 basis=row["basis"],
             )
             for row in rows
+        ]
+
+    async def replace_element_evidence(
+        self, evidence: Sequence[ElementEvidenceWrite]
+    ) -> None:
+        """Replace the tenant's unit→element EVIDENCES edges (D202, S103b).
+
+        Deletes the tenant's EVIDENCES edges and the retired SERVES edges, then
+        MERGEs the new evidence set. The element endpoint label/id-property is
+        composed from the authored whitelist (an unknown kind raises). An edge
+        whose unit or element is absent is silently skipped.
+        """
+        session = self._bound_session
+        now = _now_utc()
+        await session.run(
+            _DELETE_ELEMENT_EVIDENCE, {"tenant_id": self._tenant_id}
+        )
+        await session.run(_DELETE_GOAL_EDGES, {"tenant_id": self._tenant_id})
+        for ev in evidence:
+            tlabel, tid = _authored_endpoint(ev.element_kind)
+            await session.run(
+                _merge_element_evidence_cypher(tlabel, tid),
+                {
+                    "tenant_id": self._tenant_id,
+                    "jurisdiction": self._jurisdiction,
+                    "unit_id": str(ev.unit_id),
+                    "element_id": str(ev.element_id),
+                    "tier": ev.tier,
+                    "status": ev.status,
+                    "basis": ev.basis,
+                    "created_at": now,
+                },
+            )
+
+    async def list_element_evidence(
+        self,
+    ) -> Sequence[ElementEvidenceRecord]:
+        """Return every unit→element EVIDENCES edge for the bound tenant (D202)."""
+        session = self._bound_session
+        result = await session.run(
+            _LIST_ELEMENT_EVIDENCE, {"tenant_id": self._tenant_id}
+        )
+        return [
+            ElementEvidenceRecord(
+                unit_id=UUID(row["unit_id"]),
+                element_kind=str(row["element_kind"]).lower(),
+                element_id=UUID(row["element_id"]),
+                outcome_id=UUID(row["outcome_id"]),
+                tier=row["tier"],
+                status=row["status"],
+                basis=row["basis"],
+            )
+            for row in await result.data()
         ]
 
 

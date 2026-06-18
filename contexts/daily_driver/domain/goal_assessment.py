@@ -73,11 +73,36 @@ _STOPWORDS = frozenset(
 
 @dataclass(frozen=True)
 class GoalEdge:
-    """An inferred unit→goal facet (the ``SERVES`` edge's payload)."""
+    """An inferred unit→goal facet (the ``SERVES`` edge's payload).
+
+    From S103b (D202) this is **derived on read** from element evidence rather than
+    written: ``derive_goal_edges`` rolls a unit's element bindings up to one edge
+    per goal. The shape is unchanged so the coverage/grouping readers are untouched.
+    """
 
     unit_id: UUID
     outcome_id: UUID
     confidence: float
+    status: LinkStatus
+    basis: str
+
+
+@dataclass(frozen=True)
+class ElementEvidence:
+    """A unit's evidence for one authored element within a goal (D202, S103b).
+
+    The primary matcher output: a unit binds to an authored ``element_kind``
+    (lever / intermediary / external / outcome) by ``element_id``, inside the goal
+    ``outcome_id``. ``tier`` is the match tier (``lexical_exact`` /
+    ``lexical_keyword`` / ``alias``); ``status`` is the confirmed/candidate verdict
+    derived from it. No direction this session (S104).
+    """
+
+    unit_id: UUID
+    element_kind: str
+    element_id: UUID
+    outcome_id: UUID
+    tier: str
     status: LinkStatus
     basis: str
 
@@ -680,6 +705,49 @@ def dedup_goal_edges(edges: tuple[GoalEdge, ...]) -> tuple[GoalEdge, ...]:
     return tuple(best[k] for k in order)
 
 
+def derive_goal_edges(
+    evidence: tuple[ElementEvidence, ...]
+) -> tuple[GoalEdge, ...]:
+    """Roll element evidence up to the goal level on read (D202, S103b).
+
+    One ``GoalEdge`` per ``(unit, outcome)``: a unit serves a goal if it evidences
+    any element in it, and the goal edge takes the **strongest** binding (confirmed
+    over candidate) so coverage and grouping read exactly as the retired ``SERVES``
+    write produced. Multi-attach (a unit evidencing several elements in one goal)
+    collapses to that one edge here, so the unit is never double-counted upward.
+    Order-preserving on first appearance of each ``(unit, outcome)``.
+    """
+    rank = {LinkStatus.CONFIRMED: 1, LinkStatus.CANDIDATE: 0}
+    best: dict[tuple[UUID, UUID], ElementEvidence] = {}
+    order: list[tuple[UUID, UUID]] = []
+    for ev in evidence:
+        key = (ev.unit_id, ev.outcome_id)
+        cur = best.get(key)
+        if cur is None:
+            best[key] = ev
+            order.append(key)
+        elif rank[ev.status] > rank[cur.status]:
+            best[key] = ev
+    edges: list[GoalEdge] = []
+    for key in order:
+        ev = best[key]
+        confidence = (
+            _CONFIRMED_CONFIDENCE
+            if ev.status is LinkStatus.CONFIRMED
+            else _CANDIDATE_CONFIDENCE
+        )
+        edges.append(
+            GoalEdge(
+                unit_id=ev.unit_id,
+                outcome_id=ev.outcome_id,
+                confidence=confidence,
+                status=ev.status,
+                basis=ev.basis,
+            )
+        )
+    return tuple(edges)
+
+
 def infer_goal_edges(
     units: tuple[UnitView, ...],
     goals: tuple[Goal, ...],
@@ -886,7 +954,9 @@ __all__ = [
     "DEFAULT_GOAL_CONFIDENCE_FLOOR",
     "GoalAssessment",
     "GoalCoverage",
+    "ElementEvidence",
     "GoalEdge",
+    "derive_goal_edges",
     "LinkedGoal",
     "OrphanUnit",
     "GoalGroup",

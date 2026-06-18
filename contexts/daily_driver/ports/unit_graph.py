@@ -20,7 +20,10 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence
 
-from contexts.daily_driver.domain.goal_assessment import GoalEdge
+from contexts.daily_driver.domain.goal_assessment import (
+    ElementEvidence,
+    GoalEdge,
+)
 from contexts.daily_driver.domain.work_unit import (
     UnitFacetRef,
     UnitRecord,
@@ -55,21 +58,30 @@ class UnitGraphPort(Protocol):
         """
         ...
 
-    async def replace_goal_edges(
-        self, *, tenant_context: TenantContext, edges: Sequence[GoalEdge]
+    async def replace_element_evidence(
+        self, *, tenant_context: TenantContext, evidence: Sequence[ElementEvidence]
     ) -> None:
-        """Replace the tenant's unit→goal ``SERVES`` edges (D169).
+        """Replace the tenant's unit→authored-element ``EVIDENCES`` edges (D202).
 
-        Derived state, recomputed each correlation run; touches only the goal
-        facet (the unit ``SAME_WORK`` subgraph and the goal ``LEVER_FOR`` edges
-        are left intact). Stores only ids + the inference's edge properties.
+        The primary matcher write (S103b), replacing the retired goal-level
+        ``SERVES`` write: derived state, recomputed each correlation run, and the
+        old ``SERVES`` set is deleted alongside. Multi-attach is natural — a unit
+        carries one edge per element it evidences.
         """
+        ...
+
+    async def list_element_evidence(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[ElementEvidence, ...]:
+        """Return the tenant's unit→element ``EVIDENCES`` edges (D202, S103b)."""
         ...
 
     async def list_goal_edges(
         self, *, tenant_context: TenantContext
     ) -> tuple[GoalEdge, ...]:
-        """Return the tenant's unit→goal ``SERVES`` edges (D169)."""
+        """Return the tenant's unit→goal edges — **derived on read** from element
+        evidence (D202, S103b), no longer the written ``SERVES`` edge. The shape
+        is unchanged so the coverage/grouping readers are untouched."""
         ...
 
 
