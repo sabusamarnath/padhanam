@@ -44,6 +44,8 @@ from apps.api.routers._daily_driver_dto import (
     GoalReadingDTO,
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
+    CddDraftSummaryDTO,
+    CddDraftResultDTO,
     FacetSuggestionDTO,
     GoalAssessmentDTO,
     GoalGroupedUnitsDTO,
@@ -75,6 +77,7 @@ from contexts.daily_driver.application import (
     record_observed_outcome,
     set_today_order,
 )
+from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.domain.commitment import Commitment
 from contexts.daily_driver.ports import (
     CalendarEventsReader,
@@ -129,6 +132,11 @@ def get_calendar_events_reader(request: Request) -> CalendarEventsReader | None:
 def get_goal_graph(request: Request) -> GoalGraphPort:
     """FastAPI dependency: the daily-driver GoalGraphPort (D163)."""
     return _state(request, "daily_driver_goal_graph")  # type: ignore[return-value]
+
+
+def get_cdd_drafter(request: Request):
+    """FastAPI dependency: the daily-driver CddDrafterPort (S102, D200)."""
+    return _state(request, "daily_driver_cdd_drafter")
 
 
 def get_tasks_reader(request: Request):
@@ -344,6 +352,45 @@ async def post_raise_target(
     if reading is None:
         raise HTTPException(status_code=404, detail="goal not found after raise")
     return goal_reading_to_dto(reading)
+
+
+# --- The authored CDD layer (S102, D200) -----------------------------------
+
+
+@router.post("/cdd/draft", response_model=CddDraftSummaryDTO)
+async def post_draft_cdd(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    drafter: Annotated[object, Depends(get_cdd_drafter)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+) -> CddDraftSummaryDTO:
+    """Draft each goal's CDD via the structured-output port (S102, D200).
+
+    Safely re-runnable: a goal that already carries authored elements is skipped.
+    The matcher's SERVES/LEVER_FOR layer is untouched.
+    """
+    results = await draft_goal_cdds(
+        goal_graph=goal_graph,
+        drafter=drafter,
+        actor=actor,
+        commitment_repository=commitment_repository,
+    )
+    return CddDraftSummaryDTO(
+        results=[
+            CddDraftResultDTO(
+                outcome_id=r.outcome_id,
+                name=r.name,
+                drafted=r.drafted,
+                skipped_existing=r.skipped_existing,
+                levers=r.levers,
+                intermediaries=r.intermediaries,
+                externals=r.externals,
+            )
+            for r in results
+        ]
+    )
 
 
 @router.get("/tasks", response_model=list[TaskDTO])

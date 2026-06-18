@@ -120,11 +120,17 @@ class AuthoredEdgeRecord:
 
 @dataclass(frozen=True)
 class AuthoredCddRecord:
-    """A goal's authored CDD as read from the graph (S102, D200)."""
+    """A goal's authored CDD as read from the graph (S102, D200).
+
+    ``expected_outcome`` is the authored stance on the outcome — the measurable
+    result that means the goal is met — stored on the ``:Outcome`` node; ``None``
+    when never drafted.
+    """
 
     outcome_id: UUID
     elements: tuple[AuthoredElementRecord, ...]
     edges: tuple[AuthoredEdgeRecord, ...]
+    expected_outcome: str | None = None
 
 
 class OutcomeGraphPort(Protocol):
@@ -222,6 +228,17 @@ class OutcomeGraphPort(Protocol):
         ``element_id``. ``provenance_origin`` and ``proof_state`` carry the D200
         authored signal.
         """
+        ...
+
+    async def set_authored_outcome(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        expected_outcome: str,
+    ) -> None:
+        """Set the authored ``expected_outcome`` stance on an ``:Outcome`` node
+        (S102, D200) — the measurable result that means the goal is met."""
         ...
 
     async def merge_authored_edge(

@@ -34,6 +34,24 @@ from contexts.daily_driver.adapters.outbound.postgres.day_repository import (
     PostgresDayRepository,
 )
 from contexts.daily_driver.domain.calendar_domain import resolve_calendar_domain
+from contexts.daily_driver.domain.cdd import (
+    DRAFT_SCHEMA,
+    AuthoredEdgeView,
+    AuthoredElement,
+    DraftedCdd,
+    ElementKind,
+    GoalCddView,
+    ProofState,
+    ProvenanceOrigin,
+    build_draft_prompt,
+    parse_cdd_draft,
+)
+from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
+from shared_kernel.structured_output import (
+    StructuredOutputParseFailure,
+    StructuredOutputPort,
+    StructuredOutputRequest,
+)
 from contexts.daily_driver.domain.commitment import (
     CheckinResponse,
     Commitment,
@@ -515,6 +533,91 @@ class GoalGraphAdapter:
             tenant_context=tenant_context,
             outcome_id=outcome_id,
             current_target_level=new_target_level,
+        )
+
+    # --- Authored CDD layer (S102, D200): bridge to OutcomeGraphPort -------
+
+    async def write_authored_element(
+        self, *, tenant_context, outcome_id, kind, element_id, label, origin,
+        proof_state,
+    ) -> None:
+        await self._outcome_graph.merge_authored_element(
+            tenant_context=tenant_context, outcome_id=outcome_id,
+            element_kind=kind.value, element_id=element_id, label=label,
+            provenance_origin=origin.value, proof_state=proof_state.value,
+        )
+
+    async def write_authored_edge(
+        self, *, tenant_context, edge_type, source_kind, source_id, target_kind,
+        target_id,
+    ) -> None:
+        await self._outcome_graph.merge_authored_edge(
+            tenant_context=tenant_context, edge_type=edge_type,
+            source_kind=source_kind, source_id=source_id,
+            target_kind=target_kind, target_id=target_id,
+        )
+
+    async def set_authored_outcome(
+        self, *, tenant_context, outcome_id, expected_outcome,
+    ) -> None:
+        await self._outcome_graph.set_authored_outcome(
+            tenant_context=tenant_context, outcome_id=outcome_id,
+            expected_outcome=expected_outcome,
+        )
+
+    async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:
+        record = await self._outcome_graph.read_authored_cdd(
+            tenant_context=tenant_context, outcome_id=outcome_id
+        )
+        elements = tuple(
+            AuthoredElement(
+                kind=ElementKind(e.element_kind),
+                element_id=e.element_id,
+                label=e.label,
+                provenance_origin=ProvenanceOrigin(e.provenance_origin),
+                proof_state=ProofState(e.proof_state),
+            )
+            for e in record.elements
+        )
+        edges = tuple(
+            AuthoredEdgeView(
+                edge_type=edge.edge_type,
+                source_kind=edge.source_kind,
+                source_id=edge.source_id,
+                target_kind=edge.target_kind,
+                target_id=edge.target_id,
+            )
+            for edge in record.edges
+        )
+        return GoalCddView(
+            outcome_id=outcome_id,
+            expected_outcome=record.expected_outcome or "",
+            elements=elements,
+            edges=edges,
+        )
+
+    async def accept_authored_element(
+        self, *, tenant_context, kind, element_id,
+    ) -> bool:
+        return await self._outcome_graph.set_authored_proof_state(
+            tenant_context=tenant_context, element_kind=kind.value,
+            element_id=element_id, proof_state=ProofState.ACCEPTED.value,
+        )
+
+    async def correct_authored_element(
+        self, *, tenant_context, kind, element_id, label,
+    ) -> bool:
+        return await self._outcome_graph.set_authored_label(
+            tenant_context=tenant_context, element_kind=kind.value,
+            element_id=element_id, label=label,
+        )
+
+    async def reject_authored_element(
+        self, *, tenant_context, kind, element_id,
+    ) -> bool:
+        return await self._outcome_graph.delete_authored_element(
+            tenant_context=tenant_context, element_kind=kind.value,
+            element_id=element_id,
         )
 
 
@@ -1015,8 +1118,46 @@ def build_goal_graph() -> GoalGraphAdapter:
     )
 
 
+class CddDrafterAdapter:
+    """apps/ adapter implementing daily-driver's ``CddDrafterPort`` over the
+    provider-agnostic ``StructuredOutputPort`` (S102, D200 — the checkin
+    reply-parse precedent).
+
+    The pure domain helpers (``contexts.daily_driver.domain.cdd``) build the
+    prompt + schema and parse the response; the litellm SDK stays confined to the
+    inference adapter, never here or in the daily-driver context.
+    """
+
+    def __init__(self, *, structured_output_port: StructuredOutputPort) -> None:
+        self._structured_output = structured_output_port
+
+    async def draft(
+        self, *, goal_name: str, mode: str, lever_names: tuple[str, ...]
+    ) -> DraftedCdd | None:
+        request = StructuredOutputRequest(
+            prompt=build_draft_prompt(
+                goal_name=goal_name, mode=mode, lever_names=lever_names
+            ),
+            schema=DRAFT_SCHEMA,
+        )
+        try:
+            response = await self._structured_output.generate_structured(request)
+        except StructuredOutputParseFailure:
+            # No schema-conforming draft — the use case persists nothing.
+            return None
+        return parse_cdd_draft(response.value)
+
+
+def build_cdd_drafter(
+    *, structured_output_port: StructuredOutputPort
+) -> CddDrafterAdapter:
+    """Wire daily-driver's ``CddDrafterPort`` over the structured-output seam."""
+    return CddDrafterAdapter(structured_output_port=structured_output_port)
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
+    "CddDrafterAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
     "FacetSourceAdapter",
@@ -1025,6 +1166,7 @@ __all__ = [
     "TasksReaderAdapter",
     "UnitGraphAdapter",
     "build_calendar_events_reader",
+    "build_cdd_drafter",
     "build_commitment_repository",
     "build_day_repository",
     "build_facet_source",

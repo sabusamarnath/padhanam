@@ -525,6 +525,80 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
     )
 
 
+class CddDraftResultDTO(BaseModel):
+    """The outcome of drafting one goal's CDD (S102, D200)."""
+
+    outcome_id: UUID
+    name: str
+    drafted: bool
+    skipped_existing: bool
+    levers: int
+    intermediaries: int
+    externals: int
+
+
+class CddDraftSummaryDTO(BaseModel):
+    """The result of drafting every goal's CDD (S102, D200)."""
+
+    results: list[CddDraftResultDTO]
+
+
+class AuthoredElementDTO(BaseModel):
+    """One authored CDD element for proof (S102, D200)."""
+
+    kind: str
+    element_id: UUID
+    label: str
+    provenance_origin: str
+    proof_state: str
+
+
+class AuthoredEdgeDTO(BaseModel):
+    """One authored causal edge for proof (S102, D200)."""
+
+    edge_type: str
+    source_kind: str
+    source_id: UUID
+    target_kind: str
+    target_id: UUID
+
+
+class GoalCddDTO(BaseModel):
+    """A goal's authored CDD for proof (S102, D200)."""
+
+    outcome_id: UUID
+    expected_outcome: str
+    elements: list[AuthoredElementDTO]
+    edges: list[AuthoredEdgeDTO]
+
+
+def goal_cdd_to_dto(view) -> "GoalCddDTO":
+    return GoalCddDTO(
+        outcome_id=view.outcome_id,
+        expected_outcome=view.expected_outcome,
+        elements=[
+            AuthoredElementDTO(
+                kind=e.kind.value,
+                element_id=e.element_id,
+                label=e.label,
+                provenance_origin=e.provenance_origin.value,
+                proof_state=e.proof_state.value,
+            )
+            for e in view.elements
+        ],
+        edges=[
+            AuthoredEdgeDTO(
+                edge_type=edge.edge_type,
+                source_kind=edge.source_kind,
+                source_id=edge.source_id,
+                target_kind=edge.target_kind,
+                target_id=edge.target_id,
+            )
+            for edge in view.edges
+        ],
+    )
+
+
 class FacetSuggestionDTO(BaseModel):
     """One missing-facet suggestion (D170) — recommendation-shaped."""
 

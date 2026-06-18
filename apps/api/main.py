@@ -226,6 +226,7 @@ class AppCompositions:
     daily_driver_drop_candidate_quiet_days: int | None = None
     # S62 (D163): the goal-layer graph reader/raiser over the shared Neo4j.
     daily_driver_goal_graph: object | None = None
+    daily_driver_cdd_drafter: object | None = None
     # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
     # when unwired (the /tasks view degrades to an empty list).
     daily_driver_tasks_reader: object | None = None
@@ -588,6 +589,7 @@ def _build_default_compositions() -> AppCompositions:
         build_commitment_repository,
         build_day_repository,
         build_email_job_search_source,
+        build_cdd_drafter,
         build_facet_source,
         build_goal_graph,
         build_open_cases_reader,
@@ -630,6 +632,11 @@ def _build_default_compositions() -> AppCompositions:
     )
     # S62 (D163): the goal-layer graph reader over the shared Neo4j (process-shared).
     daily_driver_goal_graph = build_goal_graph()
+    # S102 (D200): the CDD drafter over the structured-output seam (Ollama dev
+    # model by default), the authored-layer LLM draft.
+    daily_driver_cdd_drafter = build_cdd_drafter(
+        structured_output_port=inference_port
+    )
     # S65 (D167): the Tasks-view reader over the ingested tasks cache.
     daily_driver_tasks_reader = build_tasks_reader(
         tenant_registry=registry,
@@ -727,6 +734,7 @@ def _build_default_compositions() -> AppCompositions:
             daily_driver_drop_candidate_quiet_days
         ),
         daily_driver_goal_graph=daily_driver_goal_graph,
+        daily_driver_cdd_drafter=daily_driver_cdd_drafter,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
         daily_driver_email_job_search_source=(
@@ -985,6 +993,7 @@ def create_app(
     )
     # S62 (D163): the goal-layer graph reader/raiser.
     app.state.daily_driver_goal_graph = compositions.daily_driver_goal_graph
+    app.state.daily_driver_cdd_drafter = compositions.daily_driver_cdd_drafter
     app.state.daily_driver_tasks_reader = (
         compositions.daily_driver_tasks_reader
     )

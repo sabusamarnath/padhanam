@@ -335,6 +335,17 @@ RETURN type(r) AS edge_type,
        coalesce(t.lever_id, t.element_id, t.outcome_id) AS target_id
 """
 
+# The authored stance on the outcome — the measurable result that means the goal
+# is met (D200), stored on the existing :Outcome node (D199's two faces).
+_SET_AUTHORED_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET o.authored_expected_outcome = $expected_outcome
+"""
+_READ_AUTHORED_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+RETURN o.authored_expected_outcome AS expected_outcome
+"""
+
 
 # --- Work-unit templates (D168, D166) --------------------------------------
 # The plan-side work-unit correlation: a :Unit anchor node, a thin :Facet
@@ -886,9 +897,28 @@ class TenantScopedNeo4jSession:
             )
             for row in await edge_result.data()
         )
-        return AuthoredCddRecord(
-            outcome_id=outcome_id, elements=tuple(elements), edges=edges
+        outcome_result = await session.run(_READ_AUTHORED_OUTCOME, params)
+        outcome_row = await outcome_result.single()
+        expected_outcome = (
+            outcome_row["expected_outcome"] if outcome_row is not None else None
         )
+        return AuthoredCddRecord(
+            outcome_id=outcome_id,
+            elements=tuple(elements),
+            edges=edges,
+            expected_outcome=expected_outcome,
+        )
+
+    async def set_authored_outcome(
+        self, *, outcome_id: UUID, expected_outcome: str
+    ) -> None:
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "outcome_id": str(outcome_id),
+            "expected_outcome": expected_outcome,
+        }
+        await session.run(_SET_AUTHORED_OUTCOME, params)
 
     async def set_authored_proof_state(
         self, *, element_kind: str, element_id: UUID, proof_state: str

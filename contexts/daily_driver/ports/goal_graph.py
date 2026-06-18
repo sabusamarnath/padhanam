@@ -18,12 +18,19 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
+from contexts.daily_driver.domain.cdd import (
+    ElementKind,
+    GoalCddView,
+    ProofState,
+    ProvenanceOrigin,
+)
 from contexts.daily_driver.domain.goal import Goal
 from shared_kernel import TenantContext
 
 
 class GoalGraphPort(Protocol):
-    """Read/raise port for the goal layer in the shared graph (D163)."""
+    """Read/raise port for the goal layer in the shared graph (D163), extended
+    with the authored CDD layer (S102, D200)."""
 
     async def list_goals(
         self, *, tenant_context: TenantContext
@@ -44,6 +51,84 @@ class GoalGraphPort(Protocol):
         or ``None`` when the goal is absent or cross-tenant. Never called
         automatically — only on an explicit action.
         """
+        ...
+
+    # --- Authored CDD layer (S102, D200) -----------------------------------
+
+    async def write_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        kind: ElementKind,
+        element_id: UUID,
+        label: str,
+        origin: ProvenanceOrigin,
+        proof_state: ProofState,
+    ) -> None:
+        """Persist one authored CDD element on the goal (S102, D200)."""
+        ...
+
+    async def write_authored_edge(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        """Persist one authored causal edge (FEEDS / INFLUENCES, S102)."""
+        ...
+
+    async def set_authored_outcome(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        expected_outcome: str,
+    ) -> None:
+        """Set the authored expected-outcome stance on the goal (S102, D200)."""
+        ...
+
+    async def read_goal_cdd(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> GoalCddView:
+        """Read a goal's authored CDD for proof review (S102, D200)."""
+        ...
+
+    async def accept_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        kind: ElementKind,
+        element_id: UUID,
+    ) -> bool:
+        """Mark an authored element accepted (the proof accept path, S102)."""
+        ...
+
+    async def correct_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        kind: ElementKind,
+        element_id: UUID,
+        label: str,
+    ) -> bool:
+        """Edit an authored element's label and flip its origin to
+        ``user_authored`` (the proof correct path, S102/D200)."""
+        ...
+
+    async def reject_authored_element(
+        self,
+        *,
+        tenant_context: TenantContext,
+        kind: ElementKind,
+        element_id: UUID,
+    ) -> bool:
+        """Remove an authored element (the proof reject path — user-initiated
+        delete, allowed under the no-auto-deletion invariant, S102)."""
         ...
 
 
