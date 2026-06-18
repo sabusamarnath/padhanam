@@ -167,6 +167,14 @@ def build_draft_prompt(
     )
 
 
+def required_edge_type(kind: ElementKind) -> str:
+    """The authored edge type an element of this kind uses as a *source* (D198,
+    D201): a lever or an intermediary ``FEEDS``; an external ``INFLUENCES`` (it
+    is not controlled). Used to wire an added element's default edge and to test
+    whether a reclassify leaves an incident edge ungrammatical (S103a)."""
+    return "INFLUENCES" if kind is ElementKind.EXTERNAL else "FEEDS"
+
+
 def _parse_elements(raw: Any, kind: ElementKind) -> tuple[DraftedElement, ...]:
     """Pull labelled elements of one kind, defensively (pure).
 
@@ -225,4 +233,5 @@ __all__ = [
     "ProvenanceOrigin",
     "build_draft_prompt",
     "parse_cdd_draft",
+    "required_edge_type",
 ]

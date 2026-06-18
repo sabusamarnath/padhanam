@@ -585,6 +585,25 @@ class CorrectCddElementRequest(BaseModel):
     label: str
 
 
+class AddCddElementRequest(BaseModel):
+    """Add a user-authored element of any of the four types (S103a).
+
+    ``kind`` is ``lever`` / ``intermediary`` / ``external`` / ``outcome``; the
+    outcome routes to the authored outcome stance (the goal's single terminal),
+    the others create a new element node with a default edge to the outcome.
+    """
+
+    kind: str
+    label: str = Field(min_length=1)
+
+
+class AddedCddElementDTO(BaseModel):
+    """The id of the newly added element (``None`` for an authored outcome, which
+    has no element node of its own, S103a)."""
+
+    element_id: UUID | None = None
+
+
 def goal_cdd_to_dto(view) -> "GoalCddDTO":
     return GoalCddDTO(
         outcome_id=view.outcome_id,

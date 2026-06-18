@@ -44,6 +44,8 @@ from apps.api.routers._daily_driver_dto import (
     GoalReadingDTO,
     MarkDoneRequest,
     RecordObservedOutcomeRequest,
+    AddCddElementRequest,
+    AddedCddElementDTO,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
     CorrectCddElementRequest,
@@ -80,6 +82,7 @@ from contexts.daily_driver.application import (
     record_observed_outcome,
     set_today_order,
 )
+from contexts.daily_driver.application.author_cdd import add_cdd_element
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.application.proof_goal_cdd import (
     accept_cdd_element,
@@ -404,6 +407,42 @@ async def post_draft_cdd(
             for r in results
         ]
     )
+
+
+@router.post(
+    "/cdd/{outcome_id}/elements",
+    response_model=AddedCddElementDTO,
+    status_code=201,
+)
+async def post_add_cdd_element(
+    outcome_id: UUID,
+    body: AddCddElementRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> AddedCddElementDTO:
+    """Add a user-authored element of any of the four types (S103a).
+
+    The outcome routes to the authored outcome stance (the goal's single
+    terminal); a lever / intermediary / external creates a new element node with
+    a default edge to the outcome. The path by which externals enter the model.
+    """
+    if body.kind == "outcome":
+        await correct_cdd_outcome(
+            goal_graph=goal_graph, actor=actor, outcome_id=outcome_id,
+            label=body.label,
+        )
+        return AddedCddElementDTO(element_id=None)
+    try:
+        kind = ElementKind(body.kind)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail=f"unknown element kind: {body.kind}"
+        )
+    element_id = await add_cdd_element(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id,
+        kind=kind, label=body.label,
+    )
+    return AddedCddElementDTO(element_id=element_id)
 
 
 @router.get("/cdd/{outcome_id}", response_model=GoalCddDTO)
