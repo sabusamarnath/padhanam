@@ -134,6 +134,40 @@ metrics:
 
 ---
 
+## S103a-fix — expose the edit affordance and the draft-missing empty state (D200) (build mode, surface-only)
+
+roles: engineer (the in-place edit control over the existing correct path; the empty-state read; the served-HTML guard), analyst (Step 0 against the running surface — the edit control was present-but-unrecognisable, not absent), technical writer (the current-package note, this entry).
+
+- **Step 0 (correction recorded).** The brief framed the edit control as possibly absent; reconciliation against the running `daily_driver.html` found it **present but unrecognisable** — a `window.prompt`-based "Edit" ghost button on both the element row and the outcome row, already wired to the S102 `/correct` paths (which flip `provenance_origin` to `user_authored`). So the fix made it a **clear in-place editor**, not a new path. The draft-missing handler already returned the `results` with `skipped_existing` per goal, so the empty state reads the existing zero-count, no new field. No graph, no migration, no endpoint, no permission, no matcher.
+
+- **The two gaps closed.** (1) Editing in place: clicking Edit swaps the row for a labelled input + Save/Cancel (Enter saves, Escape cancels) on each element **and** the proofable outcome, over the existing `/correct` path — so a mis-drafted label is corrected without the reject-then-re-add workaround that breaks element identity and incident edges before the matcher binds. (2) Draft-missing empty state: when every goal already has a CDD the lens shows "All goals already have a CDD" (reading `skipped_existing`), not a silent "Drafted 0 goals" that reads as failure.
+
+- **Reflection — did in-place edit close the reject-and-re-add gap?** At the surface+test level, yes: the edit affordance is now an inline editor wired to the existing correct path (origin → `user_authored`), served on the rebuilt image (grep-confirmed), so correcting a label no longer requires reject-and-re-add and no longer disturbs element identity or incident edges. The in-browser confirmation that it *reads* clearly on the real corpus is the operator's, per the S101 idiom — the gap this patch closes is the *availability and clarity* of in-place edit, which is delivered and guarded; the eyeball is gated.
+
+- **AC verdicts.** AC1 (each element + the outcome render a visible edit control; editing flows through the existing correct path and flips origin to user_authored; no new write path in the diff) ✓ — served + the surface guard; the diff adds no endpoint/use case. AC2 (draft-missing shows a clear empty state when all goals have a CDD; no new action) ✓ — served + guard. AC3 (surface-only: no schema, no migration, no new endpoint/permission; matcher and all S103a write paths untouched) ✓ — the diff is `daily_driver.html` + the marker + the surface test only (name-only grep clean). AC4 (suite green; import-linter 48/0 + AST green; served-HTML guard asserts the edit control; operator-gated live check on the rebuilt image) ✓ — unit suite exit 0, enforcement exit 0, import-linter 48/0; image re-pinned `c76dac4a`, served HTML confirmed; browser eyeball operator-gated.
+
+- Close state: **five commits — marker first (`da2626b`), edit affordance (`6a48272`), empty state (`b165276`), served-HTML guard (`49fffad`), pin bump (`ad0bc83`).** Surface-only; no D-entry (exposing an existing path is not a decision); no schema, no migration. Step 0 correction recorded (control was present-but-unrecognisable, not absent).
+
+```
+metrics:
+  classification: build session (S103a-fix — surface patch over S103a: in-place edit affordance + draft-missing empty state; D200, no decision)
+  session_started: 2026-06-18
+  session_closed: 2026-06-18
+  step0: corrected premise — the edit control was PRESENT but unrecognisable (a window.prompt ghost button on element + outcome rows, wired to the S102 /correct paths), not absent; fix makes it a clear in-place editor over the same path. draft-missing already returns results+skipped_existing, so the empty state reads the existing zero-count (no new field). surface-only — no graph/migration/endpoint/permission/matcher
+  gap_1_edit: in-place editor (inline input + Save/Cancel, Enter/Escape) on each element AND the outcome, over the existing /correct path (origin -> user_authored); replaces the unrecognisable window.prompt; closes the reject-and-re-add workaround that broke element identity + incident edges
+  gap_2_empty_state: draft-missing shows "All goals already have a CDD" (reads skipped_existing) instead of a silent "Drafted 0 goals"; "No goals to draft" for the empty corpus
+  surface_only: confirmed — diff is apps/api/static/daily_driver.html + charter/current-package.md + tests/unit/apps/api/test_daily_driver_surface.py (+ compose.yaml pin); no schema/migration/endpoint/permission; matcher + all S103a write paths untouched (name-only grep clean)
+  tests: tests/unit/apps/api/test_daily_driver_surface.py +3 (in-place edit over /correct with no window.prompt fallback on element+outcome; draft-missing empty state; the S103a add/reclassify affordances); unit suite exit 0; tests/_enforcement exit 0; import-linter 48/0
+  live: image re-pinned c76dac4a (make build-api + force-recreate, healthy); served HTML carries cddBeginEdit + cdd-edit-input + the empty-state string (grep in-container); in-browser eyeball operator-gated (Google login)
+  commits: da2626b (marker, charter-first), 6a48272 (edit affordance), b165276 (empty state), 49fffad (served-HTML guard), ad0bc83 (pin bump)
+  charter_touchpoints: charter/current-package.md (S103a-fix note under the S103a marker). No schema.md, no decisions.md (no D-entry — exposing an existing path is not a decision). log/sessions.md (this entry); compose.yaml (digest pin)
+  numbering: S103a-fix (surface-patch suffix over S103a); no D-entry; S103b/S104 untouched
+  corrects: (none — S103a's record was not wrong; both S102 and S103a deferred the browser eyeball to the operator, whose pass surfaced these surface gaps; this patches them, it does not correct a false claim)
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
