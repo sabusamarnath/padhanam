@@ -119,8 +119,33 @@ def test_dash_view_live_and_holds_moat_with_in_goal_suggestions():
     dash = _dash_template()
     assert 'id="moat"' in dash
     assert 'id="suggestions"' not in dash
-    assert "loadUnitsByGoal()" in dash
+    assert "loadAssess()" in dash  # D199/S101: the toggle-aware fetch+dispatch
     assert "function loadSuggestions" not in _HTML
+
+
+def test_dash_view_carries_the_list_map_toggle_over_one_source():
+    # D199/S101: the assess surface gains a List/Map toggle; both renderings read
+    # the cached units-by-goal source (assessData), with no second data path.
+    dash = _dash_template()
+    assert 'id="assess-toggle"' in dash
+    assert 'data-mode="list"' in dash and 'data-mode="map"' in dash
+    assert "renderAssess()" in dash  # re-render from cache on toggle — no refetch
+    assert "let assessMode" in _HTML and "assessData = await api" in _HTML
+    for fn in ("function renderAssessList", "function renderAssessMap",
+               "function mapNodeEl", "function buildMapFeeders",
+               "function measurableOutcome"):
+        assert fn in _HTML, fn
+
+
+def test_map_renders_levers_and_work_as_siblings_not_unit_under_lever():
+    # The decisive Step-0 invariant in the render: serving work feeds the outcome
+    # as a sibling of the levers (the graph links work to the outcome via SERVES,
+    # not to a lever), and the un-modelled intermediary layer shows as one
+    # platform-limit note, never a per-goal "no path" alarm.
+    assert "Levers — you act" in _HTML
+    assert "Serving work — Padhanam sees" in _HTML
+    assert "intermediaries not modelled" in _HTML
+    assert "map-platform-note" in _HTML
 
 
 def test_coverage_view_is_a_live_sibling_of_the_goals_view():
