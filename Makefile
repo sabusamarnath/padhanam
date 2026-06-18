@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -35,6 +35,7 @@ help:
 	@echo "  neo4j-reset DESTRUCTIVE — stop padhanam-neo4j and wipe its data volume"
 	@echo "  neo4j-shell Open an interactive cypher-shell against padhanam-neo4j"
 	@echo "  charter-export  Build the session-close charter snapshot (dir + zip) per docs/charter-archive-manifest.md"
+	@echo "  charter-size    Report charter/log file sizes; flag living-state files over bound (retention rule). ARGS=--check to gate"
 
 derive-env:
 	@uv run python -m ops.derive_env > .env.derived
@@ -370,3 +371,11 @@ neo4j-shell: derive-env
 # source -> snapshot mapping without writing anything.
 charter-export:
 	uv run python scripts/charter-export.py
+
+# Report the size of the charter and log files; flag any living-state file over
+# its bound. The mechanical form of the charter-and-log retention rule
+# (charter/methodology.md). Run at every package close; stdlib-only, no stack
+# required. `make charter-size` reports; `ARGS=--check` exits non-zero if a
+# bound is tripped (wire into a package-close gate when desired).
+charter-size:
+	@uv run python -m ops.charter_size_check $(ARGS)
