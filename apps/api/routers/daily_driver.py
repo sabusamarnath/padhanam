@@ -49,6 +49,7 @@ from apps.api.routers._daily_driver_dto import (
     ElementEvidenceSummaryDTO,
     ReclassifyCddElementRequest,
     RelinkCddEvidenceRequest,
+    RematchResultDTO,
     UnlinkCddEvidenceRequest,
     element_evidence_summary_to_dto,
     CddDraftSummaryDTO,
@@ -90,6 +91,9 @@ from contexts.daily_driver.application import (
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
     reclassify_cdd_element,
+)
+from contexts.daily_driver.application.correlate_goal_facets import (
+    correlate_goal_facets,
 )
 from contexts.daily_driver.application.read_element_evidence import (
     read_element_evidence,
@@ -478,6 +482,36 @@ async def get_cdd_evidence(
         return ElementEvidenceSummaryDTO()
     summary = await read_element_evidence(unit_graph=unit_graph, actor=actor)
     return element_evidence_summary_to_dto(summary)
+
+
+@router.post("/cdd/rematch", response_model=RematchResultDTO)
+async def post_cdd_rematch(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+    email_job_search_source: Annotated[
+        object | None, Depends(get_email_job_search_source)
+    ],
+) -> RematchResultDTO:
+    """Re-run the element matcher over existing units against the current element
+    set (D202/D203, S103c). Idempotent and correction-respecting: it skips
+    user-owned units, so authoring a missing goal and re-matching recovers
+    coverage on previously-unbound work without disturbing corrections."""
+    if unit_graph is None or facet_source is None:
+        raise HTTPException(status_code=503, detail="matcher seams not configured")
+    n = await correlate_goal_facets(
+        unit_graph=unit_graph,
+        facet_source=facet_source,
+        goal_graph=goal_graph,
+        commitment_repository=commitment_repository,
+        email_job_search_source=email_job_search_source,
+        actor=actor,
+    )
+    return RematchResultDTO(evidence_edges=n)
 
 
 @router.post("/cdd/evidence/unlink", status_code=204)

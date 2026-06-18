@@ -631,6 +631,13 @@ def element_evidence_summary_to_dto(summary) -> "ElementEvidenceSummaryDTO":
     )
 
 
+class RematchResultDTO(BaseModel):
+    """The on-demand re-match result (D203, S103c): the element-evidence edge
+    count after re-running (user-owned units skipped)."""
+
+    evidence_edges: int
+
+
 class UnlinkCddEvidenceRequest(BaseModel):
     """Remove one of a unit's element bindings (D203, S103c)."""
 

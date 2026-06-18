@@ -73,6 +73,15 @@ async def correlate_goal_facets(
     views = build_unit_views(
         records, {(f.facet_type, f.facet_id): f for f in facets}
     )
+    # D203/S103c: the re-match is correction-respecting — a unit the user has
+    # corrected (user-owned) is skipped entirely, so its bindings are never
+    # re-derived or overwritten. The replace deletes only non-user-owned
+    # EVIDENCES, so this filter and the delete agree on the same set.
+    user_owned = await unit_graph.list_user_owned_unit_ids(
+        tenant_context=actor.tenant_context
+    )
+    if user_owned:
+        views = tuple(v for v in views if v.unit_id not in user_owned)
     goals = await goal_graph.list_goals(tenant_context=actor.tenant_context)
 
     # Each goal's authored CDD elements become the per-element match targets.
