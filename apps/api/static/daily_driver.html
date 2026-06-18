@@ -202,9 +202,18 @@
     .cdd-row.prov-user_authored .cdd-prov { color: var(--teal); border-color: var(--teal); }
     .cdd-proof { color: var(--not_tracked-fg); background: var(--not_tracked-bg); border: 1px dashed var(--not_tracked-fg); }
     .cdd-proof.is-accepted { color: var(--on-track-fg); background: var(--on-track-bg); border: 1px solid transparent; }
-    .cdd-actions { display: inline-flex; gap: 4px; }
+    .cdd-actions { display: inline-flex; gap: 4px; align-items: center; }
     .cdd-btn { padding: 3px 9px; font-size: 11px; }
     .cdd-btn.cdd-reject { color: var(--stalled-fg); }
+    .cdd-reclass { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface-2); color: var(--ink-2); }
+    .cdd-outcome-row { background: var(--surface-2); }
+    /* D201/S103a: edges a reclassify left ungrammatical, surfaced not dropped */
+    .cdd-flag { font-size: 12px; color: var(--stalled-fg); background: var(--stalled-bg, var(--surface-2));
+      border: 1px dashed var(--stalled-fg); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+    /* S103a: the add-element control */
+    .cdd-add { display: flex; gap: 6px; align-items: center; margin: 12px 0 4px; flex-wrap: wrap; }
+    .cdd-add-input { flex: 1 1 220px; min-width: 160px; padding: 4px 8px; font-size: 12.5px;
+      border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface-1); color: var(--ink-1); }
     .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 9999px; white-space: nowrap; }
     .pill.on_track { background: var(--on-track-bg); color: var(--on-track-fg); }
@@ -542,34 +551,75 @@
       ["intermediary", "Intermediaries — the measured middle"],
       ["external", "Externals — others decide"],
     ];
+    const CDD_KIND_LABEL = { lever: "lever", intermediary: "intermediary", external: "external", outcome: "outcome" };
     function renderCddBody(body, grp, cdd) {
       body.innerHTML = "";
+      const reload = async () => {
+        let fresh; try { fresh = await api(`/daily-driver/cdd/${grp.outcome_id}`); } catch { return; }
+        renderCddBody(body, grp, fresh);
+      };
       const els = cdd.elements || [];
-      if (!els.length) {
-        const e = document.createElement("div"); e.className = "evidence-note";
-        e.textContent = "No CDD drafted yet — use “Draft missing CDDs” above.";
-        body.appendChild(e); return;
-      }
-      if (cdd.expected_outcome) {
-        const eo = document.createElement("div"); eo.className = "cdd-outcome";
-        eo.innerHTML = `<span class="cdd-outcome-label">Expected outcome</span> ${escapeHtml(cdd.expected_outcome)}`;
-        body.appendChild(eo);
+      // The outcome — a proofable terminal element (S103a), or a prompt to author one.
+      body.appendChild(cddOutcomeRow(grp, cdd, reload));
+      // Flagged edges left ungrammatical by a reclassify (D201) — surfaced, not dropped.
+      const flagged = (cdd.edges || []).filter((e) => e.needs_review);
+      if (flagged.length) {
+        const warn = document.createElement("div"); warn.className = "cdd-flag";
+        warn.textContent = `⚠ ${flagged.length} causal link${flagged.length === 1 ? "" : "s"} need review after a reclassify — ` +
+          flagged.map((e) => `${e.source_kind} ${e.edge_type.toLowerCase()} ${e.target_kind}`).join("; ") + ".";
+        body.appendChild(warn);
       }
       CDD_KINDS.forEach(([kind, label]) => {
         const items = els.filter((e) => e.kind === kind);
         if (!items.length) return;
         const lbl = document.createElement("div"); lbl.className = "feeder-label"; lbl.textContent = label;
         body.appendChild(lbl);
-        items.forEach((e) => body.appendChild(cddElementRow(body, grp, e)));
+        items.forEach((e) => body.appendChild(cddElementRow(body, grp, e, reload)));
       });
+      if (!els.length && !cdd.expected_outcome) {
+        const e = document.createElement("div"); e.className = "evidence-note";
+        e.textContent = "No CDD drafted yet — use “Draft missing CDDs” above, or add an element below.";
+        body.appendChild(e);
+      }
+      body.appendChild(cddAddControl(grp, reload));
     }
-    function cddElementRow(body, grp, el) {
+    function cddOutcomeRow(grp, cdd, reload) {
+      if (!cdd.expected_outcome) {
+        const empty = document.createElement("div"); empty.className = "evidence-note";
+        empty.textContent = "No expected outcome yet — add one (type “outcome”) below.";
+        return empty;
+      }
+      const origin = cdd.expected_outcome_origin || "llm_drafted";
+      const accepted = (cdd.expected_outcome_proof_state || "pending") === "accepted";
+      const row = document.createElement("div"); row.className = "cdd-row cdd-outcome-row prov-" + origin;
+      row.innerHTML =
+        `<span class="cdd-outcome-label">Expected outcome</span>` +
+        `<span class="cdd-label">${escapeHtml(cdd.expected_outcome)}</span>` +
+        `<span class="cdd-badge cdd-prov">${escapeHtml(origin.replace("_", " "))}</span>` +
+        `<span class="cdd-badge cdd-proof ${accepted ? "is-accepted" : ""}">${accepted ? "accepted" : "pending"}</span>`;
+      const actions = document.createElement("span"); actions.className = "cdd-actions";
+      const base = `/daily-driver/cdd/${grp.outcome_id}/outcome`;
+      if (!accepted) {
+        const acc = document.createElement("button"); acc.className = "btn-ghost cdd-btn"; acc.textContent = "Accept";
+        acc.onclick = async () => { try { await api(`${base}/accept`, { method: "POST" }); await reload(); } catch {} };
+        actions.appendChild(acc);
+      }
+      const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn"; edit.textContent = "Edit";
+      edit.onclick = async () => {
+        const label = window.prompt("Edit expected outcome:", cdd.expected_outcome);
+        if (label == null || !label.trim()) return;
+        try { await api(`${base}/correct`, { method: "POST", body: JSON.stringify({ label: label.trim() }) }); await reload(); } catch {}
+      };
+      actions.appendChild(edit);
+      const rej = document.createElement("button"); rej.className = "btn-ghost cdd-btn cdd-reject"; rej.textContent = "Reject";
+      rej.onclick = async () => { try { await api(`${base}/reject`, { method: "POST" }); await reload(); } catch {} };
+      actions.appendChild(rej);
+      row.appendChild(actions);
+      return row;
+    }
+    function cddElementRow(body, grp, el, reload) {
       const row = document.createElement("div"); row.className = "cdd-row prov-" + el.provenance_origin;
       const accepted = el.proof_state === "accepted";
-      const reload = async () => {
-        let fresh; try { fresh = await api(`/daily-driver/cdd/${grp.outcome_id}`); } catch { return; }
-        renderCddBody(body, grp, fresh);
-      };
       row.innerHTML =
         `<span class="cdd-label">${escapeHtml(el.label)}</span>` +
         `<span class="cdd-badge cdd-prov">${escapeHtml(el.provenance_origin.replace("_", " "))}</span>` +
@@ -587,11 +637,41 @@
         try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/correct`, { method: "POST", body: JSON.stringify({ label: label.trim() }) }); await reload(); } catch {}
       };
       actions.appendChild(edit);
+      // Reclassify across the lever/intermediary/external boundary (D201).
+      const move = document.createElement("select"); move.className = "cdd-btn cdd-reclass";
+      move.innerHTML = `<option value="" selected disabled>Move to…</option>` +
+        ["lever", "intermediary", "external"].filter((k) => k !== el.kind)
+          .map((k) => `<option value="${k}">${k}</option>`).join("");
+      move.onchange = async () => {
+        const to = move.value; if (!to) return;
+        try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/reclassify`, { method: "POST", body: JSON.stringify({ to_kind: to }) }); await reload(); } catch {}
+      };
+      actions.appendChild(move);
       const rej = document.createElement("button"); rej.className = "btn-ghost cdd-btn cdd-reject"; rej.textContent = "Reject";
       rej.onclick = async () => { try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/reject`, { method: "POST" }); await reload(); } catch {} };
       actions.appendChild(rej);
       row.appendChild(actions);
       return row;
+    }
+    function cddAddControl(grp, reload) {
+      const wrap = document.createElement("div"); wrap.className = "cdd-add";
+      const kind = document.createElement("select"); kind.className = "cdd-btn";
+      kind.innerHTML = ["lever", "intermediary", "external", "outcome"]
+        .map((k) => `<option value="${k}">${k}</option>`).join("");
+      const input = document.createElement("input"); input.className = "cdd-add-input";
+      input.type = "text"; input.placeholder = "name a new element…";
+      const add = document.createElement("button"); add.className = "btn-ghost cdd-btn"; add.textContent = "Add";
+      const submit = async () => {
+        const label = input.value.trim(); if (!label) return;
+        add.disabled = true;
+        try { await api(`/daily-driver/cdd/${grp.outcome_id}/elements`, { method: "POST", body: JSON.stringify({ kind: kind.value, label }) }); input.value = ""; await reload(); }
+        catch { toast("Add failed", true); }
+        add.disabled = false;
+      };
+      add.onclick = submit;
+      input.onkeydown = (ev) => { if (ev.key === "Enter") submit(); };
+      wrap.appendChild(kind); wrap.appendChild(input); wrap.appendChild(add);
+      return wrap;
     }
     // Both renderings lead with the coverage boundary (the read is valid only
     // inside it, D171) and keep the unlinked pile off the surface (D193).
