@@ -742,6 +742,22 @@ def summarise_element_evidence(
 
 
 @dataclass(frozen=True)
+class ElementBinding:
+    """One unit→element binding for the interactive display (D203, S103c).
+
+    Carries the unit's title (joined from the caches) and whether the unit is
+    user-owned, so the lens can show the bound units under each element with
+    relink/unlink affordances and an owned badge."""
+
+    unit_id: UUID
+    title: str
+    element_kind: str
+    element_id: UUID
+    tier: str
+    user_owned: bool
+
+
+@dataclass(frozen=True)
 class ElementTarget:
     """One authored element a unit can bind to (D202): its kind, id, and label."""
 
@@ -1155,6 +1171,7 @@ __all__ = [
     "GoalAssessment",
     "GoalCoverage",
     "ElementEvidence",
+    "ElementBinding",
     "ElementEvidenceSummary",
     "ElementTarget",
     "GoalEdge",

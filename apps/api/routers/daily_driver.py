@@ -46,11 +46,13 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     AddCddElementRequest,
     AddedCddElementDTO,
+    ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     ReclassifyCddElementRequest,
     RelinkCddEvidenceRequest,
     RematchResultDTO,
     UnlinkCddEvidenceRequest,
+    element_binding_to_dto,
     element_evidence_summary_to_dto,
     CddDraftSummaryDTO,
     CddDraftResultDTO,
@@ -96,6 +98,7 @@ from contexts.daily_driver.application.correlate_goal_facets import (
     correlate_goal_facets,
 )
 from contexts.daily_driver.application.read_element_evidence import (
+    read_element_bindings,
     read_element_evidence,
 )
 from contexts.daily_driver.application.correct_cdd_evidence import (
@@ -482,6 +485,23 @@ async def get_cdd_evidence(
         return ElementEvidenceSummaryDTO()
     summary = await read_element_evidence(unit_graph=unit_graph, actor=actor)
     return element_evidence_summary_to_dto(summary)
+
+
+@router.get("/cdd/bindings", response_model=list[ElementBindingDTO])
+async def get_cdd_bindings(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+) -> list[ElementBindingDTO]:
+    """Each unit→element binding with its title + user-ownership (D203, S103c),
+    for the interactive lens's relink/unlink affordances. Declared before
+    ``/cdd/{outcome_id}`` so ``bindings`` is not parsed as an outcome id."""
+    if unit_graph is None or facet_source is None:
+        return []
+    bindings = await read_element_bindings(
+        unit_graph=unit_graph, facet_source=facet_source, actor=actor
+    )
+    return [element_binding_to_dto(b) for b in bindings]
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)

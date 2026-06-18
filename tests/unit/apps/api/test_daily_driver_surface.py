@@ -217,6 +217,17 @@ def test_cdd_lens_shows_element_evidence_and_the_unbound_bucket():
     assert "unbound" in _HTML.lower()
 
 
+def test_cdd_lens_is_interactive_relink_unlink_rematch():
+    # S103c/D203: the evidence display is interactive — a re-match trigger, and
+    # per-element bound units with relink/unlink (over the read-only S103b display).
+    assert '"/daily-driver/cdd/rematch"' in _HTML
+    assert '"/daily-driver/cdd/bindings"' in _HTML
+    assert '"/daily-driver/cdd/evidence/relink"' in _HTML
+    assert '"/daily-driver/cdd/evidence/unlink"' in _HTML
+    assert "function renderBindings" in _HTML
+    assert "Re-match" in _HTML
+
+
 def test_draft_missing_has_a_clear_empty_state():
     # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
     # flag and shows a clear "all already have a CDD" state, not a silent zero.

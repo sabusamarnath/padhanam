@@ -631,6 +631,24 @@ def element_evidence_summary_to_dto(summary) -> "ElementEvidenceSummaryDTO":
     )
 
 
+class ElementBindingDTO(BaseModel):
+    """One unit→element binding for the interactive lens (D203, S103c)."""
+
+    unit_id: UUID
+    title: str
+    element_kind: str
+    element_id: UUID
+    tier: str
+    user_owned: bool
+
+
+def element_binding_to_dto(b) -> "ElementBindingDTO":
+    return ElementBindingDTO(
+        unit_id=b.unit_id, title=b.title, element_kind=b.element_kind,
+        element_id=b.element_id, tier=b.tier, user_owned=b.user_owned,
+    )
+
+
 class RematchResultDTO(BaseModel):
     """The on-demand re-match result (D203, S103c): the element-evidence edge
     count after re-running (user-owned units skipped)."""

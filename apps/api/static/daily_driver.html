@@ -200,7 +200,13 @@
     .cdd-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 9999px; white-space: nowrap; }
     .cdd-prov { color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--hairline); }
     /* D202/S103b: units-of-work bound to this element (read-only) */
-    .cdd-evidence { color: var(--teal); background: var(--surface-2); border: 1px solid var(--hairline); }
+    .cdd-evidence { color: var(--teal); background: var(--surface-2); border: 1px solid var(--hairline); cursor: pointer; }
+    /* D203/S103c: the bound-units expand with relink/unlink */
+    .cdd-bindings { margin: 2px 0 8px 14px; border-left: 2px solid var(--hairline); padding-left: 10px; }
+    .cdd-binding { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+    .cdd-binding-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
+    .cdd-tier { color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--hairline); }
+    .cdd-owned { color: var(--teal); border: 1px solid var(--teal); }
     .cdd-row.prov-user_authored .cdd-prov { color: var(--teal); border-color: var(--teal); }
     .cdd-proof { color: var(--not_tracked-fg); background: var(--not_tracked-bg); border: 1px dashed var(--not_tracked-fg); }
     .cdd-proof.is-accepted { color: var(--on-track-fg); background: var(--on-track-bg); border: 1px solid transparent; }
@@ -518,15 +524,29 @@
     // D202/S103b: element-evidence counts (which signal landed on each element) +
     // the unbound bucket, read-only.
     let cddEvidence = { counts: {}, bound_units: 0, unbound_units: 0, total_units: 0 };
+    let cddBindings = [];  // D203/S103c: unit→element bindings for relink/unlink
     async function renderAssessCdd(box, g) {
       box.innerHTML = "";
       const cov = appendCoverageLine(box, g);
       if (!cov.has_coverage) { appendNoCoverage(box); return; }
       try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch { cddEvidence = { counts: {}, bound_units: 0, unbound_units: 0, total_units: 0 }; }
+      try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch { cddBindings = []; }
       const ev = document.createElement("div"); ev.className = "sub"; ev.style.margin = "0 0 10px";
       ev.innerHTML = `<strong>Evidence:</strong> ${cddEvidence.bound_units} of ${cddEvidence.total_units} units bound to an element · <strong>${cddEvidence.unbound_units}</strong> unbound (matched no element — the emergent-loop queue).`;
       box.appendChild(ev);
       const bar = document.createElement("div"); bar.className = "cdd-bar";
+      // D203/S103c: re-run the matcher on demand — fills newly-authored elements
+      // with previously-unbound work, skipping units the user has corrected.
+      const rematch = document.createElement("button"); rematch.className = "btn-ghost"; rematch.textContent = "Re-match";
+      rematch.title = "Re-run the matcher over existing work (idempotent; skips your corrections)";
+      rematch.onclick = async () => {
+        rematch.disabled = true; rematch.textContent = "Re-matching…";
+        try { const r = await api("/daily-driver/cdd/rematch", { method: "POST" }); toast(`Re-matched: ${r.evidence_edges} bindings`); }
+        catch { toast("Re-match failed", true); }
+        rematch.disabled = false; rematch.textContent = "Re-match";
+        renderAssess();
+      };
+      bar.appendChild(rematch);
       const btn = document.createElement("button"); btn.className = "btn-primary"; btn.textContent = "Draft missing CDDs";
       btn.onclick = async () => {
         btn.disabled = true; btn.textContent = "Drafting…";
@@ -591,7 +611,7 @@
         if (!items.length) return;
         const lbl = document.createElement("div"); lbl.className = "feeder-label"; lbl.textContent = label;
         body.appendChild(lbl);
-        items.forEach((e) => body.appendChild(cddElementRow(body, grp, e, reload)));
+        items.forEach((e) => body.appendChild(cddElementRow(body, grp, e, cdd, reload)));
       });
       if (!els.length && !cdd.expected_outcome) {
         const e = document.createElement("div"); e.className = "evidence-note";
@@ -630,15 +650,29 @@
       row.appendChild(actions);
       return row;
     }
-    function cddElementRow(body, grp, el, reload) {
+    function cddElementRow(body, grp, el, cdd, reload) {
+      const wrap = document.createElement("div");
       const row = document.createElement("div"); row.className = "cdd-row prov-" + el.provenance_origin;
       const accepted = el.proof_state === "accepted";
       const ec = (cddEvidence.counts && cddEvidence.counts[el.element_id]) || 0;  // D202/S103b
       row.innerHTML =
         `<span class="cdd-label">${escapeHtml(el.label)}</span>` +
-        `<span class="cdd-badge cdd-evidence" title="units of work bound to this element">${ec} unit${ec === 1 ? "" : "s"}</span>` +
+        `<span class="cdd-badge cdd-evidence" title="units of work bound to this element — click to review/correct" role="button">${ec} unit${ec === 1 ? "" : "s"}${ec ? " ▾" : ""}</span>` +
         `<span class="cdd-badge cdd-prov">${escapeHtml(el.provenance_origin.replace("_", " "))}</span>` +
         `<span class="cdd-badge cdd-proof ${accepted ? "is-accepted" : ""}">${accepted ? "accepted" : "pending"}</span>`;
+      // D203/S103c: expand the bound units with relink/unlink affordances.
+      const sub = document.createElement("div"); sub.className = "cdd-bindings"; sub.style.display = "none";
+      const refresh = async () => {
+        try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
+        try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+        await reload();
+      };
+      if (ec) {
+        row.querySelector(".cdd-evidence").onclick = () => {
+          if (sub.style.display === "none") { renderBindings(sub, grp, el, cdd, refresh); sub.style.display = "block"; }
+          else sub.style.display = "none";
+        };
+      }
       const actions = document.createElement("span"); actions.className = "cdd-actions";
       if (!accepted) {
         const acc = document.createElement("button"); acc.className = "btn-ghost cdd-btn"; acc.textContent = "Accept";
@@ -662,7 +696,51 @@
       rej.onclick = async () => { try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/reject`, { method: "POST" }); await reload(); } catch {} };
       actions.appendChild(rej);
       row.appendChild(actions);
-      return row;
+      wrap.appendChild(row); wrap.appendChild(sub);
+      return wrap;
+    }
+    // D203/S103c: the bound units under an element, each with relink + unlink.
+    function renderBindings(sub, grp, el, cdd, refresh) {
+      sub.innerHTML = "";
+      const mine = (cddBindings || []).filter((b) => b.element_id === el.element_id);
+      if (!mine.length) { sub.innerHTML = `<div class="evidence-note">No bound units.</div>`; return; }
+      // Relink targets: the goal's other authored elements + its outcome.
+      const targets = (cdd.elements || [])
+        .filter((t) => t.element_id !== el.element_id)
+        .map((t) => ({ kind: t.kind, id: t.element_id, label: t.label }));
+      if (cdd.expected_outcome && grp.outcome_id !== el.element_id)
+        targets.push({ kind: "outcome", id: grp.outcome_id, label: "expected outcome" });
+      mine.slice(0, 50).forEach((b) => {
+        const r = document.createElement("div"); r.className = "cdd-binding";
+        r.innerHTML =
+          `<span class="cdd-binding-title">${escapeHtml(b.title)}</span>` +
+          `<span class="cdd-badge cdd-tier">${escapeHtml(b.tier.replace("_", " "))}</span>` +
+          (b.user_owned ? `<span class="cdd-badge cdd-owned" title="you have corrected this unit">yours</span>` : "");
+        const acts = document.createElement("span"); acts.className = "cdd-actions";
+        if (targets.length) {
+          const mv = document.createElement("select"); mv.className = "cdd-btn cdd-reclass";
+          mv.innerHTML = `<option value="" selected disabled>Relink to…</option>` +
+            targets.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join("");
+          mv.onchange = async () => {
+            const t = targets[mv.value]; if (!t) return;
+            try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: el.kind, from_element_id: el.element_id, to_kind: t.kind, to_element_id: t.id }) }); await refresh(); }
+            catch { toast("Relink failed", true); }
+          };
+          acts.appendChild(mv);
+        }
+        const un = document.createElement("button"); un.className = "btn-ghost cdd-btn cdd-reject"; un.textContent = "Unlink";
+        un.onclick = async () => {
+          try { await api("/daily-driver/cdd/evidence/unlink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, kind: el.kind, element_id: el.element_id }) }); await refresh(); }
+          catch { toast("Unlink failed", true); }
+        };
+        acts.appendChild(un);
+        r.appendChild(acts); sub.appendChild(r);
+      });
+      if (mine.length > 50) {
+        const more = document.createElement("div"); more.className = "evidence-note";
+        more.textContent = `…and ${mine.length - 50} more bound units.`;
+        sub.appendChild(more);
+      }
     }
     // S103a-fix: in-place edit. Clicking Edit swaps the row for a labelled input
     // + Save/Cancel, wired to the existing S102 correct path (which flips origin
