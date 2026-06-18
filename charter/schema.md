@@ -945,6 +945,49 @@ flag documented above). Three write paths land, all behind `DAILY_DRIVER_CDD_WRI
 - **Surface the outcome** as a proofable terminal element (accept / edit / reject the
   authored outcome stance).
 
+### The element-evidence layer (S103b, D202) — `EVIDENCES` edge (migration 0006)
+
+D202 binds ingested work to the **authored element** it serves, not the goal as a
+whole. A `(:Unit)-[:EVIDENCES]->(authored element)` edge is the primary evidence
+write, replacing the goal-level `(:Unit)-[:SERVES]->(:Outcome)` write (which is
+**retired** — no longer written; the goal level is **derived on read** from element
+evidence to prevent drift, D155). The edge target is a `:Lever` (by `lever_id`),
+`:Intermediary` / `:External` (by `element_id`), or the `:Outcome` goal node (by
+`outcome_id`) — the same authored-endpoint whitelist as the `FEEDS`/`INFLUENCES`
+edges. A unit may carry `EVIDENCES` edges to **more than one** element (multi-attach).
+
+Lands via `migrations/neo4j/0006_element_evidence.cypher`. Like `SERVES`/`FEEDS`,
+the edge has **no declarative constraint** (Community Edition has no
+relationship-property uniqueness); idempotency comes from the MERGE pattern keyed
+on `(tenant_id, unit, element)`, and the matcher replaces the tenant's `EVIDENCES`
+set each run (derived state). 0006 carries a relationship range index on
+`EVIDENCES(tenant_id)` for the tenant-scoped reads (idempotent, `IF NOT EXISTS`).
+
+| Property      | Type      | Notes                                                              |
+|---------------|-----------|-------------------------------------------------------------------|
+| `tenant_id`   | `String`  | not empty; matches both endpoints; the tenant-isolation predicate |
+| `jurisdiction`| `String`  | first-class per D12; matches both endpoints                       |
+| `tier`        | `String`  | the match tier: `lexical_exact` / `lexical_keyword` / `alias`     |
+| `status`      | `String`  | `confirmed` / `candidate` — derived from the tier                 |
+| `basis`       | `String`  | the matcher basis string (e.g. `element-exact`, `element-keyword`, `alias`) |
+| `created_at`  | `DateTime`| set on initial MERGE                                              |
+
+**No direction property** this session: the lever-vs-external orientation (email
+sender/recipient, calendar organiser/attendee) needs a user-identity reference the
+system does not store and whose only consumer is the emergent loop, so direction
+and its `EVIDENCES.direction` property land at **S104** (D203, reserved). **No
+embedding tier** (the live matcher is lexical-and-alias only; S100's empty
+email-embedding corpus keeps it out of scope).
+
+**Unbound** is not a node type: a unit carrying **no** `EVIDENCES` edge is unbound,
+surfaced by query (the existing unlinked/coverage read, now meaning "matched no
+element"), parked as the emergent loop's queue (S104), never dropped.
+
+**The correction record** (each relink/unlink stored with provenance as the
+learning signal) lands at **S103c** with the audit-event path, not this migration —
+S103b captures no corrections (it has no relink/unlink yet; the display is
+read-only).
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
