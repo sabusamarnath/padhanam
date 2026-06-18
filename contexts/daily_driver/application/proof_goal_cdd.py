@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from contexts.daily_driver.domain.cdd import ElementKind, GoalCddView
+from contexts.daily_driver.domain.cdd import (
+    ElementKind,
+    GoalCddView,
+    ProofState,
+    ProvenanceOrigin,
+)
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
@@ -79,9 +84,49 @@ async def reject_cdd_element(
     )
 
 
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def accept_cdd_outcome(
+    *, goal_graph: GoalGraphPort, actor: ActorContext, outcome_id: UUID
+) -> bool:
+    """Accept the authored outcome stance (proof accept on the terminal
+    element, S103a)."""
+    return await goal_graph.accept_authored_outcome(
+        tenant_context=actor.tenant_context, outcome_id=outcome_id
+    )
+
+
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def correct_cdd_outcome(
+    *, goal_graph: GoalGraphPort, actor: ActorContext, outcome_id: UUID, label: str
+) -> bool:
+    """Edit the authored outcome text, flipping its origin to user_authored and
+    its proof state to accepted (the correction is its own proof, S103a/D200)."""
+    await goal_graph.set_authored_outcome(
+        tenant_context=actor.tenant_context,
+        outcome_id=outcome_id,
+        expected_outcome=label,
+        origin=ProvenanceOrigin.USER_AUTHORED,
+        proof_state=ProofState.ACCEPTED,
+    )
+    return True
+
+
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def reject_cdd_outcome(
+    *, goal_graph: GoalGraphPort, actor: ActorContext, outcome_id: UUID
+) -> bool:
+    """Clear the authored outcome stance — the user-initiated reject (S103a)."""
+    return await goal_graph.reject_authored_outcome(
+        tenant_context=actor.tenant_context, outcome_id=outcome_id
+    )
+
+
 __all__ = [
     "accept_cdd_element",
+    "accept_cdd_outcome",
     "correct_cdd_element",
+    "correct_cdd_outcome",
     "read_goal_cdd",
     "reject_cdd_element",
+    "reject_cdd_outcome",
 ]

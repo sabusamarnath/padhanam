@@ -110,6 +110,8 @@ async def draft_goal_cdds(
                 tenant_context=actor.tenant_context,
                 outcome_id=goal.id,
                 expected_outcome=drafted.expected_outcome,
+                origin=ProvenanceOrigin.LLM_DRAFTED,
+                proof_state=ProofState.PENDING,
             )
 
         async def _persist(kind: ElementKind, label: str) -> UUID:

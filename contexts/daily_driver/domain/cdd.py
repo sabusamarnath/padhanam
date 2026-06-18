@@ -92,12 +92,19 @@ class AuthoredEdgeView:
 
 @dataclass(frozen=True)
 class GoalCddView:
-    """A goal's authored CDD as read for proof (S102, D200)."""
+    """A goal's authored CDD as read for proof (S102, D200).
+
+    ``expected_outcome_origin`` / ``expected_outcome_proof_state`` carry the
+    outcome's authored signal so it renders as a proofable terminal element
+    (S103a); both are ``None`` when the goal has no authored outcome yet.
+    """
 
     outcome_id: UUID
     expected_outcome: str
     elements: tuple[AuthoredElement, ...]
     edges: tuple[AuthoredEdgeView, ...]
+    expected_outcome_origin: ProvenanceOrigin | None = None
+    expected_outcome_proof_state: ProofState | None = None
 
 
 # The JSON Schema the structured-output port constrains the model to.

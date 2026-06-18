@@ -124,13 +124,18 @@ class AuthoredCddRecord:
 
     ``expected_outcome`` is the authored stance on the outcome — the measurable
     result that means the goal is met — stored on the ``:Outcome`` node; ``None``
-    when never drafted.
+    when never drafted. ``expected_outcome_origin`` / ``expected_outcome_proof_state``
+    carry its authored signal (S103a; coalesced to ``llm_drafted`` / ``pending``
+    for the S102 drafts that predate the proof properties), both ``None`` when
+    there is no authored outcome.
     """
 
     outcome_id: UUID
     elements: tuple[AuthoredElementRecord, ...]
     edges: tuple[AuthoredEdgeRecord, ...]
     expected_outcome: str | None = None
+    expected_outcome_origin: str | None = None
+    expected_outcome_proof_state: str | None = None
 
 
 class OutcomeGraphPort(Protocol):
@@ -236,9 +241,28 @@ class OutcomeGraphPort(Protocol):
         tenant_context: TenantContext,
         outcome_id: UUID,
         expected_outcome: str,
+        provenance_origin: str,
+        proof_state: str,
     ) -> None:
         """Set the authored ``expected_outcome`` stance on an ``:Outcome`` node
-        (S102, D200) — the measurable result that means the goal is met."""
+        with its ``provenance_origin`` + ``proof_state`` (S102 draft, S103a
+        author/correct) — the measurable result that means the goal is met."""
+        ...
+
+    async def accept_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Set the authored outcome's ``proof_state`` to ``accepted`` (the
+        outcome accept path, S103a). Returns ``False`` when the goal has no
+        authored outcome or is cross-tenant."""
+        ...
+
+    async def clear_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Remove the authored outcome stance from an ``:Outcome`` node (the
+        outcome reject path, S103a — the node itself, the goal, is never
+        deleted). Returns ``False`` when there was none."""
         ...
 
     async def merge_authored_edge(

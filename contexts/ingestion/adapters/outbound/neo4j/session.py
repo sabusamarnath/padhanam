@@ -336,14 +336,36 @@ RETURN type(r) AS edge_type,
 """
 
 # The authored stance on the outcome — the measurable result that means the goal
-# is met (D200), stored on the existing :Outcome node (D199's two faces).
+# is met (D200), stored on the existing :Outcome node (D199's two faces). S103a
+# makes it proofable: it carries an origin + proof_state alongside the text, all
+# schemaless (no constraint, no migration). Reject clears all three; the node
+# itself (the goal) is never deleted.
 _SET_AUTHORED_OUTCOME = """
 MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
-SET o.authored_expected_outcome = $expected_outcome
+SET o.authored_expected_outcome = $expected_outcome,
+    o.authored_outcome_origin = $provenance_origin,
+    o.authored_outcome_proof_state = $proof_state
+RETURN o.outcome_id AS outcome_id
 """
 _READ_AUTHORED_OUTCOME = """
 MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
-RETURN o.authored_expected_outcome AS expected_outcome
+RETURN o.authored_expected_outcome AS expected_outcome,
+       o.authored_outcome_origin AS provenance_origin,
+       o.authored_outcome_proof_state AS proof_state
+"""
+_ACCEPT_AUTHORED_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+WHERE o.authored_expected_outcome IS NOT NULL
+SET o.authored_outcome_proof_state = 'accepted'
+RETURN o.outcome_id AS outcome_id
+"""
+_CLEAR_AUTHORED_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+WHERE o.authored_expected_outcome IS NOT NULL
+REMOVE o.authored_expected_outcome,
+       o.authored_outcome_origin,
+       o.authored_outcome_proof_state
+RETURN o.outcome_id AS outcome_id
 """
 
 
@@ -902,23 +924,52 @@ class TenantScopedNeo4jSession:
         expected_outcome = (
             outcome_row["expected_outcome"] if outcome_row is not None else None
         )
+        # Coalesce the proof signal for the S102 drafts that predate it: an
+        # authored outcome with no recorded origin/proof was LLM-drafted/pending.
+        if expected_outcome is not None:
+            outcome_origin = outcome_row["provenance_origin"] or "llm_drafted"
+            outcome_proof = outcome_row["proof_state"] or "pending"
+        else:
+            outcome_origin = None
+            outcome_proof = None
         return AuthoredCddRecord(
             outcome_id=outcome_id,
             elements=tuple(elements),
             edges=edges,
             expected_outcome=expected_outcome,
+            expected_outcome_origin=outcome_origin,
+            expected_outcome_proof_state=outcome_proof,
         )
 
     async def set_authored_outcome(
-        self, *, outcome_id: UUID, expected_outcome: str
+        self,
+        *,
+        outcome_id: UUID,
+        expected_outcome: str,
+        provenance_origin: str,
+        proof_state: str,
     ) -> None:
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
             "outcome_id": str(outcome_id),
             "expected_outcome": expected_outcome,
+            "provenance_origin": provenance_origin,
+            "proof_state": proof_state,
         }
         await session.run(_SET_AUTHORED_OUTCOME, params)
+
+    async def accept_authored_outcome(self, *, outcome_id: UUID) -> bool:
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        result = await session.run(_ACCEPT_AUTHORED_OUTCOME, params)
+        return await result.single() is not None
+
+    async def clear_authored_outcome(self, *, outcome_id: UUID) -> bool:
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        result = await session.run(_CLEAR_AUTHORED_OUTCOME, params)
+        return await result.single() is not None
 
     async def set_authored_proof_state(
         self, *, element_kind: str, element_id: UUID, proof_state: str

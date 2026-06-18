@@ -83,9 +83,12 @@ from contexts.daily_driver.application import (
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
 from contexts.daily_driver.application.proof_goal_cdd import (
     accept_cdd_element,
+    accept_cdd_outcome,
     correct_cdd_element,
+    correct_cdd_outcome,
     read_goal_cdd,
     reject_cdd_element,
+    reject_cdd_outcome,
 )
 from contexts.daily_driver.domain.cdd import ElementKind
 from contexts.daily_driver.domain.commitment import Commitment
@@ -463,6 +466,50 @@ async def post_reject_cdd_element(
     )
     if not ok:
         raise HTTPException(status_code=404, detail="authored element not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/{outcome_id}/outcome/accept", status_code=204)
+async def post_accept_cdd_outcome(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Accept the authored outcome stance (proof on the terminal element, S103a)."""
+    ok = await accept_cdd_outcome(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="no authored outcome to accept")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/{outcome_id}/outcome/correct", status_code=204)
+async def post_correct_cdd_outcome(
+    outcome_id: UUID,
+    body: CorrectCddElementRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Edit the authored outcome, flipping origin to user_authored (S103a, D200)."""
+    await correct_cdd_outcome(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id, label=body.label
+    )
+    return Response(status_code=204)
+
+
+@router.post("/cdd/{outcome_id}/outcome/reject", status_code=204)
+async def post_reject_cdd_outcome(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Clear the authored outcome stance — the user-initiated reject (S103a)."""
+    ok = await reject_cdd_outcome(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="no authored outcome to clear")
     return Response(status_code=204)
 
 

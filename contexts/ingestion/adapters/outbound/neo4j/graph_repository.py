@@ -297,12 +297,43 @@ class Neo4jGraphRepository:
         tenant_context: TenantContext,
         outcome_id: UUID,
         expected_outcome: str,
+        provenance_origin: str,
+        proof_state: str,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 await s.set_authored_outcome(
-                    outcome_id=outcome_id, expected_outcome=expected_outcome
+                    outcome_id=outcome_id,
+                    expected_outcome=expected_outcome,
+                    provenance_origin=provenance_origin,
+                    proof_state=proof_state,
                 )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def accept_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.accept_authored_outcome(outcome_id=outcome_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def clear_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.clear_authored_outcome(outcome_id=outcome_id)
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

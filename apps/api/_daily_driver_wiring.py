@@ -558,11 +558,22 @@ class GoalGraphAdapter:
         )
 
     async def set_authored_outcome(
-        self, *, tenant_context, outcome_id, expected_outcome,
+        self, *, tenant_context, outcome_id, expected_outcome, origin, proof_state,
     ) -> None:
         await self._outcome_graph.set_authored_outcome(
             tenant_context=tenant_context, outcome_id=outcome_id,
             expected_outcome=expected_outcome,
+            provenance_origin=origin.value, proof_state=proof_state.value,
+        )
+
+    async def accept_authored_outcome(self, *, tenant_context, outcome_id) -> bool:
+        return await self._outcome_graph.accept_authored_outcome(
+            tenant_context=tenant_context, outcome_id=outcome_id
+        )
+
+    async def reject_authored_outcome(self, *, tenant_context, outcome_id) -> bool:
+        return await self._outcome_graph.clear_authored_outcome(
+            tenant_context=tenant_context, outcome_id=outcome_id
         )
 
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:
@@ -589,11 +600,23 @@ class GoalGraphAdapter:
             )
             for edge in record.edges
         )
+        outcome_origin = (
+            ProvenanceOrigin(record.expected_outcome_origin)
+            if record.expected_outcome_origin is not None
+            else None
+        )
+        outcome_proof = (
+            ProofState(record.expected_outcome_proof_state)
+            if record.expected_outcome_proof_state is not None
+            else None
+        )
         return GoalCddView(
             outcome_id=outcome_id,
             expected_outcome=record.expected_outcome or "",
             elements=elements,
             edges=edges,
+            expected_outcome_origin=outcome_origin,
+            expected_outcome_proof_state=outcome_proof,
         )
 
     async def accept_authored_element(

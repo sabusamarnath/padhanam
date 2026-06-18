@@ -88,8 +88,27 @@ class GoalGraphPort(Protocol):
         tenant_context: TenantContext,
         outcome_id: UUID,
         expected_outcome: str,
+        origin: ProvenanceOrigin,
+        proof_state: ProofState,
     ) -> None:
-        """Set the authored expected-outcome stance on the goal (S102, D200)."""
+        """Set the authored expected-outcome stance on the goal with its
+        provenance + proof state (S102 draft = llm_drafted/pending; S103a
+        author/correct = user_authored/accepted)."""
+        ...
+
+    async def accept_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Mark the authored outcome accepted (the outcome proof accept path,
+        S103a). Returns ``False`` when the goal has no authored outcome."""
+        ...
+
+    async def reject_authored_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Clear the authored outcome stance — the user-initiated reject (S103a).
+        The ``:Outcome`` node is the goal and is never deleted; only the authored
+        stance is removed. Returns ``False`` when there was none."""
         ...
 
     async def read_goal_cdd(

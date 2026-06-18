@@ -564,12 +564,19 @@ class AuthoredEdgeDTO(BaseModel):
 
 
 class GoalCddDTO(BaseModel):
-    """A goal's authored CDD for proof (S102, D200)."""
+    """A goal's authored CDD for proof (S102, D200).
+
+    ``expected_outcome_origin`` / ``expected_outcome_proof_state`` carry the
+    outcome's authored signal so the surface renders it as a proofable terminal
+    element (S103a); both ``None`` when the goal has no authored outcome.
+    """
 
     outcome_id: UUID
     expected_outcome: str
     elements: list[AuthoredElementDTO]
     edges: list[AuthoredEdgeDTO]
+    expected_outcome_origin: str | None = None
+    expected_outcome_proof_state: str | None = None
 
 
 class CorrectCddElementRequest(BaseModel):
@@ -582,6 +589,16 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
     return GoalCddDTO(
         outcome_id=view.outcome_id,
         expected_outcome=view.expected_outcome,
+        expected_outcome_origin=(
+            view.expected_outcome_origin.value
+            if view.expected_outcome_origin is not None
+            else None
+        ),
+        expected_outcome_proof_state=(
+            view.expected_outcome_proof_state.value
+            if view.expected_outcome_proof_state is not None
+            else None
+        ),
         elements=[
             AuthoredElementDTO(
                 kind=e.kind.value,
