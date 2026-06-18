@@ -988,6 +988,30 @@ learning signal) lands at **S103c** with the audit-event path, not this migratio
 S103b captures no corrections (it has no relink/unlink yet; the display is
 read-only).
 
+#### User-ownership + correction capture (S103c, D203) — no migration
+
+S103c makes the bindings correctable and the re-match re-runnable, all schemaless
+over the `0005`/`0006` shapes — **no migration**.
+
+- **`:Unit.user_owned`** (`Bool` / absent) — set `true` on a `:Unit` the first time
+  the user relinks or unlinks any of its evidence (unit-level ownership grain,
+  D203). The re-runnable re-match **skips** user-owned units: `replace_element_evidence`
+  deletes only `EVIDENCES` from non-user-owned units, and the matcher excludes
+  user-owned units from the inference, so a correction is never overwritten and
+  authoring a new goal recovers coverage only on the non-owned remainder. Absent ⇒
+  matcher-owned. Survives `correlate_units` (the `:Unit` MERGE by deterministic id
+  preserves the property). Per-element ownership is the named refinement (deferred).
+- **A relinked/unlinked `EVIDENCES` edge** carries `tier = user`, `status = confirmed`,
+  `basis = user-corrected` (the user's binding outranks the matcher's tiers).
+- **The correction record is an audit event** (`AuditPort.emit`, the canonical
+  hash-chained append-only store — the Step-0 audit-versus-dedicated decision,
+  settled for audit). `resource_type = cdd_element_evidence`; `action_verb`
+  `cdd.relink` / `cdd.unlink`; `before_state` the prior binding (unit + element),
+  `after_state` the new binding (the relink target, or removed for unlink); `actor`
+  + `timestamp` from the event. The labelled (prior → new) pair is the learning
+  signal a later session reads back through the audit reader's faceted query; S103c
+  captures, it does not consume.
+
 ## Agent tables (per-tenant)
 
 Live on each tenant's dedicated Postgres instance per D32. Schema lands at S24 via Alembic revision `0008_agent_tables` on the per-tenant track at `alembic/tenant/`. S26a-2 extends `agent_templates` with role lineage fields via Alembic revision `0009_agent_role_lineage` per D86's role-first refinement.
