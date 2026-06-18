@@ -1086,3 +1086,18 @@ Surfaced by the dogfood "no way to update a task" observation. Native plan inter
 **What defers.** Whether to offer a native done-tick at all, given the divergence cost.
 
 **Activation trigger.** A deliberate decision, not drift. The clean default until then: the user completes in the source tool and Padhanam observes it on re-pull. References D148/D155 (the read-only external-cache model), D162 (the observed half of the loop).
+
+### Job-search as a portfolio of pipelines (the sequence-goal shape)
+
+Get-a-job is modelled today as one sequence goal with ordered steps (D163), but a job
+search is a portfolio of concurrent pipelines: several opportunities, each at its own stage,
+with the terminal being an offer accepted on any one of them. The single-sequence shape does
+not cleanly hold the many-concurrent-pipelines case, and the flat-lever conflation D198
+corrects is the symptom. Flagged at the front-end CDD pass (2026-06-18).
+
+**Activation trigger.** The Phase 2-A dogfood week showing whether the multi-pipeline shape
+is felt in lived use, decided at the post-week pass alongside the Map-and-Flow and intermediary
+build (D162). Not re-architected before the week; recorded now so the week reads against it
+rather than discovering it cold. References D163 (the sequence goal with ordered steps), D198
+(the process-versus-CDD boundary whose flat-lever conflation this is the symptom of), D162 (the
+deferred causal-depth build this is decided alongside).

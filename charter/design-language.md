@@ -46,6 +46,8 @@ The today list, the week matrix, and the dashboard are three renderings of that 
 
 A workspace offers a **Map and a Flow** view of the same nodes. The Map is the causal structure, levers feeding factors feeding outcomes. The Flow is the execution sequence. Editing a step in the Flow ripples derived status up the Map. A lever on the Map deep-links to its step in the Flow to edit it.
 
+**Process and CDD are two linked layers, not one (D198).** The Flow is a process map: the stages an item moves through (for a job opportunity, the inbound, the HR call, the interview, the offer). The Map is the Causal Decision Diagram: the levers, intermediaries, and outcome that explain the decision at each stage. Following Pratt, the decision points in the Flow are portals into the Map, and the boundary between the two is fixed at the element level. A stage reached is an intermediary, a measured position in a pipeline. An inbound the user did not initiate is an external. A process instance, one opportunity moving through stages, is a Flow item, neither a lever nor a CDD node. Only the user's controllable action at a decision point is a lever. Editing a step in the Flow ripples derived status up the Map; the two views never collapse into one. A single coarse lever that mixes stages, inbound contacts, and user actions is the modelling error this clause exists to prevent.
+
 Output is recommendation-shaped, not chart-shaped (D9). The dashboard answers "how am I doing" with a verdict, a cause, and the move that changes it, not a wall of metrics.
 
 ---
@@ -105,4 +107,4 @@ These recur across every surface and are the spine of the language.
 
 ## 11. References
 
-Charter: D156 (the whole-life causal daily driver), D157 (the first slice), D158 (the live conversation cell), D159 (calendar items in the Today surface + the Connections page; calendar-to-domain mapping), D9 (recommendation-shaped output), D115 (ConversationFlow, stateless-per-turn), D131 / D138 (citation discipline), D139 / D134 (clarification; no-silent-operation), D148 / D151 (read-only calendar and email intake), D12 (tenant + jurisdiction), D32 (database-per-tenant), and the open deferred decision on personal causal-graph isolation and encryption. Tokens: `charter/brand/tokens.css`.
+Charter: D156 (the whole-life causal daily driver), D157 (the first slice), D158 (the live conversation cell), D159 (calendar items in the Today surface + the Connections page; calendar-to-domain mapping), D9 (recommendation-shaped output), D115 (ConversationFlow, stateless-per-turn), D131 / D138 (citation discipline), D139 / D134 (clarification; no-silent-operation), D148 / D151 (read-only calendar and email intake), D12 (tenant + jurisdiction), D32 (database-per-tenant), D198 (process and CDD as two linked layers; stage as intermediary, inbound as external, controllable action as lever), and the open deferred decision on personal causal-graph isolation and encryption. Tokens: `charter/brand/tokens.css`.
