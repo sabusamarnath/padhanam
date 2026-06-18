@@ -7,7 +7,16 @@ import re
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from contexts.daily_driver.application.author_cdd import (
+    add_cdd_element,
+    reclassify_cdd_element,
+)
 from contexts.daily_driver.application.draft_goal_cdd import draft_goal_cdds
+from contexts.daily_driver.application.proof_goal_cdd import (
+    accept_cdd_outcome,
+    correct_cdd_outcome,
+    reject_cdd_outcome,
+)
 from contexts.daily_driver.domain.cdd import (
     DRAFT_SCHEMA,
     DraftedCdd,
@@ -18,6 +27,7 @@ from contexts.daily_driver.domain.cdd import (
     ProvenanceOrigin,
     build_draft_prompt,
     parse_cdd_draft,
+    required_edge_type,
 )
 from contexts.daily_driver.domain.goal import (
     ControlAxis,
@@ -123,8 +133,11 @@ class _FakeGraph:
             outcome_id=outcome_id, expected_outcome="", elements=els, edges=()
         )
 
-    async def set_authored_outcome(self, *, tenant_context, outcome_id, expected_outcome):
+    async def set_authored_outcome(self, *, tenant_context, outcome_id,
+                                   expected_outcome, origin, proof_state):
         self.outcome = expected_outcome
+        self.outcome_origin = origin
+        self.outcome_proof = proof_state
 
     async def write_authored_element(self, *, tenant_context, outcome_id, kind,
                                      element_id, label, origin, proof_state):
@@ -196,6 +209,161 @@ def test_draft_persists_nothing_on_parse_failure_none():
     g._goal = _SEQ_GOAL
     res = asyncio.run(draft_goal_cdds(goal_graph=g, drafter=_FakeDrafter(None), actor=_actor()))
     assert not res[0].drafted and g.elements == []
+
+
+# --- S103a authoring completion: add, reclassify, outcome proof --------------
+
+def test_required_edge_type_grammar():
+    assert required_edge_type(ElementKind.LEVER) == "FEEDS"
+    assert required_edge_type(ElementKind.INTERMEDIARY) == "FEEDS"
+    assert required_edge_type(ElementKind.EXTERNAL) == "INFLUENCES"
+
+
+class _ModelGraph:
+    """A fake GoalGraph that models the authored-element + edge semantics, so the
+    use-case tests assert the reclassify contract (identity preserved, origin
+    flips, invalid edge flagged not dropped) — the reference of the live Cypher."""
+
+    def __init__(self, outcome_id):
+        self.outcome_id = outcome_id
+        self.elements = {}  # element_id -> {kind, label, origin, proof}
+        self.edges = []     # {edge_type, source_kind, source_id, target_kind, target_id, needs_review}
+        self.outcome = None  # {text, origin, proof} | None
+
+    async def write_authored_element(self, *, tenant_context, outcome_id, kind,
+                                     element_id, label, origin, proof_state):
+        self.elements[element_id] = {
+            "kind": kind.value, "label": label,
+            "origin": origin.value, "proof": proof_state.value,
+        }
+
+    async def write_authored_edge(self, *, tenant_context, edge_type, source_kind,
+                                  source_id, target_kind, target_id):
+        self.edges.append({
+            "edge_type": edge_type, "source_kind": source_kind, "source_id": source_id,
+            "target_kind": target_kind, "target_id": target_id, "needs_review": False,
+        })
+
+    async def reclassify_authored_element(self, *, tenant_context, from_kind,
+                                          to_kind, element_id):
+        el = self.elements.get(element_id)
+        if el is None or el["kind"] != from_kind.value:
+            return False
+        el["kind"] = to_kind.value
+        el["origin"] = "user_authored"
+        req = required_edge_type(to_kind)
+        for e in self.edges:
+            if e["source_id"] == element_id:
+                e["source_kind"] = to_kind.value
+                if e["edge_type"] != req:
+                    e["needs_review"] = True  # flagged, NEVER removed
+        return True
+
+    async def set_authored_outcome(self, *, tenant_context, outcome_id,
+                                   expected_outcome, origin, proof_state):
+        self.outcome = {"text": expected_outcome, "origin": origin.value,
+                        "proof": proof_state.value}
+
+    async def accept_authored_outcome(self, *, tenant_context, outcome_id):
+        if self.outcome is None:
+            return False
+        self.outcome["proof"] = "accepted"
+        return True
+
+    async def reject_authored_outcome(self, *, tenant_context, outcome_id):
+        if self.outcome is None:
+            return False
+        self.outcome = None
+        return True
+
+
+def test_add_element_persists_user_authored_accepted_with_default_edge():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    eid = asyncio.run(add_cdd_element(
+        goal_graph=g, actor=_actor(), outcome_id=oid,
+        kind=ElementKind.EXTERNAL, label="Hiring freeze"))
+    el = g.elements[eid]
+    assert el["origin"] == "user_authored" and el["proof"] == "accepted"
+    # An external joins the chain with an INFLUENCES edge to the outcome.
+    edge = g.edges[0]
+    assert edge["edge_type"] == "INFLUENCES"
+    assert edge["source_kind"] == "external" and edge["target_kind"] == "outcome"
+    assert edge["source_id"] == eid and edge["target_id"] == oid
+
+
+def test_add_lever_wires_a_feeds_edge_to_the_outcome():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    asyncio.run(add_cdd_element(
+        goal_graph=g, actor=_actor(), outcome_id=oid,
+        kind=ElementKind.LEVER, label="Apply"))
+    assert g.edges[0]["edge_type"] == "FEEDS"
+
+
+def test_reclassify_preserves_identity_flips_origin_and_flags_not_drops():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    lid = asyncio.run(add_cdd_element(
+        goal_graph=g, actor=_actor(), outcome_id=oid,
+        kind=ElementKind.LEVER, label="Recruiter reaching out"))
+    assert g.edges[0]["edge_type"] == "FEEDS" and not g.edges[0]["needs_review"]
+    edges_before = len(g.edges)
+
+    ok = asyncio.run(reclassify_cdd_element(
+        goal_graph=g, actor=_actor(),
+        from_kind=ElementKind.LEVER, to_kind=ElementKind.EXTERNAL, element_id=lid))
+    assert ok
+    # Identity preserved (same id), kind swapped, origin flipped to user_authored.
+    assert lid in g.elements
+    assert g.elements[lid]["kind"] == "external"
+    assert g.elements[lid]["origin"] == "user_authored"
+    # The FEEDS edge is flagged, NOT deleted (D201 — no silent delete).
+    assert len(g.edges) == edges_before
+    assert g.edges[0]["needs_review"] is True
+    assert g.edges[0]["edge_type"] == "FEEDS"  # still present, surfaced for review
+
+
+def test_reclassify_to_compatible_kind_does_not_flag():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    # An intermediary FEEDS the outcome; reclassifying to a lever (also FEEDS)
+    # leaves the edge grammatical, so nothing is flagged.
+    iid = asyncio.run(add_cdd_element(
+        goal_graph=g, actor=_actor(), outcome_id=oid,
+        kind=ElementKind.INTERMEDIARY, label="Response rate"))
+    asyncio.run(reclassify_cdd_element(
+        goal_graph=g, actor=_actor(),
+        from_kind=ElementKind.INTERMEDIARY, to_kind=ElementKind.LEVER, element_id=iid))
+    assert g.edges[0]["needs_review"] is False
+
+
+def test_reclassify_noop_same_kind_is_rejected_without_touching_the_graph():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    lid = asyncio.run(add_cdd_element(
+        goal_graph=g, actor=_actor(), outcome_id=oid,
+        kind=ElementKind.LEVER, label="Apply"))
+    before = dict(g.elements[lid])
+    ok = asyncio.run(reclassify_cdd_element(
+        goal_graph=g, actor=_actor(),
+        from_kind=ElementKind.LEVER, to_kind=ElementKind.LEVER, element_id=lid))
+    assert ok is False
+    assert g.elements[lid] == before  # untouched
+
+
+def test_outcome_proof_accept_correct_reject():
+    oid = uuid4()
+    g = _ModelGraph(oid)
+    # Author the outcome (the add-outcome path routes through correct).
+    asyncio.run(correct_cdd_outcome(
+        goal_graph=g, actor=_actor(), outcome_id=oid, label="Offer accepted"))
+    assert g.outcome["origin"] == "user_authored" and g.outcome["proof"] == "accepted"
+    # Accept is idempotent here; reject clears the stance (the goal node survives).
+    assert asyncio.run(accept_cdd_outcome(goal_graph=g, actor=_actor(), outcome_id=oid)) is True
+    assert asyncio.run(reject_cdd_outcome(goal_graph=g, actor=_actor(), outcome_id=oid)) is True
+    assert g.outcome is None
+    assert asyncio.run(reject_cdd_outcome(goal_graph=g, actor=_actor(), outcome_id=oid)) is False
 
 
 # --- migration-shape guard (the live-surface law's minimum standing guard) --

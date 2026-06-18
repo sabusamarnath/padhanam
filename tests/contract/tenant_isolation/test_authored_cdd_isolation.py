@@ -101,6 +101,79 @@ sys.exit(asyncio.run(main()))
     assert "OK" in result.stdout
 
 
+def test_reclassify_flags_invalid_edge_without_deleting_and_isolates(
+    stack_ready: None,
+) -> None:
+    """The S103a reclassify on the live surface (D201): tenant A creates a lever
+    that FEEDS an intermediary, reclassifies the lever to an external, and the
+    now-ungrammatical FEEDS edge is flagged (needs_review) — never deleted; the
+    node keeps its id; the origin flips to user_authored; tenant B still reads
+    none of it. The add path reuses merge_authored_element, covered above."""
+    script = r"""
+import asyncio, sys
+from uuid import uuid4
+from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
+from shared_kernel import TenantContext
+from padhanam.config import Neo4jSettings
+
+A = TenantContext(tenant_id="00000000-0000-4000-8000-00000000a001",
+                  jurisdiction="eu-west", cost_attribution_id="00000000-0000-4000-8000-00000000a001")
+B = TenantContext(tenant_id="00000000-0000-4000-8000-00000000b002",
+                  jurisdiction="eu-west", cost_attribution_id="00000000-0000-4000-8000-00000000b002")
+
+async def main():
+    repo = Neo4jGraphRepository.from_settings(Neo4jSettings())
+    outcome_id = uuid4(); lever_id = uuid4(); inter_id = uuid4()
+    try:
+        await repo.merge_authored_element(
+            tenant_context=A, outcome_id=outcome_id, element_kind="lever",
+            element_id=lever_id, label="probe-lever",
+            provenance_origin="llm_drafted", proof_state="pending")
+        await repo.merge_authored_element(
+            tenant_context=A, outcome_id=outcome_id, element_kind="intermediary",
+            element_id=inter_id, label="probe-inter",
+            provenance_origin="llm_drafted", proof_state="pending")
+        await repo.merge_authored_edge(
+            tenant_context=A, edge_type="FEEDS", source_kind="lever",
+            source_id=lever_id, target_kind="intermediary", target_id=inter_id)
+
+        ok = await repo.reclassify_authored_element(
+            tenant_context=A, from_kind="lever", to_kind="external", element_id=lever_id)
+        if not ok:
+            print("FAIL: reclassify returned False"); return 1
+
+        cdd = await repo.read_authored_cdd(tenant_context=A, outcome_id=outcome_id)
+        el = next((e for e in cdd.elements if e.element_id == lever_id), None)
+        if el is None:
+            print("FAIL: node identity lost after reclassify"); return 2
+        if el.element_kind != "external":
+            print("FAIL: kind not swapped: " + el.element_kind); return 3
+        if el.provenance_origin != "user_authored":
+            print("FAIL: origin not flipped: " + el.provenance_origin); return 4
+        feeds = [e for e in cdd.edges if e.edge_type == "FEEDS" and e.source_id == lever_id]
+        if not feeds:
+            print("FAIL: the FEEDS edge was silently deleted"); return 5
+        if not feeds[0].needs_review:
+            print("FAIL: the now-invalid edge was not flagged needs_review"); return 6
+
+        other = await repo.read_authored_cdd(tenant_context=B, outcome_id=outcome_id)
+        if other.elements or other.edges:
+            print("FAIL: tenant B read tenant A's reclassified CDD"); return 7
+    finally:
+        await repo.delete_authored_element(tenant_context=A, element_kind="external", element_id=lever_id)
+        await repo.delete_authored_element(tenant_context=A, element_kind="intermediary", element_id=inter_id)
+        await repo.close()
+    print("OK"); return 0
+
+sys.exit(asyncio.run(main()))
+"""
+    result = _exec_in_api(script)
+    assert result.returncode == 0, (
+        f"exit {result.returncode}: stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "OK" in result.stdout
+
+
 def test_authored_constraints_exist_on_the_live_shape(stack_ready: None) -> None:
     """The migration's authored constraints exist on the running Neo4j (the
     live-surface verification law — drift fails here, not in production)."""
