@@ -445,6 +445,55 @@ def test_group_yields_one_group_of_n_not_n_flat_rows():
     assert grouped.unlinked == ()
 
 
+# --- D199/S101: the measurable-outcome fields ride the grouped read -------
+# The Map renders the outcome distinct from the goal; the fields are carried
+# (propagated from the :Outcome node), not recomputed. One test per mode.
+
+def test_group_carries_progressive_outcome_measure():
+    goal = _progressive_goal("German", lever_commitment_id=uuid4())
+    units = (_served_unit("Practice"),)
+    grouped = group_units_by_goal(units, (goal,), (_edge(units[0], goal),))
+    grp = grouped.groups[0]
+    assert grp.mode == "progressive"
+    assert grp.ladder == ("A1", "A2", "B1")
+    assert grp.current_target_level == "A2"
+    # A progressive goal carries no sequence terminal.
+    assert grp.terminal_target is None
+    assert grp.terminal_state is None
+
+
+def test_group_carries_sequence_outcome_measure():
+    goal = _domain_goal(
+        name="Get a job", domain="work", mode=GoalMode.SEQUENCE,
+        steps=(LeverStep(commitment_id=uuid4(), order=1, state=StepState.READY),),
+    )
+    units = (_served_unit("Interview"),)
+    grouped = group_units_by_goal(units, (goal,), (_edge(units[0], goal),))
+    grp = grouped.groups[0]
+    assert grp.mode == "sequence"
+    assert grp.terminal_target == "Offer accepted"
+    assert grp.terminal_state == "pending"
+    # A sequence goal carries no progressive ladder.
+    assert grp.ladder == ()
+    assert grp.current_target_level is None
+
+
+def test_group_carries_homeostatic_mode_with_no_target_fields():
+    # A homeostatic goal's measure is the rhythm held (read from the verdict),
+    # so it carries the mode but neither a ladder nor a terminal.
+    goal = _domain_goal(
+        name="Litany", domain="personal", lever_commitment_id=uuid4()
+    )
+    units = (_served_unit("Litany"),)
+    grouped = group_units_by_goal(units, (goal,), (_edge(units[0], goal),))
+    grp = grouped.groups[0]
+    assert grp.mode == "homeostatic"
+    assert grp.ladder == ()
+    assert grp.current_target_level is None
+    assert grp.terminal_target is None
+    assert grp.terminal_state is None
+
+
 # --- D187/S92: per-goal status flows through group_units_by_goal ----------
 
 def test_distinct_units_cap_to_a_head_plus_a_counted_tail():

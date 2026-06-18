@@ -247,6 +247,19 @@ class GoalGroup:
     # ("not tracked") even when the goal as a whole reads a verdict from the
     # tracked ones (the partial-tracking rule). Empty for cadence-less goals.
     levers: tuple[GoalLeverStatus, ...] = ()
+    # D199/S101: the goal's measurable-outcome fields (D163), carried so the Map
+    # can render the outcome distinct from the goal (the aim) — derived, not
+    # recomputed. ``mode`` discriminates the shape; for a **progressive** goal
+    # ``ladder``/``current_target_level`` give the level against the target; for
+    # a **sequence** goal ``terminal_target``/``terminal_state`` give the terminal
+    # and its state; a **homeostatic** goal's measure is the rhythm held (read
+    # from the verdict/levers, no extra field). Already fetched on the goal read
+    # (the :Outcome node) — this is propagation, not a new query.
+    mode: str | None = None
+    ladder: tuple[str, ...] = ()
+    current_target_level: str | None = None
+    terminal_target: str | None = None
+    terminal_state: str | None = None
 
 
 @dataclass(frozen=True)
@@ -502,6 +515,23 @@ def group_units_by_goal(
                 suggestion_head=s_head,
                 suggestion_total=s_total,
                 levers=levers,
+                # D199/S101: the measurable-outcome fields from the :Outcome node,
+                # carried for the Map's outcome render (derived, not recomputed).
+                mode=goal.mode.value,
+                ladder=goal.ladder.levels if goal.ladder is not None else (),
+                current_target_level=(
+                    goal.ladder.current_target_level
+                    if goal.ladder is not None
+                    else None
+                ),
+                terminal_target=(
+                    goal.terminal.target if goal.terminal is not None else None
+                ),
+                terminal_state=(
+                    goal.terminal.state.value
+                    if goal.terminal is not None
+                    else None
+                ),
             )
         )
 

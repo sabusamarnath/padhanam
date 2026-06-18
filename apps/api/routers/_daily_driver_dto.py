@@ -438,6 +438,17 @@ class GoalGroupDTO(BaseModel):
     # D191/S96: per-lever status for a cadence goal — which levers have no
     # completion data ("not_tracked") even when the goal reads a verdict.
     levers: list[GoalLeverStatusDTO] = []
+    # D199/S101: the goal's measurable-outcome fields (D163), for the Map to
+    # render the outcome distinct from the goal (the aim). ``mode`` discriminates
+    # the shape; ``ladder``/``current_target_level`` are the progressive level
+    # against the target; ``terminal_target``/``terminal_state`` are the sequence
+    # terminal and its state; a homeostatic goal's measure is the rhythm held
+    # (read from the verdict, no field). Propagated from the :Outcome node.
+    mode: str | None = None
+    ladder: list[str] = []
+    current_target_level: str | None = None
+    terminal_target: str | None = None
+    terminal_state: str | None = None
 
 
 class GoalGroupedUnitsDTO(BaseModel):
@@ -502,6 +513,11 @@ def grouped_units_to_dto(grouped: GoalGroupedUnits) -> GoalGroupedUnitsDTO:
                     GoalLeverStatusDTO(name=lv.name, status=lv.status.value)
                     for lv in g.levers
                 ],
+                mode=g.mode,
+                ladder=list(g.ladder),
+                current_target_level=g.current_target_level,
+                terminal_target=g.terminal_target,
+                terminal_state=g.terminal_state,
             )
             for g in grouped.groups
         ],
