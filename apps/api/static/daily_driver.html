@@ -207,6 +207,12 @@
     .cdd-binding-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
     .cdd-tier { color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--hairline); }
     .cdd-owned { color: var(--teal); border: 1px solid var(--teal); }
+    /* S103c-fix: the why + the lexical match-strength band (not correctness) */
+    .cdd-why { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
+    .cdd-strength { text-transform: uppercase; font-weight: 700; }
+    .cdd-strength.s-strong { color: var(--on-track-fg); background: var(--on-track-bg); border: 1px solid transparent; }
+    .cdd-strength.s-medium { color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline); }
+    .cdd-strength.s-weak { color: var(--stalled-fg); background: var(--stalled-bg, var(--surface-2)); border: 1px dashed var(--stalled-fg); }
     .cdd-row.prov-user_authored .cdd-prov { color: var(--teal); border-color: var(--teal); }
     .cdd-proof { color: var(--not_tracked-fg); background: var(--not_tracked-bg); border: 1px dashed var(--not_tracked-fg); }
     .cdd-proof.is-accepted { color: var(--on-track-fg); background: var(--on-track-bg); border: 1px solid transparent; }
@@ -712,8 +718,12 @@
         targets.push({ kind: "outcome", id: grp.outcome_id, label: "expected outcome" });
       mine.slice(0, 50).forEach((b) => {
         const r = document.createElement("div"); r.className = "cdd-binding";
+        const strength = b.strength || "";  // S103c-fix: lexical match strength (not correctness)
+        const why = b.matched_term ? `matched on “${escapeHtml(b.matched_term)}”` : "";
         r.innerHTML =
           `<span class="cdd-binding-title">${escapeHtml(b.title)}</span>` +
+          (why ? `<span class="cdd-why" title="what the matcher matched on — string match, not correctness">${why}</span>` : "") +
+          (strength ? `<span class="cdd-badge cdd-strength s-${strength}" title="lexical match strength, not a trust score">${strength}</span>` : "") +
           `<span class="cdd-badge cdd-tier">${escapeHtml(b.tier.replace("_", " "))}</span>` +
           (b.user_owned ? `<span class="cdd-badge cdd-owned" title="you have corrected this unit">yours</span>` : "");
         const acts = document.createElement("span"); acts.className = "cdd-actions";

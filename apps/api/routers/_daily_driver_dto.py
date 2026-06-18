@@ -632,7 +632,10 @@ def element_evidence_summary_to_dto(summary) -> "ElementEvidenceSummaryDTO":
 
 
 class ElementBindingDTO(BaseModel):
-    """One unit→element binding for the interactive lens (D203, S103c)."""
+    """One unit→element binding for the interactive lens (D203, S103c).
+
+    ``matched_term`` (the why) and ``strength`` (a lexical match-strength band —
+    string-match strength, not correctness) are recomputed on read (S103c-fix)."""
 
     unit_id: UUID
     title: str
@@ -640,12 +643,15 @@ class ElementBindingDTO(BaseModel):
     element_id: UUID
     tier: str
     user_owned: bool
+    matched_term: str = ""
+    strength: str = ""
 
 
 def element_binding_to_dto(b) -> "ElementBindingDTO":
     return ElementBindingDTO(
         unit_id=b.unit_id, title=b.title, element_kind=b.element_kind,
         element_id=b.element_id, tier=b.tier, user_owned=b.user_owned,
+        matched_term=b.matched_term, strength=b.strength,
     )
 
 

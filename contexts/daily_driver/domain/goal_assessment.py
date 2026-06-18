@@ -747,7 +747,10 @@ class ElementBinding:
 
     Carries the unit's title (joined from the caches) and whether the unit is
     user-owned, so the lens can show the bound units under each element with
-    relink/unlink affordances and an owned badge."""
+    relink/unlink affordances and an owned badge. ``matched_term`` and
+    ``strength`` are recomputed on read (S103c-fix): the *why* (what the matcher
+    matched on) and a lexical **match-strength** band — string-match strength, not
+    semantic correctness (that is the deferred embedding tier)."""
 
     unit_id: UUID
     title: str
@@ -755,6 +758,71 @@ class ElementBinding:
     element_id: UUID
     tier: str
     user_owned: bool
+    matched_term: str = ""
+    strength: str = ""  # strong / medium / weak (lexical match strength)
+
+
+# Match-strength bands (S103c-fix). NOT a correctness/trust score — the matcher is
+# lexical+alias only. Tier orders it (exact > keyword); within keyword a match on
+# a *distinctive* term (unique to one element) outranks one on a token shared
+# across many elements (low discriminativeness — the incidental-match trap).
+_STRENGTH_STRONG = "strong"
+_STRENGTH_MEDIUM = "medium"
+_STRENGTH_WEAK = "weak"
+
+
+def binding_rationale(
+    *,
+    unit_title: str,
+    element_label: str,
+    tier: str,
+    token_element_counts: dict[str, int],
+) -> tuple[str, str]:
+    """Recompute the *why* (matched term) + the lexical match-strength band for a
+    binding (S103c-fix), deterministically from the unit title, the element label,
+    the tier, and how many elements share each token (discriminativeness).
+
+    ``token_element_counts`` maps a significant token to the number of authored
+    element labels containing it. An exact tier is strong; a keyword match on a
+    token unique to one element is medium; a keyword match on a widely-shared
+    (incidental) token, or an alias match, is weak — the trap the why exposes.
+    """
+    if tier == "lexical_exact":
+        return (element_label, _STRENGTH_STRONG)
+    if tier == "alias":
+        return ("goal name", _STRENGTH_WEAK)
+    # keyword: the shared significant tokens; show the most distinctive one.
+    unit_tokens = {
+        t for t in normalise_title(unit_title).split() if t not in _STOPWORDS
+    }
+    elem_tokens = {
+        t for t in normalise_title(element_label).split() if t not in _STOPWORDS
+    }
+    shared = unit_tokens & elem_tokens
+    if not shared:
+        # a substring match with no shared significant token (the _keyword_match
+        # substring branch) — honest but undistinctive.
+        return ("(substring)", _STRENGTH_WEAK)
+    term = min(shared, key=lambda t: token_element_counts.get(t, 1))
+    strength = (
+        _STRENGTH_MEDIUM
+        if token_element_counts.get(term, 1) <= 1
+        else _STRENGTH_WEAK
+    )
+    return (term, strength)
+
+
+def element_token_counts(labels: tuple[str, ...]) -> dict[str, int]:
+    """How many element labels contain each significant token (S103c-fix), for the
+    discriminativeness read. A token shared across many elements is incidental."""
+    counts: dict[str, int] = {}
+    for label in labels:
+        seen = {
+            t for t in normalise_title(label).split() if t not in _STOPWORDS
+        }
+        for t in seen:
+            counts[t] = counts.get(t, 0) + 1
+    return counts
 
 
 @dataclass(frozen=True)
@@ -1172,6 +1240,8 @@ __all__ = [
     "GoalCoverage",
     "ElementEvidence",
     "ElementBinding",
+    "binding_rationale",
+    "element_token_counts",
     "ElementEvidenceSummary",
     "ElementTarget",
     "GoalEdge",
