@@ -206,6 +206,11 @@
     .cdd-btn { padding: 3px 9px; font-size: 11px; }
     .cdd-btn.cdd-reject { color: var(--stalled-fg); }
     .cdd-reclass { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface-2); color: var(--ink-2); }
+    /* S103a-fix: the edit affordance reads as an editor, not a faint ghost */
+    .cdd-edit { border: 1px solid var(--hairline); border-radius: 6px; color: var(--teal); }
+    .cdd-save { color: var(--on-track-fg); font-weight: 600; }
+    .cdd-edit-input { flex: 1 1 220px; min-width: 160px; padding: 4px 8px; font-size: 13px;
+      border: 1px solid var(--teal); border-radius: 6px; background: var(--surface-1); color: var(--ink-1); }
     .cdd-outcome-row { background: var(--surface-2); }
     /* D201/S103a: edges a reclassify left ungrammatical, surfaced not dropped */
     .cdd-flag { font-size: 12px; color: var(--stalled-fg); background: var(--stalled-bg, var(--surface-2));
@@ -604,12 +609,8 @@
         acc.onclick = async () => { try { await api(`${base}/accept`, { method: "POST" }); await reload(); } catch {} };
         actions.appendChild(acc);
       }
-      const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn"; edit.textContent = "Edit";
-      edit.onclick = async () => {
-        const label = window.prompt("Edit expected outcome:", cdd.expected_outcome);
-        if (label == null || !label.trim()) return;
-        try { await api(`${base}/correct`, { method: "POST", body: JSON.stringify({ label: label.trim() }) }); await reload(); } catch {}
-      };
+      const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn cdd-edit"; edit.textContent = "Edit";
+      edit.onclick = () => cddBeginEdit(row, cdd.expected_outcome, `${base}/correct`, reload);
       actions.appendChild(edit);
       const rej = document.createElement("button"); rej.className = "btn-ghost cdd-btn cdd-reject"; rej.textContent = "Reject";
       rej.onclick = async () => { try { await api(`${base}/reject`, { method: "POST" }); await reload(); } catch {} };
@@ -630,12 +631,8 @@
         acc.onclick = async () => { try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/accept`, { method: "POST" }); await reload(); } catch {} };
         actions.appendChild(acc);
       }
-      const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn"; edit.textContent = "Edit";
-      edit.onclick = async () => {
-        const label = window.prompt("Edit label:", el.label);
-        if (label == null || !label.trim()) return;
-        try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/correct`, { method: "POST", body: JSON.stringify({ label: label.trim() }) }); await reload(); } catch {}
-      };
+      const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn cdd-edit"; edit.textContent = "Edit";
+      edit.onclick = () => cddBeginEdit(row, el.label, `/daily-driver/cdd/elements/${el.kind}/${el.element_id}/correct`, reload);
       actions.appendChild(edit);
       // Reclassify across the lever/intermediary/external boundary (D201).
       const move = document.createElement("select"); move.className = "cdd-btn cdd-reclass";
@@ -652,6 +649,29 @@
       actions.appendChild(rej);
       row.appendChild(actions);
       return row;
+    }
+    // S103a-fix: in-place edit. Clicking Edit swaps the row for a labelled input
+    // + Save/Cancel, wired to the existing S102 correct path (which flips origin
+    // to user_authored). No new write path — a clearer affordance over the same one.
+    function cddBeginEdit(row, currentText, correctPath, reload) {
+      row.innerHTML = "";
+      const input = document.createElement("input"); input.className = "cdd-edit-input";
+      input.type = "text"; input.value = currentText;
+      const acts = document.createElement("span"); acts.className = "cdd-actions";
+      const save = document.createElement("button"); save.className = "btn-ghost cdd-btn cdd-save"; save.textContent = "Save";
+      const cancel = document.createElement("button"); cancel.className = "btn-ghost cdd-btn"; cancel.textContent = "Cancel";
+      const commit = async () => {
+        const label = input.value.trim(); if (!label) return;
+        save.disabled = true;
+        try { await api(correctPath, { method: "POST", body: JSON.stringify({ label }) }); } catch {}
+        await reload();
+      };
+      save.onclick = commit;
+      cancel.onclick = reload;
+      input.onkeydown = (ev) => { if (ev.key === "Enter") commit(); else if (ev.key === "Escape") reload(); };
+      acts.appendChild(save); acts.appendChild(cancel);
+      row.appendChild(input); row.appendChild(acts);
+      input.focus(); input.select();
     }
     function cddAddControl(grp, reload) {
       const wrap = document.createElement("div"); wrap.className = "cdd-add";
