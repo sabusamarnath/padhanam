@@ -256,6 +256,44 @@ metrics:
 
 ---
 
+## S103c-fix — legible bindings: the why, match strength, and a workable unlink (D203) (build mode, surface-mostly)
+
+roles: engineer (the recompute-on-read rationale + strength; the triage + in-place unlink + bulk; the tests), analyst (Step 0 — the edge records tier+basis not the matched term; the live strength distribution + the classifier-why find), technical writer (the marker, the smoke doc, this entry).
+
+- **Step 0 finding.** The matcher records `tier` + `basis` on the EVIDENCES edge but **not the matched term**, so the why and the strength are **recomputed on read** from the deterministic lexical/alias match against the current element vocabulary — no storage change, no migration (confirming the brief's premise). Honest framing held throughout: what is shown is **lexical match strength, not correctness** (the matcher is lexical+alias only; semantic confidence is the deferred embedding tier).
+
+- **The three gaps closed.** (1) **The why** — each binding shows the matched term (`matched on "practice"`), recomputed on read. (2) **Match strength** — a strong/medium/weak band from tier + discriminativeness (a distinctive matched token outranks an incidental shared one), labelled strength-not-correctness. (3) **Workable unlink** — an unlink/relink re-renders the bound-units list **in place** (a sub-local refresh) instead of collapsing it, with a weak-only **triage** filter (weakest-first) and a **bulk** "Unlink selected" (each its own correction record).
+
+- **Reflection — did the why + strength let me triage, and did strength mislead?** The empirical triage *experience* is the operator's browser pass, but the live recompute on the real corpus gives the substantive read: **421 weak / 275 medium / 166 strong** — 49% weak, so the triage target is real and large, and the weak whys are legibly the trap ("Music practice Megan" → matched **"practice"**, an incidental token shared across elements; multi-attaching on it). The decisive find: **all 166 "strong" bindings are the D183 job-search classifier, not lexical exact — the lexical matcher produced zero exact title==label matches on this corpus.** So lexical strength here tops out at *medium* (a distinctive keyword), and the only *strong* signal is the rule. That sharpens the "did strength mislead" question structurally: a high-strength-relink (where lexical strength and semantic correctness part) can only come from the medium tier on this corpus, and it is the embedding-tier signal — the empirical count of such relinks is the operator's to record. The live pass also caught a self-inflicted honesty bug: the 166 classifier bindings first showed `matched "Receive a job offer"` (a string match that never happened); fixed in-session to render **"job-search classifier"** so the why never misleads.
+
+- **methodology:** the live read earned its keep twice — it produced the reflection's headline (strong == classifier-only, lexical-exact empty) *and* caught that S103c-fix's own first cut mislabelled the classifier binding's why; running the recompute against the real corpus, not a fixture, is what surfaced both. The honest-framing discipline (strength is string-match, not correctness) is what made the mislabel visible as a bug rather than passing as a plausible badge.
+
+- **AC verdicts.** AC1 (tier + matched term + a strength band labelled match-strength, recomputed on read, no storage change) ✓ — live recompute + the honest-why fix. AC2 (triage weakest-first / weak-only filter) ✓ served. AC3 (unlink keeps the list expanded; bulk works; each unlink one record) ✓ — `subRefresh` in place + the bulk loop; unit-tested (N calls → N records). AC4 (surface + read-side only: no migration, no new write path beyond batching, matcher + consume untouched) ✓ — grep-confirmed (goal_assessment additions only, `correlate_goal_facets` not in the diff). AC5 (suite/import-linter/AST green; served-HTML guard; operator-gated live check via `make build-api`) ✓ — unit + enforcement green, import-linter 48/0, served on pin `8a4078c`, 5/5 contract guards pass live.
+
+- Close state: **six commits — marker (`eaf5a84`), rationale+strength (`a23a919`), triage+workable-unlink (`1dc7cb3`), tests (`89be65e`), the honest-why fix (`b77bfb2`), pin+smoke (`e03c7db`).** Surface-mostly (recompute-on-read + front-end); no migration, no D-entry. Commits 2+3 (triage, workable unlink) landed together — interleaved in one render function. The triage *experience* and the high-strength-relink count are the operator's gated browser pass.
+
+```
+metrics:
+  classification: build session (S103c-fix — legible bindings: the why + match strength + a workable unlink; surface-mostly over S103c, no decision)
+  session_started: 2026-06-19
+  session_closed: 2026-06-19
+  step0: the EVIDENCES edge records tier+basis, NOT the matched term -> the why + strength are recomputed on read from the deterministic lexical/alias match against the current element vocabulary; no storage change, no migration; honest framing = lexical match strength not correctness (matcher is lexical+alias only)
+  gap_1_why: each binding shows the matched term (recompute on read via binding_rationale)
+  gap_2_strength: strong/medium/weak band from tier + discriminativeness (element_token_counts); labelled match-strength not a trust score; classifier-fed (D183) binding shows "job-search classifier" (live-found honesty fix)
+  gap_3_unlink: in-place subRefresh keeps the list expanded through unlink/relink; weak-only triage filter (weakest-first); bulk "Unlink selected" (each its own correction record)
+  surface_only: confirmed — goal_assessment.py additions only (matcher inference unchanged), read_element_evidence.py, the DTO, /cdd/bindings, daily_driver.html; no migration, correlate_goal_facets not in the diff, consume side untouched
+  live: read_element_bindings recompute on the personal tenant — 421 weak / 275 medium / 166 strong; ALL 166 strong are the D183 classifier (lexical exact == 0 on this corpus); the why honest after the fix; image re-pinned 8a4078c; 5/5 tenant-isolation contract guards pass live; served HTML carries the affordances
+  tests: tests/unit/contexts/daily_driver/test_correction_loop.py (binding_rationale bands + bulk one-record-each) + tests/unit/apps/api/test_daily_driver_surface.py (why/strength/triage/subRefresh/bulk guards); unit + enforcement exit 0; import-linter 48/0
+  reflection: triage target is real (49% weak); weak whys legibly expose the incidental-token trap; strong == classifier-only (lexical-exact empty) so a high-strength relink can only come from the medium tier and is the embedding-tier signal; the empirical triage experience + high-strength-relink count are operator-gated
+  commits: eaf5a84 (marker), a23a919 (rationale+strength), 1dc7cb3 (triage + workable unlink), 89be65e (tests), b77bfb2 (honest-why fix), e03c7db (pin + smoke)
+  charter_touchpoints: charter/current-package.md (S103c-fix note). No schema.md, no decisions.md (no D-entry — exposing match properties + an honest read-side proxy is not a decision). log/sessions.md (this entry); compose.yaml (pin); docs/smoke/p2b_s103c_fix_legible_bindings.md
+  numbering: S103c-fix (legibility-patch suffix over S103c); no D-entry; D203 stands as the live decision max; S104's direction decision takes the next free number when it runs
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
