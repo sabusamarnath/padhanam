@@ -194,6 +194,94 @@ def test_binding_rationale_alias_is_weak():
     assert strength == "weak"
 
 
+# --- S103c-fix-3: the outcome-kind 422 fix + the honest why -----------------
+
+class _EdgeModel:
+    """A minimal str-kind unit-graph: edges as (unit, kind, element) — function,
+    not presence. unlink removes the edge; relink moves it."""
+
+    def __init__(self):
+        self.edges: set = set()
+
+    async def unlink_element_evidence(self, *, tenant_context, unit_id,
+                                      element_kind, element_id):
+        before = len(self.edges)
+        self.edges.discard((unit_id, element_kind, element_id))
+        return len(self.edges) < before
+
+    async def relink_element_evidence(self, *, tenant_context, unit_id, from_kind,
+                                      from_element_id, to_kind, to_element_id):
+        key = (unit_id, from_kind, from_element_id)
+        if key not in self.edges:
+            return False
+        self.edges.discard(key)
+        self.edges.add((unit_id, to_kind, to_element_id))
+        return True
+
+
+def test_unlink_completes_for_every_view_kind_including_outcome():
+    # The Map-unlink fix: unlink must complete for every EVIDENCES endpoint kind a
+    # view can send — including "outcome" (the weak alias bindings), which used to
+    # 422. Function, not presence: the edge is actually removed.
+    for kind in ("lever", "intermediary", "external", "outcome"):
+        m = _EdgeModel(); u = uuid4(); e = uuid4()
+        m.edges.add((u, kind, e))
+        ok = asyncio.run(unlink_cdd_evidence(
+            unit_graph=m, actor=_actor(), unit_id=u, kind=kind, element_id=e))
+        assert ok and (u, kind, e) not in m.edges, kind
+
+
+def test_relink_completes_to_and_from_the_outcome():
+    m = _EdgeModel(); u = uuid4(); src = uuid4(); dst = uuid4()
+    m.edges.add((u, "lever", src))
+    ok = asyncio.run(relink_cdd_evidence(
+        unit_graph=m, actor=_actor(), unit_id=u, from_kind="lever",
+        from_element_id=src, to_kind="outcome", to_element_id=dst))
+    assert ok
+    assert (u, "outcome", dst) in m.edges and (u, "lever", src) not in m.edges
+
+
+def test_evidence_kinds_includes_outcome_regression():
+    # The 422 regression guard: the router validates unlink/relink against this.
+    from contexts.daily_driver.domain.cdd import EVIDENCE_KINDS
+    assert "outcome" in EVIDENCE_KINDS
+    assert {"lever", "intermediary", "external"} <= EVIDENCE_KINDS
+
+
+def test_binding_rationale_alias_shows_the_real_goal_token():
+    term, strength = binding_rationale(
+        unit_title="Marathon training plan", element_label="", tier="alias",
+        token_element_counts={}, goal_tokens=frozenset({"marathon"}),
+    )
+    assert term == "marathon" and strength == "weak"
+
+
+def test_binding_rationale_no_clear_basis_when_no_token_reproduces():
+    from contexts.daily_driver.domain.goal_assessment import NO_CLEAR_BASIS
+    # alias bound but no unit∩goal-name overlap — the spurious-binding signal.
+    term, _ = binding_rationale(
+        unit_title="La Fosse PM role", element_label="", tier="alias",
+        token_element_counts={}, goal_tokens=frozenset({"marathon"}),
+    )
+    assert term == NO_CLEAR_BASIS
+    # keyword with no shared significant token — no "(substring)" placeholder.
+    term2, _ = binding_rationale(
+        unit_title="zzz unrelated", element_label="Network",
+        tier="lexical_keyword", token_element_counts={},
+    )
+    assert term2 == NO_CLEAR_BASIS
+
+
+def test_no_placeholder_basis_remains():
+    # AC3: no remaining "goal name" / "(substring)" placeholder.
+    import inspect
+
+    import contexts.daily_driver.domain.goal_assessment as ga
+    src = inspect.getsource(ga.binding_rationale)
+    assert '"goal name"' not in src
+    assert '"(substring)"' not in src
+
+
 # --- re-match: idempotence, ownership, coverage recovery --------------------
 
 def _unit(title: str):

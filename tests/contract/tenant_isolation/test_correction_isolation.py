@@ -54,6 +54,64 @@ def _exec_in_api(script: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_unlink_completes_for_an_outcome_bound_unit(stack_ready: None) -> None:
+    """The S103c-fix-3 Map fix on the live surface: a unit bound to the OUTCOME
+    element (kind 'outcome' — the weak alias bindings) unlinks cleanly, where the
+    router used to 422. Function, not presence: the edge is actually removed."""
+    script = r"""
+import asyncio, sys
+from uuid import uuid4
+from contexts.ingestion.adapters.outbound.neo4j import Neo4jGraphRepository
+from contexts.ingestion.adapters.outbound.neo4j.session import TenantScopedNeo4jSession
+from contexts.ingestion.ports.unit_graph_port import ElementEvidenceWrite
+from shared_kernel import TenantContext
+from padhanam.config import Neo4jSettings
+
+A = TenantContext(tenant_id="00000000-0000-4000-8000-00000000a001",
+                  jurisdiction="eu-west", cost_attribution_id="00000000-0000-4000-8000-00000000a001")
+
+async def main():
+    repo = Neo4jGraphRepository.from_settings(Neo4jSettings())
+    oid = uuid4(); unit_id = uuid4()
+    try:
+        async with TenantScopedNeo4jSession(repo._driver, A) as s:
+            await s._bound_session.run(
+                "MERGE (o:Outcome {tenant_id:$t, outcome_id:$o}) ON CREATE SET o.jurisdiction='eu-west'",
+                {"t": str(A.tenant_id), "o": str(oid)})
+            await s._bound_session.run(
+                "MERGE (u:Unit {tenant_id:$t, unit_id:$u}) ON CREATE SET u.jurisdiction='eu-west'",
+                {"t": str(A.tenant_id), "u": str(unit_id)})
+        # Bind the unit to the OUTCOME element (the alias-tier shape).
+        await repo.replace_element_evidence(tenant_context=A, evidence=[
+            ElementEvidenceWrite(unit_id=unit_id, element_kind="outcome", element_id=oid,
+                                 tier="alias", status="candidate", basis="goal-name")])
+        ok = await repo.unlink_element_evidence(
+            tenant_context=A, unit_id=unit_id, element_kind="outcome", element_id=oid)
+        if not ok:
+            print("FAIL: outcome unlink returned False (the Map-422 class)"); return 1
+        ev = await repo.list_element_evidence(tenant_context=A)
+        if any(e.unit_id == unit_id for e in ev):
+            print("FAIL: outcome edge survived the unlink"); return 2
+    finally:
+        async with TenantScopedNeo4jSession(repo._driver, A) as s:
+            await s._bound_session.run(
+                "MATCH (u:Unit {tenant_id:$t, unit_id:$u}) DETACH DELETE u",
+                {"t": str(A.tenant_id), "u": str(unit_id)})
+            await s._bound_session.run(
+                "MATCH (o:Outcome {tenant_id:$t, outcome_id:$o}) DETACH DELETE o",
+                {"t": str(A.tenant_id), "o": str(oid)})
+        await repo.close()
+    print("OK"); return 0
+
+sys.exit(asyncio.run(main()))
+"""
+    result = _exec_in_api(script)
+    assert result.returncode == 0, (
+        f"exit {result.returncode}: stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "OK" in result.stdout
+
+
 def test_relink_marks_owned_and_rematch_respects_it_and_isolates(
     stack_ready: None,
 ) -> None:
