@@ -68,6 +68,9 @@ async def read_element_bindings(
     # each authored element's label by id, and how many elements share each token.
     label_by_element: dict = {}
     all_labels: list[str] = []
+    # S103c-fix-3: the goal-name/alias tokens per goal, so an alias binding's why
+    # shows the real unit∩goal-name token (not the "goal name" placeholder).
+    goal_tokens_by_outcome: dict = {}
     goals = await goal_graph.list_goals(tenant_context=actor.tenant_context)
     for goal in goals:
         cdd = await goal_graph.read_goal_cdd(
@@ -79,6 +82,9 @@ async def read_element_bindings(
         if cdd.expected_outcome:
             label_by_element[goal.id] = cdd.expected_outcome
             all_labels.append(cdd.expected_outcome)
+        goal_tokens_by_outcome[goal.id] = frozenset(
+            element_token_counts((goal.name, *goal.aliases)).keys()
+        )
     token_counts = element_token_counts(tuple(all_labels))
 
     bindings: list[ElementBinding] = []
@@ -91,6 +97,7 @@ async def read_element_bindings(
             tier=e.tier,
             basis=e.basis,
             token_element_counts=token_counts,
+            goal_tokens=goal_tokens_by_outcome.get(e.outcome_id, frozenset()),
         )
         bindings.append(
             ElementBinding(

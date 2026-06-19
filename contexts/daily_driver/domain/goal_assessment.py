@@ -773,6 +773,13 @@ _STRENGTH_MEDIUM = "medium"
 _STRENGTH_WEAK = "weak"
 
 
+# S103c-fix-3: the honest "no reproducible token" why. A binding whose recompute
+# cannot surface a real overlapping token reads as exactly that — it both flags the
+# binding for unlink and stops the why implying a match that did not happen. The
+# count of these is the spurious-binding signal (the matcher-quality input).
+NO_CLEAR_BASIS = "no clear basis"
+
+
 def binding_rationale(
     *,
     unit_title: str,
@@ -780,15 +787,18 @@ def binding_rationale(
     tier: str,
     basis: str = "",
     token_element_counts: dict[str, int],
+    goal_tokens: frozenset[str] = frozenset(),
 ) -> tuple[str, str]:
     """Recompute the *why* (matched term) + the lexical match-strength band for a
-    binding (S103c-fix), deterministically from the unit title, the element label,
-    the tier, the basis, and how many elements share each token (discriminativeness).
+    binding (S103c-fix; honesty hardened S103c-fix-3), deterministically from the
+    unit title, the element label (or, for the alias tier, the goal-name/alias
+    ``goal_tokens``), the tier, the basis, and how many elements share each token.
 
-    ``token_element_counts`` maps a significant token to the number of authored
-    element labels containing it. An exact tier is strong; a keyword match on a
-    token unique to one element is medium; a keyword match on a widely-shared
-    (incidental) token, or an alias match, is weak — the trap the why exposes.
+    Shows the **real overlapping token** where the recompute finds one, and
+    ``NO_CLEAR_BASIS`` ("no clear basis") where it cannot — no "goal name" or
+    "(substring)" placeholder. An exact tier is strong; a keyword match on a token
+    unique to one element is medium; a keyword match on a widely-shared (incidental)
+    token, or an alias match, is weak — the trap the why exposes.
     """
     # The classifier-fed (D183) binding is a rule verdict, not a string match —
     # show the rule honestly rather than the outcome label (S103c-fix live find).
@@ -796,20 +806,25 @@ def binding_rationale(
         return ("job-search classifier", _STRENGTH_STRONG)
     if tier == "lexical_exact":
         return (element_label, _STRENGTH_STRONG)
-    if tier == "alias":
-        return ("goal name", _STRENGTH_WEAK)
-    # keyword: the shared significant tokens; show the most distinctive one.
     unit_tokens = {
         t for t in normalise_title(unit_title).split() if t not in _STOPWORDS
     }
+    if tier == "alias":
+        # The alias bound on the *goal name / aliases*, not the element label — so
+        # the real token is the unit∩goal-name overlap; none reproducible reads as
+        # "no clear basis" (the spurious-binding signal, S103c-fix-3).
+        shared = unit_tokens & goal_tokens
+        if not shared:
+            return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
+        return (sorted(shared)[0], _STRENGTH_WEAK)
+    # keyword: the shared significant tokens; show the most distinctive one.
     elem_tokens = {
         t for t in normalise_title(element_label).split() if t not in _STOPWORDS
     }
     shared = unit_tokens & elem_tokens
     if not shared:
-        # a substring match with no shared significant token (the _keyword_match
-        # substring branch) — honest but undistinctive.
-        return ("(substring)", _STRENGTH_WEAK)
+        # a substring match with no shared significant token — no token to show.
+        return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
     term = min(shared, key=lambda t: token_element_counts.get(t, 1))
     strength = (
         _STRENGTH_MEDIUM
@@ -1247,6 +1262,7 @@ __all__ = [
     "GoalCoverage",
     "ElementEvidence",
     "ElementBinding",
+    "NO_CLEAR_BASIS",
     "binding_rationale",
     "element_token_counts",
     "ElementEvidenceSummary",
