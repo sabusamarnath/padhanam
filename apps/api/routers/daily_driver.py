@@ -115,7 +115,7 @@ from contexts.daily_driver.application.proof_goal_cdd import (
     reject_cdd_element,
     reject_cdd_outcome,
 )
-from contexts.daily_driver.domain.cdd import ElementKind
+from contexts.daily_driver.domain.cdd import EVIDENCE_KINDS, ElementKind
 from contexts.daily_driver.domain.commitment import Commitment
 from contexts.daily_driver.ports import (
     CalendarEventsReader,
@@ -546,13 +546,11 @@ async def post_unlink_cdd_evidence(
     """Remove one of a unit's element bindings; mark the unit user-owned (D203)."""
     if unit_graph is None:
         raise HTTPException(status_code=503, detail="unit graph not configured")
-    try:
-        kind = ElementKind(body.kind)
-    except ValueError:
+    if body.kind not in EVIDENCE_KINDS:  # incl. "outcome" (S103c-fix-3)
         raise HTTPException(status_code=422, detail=f"unknown kind: {body.kind}")
     ok = await unlink_cdd_evidence(
         unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
-        kind=kind, element_id=body.element_id, audit_port=audit_port,
+        kind=body.kind, element_id=body.element_id, audit_port=audit_port,
     )
     if not ok:
         raise HTTPException(status_code=404, detail="binding not found")
@@ -570,15 +568,12 @@ async def post_relink_cdd_evidence(
     user-corrected and the unit user-owned (D203)."""
     if unit_graph is None:
         raise HTTPException(status_code=503, detail="unit graph not configured")
-    try:
-        from_kind = ElementKind(body.from_kind)
-        to_kind = ElementKind(body.to_kind)
-    except ValueError:
+    if body.from_kind not in EVIDENCE_KINDS or body.to_kind not in EVIDENCE_KINDS:
         raise HTTPException(status_code=422, detail="unknown element kind")
     ok = await relink_cdd_evidence(
         unit_graph=unit_graph, actor=actor, unit_id=body.unit_id,
-        from_kind=from_kind, from_element_id=body.from_element_id,
-        to_kind=to_kind, to_element_id=body.to_element_id, audit_port=audit_port,
+        from_kind=body.from_kind, from_element_id=body.from_element_id,
+        to_kind=body.to_kind, to_element_id=body.to_element_id, audit_port=audit_port,
     )
     if not ok:
         raise HTTPException(

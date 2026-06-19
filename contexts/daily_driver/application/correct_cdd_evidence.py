@@ -18,7 +18,6 @@ from contexts.daily_driver.application.audit_events import (
     relink_correction_event,
     unlink_correction_event,
 )
-from contexts.daily_driver.domain.cdd import ElementKind
 from contexts.daily_driver.ports.unit_graph import UnitGraphPort
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
@@ -33,13 +32,15 @@ async def unlink_cdd_evidence(
     unit_graph: UnitGraphPort,
     actor: ActorContext,
     unit_id: UUID,
-    kind: ElementKind,
+    kind: str,
     element_id: UUID,
     audit_port: AuditPort | None = None,
 ) -> bool:
     """Remove one of a unit's element bindings; mark the unit user-owned (D203),
-    and capture the correction append-only as the learning signal. Returns
-    ``False`` when the binding is absent or cross-tenant (no record emitted)."""
+    and capture the correction append-only as the learning signal. ``kind`` is an
+    EVIDENCES endpoint kind (lever/intermediary/external/**outcome** — the outcome
+    is bindable, S103c-fix-3). Returns ``False`` when the binding is absent or
+    cross-tenant (no record emitted)."""
     ok = await unit_graph.unlink_element_evidence(
         tenant_context=actor.tenant_context,
         unit_id=unit_id,
@@ -52,7 +53,7 @@ async def unlink_cdd_evidence(
                 tenant_context=actor.tenant_context,
                 actor=actor.actor_id,
                 unit_id=unit_id,
-                kind=kind.value,
+                kind=kind,
                 element_id=element_id,
             )
         )
@@ -65,9 +66,9 @@ async def relink_cdd_evidence(
     unit_graph: UnitGraphPort,
     actor: ActorContext,
     unit_id: UUID,
-    from_kind: ElementKind,
+    from_kind: str,
     from_element_id: UUID,
-    to_kind: ElementKind,
+    to_kind: str,
     to_element_id: UUID,
     audit_port: AuditPort | None = None,
 ) -> bool:
@@ -90,9 +91,9 @@ async def relink_cdd_evidence(
                 tenant_context=actor.tenant_context,
                 actor=actor.actor_id,
                 unit_id=unit_id,
-                from_kind=from_kind.value,
+                from_kind=from_kind,
                 from_element_id=from_element_id,
-                to_kind=to_kind.value,
+                to_kind=to_kind,
                 to_element_id=to_element_id,
             )
         )

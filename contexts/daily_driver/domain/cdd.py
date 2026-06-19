@@ -42,6 +42,16 @@ class ElementKind(str, Enum):
     EXTERNAL = "external"
 
 
+# The kinds an EVIDENCES edge can target (D202) — the authored elements *plus* the
+# outcome goal node a unit can be bound to. Distinct from ``ElementKind`` (which is
+# the authored-element kinds only): unlink/relink operate on EVIDENCES endpoints, so
+# they accept ``outcome`` too. (S103c-fix-3: the Map-unlink 422 was the router
+# rejecting ``outcome`` via ``ElementKind`` while the graph endpoint supported it.)
+EVIDENCE_KINDS: frozenset[str] = frozenset(
+    {"lever", "intermediary", "external", "outcome"}
+)
+
+
 # The recent-few cap per kind so a verbose draft cannot flood the proof surface.
 _MAX_PER_KIND = 6
 
@@ -232,6 +242,7 @@ __all__ = [
     "DRAFT_SCHEMA",
     "DraftedCdd",
     "DraftedElement",
+    "EVIDENCE_KINDS",
     "ElementKind",
     "GoalCddView",
     "ProofState",

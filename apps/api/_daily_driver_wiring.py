@@ -896,9 +896,11 @@ class UnitGraphAdapter:
     async def unlink_element_evidence(
         self, *, tenant_context: TenantContext, unit_id, element_kind, element_id
     ) -> bool:
+        # element_kind is an EVIDENCES endpoint kind string (incl. "outcome",
+        # S103c-fix-3); the graph composes the label from its whitelist.
         return await self._unit_graph.unlink_element_evidence(
             tenant_context=tenant_context, unit_id=unit_id,
-            element_kind=element_kind.value, element_id=element_id,
+            element_kind=element_kind, element_id=element_id,
         )
 
     async def relink_element_evidence(
@@ -907,8 +909,8 @@ class UnitGraphAdapter:
     ) -> bool:
         return await self._unit_graph.relink_element_evidence(
             tenant_context=tenant_context, unit_id=unit_id,
-            from_kind=from_kind.value, from_element_id=from_element_id,
-            to_kind=to_kind.value, to_element_id=to_element_id,
+            from_kind=from_kind, from_element_id=from_element_id,
+            to_kind=to_kind, to_element_id=to_element_id,
         )
 
 
