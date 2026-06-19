@@ -261,6 +261,36 @@ def test_list_and_map_can_correct_from_one_shared_source():
     assert "Relink to goal" in _HTML  # the cross-goal element picker
 
 
+def _fn_body(name: str) -> str:
+    start = _HTML.index(f"function {name}(")
+    # crude: the body up to the next top-level "function " at the same indent.
+    nxt = _HTML.find("\n    function ", start + 1)
+    return _HTML[start: nxt if nxt != -1 else len(_HTML)]
+
+
+def test_correction_interaction_is_single_sourced():
+    # S103c-fix-4 (the structural single-source guard, reflection 1): the
+    # correction interaction lives in ONE component; a future view that
+    # re-implemented its own would duplicate the bulk control / the unlink call.
+    assert "function renderCorrectionList" in _HTML
+    # the unlink ACTION is single-sourced (one POST site, in unlinkBinding) — a
+    # second correction implementation would add another.
+    assert _HTML.count('"/daily-driver/cdd/evidence/unlink"') == 1
+    # the bulk control + the bulk-select checkbox live in the shared source only
+    shared = _fn_body("renderCorrectionList")
+    assert 'textContent = "Unlink selected"' in shared and "cdd-pick" in shared
+    assert _HTML.count('textContent = "Unlink selected"') == 1
+    # both view renderers DELEGATE to the shared source, not re-implement it
+    assert "renderCorrectionList(" in _fn_body("renderBindings")
+    assert "renderCorrectionList(" in _fn_body("renderGoalCorrections")
+
+
+def test_correction_row_shows_why_and_strength_consistently():
+    # AC4: the why + strength render from the one source (so all three views match).
+    src = _fn_body("renderCorrectionList")
+    assert "matched on" in src and "cdd-strength" in src
+
+
 def test_draft_missing_has_a_clear_empty_state():
     # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
     # flag and shows a clear "all already have a CDD" state, not a silent zero.
