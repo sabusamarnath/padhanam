@@ -1137,36 +1137,35 @@
     // S103c-fix-2: per-goal corrections in List and Map — the goal's bound units
     // with unlink + cross-goal element-level relink, identical semantics to the
     // CDD view (D203: any view is just the entry point; the correction is the same).
+    // S103c-fix-4: List/Map corrections are now a thin renderer over the shared
+    // renderCorrectionList — so they gain in-place re-render (no collapse), bulk
+    // select, and triage, identical to CDD. Grouped by the goal's bound units; the
+    // cross-goal relinkPicker is the context-specific relink control.
     function renderGoalCorrections(body, grp) {
-      const mine = (cddBindings || []).filter((b) => b.outcome_id === grp.outcome_id);
-      if (!mine.length) return;
+      const initial = (cddBindings || []).filter((b) => b.outcome_id === grp.outcome_id);
+      if (!initial.length) return;
       const lbl = document.createElement("div"); lbl.className = "feeder-label"; lbl.textContent = "Corrections — fix what's bound here";
       body.appendChild(lbl);
-      mine.slice(0, 30).forEach((b) => {
-        const r = document.createElement("div"); r.className = "cdd-binding";
-        const why = b.matched_term ? `matched on “${escapeHtml(b.matched_term)}”` : "";
-        const meta = document.createElement("span"); meta.style.cssText = "flex:1 1 auto;display:flex;gap:8px;align-items:center;overflow:hidden;";
-        meta.innerHTML =
-          `<span class="cdd-binding-title">${escapeHtml(b.title)}</span>` +
-          `<span class="cdd-badge cdd-tier">${escapeHtml(b.element_kind)}</span>` +
-          (b.strength ? `<span class="cdd-badge cdd-strength s-${b.strength}" title="lexical match strength, not correctness">${b.strength}</span>` : "") +
-          (why ? `<span class="cdd-why">${why}</span>` : "") +
-          (b.user_owned ? `<span class="cdd-badge cdd-owned" title="you have corrected this unit">yours</span>` : "");
-        r.appendChild(meta);
-        const acts = document.createElement("span"); acts.className = "cdd-actions";
-        acts.appendChild(relinkPicker(b));
-        const un = document.createElement("button"); un.className = "btn-ghost cdd-btn cdd-reject"; un.textContent = "Unlink";
-        un.onclick = async () => {
-          try { await api("/daily-driver/cdd/evidence/unlink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, kind: b.element_kind, element_id: b.element_id }) }); await loadAssess(); }
-          catch { toast("Unlink failed", true); }
-        };
-        acts.appendChild(un); r.appendChild(acts); body.appendChild(r);
+      const corr = document.createElement("div"); body.appendChild(corr);
+      // In-place refresh: re-read the shared bindings cache, re-render just this
+      // corrections list (not a full loadAssess that would collapse the fold).
+      const refresh = async () => {
+        try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+        try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
+        renderCorrectionList(corr, {
+          bindings: (cddBindings || []).filter((b) => b.outcome_id === grp.outcome_id),
+          refresh, relinkControlFor: relinkPicker, emptyMsg: "No bound units.",
+        });
+      };
+      renderCorrectionList(corr, {
+        bindings: initial, refresh, relinkControlFor: relinkPicker,
+        emptyMsg: "No bound units.",
       });
-      if (mine.length > 30) { const m = document.createElement("div"); m.className = "evidence-note"; m.textContent = `…and ${mine.length - 30} more bound here.`; body.appendChild(m); }
     }
     // The cross-goal element picker (S103c-fix-2): choose a goal, then an element
     // within it; the edge moves to the chosen element (D202 stays element-level).
-    function relinkPicker(b) {
+    // S103c-fix-4: takes the shared in-place refresh.
+    function relinkPicker(b, refresh) {
       const wrap = document.createElement("span"); wrap.className = "cdd-relink-picker"; wrap.style.cssText = "display:inline-flex;gap:4px;";
       const goalSel = document.createElement("select"); goalSel.className = "cdd-btn cdd-reclass";
       goalSel.innerHTML = `<option value="" selected disabled>Relink to goal…</option>` +
@@ -1184,7 +1183,7 @@
       };
       elemSel.onchange = async () => {
         const o = (elemSel._opts || [])[elemSel.value]; if (!o) return;
-        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.kind, to_element_id: o.id }) }); await loadAssess(); }
+        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.kind, to_element_id: o.id }) }); await (refresh ? refresh() : loadAssess()); }
         catch { toast("Relink failed", true); }
       };
       wrap.appendChild(goalSel); wrap.appendChild(elemSel);
