@@ -1391,3 +1391,16 @@ Source: S100 Step-0 live read. `email_chunks` is empty (0 rows) for the personal
 
   - triaged: defer → next phase audit (fold into the dogfood-deployment-state doc with instances #1/#2)
   - resolution: queued; confirmed a miss (not a deferral) by the S100 wiring read at the operator's request.
+
+## 2026-06-19 [S103c-fix-2] — current-package.md approaching its size bound
+
+`charter/current-package.md` is at ~18.3k / 20k tokens — the open Phase-2-B CDD
+package has accumulated many session markers (S102, S103a, S103a-fix, S103b, S103c,
+S103c-fix, S103c-fix-2). It will cross the bound within a session or two.
+
+  - triaged: defer on 2026-06-19
+  - resolution: windowing is a package-close maintenance task per the
+    charter-and-log retention rule (`charter/methodology.md`); archive the closed
+    session markers to `docs/archive/packages/` when the package closes, or run a
+    maintenance session (the S102m idiom) if it crosses 20k before then. Not
+    actioned in this build session (out of scope).

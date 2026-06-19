@@ -294,6 +294,46 @@ metrics:
 
 ---
 
+## S103c-fix-2 — view coherence: one corrected truth across List, Map, CDD (D202/D203) (build mode, surface + read-side)
+
+roles: analyst (Step 0 — the load-bearing read-path reconciliation that corrected the brief's premise), engineer (the per-goal corrections section + cross-goal relink picker in List/Map; the binding `outcome_id`; the consistency guard + tests), technical writer (the marker, the smoke doc, this entry).
+
+- **Step 0 finding (the brief's premise corrected).** The brief's load-bearing question was whether List and Map read a separate model (stop-and-flag) or a bypassable seam (small re-point). Neither — **they already derive from element evidence.** Since S103b, `/units-by-goal` → `list_units_by_goal` → `unit_graph.list_goal_edges()`, and the bridge's `list_goal_edges` derives from `list_element_evidence` + `derive_goal_edges`; the remaining `SERVES` references were stale docstrings, not a live read. So the read-coherence gap was already closed at S103b — the re-point is a **no-op**, no separate-model reconciliation, no scoping fork, no D-entry. The genuine gap was **write-reach**: List and Map were read-only, lacking the unlink/relink the CDD view got at S103c. The session is therefore smaller and cleaner than framed: expose the corrections, don't re-plumb the reads.
+
+- **Reflection 1 — did corrections propagate cleanly across all three views?** The empirical "without a manual refresh" is the operator's browser pass, but the architecture makes propagation **structural, not best-effort**: all three views read one shared cache (`assessData` + `cddBindings`, loaded once in `loadAssess`), and every correction — from any view — calls `loadAssess()`, which re-reads that one cache and re-renders. There is no second data path to go stale, and the live coherence is proven: on the real corpus the List/Map goal edges (688) equal `derive_goal_edges` of the CDD element evidence (840). A stale binding in one view would require the views to read diverging sources, which the consistency guard now fails on. So a stale view is structurally precluded; the operator's eyeball confirms the feel.
+
+- **Reflection 2 — was element-level relink the right grain from the goal-level views?** Operator-gated, reasoned. The picker is goal-then-element (cross-goal), which keeps D202's element-level model intact — relinking from a goal-level view still lands on a specific element, so the matcher's learning signal stays element-grained rather than collapsing to a goal-whole link. The open question the prompt names — did you want to move an email to a goal *without* naming an element (a goal-level default) — is the deferred refinement; if it recurs, the natural default is the goal's outcome element (so a goal-default is sugar over the element model, not a model change). Named, not built, pending the live pass.
+
+- **methodology:** Step 0 paid for itself by *subtraction* — it caught that the brief's central premise ("List and Map read a stale model") was already false, turning a feared re-plumb (possibly a read-architecture decision) into a no-op plus a small write-reach exposure. The discipline that surfaced it: trace the actual read path to its source (`list_goal_edges` → `derive_goal_edges`) rather than trusting the docstrings, which still said `SERVES`. The stale-docstring lag is itself the lesson — a prior session re-pointed the read but left the prose, so the next brief inherited a wrong mental model from the comments; refreshing the docstring this session closes that lag.
+
+- **AC verdicts.** AC1 (List/Map derive from the same element-evidence truth as CDD; a correction reflects in all three; proven by the consistency guard) ✓ — the unit guard (`list_goal_edges == derive_goal_edges(list_element_evidence)`) + **live** (688 == derive(840)). AC2 (unlink in List/Map — orphans to unbound, marks user-owned, emits a record via the S103c path) ✓ served + reuses the path (unit-tested). AC3 (element-level relink via a goal-then-element picker, cross-goal, edge moves element-level per D202) ✓ served + reuses the path. AC4 (the consistency guard fails if the views diverge) ✓ — `test_view_coherence`. AC5 (surface + read-side: no schema, no new write path beyond more entry points, matcher + consume untouched) ✓ — grep-confirmed (no migration; `infer_element_evidence`/`correlate_goal_facets` not in the diff). AC6 (suite/import-linter/AST green; served-HTML guard; operator-gated live check via `make build-api`) ✓ — unit + enforcement green, import-linter 48/0, served on pin `79276dd`, 5/5 contract guards live, cross-view coherence live-verified.
+
+- Close state: **six commits — marker (`f3aba55`), binding-carries-its-goal + docstring refresh (`cfd5467`), unlink + element-level relink from List/Map (`25dcede`), tests (`269daaf`), pin+smoke (`f2cad36`)** (and the marker). Surface + read-side; no migration, no D-entry. Commits 2+3 (unlink, relink) landed together — interleaved in the one shared `renderGoalCorrections` / `relinkPicker`. The cross-view propagation feel and the relink-grain question are the operator's gated browser pass.
+
+```
+metrics:
+  classification: build session (S103c-fix-2 — view coherence: one corrected element-evidence truth across List/Map/CDD + write-reach to List/Map; surface + read-side, no decision)
+  session_started: 2026-06-19
+  session_closed: 2026-06-19
+  step0: brief premise CORRECTED — List/Map are NOT reading a stale goal-level model; since S103b they derive from element evidence (units-by-goal -> list_units_by_goal -> list_goal_edges -> derive_goal_edges over list_element_evidence); remaining SERVES refs are stale docstrings; read-coherence gap already closed at S103b (re-point is a no-op, no separate-model fork, no D-entry); genuine gap = write-reach (List/Map read-only)
+  gap_closed: List/Map gain the S103c unlink + element-level cross-goal relink, over the same element-evidence bindings the CDD view uses (one shared cache: assessData + cddBindings loaded once in loadAssess); a consistency guard so the three views cannot silently diverge
+  read_side: ElementBinding + DTO gain outcome_id (lets the goal-level views resolve a unit's bindings per goal); list_units_by_goal docstring refreshed from SERVES to element-evidence-derived
+  write_reuse: List/Map unlink/relink POST the S103c /cdd/evidence/unlink and /relink — same use cases, mark user-owned + emit a correction record (D203); relink is element-level via a goal-then-element picker, cross-goal allowed (D202); no new write path
+  live: image re-pinned 79276dd; cross-view coherence verified on the real corpus (element evidence 840, goal edges 688, List/Map == derive_goal_edges(CDD evidence) True); served HTML carries renderGoalCorrections + relinkPicker; 5/5 tenant-isolation contract guards pass live
+  tests: tests/unit/apps/api/test_view_coherence.py (list_goal_edges == derive_goal_edges(list_element_evidence) — the consistency guard; multi-attach rollup coherent) + served-HTML guards (List/Map corrections, cross-goal picker, S103c-path reuse, one shared source); unit + enforcement exit 0; import-linter 48/0
+  surface_only: confirmed — daily_driver.html, the binding DTO+read (outcome_id), list_units_by_goal docstring, ElementBinding; no migration, no matcher logic change (infer_element_evidence/correlate_goal_facets untouched), no schema, consume side untouched
+  reflection_1_propagation: structural — one shared cache, every correction calls loadAssess() to re-read; no second path to go stale; live-proven coherent (688 == derive(840)); empirical "no manual refresh" feel is operator-gated
+  reflection_2_relink_grain: element-level picker (goal-then-element, cross-goal) keeps D202's element grain; a goal-level default (relink to a goal without naming an element) is the deferred refinement, natural default = the outcome element; built only if reflection-2 shows it bites
+  commits: f3aba55 (marker), cfd5467 (binding carries its goal + docstring refresh), 25dcede (unlink + element-level relink from List/Map), 269daaf (tests), f2cad36 (pin + smoke)
+  charter_touchpoints: charter/current-package.md (S103c-fix-2 marker). No schema.md, no decisions.md (no D-entry — reuses D202's element model + D203's correction semantics; the re-point was a no-op). log/sessions.md (this entry); compose.yaml (pin); docs/smoke/p2b_s103c_fix_2_view_coherence.md
+  numbering: S103c-fix-2 (view-coherence patch over S103c); no D-entry; D203 stands as the live decision max; S104's direction decision takes the next free number when it runs
+  note: charter/current-package.md is at ~18.3k/20k tokens (many open-package markers) — approaching the size bound; flagged as a capture for windowing at package close
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
