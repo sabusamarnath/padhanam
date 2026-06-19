@@ -1392,15 +1392,14 @@ Source: S100 Step-0 live read. `email_chunks` is empty (0 rows) for the personal
   - triaged: defer → next phase audit (fold into the dogfood-deployment-state doc with instances #1/#2)
   - resolution: queued; confirmed a miss (not a deferral) by the S100 wiring read at the operator's request.
 
-## 2026-06-19 [S103c-fix-2] — current-package.md approaching its size bound
+## 2026-06-19 [S103c-fix-2] — current-package.md size (CORRECTED at S103c-fix-3: not near the bound)
 
-`charter/current-package.md` is at ~18.3k / 20k tokens — the open Phase-2-B CDD
-package has accumulated many session markers (S102, S103a, S103a-fix, S103b, S103c,
-S103c-fix, S103c-fix-2). It will cross the bound within a session or two.
+`charter/current-package.md` carries many open-Phase-2-B-CDD session markers
+(S102, S103a, S103a-fix, S103b, S103c, S103c-fix, S103c-fix-2, S103c-fix-3).
 
-  - triaged: defer on 2026-06-19
-  - resolution: windowing is a package-close maintenance task per the
-    charter-and-log retention rule (`charter/methodology.md`); archive the closed
-    session markers to `docs/archive/packages/` when the package closes, or run a
-    maintenance session (the S102m idiom) if it crosses 20k before then. Not
-    actioned in this build session (out of scope).
+  - triaged: note on 2026-06-19 — **the original alarm was wrong.**
+  - resolution: the S103c-fix-2 close read "~18.3k / 20k tokens" conflated the
+    charter-size tool's **bytes** column with its **tokens** column. The file is at
+    **~5.2k tokens against the 20k-token bound (~26%)** — not approaching it.
+    No windowing is needed soon; the per-package archive at package close (the
+    D107 / retention-rule cadence) handles it in the ordinary course. No action.

@@ -795,8 +795,8 @@ def binding_rationale(
     ``goal_tokens``), the tier, the basis, and how many elements share each token.
 
     Shows the **real overlapping token** where the recompute finds one, and
-    ``NO_CLEAR_BASIS`` ("no clear basis") where it cannot — no "goal name" or
-    "(substring)" placeholder. An exact tier is strong; a keyword match on a token
+    ``NO_CLEAR_BASIS`` where it cannot — replacing the earlier placeholders. An
+    exact tier is strong; a keyword match on a token
     unique to one element is medium; a keyword match on a widely-shared (incidental)
     token, or an alias match, is weak — the trap the why exposes.
     """
