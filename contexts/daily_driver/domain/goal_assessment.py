@@ -756,6 +756,8 @@ class ElementBinding:
     title: str
     element_kind: str
     element_id: UUID
+    outcome_id: UUID  # the goal this element belongs to (S103c-fix-2: lets the
+                      # goal-level List/Map views resolve a unit's bindings per goal)
     tier: str
     user_owned: bool
     matched_term: str = ""

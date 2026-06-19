@@ -641,6 +641,7 @@ class ElementBindingDTO(BaseModel):
     title: str
     element_kind: str
     element_id: UUID
+    outcome_id: UUID
     tier: str
     user_owned: bool
     matched_term: str = ""
@@ -650,8 +651,8 @@ class ElementBindingDTO(BaseModel):
 def element_binding_to_dto(b) -> "ElementBindingDTO":
     return ElementBindingDTO(
         unit_id=b.unit_id, title=b.title, element_kind=b.element_kind,
-        element_id=b.element_id, tier=b.tier, user_owned=b.user_owned,
-        matched_term=b.matched_term, strength=b.strength,
+        element_id=b.element_id, outcome_id=b.outcome_id, tier=b.tier,
+        user_owned=b.user_owned, matched_term=b.matched_term, strength=b.strength,
     )
 
 

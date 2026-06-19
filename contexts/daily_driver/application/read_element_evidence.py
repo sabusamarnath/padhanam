@@ -98,6 +98,7 @@ async def read_element_bindings(
                 title=title,
                 element_kind=e.element_kind,
                 element_id=e.element_id,
+                outcome_id=e.outcome_id,
                 tier=e.tier,
                 user_owned=e.unit_id in owned,
                 matched_term=matched_term,

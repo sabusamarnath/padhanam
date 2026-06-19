@@ -1,11 +1,13 @@
 """list_units_by_goal use case — the moat view anchored on the goal served (D180).
 
-Reads the units (enriched with cache facet titles), the goals, and the persisted
-``SERVES`` edges — the same inputs as ``list_goal_assessment`` — then projects
-them through the pure ``group_units_by_goal``: units grouped under the
-``:Outcome`` each ``SERVES``, orphan units under one unlinked group, the D175
-series-fold applied before grouping. A read-and-render projection over the
-existing graph; no graph write (S83).
+Reads the units (enriched with cache facet titles), the goals, and the goal edges
+**derived on read from element evidence** (D202/S103b — ``list_goal_edges`` now
+rolls up the ``EVIDENCES`` edges; the goal-level ``SERVES`` write is retired) — the
+same inputs as ``list_goal_assessment`` — then projects them through the pure
+``group_units_by_goal``: units grouped under the ``:Outcome`` they serve, orphan
+units under one unlinked group, the D175 series-fold applied before grouping. So
+List and Map read the same corrected element-evidence truth the CDD view does
+(S103c-fix-2). A read-and-render projection; no graph write (S83).
 """
 
 from __future__ import annotations
