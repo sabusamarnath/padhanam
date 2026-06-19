@@ -329,7 +329,7 @@ metrics:
   numbering: S103c-fix-2 (view-coherence patch over S103c); no D-entry; D203 stands as the live decision max; S104's direction decision takes the next free number when it runs
   note: charter/current-package.md is at ~18.3k/20k tokens (many open-package markers) — approaching the size bound; flagged as a capture for windowing at package close [CORRECTED by S103c-fix-3: this conflated bytes with tokens — the file is ~5.2k/20k tokens, not near the bound]
   corrects:
-  corrected_by: S103c-fix-3 (the Map unlink shipped here was broken — the outcome-kind 422 — and the served-HTML guard checked render not function; and this size note mistook bytes for tokens)
+  corrected_by: S103c-fix-3 (the Map unlink shipped here was broken — the outcome-kind 422 — and the served-HTML guard checked render not function; and this size note mistook bytes for tokens); S103c-fix-4 (the List/Map corrections it added copied the CDD display not the interaction — collapse-on-unlink, no bulk — single-sourced there)
 ```
 
 ---
@@ -369,6 +369,45 @@ metrics:
   charter_touchpoints: charter/current-package.md (S103c-fix-3 marker); log/captures.md (corrected the current-package size alarm). No schema.md, no decisions.md (no D-entry). log/sessions.md (this entry); compose.yaml (pin); docs/smoke/p2b_s103c_fix_3_bug_and_why_honesty.md
   numbering: S103c-fix-3 (bug+honesty patch over S103c); no D-entry; D203 stands as the live decision max; S104's direction decision takes the next free number when it runs
   corrects: S103c-fix-2 (the Map unlink shipped broken — outcome 422 — and its served-HTML guard checked render not function; this fixes the bug and extends the guard to function. Also corrects the S103c-fix-2 current-package size capture: bytes mistaken for tokens)
+  corrected_by:
+```
+
+---
+
+## S103c-fix-4 — one correction interaction across all three views (D202/D203) (build mode, surface-only)
+
+roles: engineer (the consolidation — the shared renderCorrectionList + thin renderers; the structural guard), analyst (Step 0 inventory + the shape decision), technical writer (the marker, the smoke doc, this entry).
+
+- **Step 0 shape decision (the finding).** The two correction renderings — CDD's `renderBindings` (groups by element; had in-place re-render, bulk, triage, same-goal relink select) and List/Map's `renderGoalCorrections` (groups by the goal's bound units; had the why/strength/relink but full-reload, no bulk, no triage) — differ in two context dimensions: **grouping** (by element vs by goal) and the **relink target space** (same-goal element select vs cross-goal goal-then-element picker). So the chosen shape is **a shared interaction behind two thin renderers** (Step 0 option 2), not a single merged renderer: one `renderCorrectionList` owns the interaction (triage, bulk select, in-place re-render, the why/strength/unlink row), and the **relink control** is the one context-specific piece passed in (`relinkControlFor`). The unlink uses `b.element_kind` uniformly — correct for both, since a binding's kind is its element's kind.
+
+- **Reflection 1 — is it genuinely single-sourced, and which protection landed?** **Structural, not just functional parity.** The guard asserts the unlink action is **one POST site** (`unlinkBinding`), the bulk control + the select checkbox live **only** in `renderCorrectionList`, and both `renderBindings` and `renderGoalCorrections` **delegate** to it (their bodies contain `renderCorrectionList(`). A future view that re-implemented its own correction handling would either add a second unlink POST site or a second bulk control — both caught by the count assertions — or skip the delegate call — caught by the body check. So a determined divergence is *prevented*, not merely unlikely; this is the UI analogue of the read-consistency guard, the protection the brief asked for in its strongest expressible form.
+
+- **Reflection 2 — what context difference did the consolidation absorb?** Two, both pushed to the caller as parameters: **grouping** is the caller passing the already-filtered `bindings` (CDD: by `element_id`; List/Map: by `outcome_id`), and the **relink target space** is the caller passing `relinkControlFor` (CDD: a same-goal element `<select>`; List/Map: the cross-goal goal-then-element picker). The shared source knows nothing of either — it takes a list of bindings, a refresh, and a relink-control factory. So the next correction surface inherits the shape directly: pass your bindings and your relink control, get triage / bulk / in-place re-render / why / strength for free. (One normalization fell out: the consolidated row standardises on **element_kind + strength + why** — the CDD view's old raw tier badge was dropped as redundant with the strength band.)
+
+- **methodology:** the recurring-fix signal is the lesson — the same in-place + bulk fix was needed a third time because S103c-fix-2 copied the *display* of the CDD corrections without the *interaction*, and the guard then checked the display rendered, not that the interaction matched. Single-sourcing the interaction + a structural guard that the views *delegate* (not just render the same strings) is what converts "fix it again next surface" into "can't diverge." The general rule: when a behaviour has been re-patched in N places, the (N+1)th fix should be the consolidation, and the guard should assert the shared *source* is used, not that the behaviour is present.
+
+- **AC verdicts.** AC1 (the interaction single-sourced; CDD/List/Map use it; verified by the guard) ✓ — the structural single-source guard. AC2 (List/Map re-render in place on unlink/relink, no collapse, matching CDD) ✓ — the sub-local refresh; served. AC3 (bulk unlink in all three; each emits its own record) ✓ — the shared bulk loop over `unlinkBinding`; the one-record-per-binding behaviour stands from S103c-fix-3 (the shared call routes every view through it). AC4 (why + strength consistent across views) ✓ — rendered from the one source (guard). AC5 (the guard fails if a view re-implements its own correction interaction) ✓ — the unlink-site/bulk-control uniqueness + delegate checks. AC6 (surface-only: no schema, no new write path, matcher + consume untouched) ✓ — the diff is `daily_driver.html` + the marker + tests, grep-confirmed. AC7 (suite/import-linter/AST green; functional + served-HTML guards; operator-gated live via `make build-api`) ✓ — unit + enforcement green, import-linter 48/0, served on pin `6a5067e`, correction contract guards live.
+
+- Close state: **six commits — marker (`3e04c27`), single-source the interaction (`e61a102`), List/Map in-place + bulk (`5b014e7`), single-source guards (`b5398e8`), pin+smoke (`490d3fc`)** (and the marker). Surface-only; no write-path, matcher, schema, or D-entry change. The correction interaction is now one component; the structural guard stops the divergence from recurring. The live feel is the operator's gated browser pass.
+
+```
+metrics:
+  classification: build session (S103c-fix-4 — single-source the correction interaction + List/Map parity; surface-only UI consolidation, no decision)
+  session_started: 2026-06-19
+  session_closed: 2026-06-19
+  step0: two correction renderings — CDD renderBindings (group by element; in-place/bulk/triage/same-goal relink) and List/Map renderGoalCorrections (group by goal; why/strength/relink but full-reload, no bulk/triage); they differ in grouping + relink target space, so the shape is a SHARED INTERACTION BEHIND TWO THIN RENDERERS (option 2), not a single merged renderer; the relink control is the parameterised context piece
+  consolidation: renderCorrectionList (+ unlinkBinding) is the one correction interaction (triage weakest-first + weak-only, bulk select + "Unlink selected" each its own record, per-binding why/strength/unlink, in-place re-render); CDD renderBindings + List/Map renderGoalCorrections are thin renderers passing {bindings, refresh, relinkControlFor}; relink control: cddElementRelink (same-goal select) vs relinkPicker (cross-goal); unlink uses b.element_kind uniformly; row standardised on element_kind + strength + why (tier dropped, redundant with strength)
+  parity_gain: List/Map now re-render in place on unlink/relink (sub-local refresh, no fold collapse) + bulk select + triage — identical to CDD, by pointing them at the shared source
+  protection: STRUCTURAL single-source guard — unlink action is one POST site (unlinkBinding); bulk control + checkbox only in renderCorrectionList; both renderers delegate (body contains renderCorrectionList(); a re-implementing view would duplicate the unlink site/bulk control or skip the delegate -> caught
+  tests: tests/unit/apps/api/test_daily_driver_surface.py (single-source guard: unlink-POST count==1, bulk control + cdd-pick only in the shared source, both renderers delegate; AC4 why+strength from the one source); functional bulk one-record-each stands from S103c-fix-3; unit + enforcement exit 0; import-linter 48/0
+  surface_only: confirmed — diff is apps/api/static/daily_driver.html + charter/current-package.md + tests only; no Python write-path, no matcher, no schema, consume side untouched
+  live: image re-pinned 6a5067e; served HTML carries renderCorrectionList (one source) used by all three views; correction contract guards pass live; the in-place/bulk feel on List/Map is operator-gated
+  reflection_1_single_source: structural (not just functional parity) — the guard catches a future view re-implementing its own correction handling (duplicate unlink site / bulk control, or missing delegate)
+  reflection_2_context_difference: grouping (by element vs by goal) absorbed by the caller passing filtered bindings; the relink target space (same-goal vs cross-goal) by the caller passing relinkControlFor; the shared source is context-free
+  commits: 3e04c27 (marker), e61a102 (single-source the interaction; CDD rewired), 5b014e7 (List/Map in-place + bulk), b5398e8 (single-source guards), 490d3fc (pin + smoke)
+  charter_touchpoints: charter/current-package.md (S103c-fix-4 marker). No schema.md, no decisions.md (no D-entry). log/sessions.md (this entry); compose.yaml (pin); docs/smoke/p2b_s103c_fix_4_one_correction_interaction.md
+  numbering: S103c-fix-4 (correction-interaction consolidation over S103c); no D-entry; D203 stands as the live decision max; S104's direction decision takes the next free number when it runs
+  corrects: S103c-fix-2 (the List/Map corrections it added copied the CDD display not the interaction — collapse-on-unlink, no bulk; single-sourced here so it cannot diverge again)
   corrected_by:
 ```
 
