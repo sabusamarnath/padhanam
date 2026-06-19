@@ -244,6 +244,23 @@ def test_cdd_bindings_are_triageable_and_unlink_stays_expanded():
     assert "Unlink selected" in _HTML  # bulk path
 
 
+def test_list_and_map_can_correct_from_one_shared_source():
+    # S103c-fix-2: List and Map gain unlink + element-level relink, over the same
+    # element-evidence bindings the CDD view uses (loaded once in loadAssess), and
+    # reuse the S103c correction paths (no new write path).
+    assert "function renderGoalCorrections" in _HTML
+    assert "function relinkPicker" in _HTML
+    # one shared source: bindings loaded in loadAssess, used by all three views
+    assert "cddBindings = await api" in _HTML
+    assert "loadAssess" in _HTML
+    # corrections from List AND Map fold bodies
+    assert _HTML.count("renderGoalCorrections(body, grp)") >= 2
+    # reuse the S103c paths, not a new write path
+    assert '"/daily-driver/cdd/evidence/unlink"' in _HTML
+    assert '"/daily-driver/cdd/evidence/relink"' in _HTML
+    assert "Relink to goal" in _HTML  # the cross-goal element picker
+
+
 def test_draft_missing_has_a_clear_empty_state():
     # S103a-fix AC2: draft-missing reads the existing zero-count + skipped_existing
     # flag and shows a clear "all already have a CDD" state, not a silent zero.
