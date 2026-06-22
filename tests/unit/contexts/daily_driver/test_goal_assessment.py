@@ -20,13 +20,18 @@ from datetime import datetime, timedelta, timezone
 from dataclasses import fields
 
 from contexts.daily_driver.domain.goal_assessment import (
+    NO_CLEAR_BASIS,
     GoalEdge,
     GoalGroup,
     GroupedUnit,
+    _keyword_match,
     assess_goals,
+    binding_rationale,
     commitment_domains_from_goals,
     group_units_by_goal,
     infer_goal_edges,
+    shared_significant_tokens,
+    significant_tokens,
 )
 from contexts.daily_driver.domain.unit_view import UnitFacetView, UnitView
 from contexts.daily_driver.domain.work_unit import FacetType, LinkStatus
@@ -116,6 +121,75 @@ def test_a_stopword_only_overlap_forms_no_edge():
     unit = _unit("Get a coffee")
     edges = infer_goal_edges((unit,), (goal,), {cid: "Apply to roles"})
     assert edges == ()
+
+
+# --- S103d/D204: match rule == read-side basis rule (shared token, no substring)
+
+
+def _keyword_has_basis(unit_title: str, target: str) -> bool:
+    """The read-side verdict for a keyword binding of ``unit_title`` to ``target``:
+    True when ``binding_rationale`` finds a basis, False when it reads
+    NO_CLEAR_BASIS. The mirror of the matcher's ``_keyword_match`` it must equal."""
+    term, _ = binding_rationale(
+        unit_title=unit_title,
+        element_label=target,
+        tier="lexical_keyword",
+        token_element_counts={},
+    )
+    return term != NO_CLEAR_BASIS
+
+
+def _alias_has_basis(unit_title: str, target: str) -> bool:
+    """The read-side verdict for an alias binding: the alias tier reads the
+    unit∩goal-name(/alias) overlap, so it has a basis iff a significant token is
+    shared — the same predicate ``_keyword_match`` applies in the alias tier."""
+    term, _ = binding_rationale(
+        unit_title=unit_title,
+        element_label="",
+        tier="alias",
+        token_element_counts={},
+        goal_tokens=significant_tokens(target),
+    )
+    return term != NO_CLEAR_BASIS
+
+
+# Pairs spanning the three cases: shared significant token, substring-only (the
+# behaviour S103d removes), and disjoint. "prunes" contains the substring "run";
+# "jobsworth" contains "job" — the substring-only fragments the old rule bound.
+_TIE_PAIRS = (
+    ("apply to roles", "apply to roles"),          # exact overlap
+    ("drafted application for acme", "application response rate"),  # shared token
+    ("morning run by the river", "run"),           # shared token "run"
+    ("buy prunes", "run"),                          # substring-only: prunes ⊃ run
+    ("jobsworth attitude", "job"),                  # substring-only: jobsworth ⊃ job
+    ("dentist appointment", "marathon"),            # disjoint
+)
+
+
+def test_match_rule_ties_to_the_read_side_basis_rule():
+    # The divergence guard (D204): the matcher binds a (unit, target) pair iff the
+    # read-side finds a basis for it — for BOTH the keyword and alias tiers. A
+    # future edit that re-introduced substring into one rule but not the other
+    # would break a substring-only pair here.
+    for unit_title, target in _TIE_PAIRS:
+        binds = _keyword_match(unit_title, target)
+        assert binds == _keyword_has_basis(unit_title, target), (unit_title, target)
+        assert binds == _alias_has_basis(unit_title, target), (unit_title, target)
+
+
+def test_substring_without_shared_token_does_not_bind():
+    # Precision (D204): "prunes" contains the substring "run", but they share no
+    # significant token — the old rule bound it, the new rule does not.
+    assert "run" in "buy prunes"  # the substring the old branch fired on
+    assert _keyword_match("buy prunes", "run") is False
+    assert _keyword_match("jobsworth attitude", "job") is False
+
+
+def test_shared_significant_token_still_binds():
+    # Recall (D204): a genuine shared token still binds, both directions.
+    assert _keyword_match("morning run by the river", "run") is True
+    assert _keyword_match("Get a job", "Job search") is True
+    assert shared_significant_tokens("Job search", "Get a job") == frozenset({"job"})
 
 
 def test_alias_term_links_a_unit_with_no_name_overlap():

@@ -106,6 +106,25 @@ def test_no_match_parks_unbound():
     assert ev == ()  # no row -> unbound
 
 
+def test_alias_substring_only_no_shared_token_does_not_bind():
+    # S103d/D204 precision: "prunes" contains the substring "run", which the old
+    # alias rule bound to the outcome — but they share no significant token, so
+    # the read-side called it baseless. The matcher now parks it unbound.
+    lever = ElementTarget(kind="lever", element_id=uuid4(), label="Long run")
+    goal = _goal(name="Run", elements=(lever,))
+    ev = infer_element_evidence((_view("Buy prunes"),), (goal,))
+    assert ev == ()  # no substring-only alias bind to the outcome
+
+
+def test_alias_shared_token_still_binds_outcome():
+    # S103d/D204 recall: a genuine shared token still falls back to the outcome.
+    lever = ElementTarget(kind="lever", element_id=uuid4(), label="Long run")
+    goal = _goal(name="Marathon", elements=(lever,))
+    ev = infer_element_evidence((_view("Marathon training plan"),), (goal,))
+    assert len(ev) == 1
+    assert ev[0].element_kind == "outcome" and ev[0].tier == "alias"
+
+
 # --- dedup + derive ---------------------------------------------------------
 
 def test_dedup_keeps_best_tier_for_same_element():
