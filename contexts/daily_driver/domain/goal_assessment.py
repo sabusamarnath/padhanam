@@ -71,6 +71,27 @@ _STOPWORDS = frozenset(
 )
 
 
+def significant_tokens(text: str) -> frozenset[str]:
+    """The non-stopword tokens of ``text``, normalised.
+
+    The single source for the lexical match rule (S103d/D204): both the
+    matcher's bind test (``_keyword_match``) and the read-side basis test
+    (``binding_rationale``, ``element_token_counts``) compute their token sets
+    here, so the two cannot drift. ``normalise_title`` is idempotent, so passing
+    an already-normalised string is safe.
+    """
+    return frozenset(
+        t for t in normalise_title(text).split() if t not in _STOPWORDS
+    )
+
+
+def shared_significant_tokens(left: str, right: str) -> frozenset[str]:
+    """The significant tokens ``left`` and ``right`` share — the basis a binding
+    needs (S103d/D204). Empty means no clear basis: the matcher does not bind and
+    the read-side reads ``NO_CLEAR_BASIS``."""
+    return significant_tokens(left) & significant_tokens(right)
+
+
 @dataclass(frozen=True)
 class GoalEdge:
     """An inferred unit→goal facet (the ``SERVES`` edge's payload).
@@ -625,19 +646,17 @@ def _unit_titles(unit: UnitView) -> tuple[str, ...]:
 
 
 def _keyword_match(unit_title: str, goal_name: str) -> bool:
-    """Lean candidate match: substring either direction, or a shared long token.
+    """Lean candidate match: a shared significant token (S103d/D204).
 
-    Deliberately simple (D169 — not an inference engine). Single-word goals
-    (German, Esperanto, marathon) match by substring; multi-word goals match
-    conservatively via a shared significant token.
+    Deliberately simple (D169 — not an inference engine). The matcher binds
+    exactly when unit and target share a significant token, which is the rule the
+    read-side basis check (``binding_rationale``) already enforces — so the
+    matcher no longer creates the substring-only binds the honest-why narrates as
+    ``NO_CLEAR_BASIS``. The earlier substring branch (``goal_name in unit_title``
+    either direction) is dropped; both sides now read through
+    ``shared_significant_tokens``.
     """
-    if not unit_title or not goal_name:
-        return False
-    if goal_name in unit_title or unit_title in goal_name:
-        return True
-    unit_tokens = {t for t in unit_title.split() if t not in _STOPWORDS}
-    goal_tokens = {t for t in goal_name.split() if t not in _STOPWORDS}
-    return bool(unit_tokens & goal_tokens)
+    return bool(shared_significant_tokens(unit_title, goal_name))
 
 
 # --- D183/S89: the classifier-fed edge -------------------------------------
@@ -806,9 +825,7 @@ def binding_rationale(
         return ("job-search classifier", _STRENGTH_STRONG)
     if tier == "lexical_exact":
         return (element_label, _STRENGTH_STRONG)
-    unit_tokens = {
-        t for t in normalise_title(unit_title).split() if t not in _STOPWORDS
-    }
+    unit_tokens = significant_tokens(unit_title)
     if tier == "alias":
         # The alias bound on the *goal name / aliases*, not the element label — so
         # the real token is the unit∩goal-name overlap; none reproducible reads as
@@ -818,12 +835,11 @@ def binding_rationale(
             return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
         return (sorted(shared)[0], _STRENGTH_WEAK)
     # keyword: the shared significant tokens; show the most distinctive one.
-    elem_tokens = {
-        t for t in normalise_title(element_label).split() if t not in _STOPWORDS
-    }
+    elem_tokens = significant_tokens(element_label)
     shared = unit_tokens & elem_tokens
     if not shared:
-        # a substring match with no shared significant token — no token to show.
+        # no shared significant token — no clear basis (since S103d the matcher
+        # no longer binds this case, so a live keyword binding always shares one).
         return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
     term = min(shared, key=lambda t: token_element_counts.get(t, 1))
     strength = (
@@ -839,10 +855,7 @@ def element_token_counts(labels: tuple[str, ...]) -> dict[str, int]:
     discriminativeness read. A token shared across many elements is incidental."""
     counts: dict[str, int] = {}
     for label in labels:
-        seen = {
-            t for t in normalise_title(label).split() if t not in _STOPWORDS
-        }
-        for t in seen:
+        for t in significant_tokens(label):
             counts[t] = counts.get(t, 0) + 1
     return counts
 
