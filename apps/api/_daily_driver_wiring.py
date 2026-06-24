@@ -42,6 +42,7 @@ from contexts.daily_driver.domain.cdd import (
     ElementKind,
     GateView,
     GoalCddView,
+    OpportunityView,
     ProofState,
     ProvenanceOrigin,
     build_draft_prompt,
@@ -631,6 +632,21 @@ class GoalGraphAdapter:
             )
             for g in gate_records
         )
+        opp_records = await self._outcome_graph.list_opportunities(
+            tenant_context=tenant_context, outcome_id=outcome_id
+        )
+        opportunities = tuple(
+            OpportunityView(
+                opportunity_id=o.opportunity_id,
+                name=o.name,
+                current_gate_id=o.current_gate_id,
+                unit_count=o.unit_count,
+                provenance_origin=ProvenanceOrigin(o.provenance_origin),
+                proof_state=ProofState(o.proof_state),
+                source=o.source,
+            )
+            for o in opp_records
+        )
         return GoalCddView(
             outcome_id=outcome_id,
             expected_outcome=record.expected_outcome or "",
@@ -639,6 +655,7 @@ class GoalGraphAdapter:
             expected_outcome_origin=outcome_origin,
             expected_outcome_proof_state=outcome_proof,
             gates=gates,
+            opportunities=opportunities,
         )
 
     async def accept_authored_element(

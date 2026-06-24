@@ -126,6 +126,9 @@ class GoalCddView:
     # The process-flow gates (S103g, D207), each a portal into its local CDD; the
     # gate-scoped elements are those in ``elements`` carrying the gate's id.
     gates: tuple["GateView", ...] = ()
+    # The opportunities (process instances, S103h, D208) moving through the gates;
+    # each is positioned at its ``current_gate_id`` and groups ``unit_count`` units.
+    opportunities: tuple["OpportunityView", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,23 @@ class GateView:
     provenance_origin: ProvenanceOrigin
     proof_state: ProofState
     step_commitment_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class OpportunityView:
+    """One opportunity (process instance, S103h, D208) as read for the surface.
+
+    Positioned at ``current_gate_id`` (its furthest-evidenced gate, or ``None``
+    when its work does not evidence any built gate), grouping ``unit_count`` units.
+    """
+
+    opportunity_id: UUID
+    name: str
+    current_gate_id: UUID | None
+    unit_count: int
+    provenance_origin: ProvenanceOrigin
+    proof_state: ProofState
+    source: str | None = None
 
 
 # The JSON Schema the structured-output port constrains the model to.

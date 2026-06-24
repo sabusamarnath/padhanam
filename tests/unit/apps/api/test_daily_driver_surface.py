@@ -315,3 +315,12 @@ def test_cdd_renders_process_flow_gate_sections():
     # gate-scoped elements are split from goal-level by gate_id.
     assert "e.gate_id" in _HTML
     assert "cdd.gates" in _HTML
+
+
+def test_cdd_renders_opportunities_under_gates():
+    # S103h (D208): the flow shows opportunities, a per-opportunity summary, and
+    # each opportunity's gate position + unit count.
+    assert "cdd.opportunities" in _HTML
+    assert "cdd-opp-summary" in _HTML
+    assert "current_gate_id" in _HTML
+    assert "Opportunities here" in _HTML

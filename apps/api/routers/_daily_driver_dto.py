@@ -571,6 +571,19 @@ class GateDTO(BaseModel):
     step_commitment_id: UUID | None = None
 
 
+class OpportunityDTO(BaseModel):
+    """One opportunity (process instance, S103h, D208) for the surface — positioned
+    at ``current_gate_id``, grouping ``unit_count`` units."""
+
+    opportunity_id: UUID
+    name: str
+    current_gate_id: UUID | None = None
+    unit_count: int
+    provenance_origin: str
+    proof_state: str
+    source: str | None = None
+
+
 class AuthoredEdgeDTO(BaseModel):
     """One authored causal edge for proof (S102, D200).
 
@@ -603,6 +616,8 @@ class GoalCddDTO(BaseModel):
     # The process-flow gates (S103g, D207), ordered by gate_order; each a portal
     # into its local CDD (the elements carrying its gate_id).
     gates: list[GateDTO] = []
+    # The opportunities (process instances, S103h, D208) moving through the gates.
+    opportunities: list[OpportunityDTO] = []
 
 
 class CorrectCddElementRequest(BaseModel):
@@ -758,6 +773,18 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
                 step_commitment_id=g.step_commitment_id,
             )
             for g in getattr(view, "gates", ())
+        ],
+        opportunities=[
+            OpportunityDTO(
+                opportunity_id=o.opportunity_id,
+                name=o.name,
+                current_gate_id=o.current_gate_id,
+                unit_count=o.unit_count,
+                provenance_origin=o.provenance_origin.value,
+                proof_state=o.proof_state.value,
+                source=o.source,
+            )
+            for o in getattr(view, "opportunities", ())
         ],
     )
 

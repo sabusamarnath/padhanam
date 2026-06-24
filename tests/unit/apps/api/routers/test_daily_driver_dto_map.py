@@ -196,3 +196,31 @@ def test_goal_cdd_to_dto_carries_gates_and_gate_id():
     by_label = {e.label: e for e in dto.elements}
     assert by_label["Tailoring effort"].gate_id == gate_id
     assert by_label["Origination"].gate_id is None
+
+
+def test_goal_cdd_to_dto_carries_opportunities():
+    # S103h (D208): opportunities reach the wire with position + unit count.
+    from uuid import uuid4 as _uuid4
+
+    from apps.api.routers._daily_driver_dto import goal_cdd_to_dto
+    from contexts.daily_driver.domain.cdd import (
+        GoalCddView, OpportunityView, ProofState, ProvenanceOrigin,
+    )
+
+    gate_id = _uuid4()
+    view = GoalCddView(
+        outcome_id=_uuid4(), expected_outcome="Role secured",
+        elements=(), edges=(),
+        opportunities=(
+            OpportunityView(
+                opportunity_id=_uuid4(), name="Acme", current_gate_id=gate_id,
+                unit_count=5, provenance_origin=ProvenanceOrigin.USER_AUTHORED,
+                proof_state=ProofState.PENDING, source="acme.example",
+            ),
+        ),
+    )
+    dto = goal_cdd_to_dto(view)
+    assert len(dto.opportunities) == 1
+    assert dto.opportunities[0].name == "Acme"
+    assert dto.opportunities[0].unit_count == 5
+    assert dto.opportunities[0].current_gate_id == gate_id
