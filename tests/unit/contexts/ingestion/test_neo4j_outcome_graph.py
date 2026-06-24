@@ -301,3 +301,20 @@ def test_unarchive_outcome_removes_marker() -> None:
     # Re-activation removes the marker (returns the goal whole); never deletes.
     assert "REMOVE o.archived_at" in cypher
     assert "DELETE" not in cypher.upper()
+
+
+def test_list_archived_outcome_ids_filters_to_archived() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[{"outcome_id": str(_OUTCOME_ID)}])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> list:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.list_archived_outcome_ids()
+
+    ids = asyncio.run(run())
+    assert ids == [_OUTCOME_ID]
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert re.search(r"o\.archived_at\s+IS\s+NOT\s+NULL", cypher), cypher
+    assert params["tenant_id"] == _TENANT.tenant_id

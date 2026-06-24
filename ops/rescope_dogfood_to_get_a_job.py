@@ -98,22 +98,15 @@ async def _rescope(*, reactivate: bool) -> None:
 
 
 async def _reactivate_all(graph, tenant_context) -> None:
-    """Reverse the re-scope by unarchiving the known dogfood goal ids — archived
-    goals are hidden from ``list_outcomes``, so reactivation targets ids, not the
-    active list. The full personal-tenant goal id set is read from the seed
-    scripts; here we unarchive every id the seeds mint and report what returned.
-    """
-    from ops import (  # local import keeps the seed-id source single
-        seed_dogfood_goals,
-        seed_german_goal,
-        seed_get_a_job,
-    )
-
-    ids = _seeded_outcome_ids(
-        seed_dogfood_goals, seed_german_goal, seed_get_a_job
+    """Reverse the re-scope by unarchiving the **actual** archived set — read the
+    archived ids straight from the graph (the complement of the active list), so
+    reactivation restores every archived goal whole and cannot drift from what was
+    archived (it does not depend on knowing the seed modules)."""
+    archived = await graph.list_archived_outcome_ids(
+        tenant_context=tenant_context
     )
     returned = 0
-    for oid in ids:
+    for oid in archived:
         ok = await graph.unarchive_outcome(
             tenant_context=tenant_context, outcome_id=oid
         )
@@ -124,32 +117,6 @@ async def _reactivate_all(graph, tenant_context) -> None:
     log.info(
         "reactivated %d goals; active goals now: %d", returned, len(active)
     )
-
-
-def _seeded_outcome_ids(*modules) -> list:
-    """Collect the outcome ids the seed modules declare — both the module-level
-    ``*OUTCOME_ID`` UUID constants (German, get-a-job) and the ``SPECS`` tuple of
-    goal specs each carrying an ``outcome_id`` (the dogfood-goals set). Reads the
-    seeds' own id source so the reverse path cannot drift from what was seeded."""
-    from uuid import UUID
-
-    ids: list[UUID] = []
-    seen: set[UUID] = set()
-
-    def _add(value: object) -> None:
-        if isinstance(value, UUID) and value not in seen:
-            seen.add(value)
-            ids.append(value)
-
-    for mod in modules:
-        for name in dir(mod):
-            if name.endswith("OUTCOME_ID"):
-                _add(getattr(mod, name))
-        specs = getattr(mod, "SPECS", None)
-        if specs is not None:
-            for spec in specs:
-                _add(getattr(spec, "outcome_id", None))
-    return ids
 
 
 def main() -> int:

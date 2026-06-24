@@ -222,6 +222,14 @@ class OutcomeGraphPort(Protocol):
         so the goal returns whole to every read. Returns ``True`` when found."""
         ...
 
+    async def list_archived_outcome_ids(
+        self, *, tenant_context: TenantContext
+    ) -> list[UUID]:
+        """Return the ids of every archived goal (S103e, D205) — the complement
+        of ``list_outcomes`` (active-only). Reactivation reads this to restore the
+        whole archived set without depending on seed-module ids."""
+        ...
+
     async def list_outcomes(
         self,
         *,

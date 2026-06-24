@@ -214,6 +214,16 @@ REMOVE o.archived_at
 RETURN o.outcome_id AS outcome_id
 """
 
+# The archived set — the complement of _LIST_OUTCOMES (which scopes to active).
+# Reactivation reads this directly rather than guessing ids from seed modules, so
+# it cannot drift from what is actually archived.
+_LIST_ARCHIVED_OUTCOME_IDS = """
+MATCH (o:Outcome {tenant_id: $tenant_id})
+WHERE o.archived_at IS NOT NULL
+RETURN o.outcome_id AS outcome_id
+ORDER BY o.outcome_id ASC
+"""
+
 # The archive marker (S103e, D205): a goal the user has archived carries
 # o.archived_at; the list scopes to active goals (archived_at IS NULL), so an
 # archived goal drops out of the assess surface and the matcher (both read this
@@ -971,6 +981,16 @@ class TenantScopedNeo4jSession:
         params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
         result = await session.run(_UNARCHIVE_OUTCOME, params)
         return await result.single() is not None
+
+    async def list_archived_outcome_ids(self) -> list[UUID]:
+        """Return the ids of every archived goal (S103e, D205) — the complement
+        of ``list_outcomes`` (which is active-only). Reactivation reads this to
+        restore the whole archived set without depending on seed-module ids."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id}
+        result = await session.run(_LIST_ARCHIVED_OUTCOME_IDS, params)
+        rows = await result.data()
+        return [UUID(row["outcome_id"]) for row in rows]
 
     async def list_outcomes(self) -> Sequence[OutcomeGraphRecord]:
         """Return every Outcome with its lever edges for the bound tenant (D163).
