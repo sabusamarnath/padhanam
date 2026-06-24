@@ -868,11 +868,16 @@ def element_token_counts(labels: tuple[str, ...]) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class ElementTarget:
-    """One authored element a unit can bind to (D202): its kind, id, and label."""
+    """One authored element a unit can bind to (D202): its kind, id, and label.
+
+    ``gate_id`` (S103g, D207) is set for a gate-scoped element and ``None`` for a
+    goal-level (portfolio) element — the matcher's gate-local precedence reads it.
+    """
 
     kind: str
     element_id: UUID
     label: str
+    gate_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -950,30 +955,48 @@ def infer_element_evidence(
                         label=goal.expected_outcome,
                     )
                 )
+            # Collect every (element, tier) match for this unit with the set of
+            # significant tokens that drove it, so gate-local precedence (D207)
+            # can be applied across the whole goal before emitting any row.
+            matches: list[tuple[ElementTarget, str, LinkStatus, str, frozenset[str]]] = []
             for el in targets:
                 label = normalise_title(el.label)
                 if not label:
                     continue
                 if any(t == label for t in titles):
-                    evidence.append(
-                        ElementEvidence(
-                            unit_id=unit.unit_id, element_kind=el.kind,
-                            element_id=el.element_id, outcome_id=goal.outcome_id,
-                            tier="lexical_exact", status=LinkStatus.CONFIRMED,
-                            basis="element-exact",
-                        )
+                    toks = significant_tokens(el.label)
+                    matches.append(
+                        (el, "lexical_exact", LinkStatus.CONFIRMED,
+                         "element-exact", toks)
                     )
-                    matched_in_goal = True
-                elif any(_keyword_match(t, label) for t in titles):
-                    evidence.append(
-                        ElementEvidence(
-                            unit_id=unit.unit_id, element_kind=el.kind,
-                            element_id=el.element_id, outcome_id=goal.outcome_id,
-                            tier="lexical_keyword", status=LinkStatus.CANDIDATE,
-                            basis="element-keyword",
+                else:
+                    shared: frozenset[str] = frozenset()
+                    for t in titles:
+                        shared |= shared_significant_tokens(t, el.label)
+                    if shared:
+                        matches.append(
+                            (el, "lexical_keyword", LinkStatus.CANDIDATE,
+                             "element-keyword", shared)
                         )
+            # Gate-local precedence (D207): a gate-scoped element is the more
+            # specific home, so the tokens it captures for this unit suppress a
+            # goal-level element's match on the *same* token. A goal-level match
+            # whose shared tokens are wholly covered by gate matches is dropped;
+            # a goal-level match on a token no gate captured survives.
+            gate_tokens: frozenset[str] = frozenset().union(
+                *(m[4] for m in matches if m[0].gate_id is not None)
+            )
+            for el, tier, status, basis, toks in matches:
+                if el.gate_id is None and toks and toks <= gate_tokens:
+                    continue  # the gate-local counterpart won every token
+                evidence.append(
+                    ElementEvidence(
+                        unit_id=unit.unit_id, element_kind=el.kind,
+                        element_id=el.element_id, outcome_id=goal.outcome_id,
+                        tier=tier, status=status, basis=basis,
                     )
-                    matched_in_goal = True
+                )
+                matched_in_goal = True
             if not matched_in_goal:
                 alias_targets = [normalise_title(goal.name)]
                 alias_targets.extend(

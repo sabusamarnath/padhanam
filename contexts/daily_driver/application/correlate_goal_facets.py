@@ -92,7 +92,8 @@ async def correlate_goal_facets(
         )
         elements = tuple(
             ElementTarget(
-                kind=e.kind.value, element_id=e.element_id, label=e.label
+                kind=e.kind.value, element_id=e.element_id, label=e.label,
+                gate_id=e.gate_id,
             )
             for e in cdd.elements
         )

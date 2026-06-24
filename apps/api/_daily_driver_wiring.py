@@ -589,6 +589,7 @@ class GoalGraphAdapter:
                 label=e.label,
                 provenance_origin=ProvenanceOrigin(e.provenance_origin),
                 proof_state=ProofState(e.proof_state),
+                gate_id=e.gate_id,
             )
             for e in record.elements
         )

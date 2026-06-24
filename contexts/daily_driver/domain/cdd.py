@@ -87,6 +87,9 @@ class AuthoredElement:
     label: str
     provenance_origin: ProvenanceOrigin
     proof_state: ProofState
+    # The gate whose local CDD this element belongs to (S103g, D207), or None for
+    # a goal-level (portfolio) element.
+    gate_id: UUID | None = None
 
 
 @dataclass(frozen=True)

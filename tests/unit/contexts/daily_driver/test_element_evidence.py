@@ -210,3 +210,54 @@ def test_email_job_search_evidence_binds_to_outcome():
     assert len(ev) == 1
     assert ev[0].element_kind == "outcome" and ev[0].element_id == o
     assert ev[0].basis == "email-job-search" and ev[0].status is LinkStatus.CONFIRMED
+
+
+# --- gate-local precedence (S103g, D207) -------------------------------------
+
+def test_gate_local_wins_the_shared_token():
+    # A goal-level portfolio element and a gate-local element share a token; a
+    # unit matching that token binds to the gate-local one, not the goal one.
+    gate_id = uuid4()
+    goal_inter = ElementTarget(
+        kind="intermediary", element_id=uuid4(),
+        label="Aggregate win-probability across the portfolio",
+    )
+    gate_inter = ElementTarget(
+        kind="intermediary", element_id=uuid4(),
+        label="Screen-through probability for this application", gate_id=gate_id,
+    )
+    goal = _goal(name="Get a job", elements=(goal_inter, gate_inter))
+    ev = infer_element_evidence((_view("estimated probability of an offer"),), (goal,))
+    bound = {e.element_id for e in ev}
+    assert gate_inter.element_id in bound  # gate won the shared "probability"
+    assert goal_inter.element_id not in bound  # goal counterpart suppressed
+
+
+def test_goal_level_survives_a_token_no_gate_captured():
+    # A goal-level element matched on a token the gate did not capture is kept —
+    # precedence drops only when the gate covers all the goal match's tokens.
+    gate_id = uuid4()
+    goal_lever = ElementTarget(
+        kind="lever", element_id=uuid4(), label="Targeting segments and companies",
+    )
+    gate_lever = ElementTarget(
+        kind="lever", element_id=uuid4(),
+        label="Tailoring effort per application", gate_id=gate_id,
+    )
+    goal = _goal(name="Get a job", elements=(goal_lever, gate_lever))
+    # "targeting" is a goal-only token; the unit does not touch the gate lever.
+    ev = infer_element_evidence((_view("Targeting fintech companies"),), (goal,))
+    bound = {e.element_id for e in ev}
+    assert goal_lever.element_id in bound  # distinct token, survives
+    assert gate_lever.element_id not in bound
+
+
+def test_gate_element_binds_like_any_element():
+    gate_id = uuid4()
+    gate_lever = ElementTarget(
+        kind="lever", element_id=uuid4(),
+        label="Take-home quality and time", gate_id=gate_id,
+    )
+    goal = _goal(name="Get a job", elements=(gate_lever,))
+    ev = infer_element_evidence((_view("Completed the take-home assessment"),), (goal,))
+    assert {e.element_id for e in ev} == {gate_lever.element_id}
