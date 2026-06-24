@@ -202,14 +202,36 @@ class OutcomeGraphPort(Protocol):
         """
         ...
 
+    async def archive_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Mark a goal archived (S103e, D205) — a reversible, non-destructive
+        removal that sets ``archived_at`` on the ``:Outcome`` node. The goal is
+        never deleted (the no-auto-deletion invariant: user-initiated removal
+        marks, never erases); its CDD elements, evidence binds and audit history
+        stay intact. An archived goal drops out of ``list_outcomes`` (active
+        only), so the assess surface and the matcher stop reading it. Returns
+        ``True`` when the goal was found, ``False`` when absent or cross-tenant.
+        """
+        ...
+
+    async def unarchive_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        """Re-activate an archived goal (S103e, D205) — removes ``archived_at``
+        so the goal returns whole to every read. Returns ``True`` when found."""
+        ...
+
     async def list_outcomes(
         self,
         *,
         tenant_context: TenantContext,
     ) -> Sequence[OutcomeGraphRecord]:
-        """Return every Outcome with its lever edge for the bound tenant,
-        ordered by name. Cross-tenant rows never surface (the wrapper binds
-        ``tenant_id`` into every predicate)."""
+        """Return every **active** Outcome (``archived_at IS NULL``) with its
+        lever edge for the bound tenant, ordered by name. Archived goals (S103e)
+        are scoped out here, so every consumer — the assess surface and the
+        matcher — reads active goals only. Cross-tenant rows never surface (the
+        wrapper binds ``tenant_id`` into every predicate)."""
         ...
 
 

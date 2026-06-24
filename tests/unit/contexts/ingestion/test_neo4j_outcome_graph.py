@@ -228,3 +228,76 @@ def test_list_outcomes_aggregates_sequence_lever_chain() -> None:
     assert rec.levers[0].step_state == "done"
     assert rec.levers[1].step_order == 2
     assert rec.levers[1].step_state == "blocked"
+
+
+# --- Archive / re-activate (S103e, D205): reversible, non-destructive ---------
+
+
+def test_list_outcomes_scopes_to_active_goals() -> None:
+    # The list Cypher carries the archive filter, so an archived goal (one that
+    # carries o.archived_at) drops out of every consumer that reads list_goals —
+    # the assess surface and the matcher — without being deleted.
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.list_outcomes()
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert re.search(r"o\.archived_at\s+IS\s+NULL", cypher), cypher
+
+
+def test_archive_outcome_sets_marker_and_binds_tenant() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.single = AsyncMock(return_value={"outcome_id": str(_OUTCOME_ID)})
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> bool:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.archive_outcome(outcome_id=_OUTCOME_ID)
+
+    found = asyncio.run(run())
+    assert found is True
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    # Sets the marker (not a delete) and binds the tenant predicate.
+    assert "SET o.archived_at" in cypher
+    assert "DELETE" not in cypher.upper() and "REMOVE" not in cypher
+    assert params["tenant_id"] == _TENANT.tenant_id
+    assert params["outcome_id"] == str(_OUTCOME_ID)
+    assert params["archived_at"] is not None
+
+
+def test_archive_outcome_missing_returns_false() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.single = AsyncMock(return_value=None)
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> bool:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.archive_outcome(outcome_id=_OUTCOME_ID)
+
+    assert asyncio.run(run()) is False
+
+
+def test_unarchive_outcome_removes_marker() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.single = AsyncMock(return_value={"outcome_id": str(_OUTCOME_ID)})
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> bool:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.unarchive_outcome(outcome_id=_OUTCOME_ID)
+
+    found = asyncio.run(run())
+    assert found is True
+    cypher = session.run.call_args.args[0]
+    # Re-activation removes the marker (returns the goal whole); never deletes.
+    assert "REMOVE o.archived_at" in cypher
+    assert "DELETE" not in cypher.upper()

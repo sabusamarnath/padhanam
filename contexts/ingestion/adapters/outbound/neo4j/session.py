@@ -197,10 +197,34 @@ SET o.current_target_level = $current_target_level
 RETURN o.current_target_level AS current_target_level
 """
 
+# The reversible archive (S103e, D205): mark a goal archived without deleting it
+# (the no-auto-deletion invariant + originals-never-erased — a user-initiated
+# removal marks, never erases). The node, its authored CDD elements, its
+# EVIDENCES binds and audit history all stay intact; only the marker is set.
+# _UNARCHIVE removes the marker so the goal returns whole to every read.
+_ARCHIVE_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET o.archived_at = $archived_at
+RETURN o.outcome_id AS outcome_id
+"""
+
+_UNARCHIVE_OUTCOME = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+REMOVE o.archived_at
+RETURN o.outcome_id AS outcome_id
+"""
+
+# The archive marker (S103e, D205): a goal the user has archived carries
+# o.archived_at; the list scopes to active goals (archived_at IS NULL), so an
+# archived goal drops out of the assess surface and the matcher (both read this
+# via list_goals) without being deleted. A goal that has never been archived has
+# no such property, and `IS NULL` is true for the missing property, so existing
+# goals pass unchanged. Reversible: _UNARCHIVE_OUTCOME removes the marker.
 _LIST_OUTCOMES = """
 MATCH (l:Lever {tenant_id: $tenant_id})
       -[r:LEVER_FOR {tenant_id: $tenant_id}]->
       (o:Outcome {tenant_id: $tenant_id})
+WHERE o.archived_at IS NULL
 RETURN o.outcome_id AS outcome_id,
        o.name AS name,
        o.control AS control,
@@ -924,6 +948,29 @@ class TenantScopedNeo4jSession:
         if record is None:
             return None
         return record["current_target_level"]
+
+    async def archive_outcome(self, *, outcome_id: UUID) -> bool:
+        """Mark a goal archived (S103e, D205) — a reversible, non-destructive
+        removal (the no-auto-deletion invariant: a user-initiated removal marks,
+        never erases). Returns ``True`` when the goal was found, ``False`` when
+        absent or cross-tenant."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "outcome_id": str(outcome_id),
+            "archived_at": _now_utc(),
+        }
+        result = await session.run(_ARCHIVE_OUTCOME, params)
+        return await result.single() is not None
+
+    async def unarchive_outcome(self, *, outcome_id: UUID) -> bool:
+        """Re-activate an archived goal (S103e, D205) — removes the archive
+        marker so the goal returns whole to every read (its CDD elements, binds
+        and audit history were never touched). Returns ``True`` when found."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        result = await session.run(_UNARCHIVE_OUTCOME, params)
+        return await result.single() is not None
 
     async def list_outcomes(self) -> Sequence[OutcomeGraphRecord]:
         """Return every Outcome with its lever edges for the bound tenant (D163).

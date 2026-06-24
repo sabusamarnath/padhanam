@@ -673,10 +673,14 @@ moves any existing instance (German) in place under the D165 mechanism.
 | `terminal_target`      | `String`/`null` | a sequence goal's terminal — the goal reached once (e.g. "Offer accepted"); `null` otherwise |
 | `terminal_state`       | `String`/`null` | `pending` / `reached` for a sequence goal's terminal; `null` otherwise. `pending` is the influence-gated part (another party decides); richer reading deferred to the influence instance |
 | `created_at`           | `DateTime`      | set on initial MERGE                                                   |
+| `archived_at`          | `DateTime`/absent | set when the user archives the goal (S103e, D205); absent on an active goal. The **reversible archive marker** — `list_outcomes` scopes to `archived_at IS NULL`, so an archived goal drops out of the assess surface and the matcher (both read active goals via `list_goals`) **without being deleted**: the node, its authored CDD elements, its `EVIDENCES` binds and audit history all stay intact. Removed by `unarchive_outcome`, returning the goal whole. Honors the no-auto-deletion invariant (4) + originals-never-erased: a user-initiated removal marks, never erases |
 
 Uniqueness constraint: `outcome_unique_per_tenant` on `(tenant_id, outcome_id)`.
 `current_target_level` changes only via `set_outcome_target` (the explicit
-raise, never automatic — D9, the no-auto-modification invariant).
+raise, never automatic — D9, the no-auto-modification invariant). `archived_at`
+is set/removed only via `archive_outcome` / `unarchive_outcome` (S103e, D205) —
+a schemaless property, **no migration** (the S102/S103a schemaless-prop
+precedent); a never-archived goal simply lacks the property.
 
 ### `:Lever` nodes (S62, D163)
 

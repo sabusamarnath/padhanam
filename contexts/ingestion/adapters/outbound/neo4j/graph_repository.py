@@ -248,6 +248,32 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def archive_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.archive_outcome(outcome_id=outcome_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def unarchive_outcome(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.unarchive_outcome(outcome_id=outcome_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     async def list_outcomes(
         self,
         *,
