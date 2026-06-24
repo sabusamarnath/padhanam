@@ -130,6 +130,9 @@ class ElementEvidenceRecord:
     tier: str
     status: str
     basis: str
+    # The gate whose local CDD the element belongs to (S103g, D207), or None for
+    # a goal-level element — the gate rollup alongside the goal rollup.
+    gate_id: UUID | None = None
 
 
 class UnitGraphPort(Protocol):

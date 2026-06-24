@@ -27,6 +27,7 @@ from uuid import UUID
 
 from contexts.ingestion.ports.outcome_graph_port import (
     AuthoredCddRecord,
+    GateRecord,
     OutcomeGraphRecord,
 )
 from contexts.ingestion.ports.unit_graph_port import (
@@ -314,6 +315,7 @@ class Neo4jGraphRepository:
         label: str,
         provenance_origin: str,
         proof_state: str,
+        gate_id: UUID | None = None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
@@ -324,6 +326,120 @@ class Neo4jGraphRepository:
                     label=label,
                     provenance_origin=provenance_origin,
                     proof_state=proof_state,
+                    gate_id=gate_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def merge_gate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        gate_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        gate_order: int,
+        local_outcome: str,
+        local_goal: str,
+        provenance_origin: str,
+        proof_state: str,
+        step_commitment_id: UUID | None = None,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_gate(
+                    gate_id=gate_id,
+                    outcome_id=outcome_id,
+                    name=name,
+                    gate_order=gate_order,
+                    local_outcome=local_outcome,
+                    local_goal=local_goal,
+                    provenance_origin=provenance_origin,
+                    proof_state=proof_state,
+                    step_commitment_id=step_commitment_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_gates(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> Sequence[GateRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                rows = await s.list_gates(outcome_id=outcome_id)
+                return [
+                    GateRecord(
+                        gate_id=UUID(r["gate_id"]),
+                        outcome_id=outcome_id,
+                        name=r["name"],
+                        gate_order=r["gate_order"],
+                        local_outcome=r["local_outcome"],
+                        local_goal=r["local_goal"],
+                        provenance_origin=r["provenance_origin"],
+                        proof_state=r["proof_state"],
+                        step_commitment_id=(
+                            UUID(r["step_commitment_id"])
+                            if r.get("step_commitment_id")
+                            else None
+                        ),
+                    )
+                    for r in rows
+                ]
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_element_gate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        gate_id: UUID,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_element_gate(
+                    element_kind=element_kind,
+                    element_id=element_id,
+                    gate_id=gate_id,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def delete_authored_edge(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.delete_authored_edge(
+                    edge_type=edge_type,
+                    source_kind=source_kind,
+                    source_id=source_id,
+                    target_kind=target_kind,
+                    target_id=target_id,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e

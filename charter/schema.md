@@ -852,6 +852,47 @@ intermediary or the outcome (the inbound the user did not initiate, D198). Same
 shape as `:Intermediary`. Uniqueness constraint: `external_unique_per_tenant` on
 `(tenant_id, element_id)`; index `external_tenant_id` on `tenant_id`.
 
+#### `:Gate` nodes (S103g, D207) — the process flow
+
+A first-class process-flow gate. The framework's process layer (D198) is built as
+gates: a gate is a portal into its **local CDD**, and the gate node is that CDD's
+**local-outcome endpoint** (an intermediary `FEEDS` the gate, parallel to how an
+intermediary `FEEDS` the `:Outcome` for the goal). Gates are a **new flow**
+referencing the D163 lever-steps where one corresponds — they do not replace the
+steps (the steps stay as the goal's sequence-status, D163). Lands via
+`migrations/neo4j/0007_process_gates.cypher`.
+
+| Property             | Type            | Notes                                                              |
+|----------------------|-----------------|--------------------------------------------------------------------|
+| `tenant_id`          | `String`        | not empty; tenant-isolation predicate at every Cypher query        |
+| `jurisdiction`       | `String`        | first-class per D12                                                 |
+| `gate_id`            | `String`        | the gate's UUID (identity)                                          |
+| `outcome_id`         | `String`        | the goal whose flow this gate belongs to                           |
+| `name`               | `String`        | the gate name (e.g. "Apply", "Screening")                          |
+| `gate_order`         | `Integer`       | the gate's position in the flow sequence                           |
+| `local_outcome`      | `String`        | the gate's local outcome — the CDD's measurable terminal           |
+| `local_goal`         | `String`        | the gate's local goal (the decision's aim)                         |
+| `provenance_origin`  | `String`        | `llm_drafted` / `user_authored` / `system_suggested`               |
+| `proof_state`        | `String`        | `pending` / `accepted`                                             |
+| `step_commitment_id` | `String`/absent | the D163 lever-step this gate references, or absent (e.g. Screening has no step) |
+| `created_at`         | `DateTime`      | set on initial MERGE                                                |
+
+Uniqueness constraint: `gate_unique_per_tenant` on `(tenant_id, gate_id)` (the
+0005 authored-node pattern).
+
+#### `gate_id` on authored elements (S103g, D207) — the dual rollup
+
+A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when
+it belongs to a gate's local CDD; a goal-level (portfolio) element simply lacks
+the property (schemaless, no constraint — the `outcome_id`-on-elements precedent).
+A gate-scoped element carries **both** `outcome_id` (so gate work still rolls up
+to the goal — coverage stays honest, D171) **and** `gate_id` (so it rolls up to
+its gate). The intra-gate Pratt edges reuse the existing `FEEDS` / `INFLUENCES`
+authored edge types (no new edge type): lever `FEEDS` intermediary, external
+`INFLUENCES` intermediary, intermediary `FEEDS` gate (the local-outcome endpoint).
+The `EVIDENCES` read returns the target element's `gate_id`, so a unit's evidence
+is attributable to a gate as well as the goal.
+
 #### Authored outcome stance on `:Outcome` (S102, D200; proofable at S103a)
 
 The goal's authored expected outcome — the measurable result that means the goal

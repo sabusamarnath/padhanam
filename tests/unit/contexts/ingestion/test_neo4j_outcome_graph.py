@@ -318,3 +318,102 @@ def test_list_archived_outcome_ids_filters_to_archived() -> None:
     cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
     assert re.search(r"o\.archived_at\s+IS\s+NOT\s+NULL", cypher), cypher
     assert params["tenant_id"] == _TENANT.tenant_id
+
+
+# --- Process gates (S103g, D207) ---------------------------------------------
+
+_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0001")
+
+
+def test_merge_gate_binds_tenant_and_fields() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_gate(
+                gate_id=_GATE_ID, outcome_id=_OUTCOME_ID, name="Apply",
+                gate_order=3, local_outcome="Expected interviews generated",
+                local_goal="highest return on marginal effort",
+                provenance_origin="llm_drafted", proof_state="pending",
+                step_commitment_id=_COMMITMENT_ID,
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "MERGE (g:Gate" in cypher
+    assert params["tenant_id"] == _TENANT.tenant_id
+    assert params["gate_id"] == str(_GATE_ID)
+    assert params["name"] == "Apply"
+    assert params["gate_order"] == 3
+    assert params["step_commitment_id"] == str(_COMMITMENT_ID)
+
+
+def test_merge_authored_element_carries_gate_id() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_authored_element(
+                outcome_id=_OUTCOME_ID, element_kind="intermediary",
+                element_id=_OUTCOME_ID, label="Screen-through probability",
+                provenance_origin="llm_drafted", proof_state="pending",
+                gate_id=_GATE_ID,
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "n.gate_id = $gate_id" in cypher
+    assert params["gate_id"] == str(_GATE_ID)
+
+
+def test_merge_authored_element_goal_level_gate_id_none() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_authored_element(
+                outcome_id=_OUTCOME_ID, element_kind="lever",
+                element_id=_OUTCOME_ID, label="Origination",
+                provenance_origin="llm_drafted", proof_state="pending",
+            )
+
+    asyncio.run(run())
+    params = session.run.call_args.args[1]
+    assert params["gate_id"] is None
+
+
+def test_set_element_gate_runs_relocation_cypher() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.single = AsyncMock(return_value={"element_id": str(_OUTCOME_ID)})
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> bool:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.set_element_gate(
+                element_kind="lever", element_id=_OUTCOME_ID, gate_id=_GATE_ID
+            )
+
+    ok = asyncio.run(run())
+    assert ok is True
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "SET n.gate_id = $gate_id" in cypher
+    # relocation preserves provenance — it must NOT set provenance_origin.
+    assert "provenance_origin" not in cypher
+    assert params["gate_id"] == str(_GATE_ID)
+
+
+def test_delete_authored_edge_targets_the_endpoints() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.delete_authored_edge(
+                edge_type="FEEDS", source_kind="lever", source_id=_OUTCOME_ID,
+                target_kind="intermediary", target_id=_COMMITMENT_ID,
+            )
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "DELETE r" in cypher
+    assert ":Lever" in cypher and ":Intermediary" in cypher

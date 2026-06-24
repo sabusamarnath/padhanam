@@ -100,6 +100,31 @@ class AuthoredElementRecord:
     label: str
     provenance_origin: str
     proof_state: str
+    # The gate whose local CDD this element belongs to (S103g, D207), or None for
+    # a goal-level (portfolio) element.
+    gate_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class GateRecord:
+    """One process-flow gate as read from the graph (S103g, D207).
+
+    A gate is a first-class flow node, sequenced by ``gate_order``, scoped to the
+    goal by ``outcome_id``. The gate node is its local CDD's local-outcome
+    endpoint (an intermediary FEEDS the gate); ``local_outcome`` / ``local_goal``
+    are the framework's gate-level outcome and goal. ``step_commitment_id``
+    references the D163 lever-step the gate corresponds to, or None.
+    """
+
+    gate_id: UUID
+    outcome_id: UUID
+    name: str
+    gate_order: int
+    local_outcome: str
+    local_goal: str
+    provenance_origin: str
+    proof_state: str
+    step_commitment_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -255,6 +280,7 @@ class OutcomeGraphPort(Protocol):
         label: str,
         provenance_origin: str,
         proof_state: str,
+        gate_id: UUID | None = None,
     ) -> None:
         """Idempotently MERGE an authored CDD element (S102, D200).
 
@@ -264,8 +290,62 @@ class OutcomeGraphPort(Protocol):
         free input). An authored lever identifies by ``lever_id`` and may have no
         ``commitment_id`` yet; an intermediary/external identifies by
         ``element_id``. ``provenance_origin`` and ``proof_state`` carry the D200
-        authored signal.
+        authored signal. ``gate_id`` (S103g, D207) scopes the element to a gate's
+        local CDD; goal-level elements pass ``None``.
         """
+        ...
+
+    # --- Process gates (S103g, D207) ---------------------------------------
+
+    async def merge_gate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        gate_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        gate_order: int,
+        local_outcome: str,
+        local_goal: str,
+        provenance_origin: str,
+        proof_state: str,
+        step_commitment_id: UUID | None = None,
+    ) -> None:
+        """Idempotently MERGE a process-flow gate (D207) — a first-class flow node
+        and its local CDD's local-outcome endpoint."""
+        ...
+
+    async def list_gates(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> Sequence[GateRecord]:
+        """Return a goal's gates ordered by ``gate_order`` (D207)."""
+        ...
+
+    async def set_element_gate(
+        self,
+        *,
+        tenant_context: TenantContext,
+        element_kind: str,
+        element_id: UUID,
+        gate_id: UUID,
+    ) -> bool:
+        """Relocate an authored element into a gate (D207) — set its ``gate_id``,
+        preserving the node, label, and provenance (the relocation carries the
+        live provenance; it is not a re-authoring). Returns ``True`` when matched."""
+        ...
+
+    async def delete_authored_edge(
+        self,
+        *,
+        tenant_context: TenantContext,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        """Delete one authored edge by its endpoints (D207 — edge migration when
+        an element relocates: drop the old goal-level edge, add the gate one)."""
         ...
 
     async def set_authored_outcome(
@@ -381,6 +461,7 @@ __all__ = [
     "AuthoredCddRecord",
     "AuthoredEdgeRecord",
     "AuthoredElementRecord",
+    "GateRecord",
     "LeverEdgeRecord",
     "OutcomeGraphPort",
     "OutcomeGraphRecord",

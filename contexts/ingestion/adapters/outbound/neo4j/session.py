@@ -267,8 +267,14 @@ _AUTHORED_NODE = {
     "intermediary": ("Intermediary", "element_id"),
     "external": ("External", "element_id"),
 }
-# Edge endpoints additionally allow the outcome node as a target.
-_AUTHORED_ENDPOINT = {**_AUTHORED_NODE, "outcome": ("Outcome", "outcome_id")}
+# Edge endpoints additionally allow the outcome node and, for gate-local CDDs
+# (S103g, D207), the :Gate node as the local-outcome endpoint (parallel to
+# :Outcome for the goal — an intermediary FEEDS its gate).
+_AUTHORED_ENDPOINT = {
+    **_AUTHORED_NODE,
+    "outcome": ("Outcome", "outcome_id"),
+    "gate": ("Gate", "gate_id"),
+}
 _AUTHORED_EDGE_TYPES = frozenset({"FEEDS", "INFLUENCES"})
 
 
@@ -301,6 +307,7 @@ ON CREATE SET
     n.created_at = $created_at
 SET
     n.outcome_id = $outcome_id,
+    n.gate_id = $gate_id,
     n.label = $label,
     n.provenance_origin = $provenance_origin,
     n.proof_state = $proof_state
@@ -317,6 +324,30 @@ MERGE (s)-[r:{edge_type} {{tenant_id: $tenant_id}}]->(t)
 ON CREATE SET
     r.jurisdiction = $jurisdiction,
     r.created_at = $created_at
+"""
+
+
+def _delete_authored_edge_cypher(
+    edge_type: str, slabel: str, sid: str, tlabel: str, tid: str
+) -> str:
+    """Delete one authored edge by its endpoints (S103g, D207 — used to migrate a
+    relocated element's edge: drop the old goal-level FEEDS, add the gate one)."""
+    return f"""
+MATCH (s:{slabel} {{tenant_id: $tenant_id, {sid}: $source_id}})
+      -[r:{edge_type} {{tenant_id: $tenant_id}}]->
+      (t:{tlabel} {{tenant_id: $tenant_id, {tid}: $target_id}})
+DELETE r
+"""
+
+
+def _set_element_gate_cypher(label: str, id_prop: str) -> str:
+    """Relocate an authored element into a gate (S103g, D207): set its gate_id,
+    preserving the node, its label, and its provenance (the relocation carries the
+    live provenance — it is not a re-authoring). Returns the id on match."""
+    return f"""
+MATCH (n:{label} {{tenant_id: $tenant_id, {id_prop}: $element_id}})
+SET n.gate_id = $gate_id
+RETURN n.{id_prop} AS element_id
 """
 
 
@@ -397,30 +428,67 @@ _LIST_AUTHORED_LEVERS = """
 MATCH (n:Lever {tenant_id: $tenant_id, outcome_id: $outcome_id})
 WHERE n.lever_id IS NOT NULL
 RETURN n.lever_id AS element_id, n.label AS label,
-       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state,
+       n.gate_id AS gate_id
 ORDER BY n.label ASC
 """
 _LIST_AUTHORED_INTERMEDIARIES = """
 MATCH (n:Intermediary {tenant_id: $tenant_id, outcome_id: $outcome_id})
 RETURN n.element_id AS element_id, n.label AS label,
-       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state,
+       n.gate_id AS gate_id
 ORDER BY n.label ASC
 """
 _LIST_AUTHORED_EXTERNALS = """
 MATCH (n:External {tenant_id: $tenant_id, outcome_id: $outcome_id})
 RETURN n.element_id AS element_id, n.label AS label,
-       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state,
+       n.gate_id AS gate_id
 ORDER BY n.label ASC
 """
+# The coalesce includes gate_id before outcome_id so the :Gate node (the
+# local-outcome endpoint, which carries both gate_id and outcome_id) resolves to
+# its gate_id; the :Outcome goal node (no gate_id) still resolves to outcome_id,
+# and gate-scoped elements resolve to their own lever_id/element_id (gate_id is a
+# scoping property on them, not their identity).
 _LIST_AUTHORED_EDGES = """
 MATCH (s)-[r:FEEDS|INFLUENCES {tenant_id: $tenant_id}]->(t)
 WHERE s.outcome_id = $outcome_id OR t.outcome_id = $outcome_id
 RETURN type(r) AS edge_type,
        labels(s)[0] AS source_kind,
-       coalesce(s.lever_id, s.element_id, s.outcome_id) AS source_id,
+       coalesce(s.lever_id, s.element_id, s.gate_id, s.outcome_id) AS source_id,
        labels(t)[0] AS target_kind,
-       coalesce(t.lever_id, t.element_id, t.outcome_id) AS target_id,
+       coalesce(t.lever_id, t.element_id, t.gate_id, t.outcome_id) AS target_id,
        coalesce(r.needs_review, false) AS needs_review
+"""
+
+# --- Process gates (S103g, D207) -------------------------------------------
+# A gate is a first-class flow node, sequenced by gate_order, scoped to the goal
+# by outcome_id, referencing a D163 step where one corresponds. The gate node is
+# the local-outcome endpoint of its CDD (an intermediary FEEDS the gate). Merged
+# idempotently by (tenant_id, gate_id) — the 0007 uniqueness constraint.
+_MERGE_GATE = """
+MERGE (g:Gate {tenant_id: $tenant_id, gate_id: $gate_id})
+ON CREATE SET
+    g.jurisdiction = $jurisdiction,
+    g.created_at = $created_at
+SET
+    g.outcome_id = $outcome_id,
+    g.name = $name,
+    g.gate_order = $gate_order,
+    g.local_outcome = $local_outcome,
+    g.local_goal = $local_goal,
+    g.provenance_origin = $provenance_origin,
+    g.proof_state = $proof_state,
+    g.step_commitment_id = $step_commitment_id
+"""
+_LIST_GATES = """
+MATCH (g:Gate {tenant_id: $tenant_id, outcome_id: $outcome_id})
+RETURN g.gate_id AS gate_id, g.name AS name, g.gate_order AS gate_order,
+       g.local_outcome AS local_outcome, g.local_goal AS local_goal,
+       g.provenance_origin AS provenance_origin, g.proof_state AS proof_state,
+       g.step_commitment_id AS step_commitment_id
+ORDER BY g.gate_order ASC
 """
 
 # The authored stance on the outcome — the measurable result that means the goal
@@ -601,6 +669,7 @@ RETURN u.unit_id AS unit_id,
        labels(e)[0] AS element_kind,
        coalesce(e.lever_id, e.element_id, e.outcome_id) AS element_id,
        e.outcome_id AS outcome_id,
+       e.gate_id AS gate_id,
        r.tier AS tier,
        r.status AS status,
        r.basis AS basis
@@ -1048,15 +1117,19 @@ class TenantScopedNeo4jSession:
         label: str,
         provenance_origin: str,
         proof_state: str,
+        gate_id: UUID | None = None,
     ) -> None:
         """MERGE an authored CDD element node (S102, D200). The label is composed
-        from the whitelist (Neo4j labels are not parameterisable)."""
+        from the whitelist (Neo4j labels are not parameterisable). ``gate_id``
+        (S103g, D207) scopes the element to a gate's local CDD; goal-level
+        elements pass ``None`` (the property is then absent)."""
         node_label, id_prop = _authored_node(element_kind)
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
             "jurisdiction": self._jurisdiction,
             "outcome_id": str(outcome_id),
+            "gate_id": str(gate_id) if gate_id is not None else None,
             "element_id": str(element_id),
             "label": label,
             "provenance_origin": provenance_origin,
@@ -1065,6 +1138,91 @@ class TenantScopedNeo4jSession:
         }
         await session.run(
             _merge_authored_element_cypher(node_label, id_prop), params
+        )
+
+    # --- Process gates (S103g, D207) ---------------------------------------
+
+    async def merge_gate(
+        self,
+        *,
+        gate_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        gate_order: int,
+        local_outcome: str,
+        local_goal: str,
+        provenance_origin: str,
+        proof_state: str,
+        step_commitment_id: UUID | None = None,
+    ) -> None:
+        """MERGE a process-flow gate (D207). The gate node is its CDD's
+        local-outcome endpoint; it references a D163 step where one exists."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "gate_id": str(gate_id),
+            "outcome_id": str(outcome_id),
+            "name": name,
+            "gate_order": gate_order,
+            "local_outcome": local_outcome,
+            "local_goal": local_goal,
+            "provenance_origin": provenance_origin,
+            "proof_state": proof_state,
+            "step_commitment_id": (
+                str(step_commitment_id) if step_commitment_id is not None else None
+            ),
+            "created_at": _now_utc(),
+        }
+        await session.run(_MERGE_GATE, params)
+
+    async def list_gates(self, *, outcome_id: UUID) -> list[dict]:
+        """Return a goal's gates, ordered by gate_order (D207)."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        result = await session.run(_LIST_GATES, params)
+        return list(await result.data())
+
+    async def set_element_gate(
+        self, *, element_kind: str, element_id: UUID, gate_id: UUID
+    ) -> bool:
+        """Relocate an authored element into a gate (D207): set its gate_id,
+        preserving the node + label + provenance. Returns True when matched."""
+        node_label, id_prop = _authored_node(element_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "element_id": str(element_id),
+            "gate_id": str(gate_id),
+        }
+        result = await session.run(
+            _set_element_gate_cypher(node_label, id_prop), params
+        )
+        return await result.single() is not None
+
+    async def delete_authored_edge(
+        self,
+        *,
+        edge_type: str,
+        source_kind: str,
+        source_id: UUID,
+        target_kind: str,
+        target_id: UUID,
+    ) -> None:
+        """Delete one authored edge by its endpoints (D207 — edge migration)."""
+        if edge_type not in _AUTHORED_EDGE_TYPES:
+            raise ValueError(f"unknown authored edge type: {edge_type!r}")
+        slabel, sid = _authored_endpoint(source_kind)
+        tlabel, tid = _authored_endpoint(target_kind)
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "source_id": str(source_id),
+            "target_id": str(target_id),
+        }
+        await session.run(
+            _delete_authored_edge_cypher(edge_type, slabel, sid, tlabel, tid),
+            params,
         )
 
     async def merge_authored_edge(
@@ -1106,6 +1264,7 @@ class TenantScopedNeo4jSession:
         ):
             result = await session.run(cypher, params)
             for row in await result.data():
+                gate_id = row.get("gate_id")
                 elements.append(
                     AuthoredElementRecord(
                         element_kind=kind,
@@ -1114,6 +1273,7 @@ class TenantScopedNeo4jSession:
                         label=row["label"],
                         provenance_origin=row["provenance_origin"],
                         proof_state=row["proof_state"],
+                        gate_id=UUID(gate_id) if gate_id else None,
                     )
                 )
         edge_result = await session.run(_LIST_AUTHORED_EDGES, params)
@@ -1412,18 +1572,23 @@ class TenantScopedNeo4jSession:
         result = await session.run(
             _LIST_ELEMENT_EVIDENCE, {"tenant_id": self._tenant_id}
         )
-        return [
-            ElementEvidenceRecord(
-                unit_id=UUID(row["unit_id"]),
-                element_kind=str(row["element_kind"]).lower(),
-                element_id=UUID(row["element_id"]),
-                outcome_id=UUID(row["outcome_id"]),
-                tier=row["tier"],
-                status=row["status"],
-                basis=row["basis"],
+        rows = await result.data()
+        out = []
+        for row in rows:
+            gate_id = row.get("gate_id")
+            out.append(
+                ElementEvidenceRecord(
+                    unit_id=UUID(row["unit_id"]),
+                    element_kind=str(row["element_kind"]).lower(),
+                    element_id=UUID(row["element_id"]),
+                    outcome_id=UUID(row["outcome_id"]),
+                    tier=row["tier"],
+                    status=row["status"],
+                    basis=row["basis"],
+                    gate_id=UUID(gate_id) if gate_id else None,
+                )
             )
-            for row in await result.data()
-        ]
+        return out
 
     async def list_user_owned_unit_ids(self) -> set[UUID]:
         """Unit ids the user has corrected (user_owned), for the re-match to skip
