@@ -128,6 +128,22 @@ class GateRecord:
 
 
 @dataclass(frozen=True)
+class OpportunityRecord:
+    """One opportunity (process instance / Flow item) as read from the graph
+    (S103h, D208). Belongs to the goal by ``outcome_id``, positioned at
+    ``current_gate_id`` (its furthest-evidenced gate), grouping ``unit_count``
+    units via ``BELONGS_TO``. ``source`` records the clustering signature."""
+
+    opportunity_id: UUID
+    name: str
+    current_gate_id: UUID | None
+    provenance_origin: str
+    proof_state: str
+    unit_count: int
+    source: str | None = None
+
+
+@dataclass(frozen=True)
 class AuthoredEdgeRecord:
     """One authored causal edge as read from the graph (S102, D200).
 
@@ -321,6 +337,43 @@ class OutcomeGraphPort(Protocol):
         """Return a goal's gates ordered by ``gate_order`` (D207)."""
         ...
 
+    # --- Process instances / opportunities (S103h, D208) -------------------
+
+    async def merge_opportunity(
+        self,
+        *,
+        tenant_context: TenantContext,
+        opportunity_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        current_gate_id: UUID | None,
+        provenance_origin: str,
+        proof_state: str,
+        source: str | None = None,
+    ) -> None:
+        """Idempotently MERGE an opportunity Flow item (D208) — a process instance
+        belonging to the goal, positioned at its furthest-evidenced gate."""
+        ...
+
+    async def list_opportunities(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> Sequence[OpportunityRecord]:
+        """Return a goal's opportunities with their unit counts (D208)."""
+        ...
+
+    async def attach_unit_to_opportunity(
+        self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
+    ) -> None:
+        """MERGE the BELONGS_TO membership edge (D208) — idempotent."""
+        ...
+
+    async def clear_opportunity_units(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> None:
+        """Delete an opportunity's BELONGS_TO edges so a re-instantiation
+        reconciles cleanly (D208)."""
+        ...
+
     async def set_element_gate(
         self,
         *,
@@ -463,6 +516,7 @@ __all__ = [
     "AuthoredElementRecord",
     "GateRecord",
     "LeverEdgeRecord",
+    "OpportunityRecord",
     "OutcomeGraphPort",
     "OutcomeGraphRecord",
 ]

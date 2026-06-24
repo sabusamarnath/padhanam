@@ -880,6 +880,37 @@ steps (the steps stay as the goal's sequence-status, D163). Lands via
 Uniqueness constraint: `gate_unique_per_tenant` on `(tenant_id, gate_id)` (the
 0005 authored-node pattern).
 
+#### `:Opportunity` nodes (S103h, D208) — process instances / Flow items
+
+An opportunity (one company/role) is a first-class **process instance** — a Flow
+item per D198, not a CDD node. It belongs to the goal by `outcome_id`, is
+positioned at its furthest-evidenced gate by `current_gate_id` (operator-
+correctable), and groups its units by a `(:Unit)-[:BELONGS_TO]->(:Opportunity)`
+edge. A clustered unit's gate-element binds read **per opportunity** (the
+`EVIDENCES` read `OPTIONAL MATCH`es the unit's `BELONGS_TO`), so a gate element's
+evidence distributes across opportunities plus an honest unclustered residual
+(D171). Lands via `migrations/neo4j/0008_process_instances.cypher`.
+
+| Property            | Type            | Notes                                                              |
+|---------------------|-----------------|--------------------------------------------------------------------|
+| `tenant_id`         | `String`        | not empty; tenant-isolation predicate at every Cypher query        |
+| `jurisdiction`      | `String`        | first-class per D12                                                 |
+| `opportunity_id`    | `String`        | the opportunity's UUID (identity)                                  |
+| `outcome_id`        | `String`        | the goal this opportunity belongs to                              |
+| `name`              | `String`        | the opportunity name (company/role, e.g. "Acme")                 |
+| `current_gate_id`   | `String`/`null` | the furthest gate the opportunity's units evidence; operator-correctable |
+| `provenance_origin` | `String`        | `system_suggested` at instantiation, `user_authored` once the operator confirms (D200) |
+| `proof_state`       | `String`        | `pending` / `accepted`                                            |
+| `source`            | `String`/`null` | the clustering signature (e.g. the company domain)                |
+| `created_at`        | `DateTime`      | set on initial MERGE                                               |
+
+Uniqueness constraint: `opportunity_unique_per_tenant` on `(tenant_id,
+opportunity_id)`. The `BELONGS_TO` edge carries `tenant_id` + `jurisdiction`, has a
+range index `belongs_to_tenant_id` on `tenant_id`, and is idempotent via the MERGE
+pattern (no relationship-property uniqueness in Community Edition). Units matching
+no confirmed opportunity stay unclustered (no `BELONGS_TO`), reading
+`opportunity_id = null` in the evidence — the honest residual, never neglect.
+
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
 A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when

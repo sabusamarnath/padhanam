@@ -491,6 +491,46 @@ RETURN g.gate_id AS gate_id, g.name AS name, g.gate_order AS gate_order,
 ORDER BY g.gate_order ASC
 """
 
+# --- Process instances / opportunities (S103h, D208) -----------------------
+# An opportunity is a Flow item belonging to the goal (outcome_id), positioned at
+# its furthest-evidenced gate (current_gate_id), grouping its units (BELONGS_TO).
+_MERGE_OPPORTUNITY = """
+MERGE (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+ON CREATE SET
+    o.jurisdiction = $jurisdiction,
+    o.created_at = $created_at
+SET
+    o.outcome_id = $outcome_id,
+    o.name = $name,
+    o.current_gate_id = $current_gate_id,
+    o.provenance_origin = $provenance_origin,
+    o.proof_state = $proof_state,
+    o.source = $source
+"""
+_LIST_OPPORTUNITIES = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, outcome_id: $outcome_id})
+OPTIONAL MATCH (u:Unit {tenant_id: $tenant_id})-[:BELONGS_TO {tenant_id: $tenant_id}]->(o)
+RETURN o.opportunity_id AS opportunity_id, o.name AS name,
+       o.current_gate_id AS current_gate_id,
+       o.provenance_origin AS provenance_origin, o.proof_state AS proof_state,
+       o.source AS source, count(u) AS unit_count
+ORDER BY o.name ASC
+"""
+# Idempotent membership: MERGE the BELONGS_TO edge keyed on (unit, opportunity).
+_ATTACH_UNIT_TO_OPPORTUNITY = """
+MATCH (u:Unit {tenant_id: $tenant_id, unit_id: $unit_id})
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+MERGE (u)-[r:BELONGS_TO {tenant_id: $tenant_id}]->(o)
+ON CREATE SET r.jurisdiction = $jurisdiction, r.created_at = $created_at
+"""
+# Clear an opportunity's memberships so a re-instantiation reconciles cleanly.
+_CLEAR_OPPORTUNITY_UNITS = """
+MATCH (:Unit {tenant_id: $tenant_id})
+      -[r:BELONGS_TO {tenant_id: $tenant_id}]->
+      (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+DELETE r
+"""
+
 # The authored stance on the outcome — the measurable result that means the goal
 # is met (D200), stored on the existing :Outcome node (D199's two faces). S103a
 # makes it proofable: it carries an origin + proof_state alongside the text, all
@@ -661,15 +701,20 @@ SET
 
 # Every authored element carries outcome_id (the goal), so the goal level derives
 # from either endpoint's outcome_id. The element id coalesces the kind's id prop.
+# The opportunity scoping (S103h, D208): OPTIONAL MATCH the unit's BELONGS_TO so
+# a clustered unit's gate-element binds carry its opportunity, and unclustered
+# units read opportunity_id = null (the honest residual).
 _LIST_ELEMENT_EVIDENCE = """
 MATCH (u:Unit {tenant_id: $tenant_id})
       -[r:EVIDENCES {tenant_id: $tenant_id}]->(e)
 WHERE e.outcome_id IS NOT NULL
+OPTIONAL MATCH (u)-[:BELONGS_TO {tenant_id: $tenant_id}]->(op:Opportunity)
 RETURN u.unit_id AS unit_id,
        labels(e)[0] AS element_kind,
        coalesce(e.lever_id, e.element_id, e.outcome_id) AS element_id,
        e.outcome_id AS outcome_id,
        e.gate_id AS gate_id,
+       op.opportunity_id AS opportunity_id,
        r.tier AS tier,
        r.status AS status,
        r.basis AS basis
@@ -1183,6 +1228,68 @@ class TenantScopedNeo4jSession:
         result = await session.run(_LIST_GATES, params)
         return list(await result.data())
 
+    # --- Process instances / opportunities (S103h, D208) -------------------
+
+    async def merge_opportunity(
+        self,
+        *,
+        opportunity_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        current_gate_id: UUID | None,
+        provenance_origin: str,
+        proof_state: str,
+        source: str | None = None,
+    ) -> None:
+        """MERGE an opportunity Flow item (D208)."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "opportunity_id": str(opportunity_id),
+            "outcome_id": str(outcome_id),
+            "name": name,
+            "current_gate_id": (
+                str(current_gate_id) if current_gate_id is not None else None
+            ),
+            "provenance_origin": provenance_origin,
+            "proof_state": proof_state,
+            "source": source,
+            "created_at": _now_utc(),
+        }
+        await session.run(_MERGE_OPPORTUNITY, params)
+
+    async def list_opportunities(self, *, outcome_id: UUID) -> list[dict]:
+        """Return a goal's opportunities with their unit counts (D208)."""
+        session = self._bound_session
+        params = {"tenant_id": self._tenant_id, "outcome_id": str(outcome_id)}
+        result = await session.run(_LIST_OPPORTUNITIES, params)
+        return list(await result.data())
+
+    async def attach_unit_to_opportunity(
+        self, *, unit_id: UUID, opportunity_id: UUID
+    ) -> None:
+        """MERGE the BELONGS_TO membership edge (D208) — idempotent."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "unit_id": str(unit_id),
+            "opportunity_id": str(opportunity_id),
+            "created_at": _now_utc(),
+        }
+        await session.run(_ATTACH_UNIT_TO_OPPORTUNITY, params)
+
+    async def clear_opportunity_units(self, *, opportunity_id: UUID) -> None:
+        """Delete an opportunity's BELONGS_TO edges so a re-instantiation
+        reconciles cleanly (D208)."""
+        session = self._bound_session
+        params = {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        }
+        await session.run(_CLEAR_OPPORTUNITY_UNITS, params)
+
     async def set_element_gate(
         self, *, element_kind: str, element_id: UUID, gate_id: UUID
     ) -> bool:
@@ -1576,6 +1683,7 @@ class TenantScopedNeo4jSession:
         out = []
         for row in rows:
             gate_id = row.get("gate_id")
+            opportunity_id = row.get("opportunity_id")
             out.append(
                 ElementEvidenceRecord(
                     unit_id=UUID(row["unit_id"]),
@@ -1586,6 +1694,7 @@ class TenantScopedNeo4jSession:
                     status=row["status"],
                     basis=row["basis"],
                     gate_id=UUID(gate_id) if gate_id else None,
+                    opportunity_id=UUID(opportunity_id) if opportunity_id else None,
                 )
             )
         return out

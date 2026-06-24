@@ -28,6 +28,7 @@ from uuid import UUID
 from contexts.ingestion.ports.outcome_graph_port import (
     AuthoredCddRecord,
     GateRecord,
+    OpportunityRecord,
     OutcomeGraphRecord,
 )
 from contexts.ingestion.ports.unit_graph_port import (
@@ -393,6 +394,89 @@ class Neo4jGraphRepository:
                     )
                     for r in rows
                 ]
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def merge_opportunity(
+        self,
+        *,
+        tenant_context: TenantContext,
+        opportunity_id: UUID,
+        outcome_id: UUID,
+        name: str,
+        current_gate_id: UUID | None,
+        provenance_origin: str,
+        proof_state: str,
+        source: str | None = None,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_opportunity(
+                    opportunity_id=opportunity_id, outcome_id=outcome_id,
+                    name=name, current_gate_id=current_gate_id,
+                    provenance_origin=provenance_origin, proof_state=proof_state,
+                    source=source,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_opportunities(
+        self, *, tenant_context: TenantContext, outcome_id: UUID
+    ) -> Sequence[OpportunityRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                rows = await s.list_opportunities(outcome_id=outcome_id)
+                return [
+                    OpportunityRecord(
+                        opportunity_id=UUID(r["opportunity_id"]),
+                        name=r["name"],
+                        current_gate_id=(
+                            UUID(r["current_gate_id"])
+                            if r.get("current_gate_id") else None
+                        ),
+                        provenance_origin=r["provenance_origin"],
+                        proof_state=r["proof_state"],
+                        unit_count=r["unit_count"],
+                        source=r.get("source"),
+                    )
+                    for r in rows
+                ]
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def attach_unit_to_opportunity(
+        self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.attach_unit_to_opportunity(
+                    unit_id=unit_id, opportunity_id=opportunity_id
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def clear_opportunity_units(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.clear_opportunity_units(opportunity_id=opportunity_id)
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

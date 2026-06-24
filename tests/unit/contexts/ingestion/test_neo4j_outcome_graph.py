@@ -417,3 +417,59 @@ def test_delete_authored_edge_targets_the_endpoints() -> None:
     cypher = session.run.call_args.args[0]
     assert "DELETE r" in cypher
     assert ":Lever" in cypher and ":Intermediary" in cypher
+
+
+# --- Process instances / opportunities (S103h, D208) -------------------------
+
+_OPP_ID = UUID("00000000-0000-4000-8000-0000063b0001")
+
+
+def test_merge_opportunity_binds_tenant_and_fields() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_opportunity(
+                opportunity_id=_OPP_ID, outcome_id=_OUTCOME_ID, name="Acme",
+                current_gate_id=_GATE_ID, provenance_origin="system_suggested",
+                proof_state="pending", source="acme.example",
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "MERGE (o:Opportunity" in cypher
+    assert params["opportunity_id"] == str(_OPP_ID)
+    assert params["name"] == "Acme"
+    assert params["current_gate_id"] == str(_GATE_ID)
+    assert params["provenance_origin"] == "system_suggested"
+
+
+def test_attach_unit_to_opportunity_merges_belongs_to() -> None:
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.attach_unit_to_opportunity(
+                unit_id=_OUTCOME_ID, opportunity_id=_OPP_ID
+            )
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "MERGE (u)-[r:BELONGS_TO" in cypher
+
+
+def test_element_evidence_read_scopes_to_opportunity() -> None:
+    # The evidence read OPTIONAL-MATCHes the unit's BELONGS_TO so a clustered
+    # unit's gate binds carry its opportunity (D208).
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.list_element_evidence()
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "BELONGS_TO" in cypher and "opportunity_id" in cypher

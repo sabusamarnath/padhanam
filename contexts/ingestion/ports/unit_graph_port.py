@@ -133,6 +133,9 @@ class ElementEvidenceRecord:
     # The gate whose local CDD the element belongs to (S103g, D207), or None for
     # a goal-level element — the gate rollup alongside the goal rollup.
     gate_id: UUID | None = None
+    # The opportunity the bound unit belongs to (S103h, D208), or None when the
+    # unit is unclustered — the per-opportunity scoping of a gate bind.
+    opportunity_id: UUID | None = None
 
 
 class UnitGraphPort(Protocol):
