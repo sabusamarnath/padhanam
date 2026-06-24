@@ -146,3 +146,53 @@ def test_no_field_links_a_unit_to_a_specific_lever():
     for u in g.units:
         fields = set(type(u).model_fields)
         assert not any("lever" in f for f in fields), fields
+
+
+def test_goal_cdd_to_dto_carries_gates_and_gate_id():
+    # S103g (D207): gates + element gate_id reach the wire so the surface groups.
+    from uuid import uuid4 as _uuid4
+
+    from apps.api.routers._daily_driver_dto import goal_cdd_to_dto
+    from contexts.daily_driver.domain.cdd import (
+        AuthoredElement,
+        ElementKind,
+        GateView,
+        GoalCddView,
+        ProofState,
+        ProvenanceOrigin,
+    )
+
+    gate_id = _uuid4()
+    outcome_id = _uuid4()
+    view = GoalCddView(
+        outcome_id=outcome_id,
+        expected_outcome="Role secured",
+        elements=(
+            AuthoredElement(
+                kind=ElementKind.LEVER, element_id=_uuid4(), label="Origination",
+                provenance_origin=ProvenanceOrigin.LLM_DRAFTED,
+                proof_state=ProofState.PENDING,
+            ),
+            AuthoredElement(
+                kind=ElementKind.LEVER, element_id=_uuid4(),
+                label="Tailoring effort",
+                provenance_origin=ProvenanceOrigin.LLM_DRAFTED,
+                proof_state=ProofState.PENDING, gate_id=gate_id,
+            ),
+        ),
+        edges=(),
+        gates=(
+            GateView(
+                gate_id=gate_id, name="Apply", gate_order=3,
+                local_outcome="Expected interviews generated",
+                local_goal="highest return on marginal effort",
+                provenance_origin=ProvenanceOrigin.LLM_DRAFTED,
+                proof_state=ProofState.PENDING,
+            ),
+        ),
+    )
+    dto = goal_cdd_to_dto(view)
+    assert len(dto.gates) == 1 and dto.gates[0].name == "Apply"
+    by_label = {e.label: e for e in dto.elements}
+    assert by_label["Tailoring effort"].gate_id == gate_id
+    assert by_label["Origination"].gate_id is None

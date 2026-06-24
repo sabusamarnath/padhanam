@@ -123,6 +123,28 @@ class GoalCddView:
     edges: tuple[AuthoredEdgeView, ...]
     expected_outcome_origin: ProvenanceOrigin | None = None
     expected_outcome_proof_state: ProofState | None = None
+    # The process-flow gates (S103g, D207), each a portal into its local CDD; the
+    # gate-scoped elements are those in ``elements`` carrying the gate's id.
+    gates: tuple["GateView", ...] = ()
+
+
+@dataclass(frozen=True)
+class GateView:
+    """One process-flow gate as read for proof (S103g, D207).
+
+    A gate is a portal into its local CDD; its gate-scoped elements are the
+    ``AuthoredElement``s whose ``gate_id`` equals this gate's ``gate_id``.
+    ``local_outcome`` is the gate's local-outcome endpoint text.
+    """
+
+    gate_id: UUID
+    name: str
+    gate_order: int
+    local_outcome: str
+    local_goal: str
+    provenance_origin: ProvenanceOrigin
+    proof_state: ProofState
+    step_commitment_id: UUID | None = None
 
 
 # The JSON Schema the structured-output port constrains the model to.

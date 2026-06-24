@@ -551,6 +551,24 @@ class AuthoredElementDTO(BaseModel):
     label: str
     provenance_origin: str
     proof_state: str
+    # The gate whose local CDD this element belongs to (S103g, D207), or None for
+    # a goal-level (portfolio) element — the surface groups by it.
+    gate_id: UUID | None = None
+
+
+class GateDTO(BaseModel):
+    """One process-flow gate for the CDD surface (S103g, D207). A gate is a portal
+    into its local CDD; its elements are the ``AuthoredElementDTO``s carrying its
+    ``gate_id``."""
+
+    gate_id: UUID
+    name: str
+    gate_order: int
+    local_outcome: str
+    local_goal: str
+    provenance_origin: str
+    proof_state: str
+    step_commitment_id: UUID | None = None
 
 
 class AuthoredEdgeDTO(BaseModel):
@@ -582,6 +600,9 @@ class GoalCddDTO(BaseModel):
     edges: list[AuthoredEdgeDTO]
     expected_outcome_origin: str | None = None
     expected_outcome_proof_state: str | None = None
+    # The process-flow gates (S103g, D207), ordered by gate_order; each a portal
+    # into its local CDD (the elements carrying its gate_id).
+    gates: list[GateDTO] = []
 
 
 class CorrectCddElementRequest(BaseModel):
@@ -710,6 +731,7 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
                 label=e.label,
                 provenance_origin=e.provenance_origin.value,
                 proof_state=e.proof_state.value,
+                gate_id=e.gate_id,
             )
             for e in view.elements
         ],
@@ -723,6 +745,19 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
                 needs_review=edge.needs_review,
             )
             for edge in view.edges
+        ],
+        gates=[
+            GateDTO(
+                gate_id=g.gate_id,
+                name=g.name,
+                gate_order=g.gate_order,
+                local_outcome=g.local_outcome,
+                local_goal=g.local_goal,
+                provenance_origin=g.provenance_origin.value,
+                proof_state=g.proof_state.value,
+                step_commitment_id=g.step_commitment_id,
+            )
+            for g in getattr(view, "gates", ())
         ],
     )
 

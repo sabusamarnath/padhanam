@@ -40,6 +40,7 @@ from contexts.daily_driver.domain.cdd import (
     AuthoredElement,
     DraftedCdd,
     ElementKind,
+    GateView,
     GoalCddView,
     ProofState,
     ProvenanceOrigin,
@@ -614,6 +615,22 @@ class GoalGraphAdapter:
             if record.expected_outcome_proof_state is not None
             else None
         )
+        gate_records = await self._outcome_graph.list_gates(
+            tenant_context=tenant_context, outcome_id=outcome_id
+        )
+        gates = tuple(
+            GateView(
+                gate_id=g.gate_id,
+                name=g.name,
+                gate_order=g.gate_order,
+                local_outcome=g.local_outcome,
+                local_goal=g.local_goal,
+                provenance_origin=ProvenanceOrigin(g.provenance_origin),
+                proof_state=ProofState(g.proof_state),
+                step_commitment_id=g.step_commitment_id,
+            )
+            for g in gate_records
+        )
         return GoalCddView(
             outcome_id=outcome_id,
             expected_outcome=record.expected_outcome or "",
@@ -621,6 +638,7 @@ class GoalGraphAdapter:
             edges=edges,
             expected_outcome_origin=outcome_origin,
             expected_outcome_proof_state=outcome_proof,
+            gates=gates,
         )
 
     async def accept_authored_element(

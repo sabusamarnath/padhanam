@@ -305,3 +305,13 @@ def test_raw_tasks_and_goal_readings_cut_from_the_surface():
     assert "function loadGoals" not in _HTML
     assert 'id="tasks"' not in _HTML
     assert 'id="goals"' not in _HTML
+
+
+def test_cdd_renders_process_flow_gate_sections():
+    # S103g (D207): the CDD lens renders the flow as gate portal sections, each
+    # opening into its local CDD (gate-scoped elements grouped by kind).
+    assert "cddGateSection" in _HTML
+    assert "Process flow" in _HTML
+    # gate-scoped elements are split from goal-level by gate_id.
+    assert "e.gate_id" in _HTML
+    assert "cdd.gates" in _HTML
