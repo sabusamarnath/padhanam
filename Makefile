@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -403,3 +403,9 @@ charter-export:
 # bound is tripped (wire into a package-close gate when desired).
 charter-size:
 	@uv run python -m ops.charter_size_check $(ARGS)
+
+# Instantiate the operator-confirmed get-a-job opportunities (S103h, D208):
+# create the :Opportunity Flow items, attach units by company signature, set each
+# current gate to its furthest-evidenced gate. Idempotent. Run correlate-units after.
+instantiate-opportunities: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.instantiate_get_a_job_opportunities
