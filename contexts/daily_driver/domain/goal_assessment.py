@@ -978,17 +978,25 @@ def infer_element_evidence(
                             (el, "lexical_keyword", LinkStatus.CANDIDATE,
                              "element-keyword", shared)
                         )
-            # Gate-local precedence (D207): a gate-scoped element is the more
-            # specific home, so the tokens it captures for this unit suppress a
-            # goal-level element's match on the *same* token. A goal-level match
-            # whose shared tokens are wholly covered by gate matches is dropped;
-            # a goal-level match on a token no gate captured survives.
-            gate_tokens: frozenset[str] = frozenset().union(
-                *(m[4] for m in matches if m[0].gate_id is not None)
-            )
+            # Gate-local precedence, narrowed to strictly-stronger (D208): a
+            # gate-scoped element suppresses a goal-level match only when the
+            # gate match is *strictly* stronger (higher tier) and shares a
+            # significant token — so the gate is genuinely the more specific home.
+            # Equal-tier matches both survive (multi-attach, D202): an incidental
+            # equal-strength gate token (the "warm" collision that zeroed the
+            # Targeting portfolio lever at two-A) can no longer strip a portfolio
+            # bind. The two-A union-subset rule over-reached on exactly that case;
+            # the real declutter of the floods is the opportunity layer, not the
+            # precedence.
+            gate_matches = [
+                (m[1], m[4]) for m in matches if m[0].gate_id is not None
+            ]
             for el, tier, status, basis, toks in matches:
-                if el.gate_id is None and toks and toks <= gate_tokens:
-                    continue  # the gate-local counterpart won every token
+                if el.gate_id is None and any(
+                    _TIER_RANK[g_tier] > _TIER_RANK[tier] and (g_toks & toks)
+                    for g_tier, g_toks in gate_matches
+                ):
+                    continue  # a strictly-stronger gate match is more specific
                 evidence.append(
                     ElementEvidence(
                         unit_id=unit.unit_id, element_kind=el.kind,

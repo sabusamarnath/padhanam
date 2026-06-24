@@ -212,25 +212,44 @@ def test_email_job_search_evidence_binds_to_outcome():
     assert ev[0].basis == "email-job-search" and ev[0].status is LinkStatus.CONFIRMED
 
 
-# --- gate-local precedence (S103g, D207) -------------------------------------
+# --- gate-local precedence, strictly-stronger (S103g/D207, narrowed S103h/D208) --
 
-def test_gate_local_wins_the_shared_token():
-    # A goal-level portfolio element and a gate-local element share a token; a
-    # unit matching that token binds to the gate-local one, not the goal one.
+def test_gate_strictly_stronger_suppresses_goal_keyword():
+    # A gate-local EXACT match suppresses a goal-level KEYWORD match on the same
+    # token — the gate is strictly stronger, so it is the more specific home.
     gate_id = uuid4()
-    goal_inter = ElementTarget(
-        kind="intermediary", element_id=uuid4(),
-        label="Aggregate win-probability across the portfolio",
+    goal_lever = ElementTarget(
+        kind="lever", element_id=uuid4(), label="Take-home preparation effort",
     )
-    gate_inter = ElementTarget(
-        kind="intermediary", element_id=uuid4(),
-        label="Screen-through probability for this application", gate_id=gate_id,
+    gate_lever = ElementTarget(
+        kind="lever", element_id=uuid4(), label="Take-home", gate_id=gate_id,
     )
-    goal = _goal(name="Get a job", elements=(goal_inter, gate_inter))
-    ev = infer_element_evidence((_view("estimated probability of an offer"),), (goal,))
+    goal = _goal(name="Get a job", elements=(goal_lever, gate_lever))
+    ev = infer_element_evidence((_view("Take-home"),), (goal,))  # exact to gate
     bound = {e.element_id for e in ev}
-    assert gate_inter.element_id in bound  # gate won the shared "probability"
-    assert goal_inter.element_id not in bound  # goal counterpart suppressed
+    assert gate_lever.element_id in bound  # exact gate match
+    assert goal_lever.element_id not in bound  # keyword goal suppressed by stronger gate
+
+
+def test_equal_tier_keeps_both_the_targeting_regression_fix():
+    # D208: the two-A over-reach — an incidental equal-tier gate keyword zeroed
+    # the Targeting portfolio lever. Now equal-tier matches BOTH survive: a unit
+    # sharing the incidental "warm" token with a gate element no longer strips the
+    # portfolio bind.
+    gate_id = uuid4()
+    targeting = ElementTarget(
+        kind="lever", element_id=uuid4(),
+        label="Targeting segments and channel warm over cold",
+    )
+    referral = ElementTarget(
+        kind="lever", element_id=uuid4(),
+        label="Referral pursuit chase a warm referral", gate_id=gate_id,
+    )
+    goal = _goal(name="Get a job", elements=(targeting, referral))
+    ev = infer_element_evidence((_view("Thanks, warm regards"),), (goal,))
+    bound = {e.element_id for e in ev}
+    assert targeting.element_id in bound  # portfolio bind survives (not stripped)
+    assert referral.element_id in bound   # gate bind also present (multi-attach)
 
 
 def test_goal_level_survives_a_token_no_gate_captured():
