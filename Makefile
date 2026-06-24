@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -254,6 +254,12 @@ rescope-dogfood-reactivate: derive-env
 # Idempotent. Run `make correlate-units` after to bind units to the elements.
 seed-get-a-job-cdd: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_get_a_job_cdd
+
+# Author the Apply + Screening gate CDDs (S103g, D207): seed the two process-flow
+# gates with Pratt wiring, relocate Tailoring effort into the Apply gate. Idempotent.
+# Run make correlate-units after to bind work to the gate elements.
+seed-get-a-job-gates: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.seed_get_a_job_gates
 
 # Pull Google Tasks for the personal tenant (S65, D167): ensure the
 # google-tasks connection then full re-pull into the re-pullable cache.
