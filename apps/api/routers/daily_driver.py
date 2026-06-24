@@ -207,6 +207,11 @@ def get_email_job_search_source(request: Request):
     return getattr(request.app.state, "daily_driver_email_job_search_source", None)
 
 
+def get_email_source_metadata(request: Request):
+    """FastAPI dependency: the EmailSourceMetadataSource (D209), if wired."""
+    return getattr(request.app.state, "daily_driver_email_source_metadata", None)
+
+
 def get_goal_graph_optional(request: Request):
     """FastAPI dependency: the GoalGraphPort if wired, else None (D169).
 
@@ -518,6 +523,9 @@ async def post_cdd_rematch(
     email_job_search_source: Annotated[
         object | None, Depends(get_email_job_search_source)
     ],
+    email_source_metadata: Annotated[
+        object | None, Depends(get_email_source_metadata)
+    ],
 ) -> RematchResultDTO:
     """Re-run the element matcher over existing units against the current element
     set (D202/D203, S103c). Idempotent and correction-respecting: it skips
@@ -531,6 +539,7 @@ async def post_cdd_rematch(
         goal_graph=goal_graph,
         commitment_repository=commitment_repository,
         email_job_search_source=email_job_search_source,
+        email_source_metadata=email_source_metadata,
         actor=actor,
     )
     return RematchResultDTO(evidence_edges=n)
@@ -789,6 +798,9 @@ async def get_units_by_goal(
     email_job_search_source: Annotated[
         object | None, Depends(get_email_job_search_source)
     ],
+    email_source_metadata: Annotated[
+        object | None, Depends(get_email_source_metadata)
+    ],
     commitment_repository: Annotated[
         CommitmentRepository, Depends(get_commitment_repository)
     ],
@@ -810,6 +822,7 @@ async def get_units_by_goal(
         goal_graph=goal_graph,
         actor=actor,
         email_job_search_source=email_job_search_source,
+        email_source_metadata=email_source_metadata,
         commitment_repository=commitment_repository,
     )
     return grouped_units_to_dto(grouped)

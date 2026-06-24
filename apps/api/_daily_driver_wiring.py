@@ -102,6 +102,7 @@ from contexts.matcher_policy.adapters.outbound.postgres import (
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchClassification,
 )
+from contexts.daily_driver.ports.email_source_metadata import EmailSourceMetadata
 from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
 from contexts.email.adapters.outbound.postgres.email_store import (
     PostgresEmailStore,
@@ -1005,6 +1006,60 @@ def build_email_job_search_source(
 ) -> EmailJobSearchSourceAdapter:
     """Wire the daily-driver EmailJobSearchSource over the email store (D183)."""
     return EmailJobSearchSourceAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+class EmailSourceMetadataAdapter:
+    """apps/ adapter implementing daily-driver's ``EmailSourceMetadataSource``
+    (D209): the email's sender domain + thread size, for the source-class
+    taxonomy. Reads the email store without the daily-driver context importing it
+    (the EmailJobSearchSource precedent)."""
+
+    def __init__(self, *, session_factory_for_tenant: _SessionFactoryForTenant) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def list_source_metadata(
+        self, *, actor: ActorContext
+    ) -> tuple[EmailSourceMetadata, ...]:
+        sessionmaker = await self._session_factory_for_tenant(actor.tenant_context)
+        emails = PostgresEmailStore(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        rows = await emails.list_emails(tenant_context=actor.tenant_context)
+        thread_size: dict[str, int] = {}
+        for e in rows:
+            if e.thread_id:
+                thread_size[e.thread_id] = thread_size.get(e.thread_id, 0) + 1
+        out: list[EmailSourceMetadata] = []
+        for e in rows:
+            addr = (e.from_address or "").lower()
+            domain = addr.split("@")[-1].strip(">").strip() if "@" in addr else ""
+            out.append(
+                EmailSourceMetadata(
+                    facet_id=e.id,
+                    domain=domain,
+                    thread_size=thread_size.get(e.thread_id, 1) if e.thread_id else 1,
+                )
+            )
+        return tuple(out)
+
+
+def build_email_source_metadata(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> EmailSourceMetadataAdapter:
+    """Wire the daily-driver EmailSourceMetadataSource over the email store (D209)."""
+    return EmailSourceMetadataAdapter(
         session_factory_for_tenant=_session_factory_builder(
             tenant_registry=tenant_registry,
             session_factory_cache=session_factory_cache,

@@ -14,22 +14,32 @@ No direction this session (S104, D203); no embedding tier (S100 empty corpus).
 
 from __future__ import annotations
 
+import logging
+
 from contexts.daily_driver.domain.goal_assessment import (
     DEFAULT_GOAL_CONFIDENCE_FLOOR,
     ElementTarget,
     GoalElementTargets,
     dedup_element_evidence,
     derive_goal_edges,
+    element_token_counts,
     infer_element_evidence,
     infer_email_job_search_evidence,
 )
+from contexts.daily_driver.domain.precision import UnitSource, apply_precision
 from contexts.daily_driver.domain.unit_view import build_unit_views
+from contexts.daily_driver.domain.work_unit import FacetType
 from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchSource,
 )
+from contexts.daily_driver.ports.email_source_metadata import (
+    EmailSourceMetadataSource,
+)
+
+_log = logging.getLogger("daily_driver.correlate")
 from contexts.daily_driver.ports.facet_source import FacetSource
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from contexts.daily_driver.ports.matcher_quality_recorder import (
@@ -58,6 +68,7 @@ async def correlate_goal_facets(
     commitment_repository: CommitmentRepository,
     actor: ActorContext,
     email_job_search_source: EmailJobSearchSource | None = None,
+    email_source_metadata: EmailSourceMetadataSource | None = None,
     matcher_quality_recorder: MatcherQualityRecorder | None = None,
     suppression_policy: SuppressionPolicy | None = None,
     confidence_floor: float = DEFAULT_GOAL_CONFIDENCE_FLOOR,
@@ -109,22 +120,87 @@ async def correlate_goal_facets(
 
     evidence = infer_element_evidence(views, tuple(targets))
 
+    # D183/S89: read the rule-confirmed job-search emails once — needed both to
+    # protect their units from the precision filter (already-vetted real job work)
+    # and to bind them to the outcome below.
+    confirmed_ids: frozenset = frozenset()
+    if email_job_search_source is not None:
+        confirmed = await email_job_search_source.list_confirmed(actor=actor)
+        confirmed_ids = frozenset(c.facet_id for c in confirmed)
+
+    # D209: the precision filter — the source-class taxonomy + the genuine-match
+    # bar in the use case, gating each lexical candidate before it persists. A
+    # board listing routes to market signal, a one-touch ack to pipeline volume,
+    # an incidental-token match un-binds, and work no goal genuinely matches parks
+    # unbound (coverage honesty at bind time, D171/D193). Protected: units carrying
+    # a rule-confirmed job email (D183-vetted). Computed here, not in the matcher
+    # domain (D16/D184).
+    meta_by_facet = {}
+    if email_source_metadata is not None:
+        for m in await email_source_metadata.list_source_metadata(actor=actor):
+            meta_by_facet[m.facet_id] = m
+    unit_source: dict = {}
+    protected: set = set()
+    for v in views:
+        present = [f for f in v.facets if f.present]
+        email_f = next(
+            (f for f in present if f.facet_type is FacetType.EMAIL), None
+        )
+        if email_f is not None:
+            m = meta_by_facet.get(email_f.facet_id)
+            unit_source[v.unit_id] = UnitSource(
+                facet_type=FacetType.EMAIL,
+                domain=m.domain if m else "",
+                subject=email_f.title or "",
+                thread_size=m.thread_size if m else 1,
+                titles=tuple(f.title for f in present if f.title),
+            )
+            if email_f.facet_id in confirmed_ids:
+                protected.add(v.unit_id)
+        elif present:
+            f0 = present[0]
+            unit_source[v.unit_id] = UnitSource(
+                facet_type=f0.facet_type, domain="", subject=f0.title or "",
+                thread_size=1, titles=tuple(f.title for f in present if f.title),
+            )
+    element_label_by_id = {}
+    for gt in targets:
+        for el in gt.elements:
+            element_label_by_id[el.element_id] = el.label
+        if gt.expected_outcome:
+            element_label_by_id[gt.outcome_id] = gt.expected_outcome
+    tok_counts = element_token_counts(
+        tuple(element_label_by_id.values())
+    )
+    precision = apply_precision(
+        evidence,
+        unit_source=unit_source,
+        element_label_by_id=element_label_by_id,
+        token_element_counts=tok_counts,
+        protected_unit_ids=frozenset(protected),
+    )
+    evidence = precision.kept
+    _log.info(
+        "precision (D209): kept=%d binds; routed market=%d pipeline=%d units; "
+        "parked=%d units; protected=%d units",
+        len(precision.kept), len(precision.market_units),
+        len(precision.pipeline_units), len(precision.parked_units),
+        len(precision.protected_units),
+    )
+
     # D183/S89: rule-confirmed job-search emails bind to the Get-a-job outcome
     # element (read back from the persisted store verdict, durable across runs).
     # email-first so its high-specificity basis wins a same-element tie.
-    if email_job_search_source is not None:
+    if email_job_search_source is not None and confirmed_ids:
         target = next(
             (g for g in goals if g.name.strip().lower() == _JOB_SEARCH_GOAL_NAME),
             None,
         )
         if target is not None:
-            confirmed = await email_job_search_source.list_confirmed(actor=actor)
-            confirmed_ids = frozenset(c.facet_id for c in confirmed)
-            if confirmed_ids:
-                email_ev = infer_email_job_search_evidence(
-                    views, target.id, confirmed_ids
-                )
-                evidence = dedup_element_evidence(list(email_ev) + list(evidence))
+            email_ev = infer_email_job_search_evidence(
+                views, target.id, confirmed_ids
+            )
+            evidence = dedup_element_evidence(list(email_ev) + list(evidence))
 
     # D186/S91b: when single-signal suppression is active, drop the weak alias-tier
     # evidence (the goal-name keyword analog) — an applied recommendation re-applied

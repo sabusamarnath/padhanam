@@ -39,6 +39,7 @@ PERSONAL_TENANT_UUID = "00000000-0000-4000-8000-00000000d001"
 async def _correlate() -> None:
     from apps.api._daily_driver_wiring import (
         EmailJobSearchSourceAdapter,
+        EmailSourceMetadataAdapter,
         FacetSourceAdapter,
         GoalGraphAdapter,
         MatcherQualityRecorderAdapter,
@@ -74,6 +75,10 @@ async def _correlate() -> None:
         session_factory_for_tenant=_session_factory_for_tenant
     )
     email_job_search_source = EmailJobSearchSourceAdapter(
+        session_factory_for_tenant=_session_factory_for_tenant
+    )
+    # D209: the source-class taxonomy reads the email sender domain + thread size.
+    email_source_metadata = EmailSourceMetadataAdapter(
         session_factory_for_tenant=_session_factory_for_tenant
     )
     # D185/S90: the observe-only matcher-quality recorder — measures the SERVES
@@ -117,6 +122,7 @@ async def _correlate() -> None:
         goal_graph=goal_graph,
         commitment_repository=commitment_repository,
         email_job_search_source=email_job_search_source,
+        email_source_metadata=email_source_metadata,
         matcher_quality_recorder=matcher_quality_recorder,
         suppression_policy=suppression_policy,
         actor=actor,

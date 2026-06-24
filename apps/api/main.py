@@ -235,6 +235,7 @@ class AppCompositions:
     # unwired (the /units view degrades to an empty list).
     daily_driver_facet_source: object | None = None
     daily_driver_email_job_search_source: object | None = None
+    daily_driver_email_source_metadata: object | None = None
     daily_driver_unit_graph: object | None = None
     # S103c (D203): the audit port for capturing CDD-evidence corrections
     # (relink/unlink) as the append-only learning signal. None when unwired.
@@ -592,6 +593,7 @@ def _build_default_compositions() -> AppCompositions:
         build_commitment_repository,
         build_day_repository,
         build_email_job_search_source,
+        build_email_source_metadata,
         build_cdd_drafter,
         build_facet_source,
         build_goal_graph,
@@ -657,6 +659,12 @@ def _build_default_compositions() -> AppCompositions:
     )
     # D183/S89: the rule-confirmed job-search emails (the persisted classifier
     # verdict) — feeds the moat's count-by-kind fold + the active reading.
+    daily_driver_email_source_metadata = build_email_source_metadata(
+        tenant_registry=tenant_registry,
+        session_factory_cache=session_factory_cache,
+        operator_principal=operator_principal,
+        security_events=security_events,
+    )
     daily_driver_email_job_search_source = build_email_job_search_source(
         tenant_registry=registry,
         session_factory_cache=session_factory_cache,
@@ -740,6 +748,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_cdd_drafter=daily_driver_cdd_drafter,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
+        daily_driver_email_source_metadata=daily_driver_email_source_metadata,
         daily_driver_email_job_search_source=(
             daily_driver_email_job_search_source
         ),
@@ -1006,6 +1015,9 @@ def create_app(
         compositions.daily_driver_facet_source
     )
     # D183/S89: the rule-confirmed job-search email source for the moat view.
+    app.state.daily_driver_email_source_metadata = (
+        compositions.daily_driver_email_source_metadata
+    )
     app.state.daily_driver_email_job_search_source = (
         compositions.daily_driver_email_job_search_source
     )
