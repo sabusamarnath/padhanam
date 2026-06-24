@@ -460,7 +460,13 @@ def group_units_by_goal(
     """
     email_kinds = email_kinds or {}
     goal_ids = {g.id for g in goals}
-    units_with_edge = {e.unit_id for e in edges}
+    # "Linked" means linked to a goal in the active set: an edge to a goal absent
+    # from `goals` (e.g. archived out, S103e/D205) does not render under any goal
+    # here, so it must not count its unit as linked either — else the unit would
+    # vanish from view instead of swelling the unlinked pile (D171 coverage
+    # honesty). `goals_with_edge` already intersects `goal_ids`; this aligns
+    # `units_with_edge` to the same boundary.
+    units_with_edge = {e.unit_id for e in edges if e.outcome_id in goal_ids}
     goals_with_edge = {e.outcome_id for e in edges} & goal_ids
     coverage = GoalCoverage(
         goals_total=len(goals),
@@ -1198,7 +1204,11 @@ def assess_goals(
     reverse-Kano restraint) then by title.
     """
     goal_ids = {goal.id for goal in goals}
-    units_with_edge = {e.unit_id for e in edges}
+    # "Linked" means linked to a goal in the active set (S103e/D205): an edge to a
+    # goal absent from `goals` (archived out) is not surfaced under any goal, so it
+    # must not count its unit as linked — the unit reads unlinked and swells the
+    # orphan pile, the honest coverage read (D171). Mirrors `goals_with_edge`.
+    units_with_edge = {e.unit_id for e in edges if e.outcome_id in goal_ids}
     goals_with_edge = {e.outcome_id for e in edges} & goal_ids
 
     coverage = GoalCoverage(

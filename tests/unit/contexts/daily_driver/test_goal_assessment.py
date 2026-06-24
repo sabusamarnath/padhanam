@@ -890,3 +890,62 @@ def test_goal_reads_inactive_when_email_activity_is_stale():
     grp = grouped.groups[0]
     assert dict(grp.email_activity) == {"application": 1}
     assert grp.active is False
+
+
+# --- S103e (D205): archived goals scope out; coverage stays honest -----------
+# The adapter scopes list_goals to active goals (archived_at IS NULL), so the
+# `goals` set the projections receive is active-only. A unit whose only edge
+# points to an archived (now-absent) goal must read UNLINKED, not vanish — the
+# coverage-honest read (D171). These tests model "the goal was archived" as
+# "the goal is absent from `goals` while its edge survives in `edges`".
+
+
+def test_assess_unit_bound_only_to_archived_goal_reads_unlinked():
+    active = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    archived = _progressive_goal("German", lever_commitment_id=uuid4())
+    active_unit = _served_unit("Apply to target roles")
+    archived_unit = _served_unit("German practice")
+    edges = (_edge(active_unit, active), _edge(archived_unit, archived))
+    # Only the active goal is in the set (the archived one scoped out upstream).
+    assessment = assess_goals((active_unit, archived_unit), (active,), edges)
+    # The active goal is covered; the archived-goal unit is an honest orphan.
+    assert assessment.coverage.goals_total == 1
+    assert assessment.coverage.units_linked == 1  # not 2 — the archived bind
+    assert assessment.coverage.has_coverage
+    orphan_ids = {o.outcome_id for o in assessment.uncovered_goals}
+    assert archived.id not in orphan_ids  # not rendered at all, not "uncovered"
+    orphan_titles = {o.title for o in assessment.orphan_work}
+    assert "German practice" in orphan_titles
+
+
+def test_group_unit_bound_only_to_archived_goal_falls_to_unlinked():
+    active = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    archived = _progressive_goal("Strength", lever_commitment_id=uuid4())
+    active_unit = _served_unit("Recruiter call")
+    archived_unit = _served_unit("Deadlift session")
+    edges = (_edge(active_unit, active), _edge(archived_unit, archived))
+    grouped = group_units_by_goal(
+        (active_unit, archived_unit), (active,), edges
+    )
+    # Only the active goal renders; the archived goal is gone entirely.
+    rendered = {g.outcome_id for g in grouped.groups}
+    assert rendered == {active.id}
+    # The archived-goal unit is not hidden — it swells the unlinked pile.
+    unlinked_titles = {u.title for u in grouped.unlinked}
+    assert "Deadlift session" in unlinked_titles
+    assert grouped.coverage.units_linked == 1
+
+
+def test_get_a_job_still_renders_and_counts_linked_after_rescope():
+    # The retained goal is unaffected: it renders and its units read linked.
+    active = _progressive_goal("Get a job", lever_commitment_id=uuid4())
+    units = (_served_unit("Application sent"), _served_unit("Interview prep"))
+    edges = tuple(_edge(u, active) for u in units)
+    grouped = group_units_by_goal(units, (active,), edges)
+    assert len(grouped.groups) == 1
+    assert grouped.groups[0].outcome_id == active.id
+    assert len(grouped.groups[0].units) == 2
+    assert grouped.unlinked == ()
+    assessment = assess_goals(units, (active,), edges)
+    assert assessment.coverage.units_linked == 2
+    assert assessment.coverage.goals_covered == 1
