@@ -860,6 +860,28 @@ intermediary or the outcome (the inbound the user did not initiate, D198). Same
 shape as `:Intermediary`. Uniqueness constraint: `external_unique_per_tenant` on
 `(tenant_id, element_id)`; index `external_tenant_id` on `tenant_id`.
 
+#### `:MeasurableOutcome` nodes (S103k, D211)
+
+An authored **measurable outcome** — a measurable result that tells you whether the
+goal is met, sitting between the intermediaries and the goal node (Pratt's
+goal-versus-outcome separation). Introduced because the model had no outcome layer:
+the goal `:Outcome` node *was* the only outcome, so the intermediaries fed the goal
+directly and read as endpoints (D211 corrects this; it supersedes slice one's single
+bundled outcome). A new node label rather than a reuse of `:Outcome`, because
+`:MeasurableOutcome` is keyed by `element_id` (like `:Intermediary`/`:External`)
+while the goal `:Outcome` is keyed by `outcome_id` — sharing the label would collide
+with every `:Outcome {outcome_id}` match. The element kind string is
+`measurable_outcome` (distinct from the `outcome` *endpoint* kind, which still
+resolves to the goal node). Intermediaries `FEEDS` a `:MeasurableOutcome`; a
+`:MeasurableOutcome` `FEEDS` the goal `:Outcome`. A new bindable target: the matcher
+and the genuine-match bar (D209) govern its binds, so outcomes are lightly evidenced
+until real offers arrive (honest, not broken). Same property shape as
+`:Intermediary` (`element_id` identity, `outcome_id` scope, `label`,
+`provenance_origin`, `proof_state`, optional `gate_id`). Lands via
+`migrations/neo4j/0009_measurable_outcome.cypher`. Uniqueness constraint:
+`measurable_outcome_unique_per_tenant` on `(tenant_id, element_id)`; index
+`measurable_outcome_tenant_id` on `tenant_id`.
+
 #### `:Gate` nodes (S103g, D207) — the process flow
 
 A first-class process-flow gate. The framework's process layer (D198) is built as
