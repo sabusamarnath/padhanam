@@ -266,6 +266,13 @@ _AUTHORED_NODE = {
     "lever": ("Lever", "lever_id"),
     "intermediary": ("Intermediary", "element_id"),
     "external": ("External", "element_id"),
+    # The measurable-outcome layer (S103k, D211): a node keyed by element_id, like
+    # an intermediary, but labelled :MeasurableOutcome so it never collides with the
+    # :Outcome goal node (keyed by outcome_id). The kind string "measurable_outcome"
+    # stays distinct from the "outcome" endpoint key below, which resolves to the
+    # goal node — so an intermediary still FEEDS the goal via "outcome", while a
+    # measurable outcome is authored/read/reclassified via "measurable_outcome".
+    "measurable_outcome": ("MeasurableOutcome", "element_id"),
 }
 # Edge endpoints additionally allow the outcome node and, for gate-local CDDs
 # (S103g, D207), the :Gate node as the local-outcome endpoint (parallel to
@@ -283,6 +290,18 @@ def _required_edge_type(kind: str) -> str:
     external INFLUENCES (it is not controlled); a lever/intermediary FEEDS. Used
     by the reclassify flagger to detect now-ungrammatical incident edges."""
     return "INFLUENCES" if kind == "external" else "FEEDS"
+
+
+# Edge endpoints report their kind as labels(n)[0].lower(); every node label
+# round-trips to its kind string (Lever->lever, Intermediary->intermediary, ...)
+# except :MeasurableOutcome, whose lowercase ("measurableoutcome") is not the kind
+# string ("measurable_outcome", S103k/D211). Normalise just that one.
+_EDGE_KIND_ALIASES = {"measurableoutcome": "measurable_outcome"}
+
+
+def _norm_edge_kind(label: object) -> str:
+    k = str(label).lower()
+    return _EDGE_KIND_ALIASES.get(k, k)
 
 
 def _authored_node(kind: str) -> tuple[str, str]:
@@ -441,6 +460,16 @@ ORDER BY n.label ASC
 """
 _LIST_AUTHORED_EXTERNALS = """
 MATCH (n:External {tenant_id: $tenant_id, outcome_id: $outcome_id})
+RETURN n.element_id AS element_id, n.label AS label,
+       n.provenance_origin AS provenance_origin, n.proof_state AS proof_state,
+       n.gate_id AS gate_id
+ORDER BY n.label ASC
+"""
+# The measurable-outcome layer (S103k, D211). Same shape as the intermediary read;
+# the kind is forced to "measurable_outcome" by the read loop (not derived from the
+# label), so the :MeasurableOutcome label needs no lowercase round-trip.
+_LIST_AUTHORED_MEASURABLE_OUTCOMES = """
+MATCH (n:MeasurableOutcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
 RETURN n.element_id AS element_id, n.label AS label,
        n.provenance_origin AS provenance_origin, n.proof_state AS proof_state,
        n.gate_id AS gate_id
@@ -1392,6 +1421,7 @@ class TenantScopedNeo4jSession:
             ("lever", _LIST_AUTHORED_LEVERS),
             ("intermediary", _LIST_AUTHORED_INTERMEDIARIES),
             ("external", _LIST_AUTHORED_EXTERNALS),
+            ("measurable_outcome", _LIST_AUTHORED_MEASURABLE_OUTCOMES),
         ):
             result = await session.run(cypher, params)
             for row in await result.data():
@@ -1411,9 +1441,9 @@ class TenantScopedNeo4jSession:
         edges = tuple(
             AuthoredEdgeRecord(
                 edge_type=row["edge_type"],
-                source_kind=str(row["source_kind"]).lower(),
+                source_kind=_norm_edge_kind(row["source_kind"]),
                 source_id=UUID(row["source_id"]),
-                target_kind=str(row["target_kind"]).lower(),
+                target_kind=_norm_edge_kind(row["target_kind"]),
                 target_id=UUID(row["target_id"]),
                 needs_review=bool(row["needs_review"]),
             )

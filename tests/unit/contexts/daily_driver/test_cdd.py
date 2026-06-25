@@ -368,17 +368,24 @@ def test_outcome_proof_accept_correct_reject():
 
 # --- migration-shape guard (the live-surface law's minimum standing guard) --
 
-_MIGRATION = Path("migrations/neo4j/0005_authored_cdd.cypher")
+# The authored-CDD constraints span more than one migration: 0005 landed the
+# original kinds, 0009 (S103k, D211) added :MeasurableOutcome. The guard scans
+# both so a new authored kind without a constraint fails here, not in production.
+_MIGRATIONS = (
+    Path("migrations/neo4j/0005_authored_cdd.cypher"),
+    Path("migrations/neo4j/0009_measurable_outcome.cypher"),
+)
 
 
 def test_migration_declares_the_authored_constraints():
-    """The migration must declare a constraint for each authored node kind the
+    """The migrations must declare a constraint for each authored node kind the
     code writes, so drift between the code's whitelist and the schema fails here
     rather than in production (the live-surface verification law)."""
-    text = _MIGRATION.read_text()
+    text = "\n".join(m.read_text() for m in _MIGRATIONS)
     assert "intermediary_unique_per_tenant" in text
     assert "external_unique_per_tenant" in text
     assert "lever_id_unique_per_tenant" in text
+    assert "measurable_outcome_unique_per_tenant" in text
     # Each authored node kind the wrapper composes labels for has a constraint.
     from contexts.ingestion.adapters.outbound.neo4j.session import _AUTHORED_NODE
     for kind, (label, _id) in _AUTHORED_NODE.items():

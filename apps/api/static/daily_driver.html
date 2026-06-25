@@ -212,6 +212,7 @@
     .map-n.st-needs { border-left: 3px solid var(--needs-fg); }
     .map-n.st-ok { border-left: 3px solid #97c459; }
     .map-n-outcome { background: var(--needs-bg); }
+    .map-n-measurable_outcome { background: var(--needs-bg); border-style: dashed; } /* D211: the measurable-outcome layer, distinct from the goal node */
     .map-n-gate { background: var(--surface-2); }
     .map-edges { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: visible; }
     .map-edge { fill: none; stroke: var(--hairline-strong); stroke-width: 1; marker-end: url(#mk); }
@@ -656,8 +657,9 @@
       ["lever", "Levers — you act"],
       ["intermediary", "Intermediaries — the measured middle"],
       ["external", "Externals — others decide"],
+      ["measurable_outcome", "Outcomes — the measurable results"],
     ];
-    const CDD_KIND_LABEL = { lever: "lever", intermediary: "intermediary", external: "external", outcome: "outcome" };
+    const CDD_KIND_LABEL = { lever: "lever", intermediary: "intermediary", external: "external", measurable_outcome: "outcome", outcome: "outcome" };
     function renderCddBody(body, grp, cdd) {
       body.innerHTML = "";
       const reload = async () => {
@@ -811,11 +813,15 @@
       const edit = document.createElement("button"); edit.className = "btn-ghost cdd-btn cdd-edit"; edit.textContent = "Edit";
       edit.onclick = () => cddBeginEdit(row, el.label, `/daily-driver/cdd/elements/${el.kind}/${el.element_id}/correct`, reload);
       actions.appendChild(edit);
-      // Reclassify across the lever/intermediary/external boundary (D201).
+      // Reclassify across the lever/intermediary/external/outcome boundary (D201,
+      // D211 — outcome both ways, so a mislabelled outcome can move back to
+      // intermediary and the proof loop has no dead end on this distinction).
+      const RECLASS_KINDS = [["lever", "lever"], ["intermediary", "intermediary"],
+        ["external", "external"], ["measurable_outcome", "outcome"]];
       const move = document.createElement("select"); move.className = "cdd-btn cdd-reclass";
       move.innerHTML = `<option value="" selected disabled>Move to…</option>` +
-        ["lever", "intermediary", "external"].filter((k) => k !== el.kind)
-          .map((k) => `<option value="${k}">${k}</option>`).join("");
+        RECLASS_KINDS.filter(([k]) => k !== el.kind)
+          .map(([k, lbl]) => `<option value="${k}">${lbl}</option>`).join("");
       move.onchange = async () => {
         const to = move.value; if (!to) return;
         try { await api(`/daily-driver/cdd/elements/${el.kind}/${el.element_id}/reclassify`, { method: "POST", body: JSON.stringify({ to_kind: to }) }); await reload(); } catch {}
@@ -948,8 +954,9 @@
     function cddAddControl(grp, reload) {
       const wrap = document.createElement("div"); wrap.className = "cdd-add";
       const kind = document.createElement("select"); kind.className = "cdd-btn";
-      kind.innerHTML = ["lever", "intermediary", "external", "outcome"]
-        .map((k) => `<option value="${k}">${k}</option>`).join("");
+      kind.innerHTML = [["lever", "lever"], ["intermediary", "intermediary"],
+        ["external", "external"], ["measurable_outcome", "outcome"]]
+        .map(([k, lbl]) => `<option value="${k}">${lbl}</option>`).join("");
       const input = document.createElement("input"); input.className = "cdd-add-input";
       input.type = "text"; input.placeholder = "name a new element…";
       const add = document.createElement("button"); add.className = "btn-ghost cdd-btn"; add.textContent = "Add";
@@ -1043,7 +1050,8 @@
       const n = document.createElement("button"); n.type = "button";
       n.className = `map-n map-n-${kind} st-${nodeStatus(el)}`;
       n.dataset.nid = String(el.element_id || el.outcome_id || label);
-      n.innerHTML = `<span class="map-n-kind">${kind}</span><span class="map-n-label">${escapeHtml(label)}</span>`;
+      const kindDisp = kind === "measurable_outcome" ? "outcome" : kind;
+      n.innerHTML = `<span class="map-n-kind">${kindDisp}</span><span class="map-n-label">${escapeHtml(label)}</span>`;
       if (el && (el.element_id || el.kind === "outcome")) n.onclick = () => openProofNode(cdd_ctx, el);
       return n;
     }
@@ -1061,12 +1069,16 @@
       const rowExt = mapRow("externals — others decide", by("external"), "external");
       const rowLev = mapRow("levers — you act", by("lever"), "lever");
       const rowInt = mapRow("intermediaries — the measured middle", by("intermediary"), "intermediary");
+      // D211: the measurable-outcome layer — its own row between the intermediaries
+      // and the goal node, never folded into the goal (else the right edge still
+      // reads as the bundled-outcome defect this corrects).
+      const rowMout = mapRow("outcomes — the measurable results", by("measurable_outcome"), "measurable_outcome");
       const outNode = mapNode({ outcome_id: cdd.outcome_id, kind: "outcome",
         proof_state: cdd.expected_outcome_proof_state },
-        cdd.expected_outcome || "Role secured", "outcome");
+        cdd.expected_outcome || "Secure a great-fit role", "outcome");
       const rowOut = document.createElement("div"); rowOut.className = "map-row map-row-out";
       rowOut.appendChild(outNode);
-      [rowLev, rowExt, rowInt, rowOut].forEach((r) => ctrl.appendChild(r));
+      [rowLev, rowExt, rowInt, rowMout, rowOut].forEach((r) => ctrl.appendChild(r));
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("class", "map-edges"); ctrl.appendChild(svg);
       wrap.appendChild(ctrl);

@@ -34,12 +34,19 @@ class ProofState(str, Enum):
 
 
 class ElementKind(str, Enum):
-    """The authored element kinds that feed the outcome (D198/D200). The goal-and-
-    outcome node itself is the existing ``:Outcome`` (D199), not an authored kind."""
+    """The authored element kinds (D198/D200/D211). Levers, intermediaries, and
+    externals feed the measurable-outcome layer; the outcomes feed the goal. The
+    goal node itself is the existing ``:Outcome`` (D199), not an authored kind —
+    distinct from ``MEASURABLE_OUTCOME``, which is the authored outcome layer
+    introduced by D211 (the ``:Outcome`` node was the *only* outcome before, so the
+    intermediaries fed the goal directly and read as endpoints). The kind string is
+    ``measurable_outcome`` to stay distinct from the ``outcome`` edge-endpoint kind,
+    which still resolves to the goal node."""
 
     LEVER = "lever"
     INTERMEDIARY = "intermediary"
     EXTERNAL = "external"
+    MEASURABLE_OUTCOME = "measurable_outcome"
 
 
 # The kinds an EVIDENCES edge can target (D202) — the authored elements *plus* the
