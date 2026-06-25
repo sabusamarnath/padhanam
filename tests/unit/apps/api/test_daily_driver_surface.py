@@ -324,3 +324,20 @@ def test_cdd_renders_opportunities_under_gates():
     assert "cdd-opp-summary" in _HTML
     assert "current_gate_id" in _HTML
     assert "Opportunities here" in _HTML
+
+
+def test_map_renders_the_real_causal_graph():
+    # S103j (D210): the Map draws the real graph — control CDD, flow spine with
+    # gate portals, opportunities, disposition strip — and node-tap opens proof.
+    assert "buildCausalMap" in _HTML
+    assert "buildFlowSpine" in _HTML and "buildGatePortal" in _HTML
+    assert "openProofNode" in _HTML            # node-tap -> proof drawer
+    assert "drawEdges" in _HTML                # directed causal edges
+    assert "map-disp" in _HTML                 # disposition summary
+    # the old depth-two sibling-feeder stopgap note is gone
+    assert "aren't modelled yet, so that link reads broken" not in _HTML
+
+
+def test_map_teal_is_interactive_only():
+    # design-language §4: teal (#2BA692) only on interactive/active affordances.
+    assert "#2BA692" in _HTML  # used for hover/focus/open states

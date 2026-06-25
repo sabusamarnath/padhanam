@@ -190,6 +190,46 @@
       border-top: 1px dashed var(--hairline-strong); margin-top: 2px; padding-top: 9px; }
     .map-gap .gap-glyph { color: var(--ink-3); letter-spacing: 1px; }
     .map-gap em { font-style: italic; }
+    /* S103j/D210: the real causal-graph render (design-language §4). Teal is
+       interactive-only; node status uses the semantic palette; structured layers. */
+    .map-graph { display: flex; flex-direction: column; gap: 14px; }
+    .map-disp { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 12px; border-radius: 8px;
+      background: var(--surface-2); font-size: 12px; color: var(--ink-2); }
+    .map-disp-item b { color: var(--ink-1); font-weight: 600; }
+    .map-layer, .map-flow { position: relative; border: 0.5px solid var(--hairline); border-radius: 10px;
+      padding: 10px 12px 14px; background: var(--surface-work); }
+    .map-layer-h, .map-row-h { font-size: 10px; color: var(--ink-3); text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 2px 0 6px; }
+    .map-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 12px; position: relative; z-index: 1; }
+    .map-row-out { justify-content: center; margin-top: 4px; }
+    .map-empty { color: var(--ink-3); font-size: 12px; }
+    .map-n { display: inline-flex; flex-direction: column; gap: 2px; text-align: left; cursor: pointer;
+      border: 1px solid var(--hairline-strong); border-radius: 8px; padding: 6px 10px; max-width: 200px;
+      background: var(--surface-work); font: inherit; }
+    .map-n:hover, .map-n:focus-visible { border-color: #2BA692; outline: none; box-shadow: 0 0 0 1px #2BA692; } /* teal = interactive only */
+    .map-n-kind { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+    .map-n-label { font-size: 12.5px; color: var(--ink-1); line-height: 1.25; }
+    .map-n.st-needs { border-left: 3px solid var(--needs-fg); }
+    .map-n.st-ok { border-left: 3px solid #97c459; }
+    .map-n-outcome { background: var(--needs-bg); }
+    .map-n-gate { background: var(--surface-2); }
+    .map-edges { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: visible; }
+    .map-edge { fill: none; stroke: var(--hairline-strong); stroke-width: 1; marker-end: url(#mk); }
+    .map-edge.rip-needs { stroke: var(--needs-fg); opacity: 0.55; }
+    .map-flow-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+    .map-gate-cell { display: flex; flex-direction: column; gap: 4px; }
+    .map-gate { font: inherit; cursor: default; border-radius: 8px; padding: 7px 10px; min-width: 64px;
+      border: 1px solid var(--hairline-strong); background: var(--surface-work); display: flex; flex-direction: column; gap: 2px; }
+    .map-gate.built { cursor: pointer; }
+    .map-gate.built:hover, .map-gate.open { border-color: #2BA692; box-shadow: 0 0 0 1px #2BA692; }
+    .map-gate.dashed { border-style: dashed; color: var(--ink-3); background: transparent; }
+    .map-gate-name { font-size: 12px; color: var(--ink-1); font-weight: 600; }
+    .map-gate.dashed .map-gate-name { color: var(--ink-3); font-weight: 500; }
+    .map-gate-opps { font-size: 10px; color: var(--ink-2); }
+    .map-portal { margin-top: 6px; padding: 8px; border: 0.5px solid var(--hairline); border-radius: 8px; background: var(--surface-2); }
+    .map-gate-outcome { font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+    .map-unplaced { font-size: 12px; color: var(--ink-2); margin-top: 8px; }
+    .map-proof { display: flex; flex-direction: column; gap: 8px; }
     /* D200/S102: the authored-CDD proof surface */
     .cdd-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; }
     .cdd-outcome { font-size: 12.5px; color: var(--ink-1); background: var(--surface-2); border: 1px solid var(--hairline);
@@ -963,16 +1003,196 @@
     // its levers and its serving work as sibling feeders. The intermediary layer
     // between feeders and outcome is not modelled (D162), shown as one broken
     // link with a single platform-limit note — never a per-goal "no path" alarm.
-    function renderAssessMap(box, g) {
+    // The Map render (D210): the real causal graph — the goal-level control CDD,
+    // the flow spine with built gates as portals into their Pratt-wired local CDDs,
+    // the opportunities at their gates, and the recommendation-shaped disposition
+    // summary. Typed nodes + directed edges + worst-status ripple, no weights
+    // (design-language §4); structured layers, never a force-directed hairball.
+    // Node-tap opens the proof drawer. Supersedes D199's depth-two stopgap.
+    // The framework's full flow (charter/frameworks) — built gates render solid,
+    // the rest dashed placeholders so the flow reads whole and two-C has its slots.
+    const FLOW_GATES = ["Pre-search", "Target", "Apply", "Screening", "Intro",
+      "CV", "Case", "Group", "Meet the team", "CxO", "References", "Negotiate", "Accept"];
+    // proof_state -> semantic node status (§4 palette): pending needs you (violet),
+    // accepted is settled (green). Worst-status ripples: an outcome with any
+    // pending feeder reads needs-you.
+    function nodeStatus(el) { return (el && el.proof_state === "accepted") ? "ok" : "needs"; }
+    async function renderAssessMap(box, g) {
       box.innerHTML = "";
       const cov = appendCoverageLine(box, g);
       if (!cov.has_coverage) { appendNoCoverage(box); return; }
-      const note = document.createElement("div");
-      note.className = "map-platform-note";
-      note.textContent = "Each goal's outcome shows the levers and work that feed it. The intermediary steps between feeders and outcome aren't modelled yet, so that link reads broken — a limit of the Map today, not a gap in your work.";
-      box.appendChild(note);
-      (g.groups || []).forEach((grp) => box.appendChild(mapNodeEl(grp)));
+      // Load the evidence counts + bindings so a tapped node's proof drawer shows
+      // its honest-why/strength/unlink (the cddElementRow affordances).
+      try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
+      try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+      for (const grp of (g.groups || [])) {
+        let cdd; try { cdd = await api(`/daily-driver/cdd/${grp.outcome_id}`); } catch { continue; }
+        box.appendChild(buildCausalMap(grp, cdd));
+      }
       appendCoveragePointer(box, g);
+    }
+    function dispStrip(cdd) {
+      const d = cdd.disposition; if (!d) return null;
+      const el = document.createElement("div"); el.className = "map-disp";
+      const item = (n, label) => `<span class="map-disp-item"><b>${n}</b> ${label}</span>`;
+      el.innerHTML = item(d.moat, "confirmed job emails") + item(d.pipeline, "in pipeline") +
+        item(d.market, "market signals") + item(d.parked, "parked — not yet a goal's work");
+      return el;
+    }
+    function mapNode(el, label, kind) {
+      const n = document.createElement("button"); n.type = "button";
+      n.className = `map-n map-n-${kind} st-${nodeStatus(el)}`;
+      n.dataset.nid = String(el.element_id || el.outcome_id || label);
+      n.innerHTML = `<span class="map-n-kind">${kind}</span><span class="map-n-label">${escapeHtml(label)}</span>`;
+      if (el && (el.element_id || el.kind === "outcome")) n.onclick = () => openProofNode(cdd_ctx, el);
+      return n;
+    }
+    let cdd_ctx = null;
+    function buildCausalMap(grp, cdd) {
+      cdd_ctx = { grp, cdd };
+      const wrap = document.createElement("div"); wrap.className = "map-graph";
+      const strip = dispStrip(cdd); if (strip) wrap.appendChild(strip);
+      const goalEls = (cdd.elements || []).filter((e) => !e.gate_id);
+      const by = (k) => goalEls.filter((e) => e.kind === k);
+      // The control layer (goal-level CDD): levers -> intermediaries -> outcome,
+      // externals feeding intermediaries. Layered rows, edges drawn over.
+      const ctrl = document.createElement("div"); ctrl.className = "map-layer"; ctrl.dataset.svg = "1";
+      ctrl.innerHTML = `<div class="map-layer-h">Control layer — the portfolio CDD</div>`;
+      const rowExt = mapRow("externals — others decide", by("external"), "external");
+      const rowLev = mapRow("levers — you act", by("lever"), "lever");
+      const rowInt = mapRow("intermediaries — the measured middle", by("intermediary"), "intermediary");
+      const outNode = mapNode({ outcome_id: cdd.outcome_id, kind: "outcome",
+        proof_state: cdd.expected_outcome_proof_state },
+        cdd.expected_outcome || "Role secured", "outcome");
+      const rowOut = document.createElement("div"); rowOut.className = "map-row map-row-out";
+      rowOut.appendChild(outNode);
+      [rowLev, rowExt, rowInt, rowOut].forEach((r) => ctrl.appendChild(r));
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "map-edges"); ctrl.appendChild(svg);
+      wrap.appendChild(ctrl);
+      // The flow spine: gates in execution order, built solid + portals, rest dashed.
+      wrap.appendChild(buildFlowSpine(cdd));
+      // Draw the control-layer edges once laid out.
+      requestAnimationFrame(() => drawEdges(ctrl, svg, cdd, null));
+      return wrap;
+    }
+    function mapRow(label, els, kind) {
+      const r = document.createElement("div"); r.className = "map-row";
+      const l = document.createElement("div"); l.className = "map-row-h"; l.textContent = label;
+      r.appendChild(l);
+      if (!els.length) { const e = document.createElement("span"); e.className = "map-empty"; e.textContent = "—"; r.appendChild(e); }
+      els.forEach((el) => r.appendChild(mapNode(el, (el.label || "").split(":")[0], kind)));
+      return r;
+    }
+    // Draw directed edges (no weights) between the node buttons, scoped to a
+    // container; worst-status ripple tints an edge by its source node's status.
+    function drawEdges(container, svg, cdd, gateId) {
+      const cr = container.getBoundingClientRect();
+      svg.setAttribute("width", cr.width); svg.setAttribute("height", cr.height);
+      svg.innerHTML = `<defs><marker id="mk" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-3)"/></marker></defs>`;
+      const idOf = (kind, id) => String(id);
+      const nodeById = {};
+      container.querySelectorAll(".map-n").forEach((n) => { nodeById[n.dataset.nid] = n; });
+      (cdd.edges || []).forEach((ed) => {
+        // scope: control layer draws goal-level edges (gateId null); a gate draws its own.
+        const s = nodeById[idOf(ed.source_kind, ed.source_id)];
+        const t = nodeById[idOf(ed.target_kind, ed.target_id)];
+        if (!s || !t) return;
+        const sb = s.getBoundingClientRect(), tb = t.getBoundingClientRect();
+        const x1 = sb.left + sb.width / 2 - cr.left, y1 = sb.bottom - cr.top;
+        const x2 = tb.left + tb.width / 2 - cr.left, y2 = tb.top - cr.top;
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const my = (y1 + y2) / 2;
+        p.setAttribute("d", `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`);
+        p.setAttribute("class", "map-edge " + (s.classList.contains("st-needs") ? "rip-needs" : "rip-ok"));
+        svg.insertBefore(p, svg.firstChild ? svg.firstChild.nextSibling : null);
+      });
+    }
+    function buildFlowSpine(cdd) {
+      const spine = document.createElement("div"); spine.className = "map-flow";
+      spine.innerHTML = `<div class="map-layer-h">Flow — the process gates (tap a built gate to open its local CDD)</div>`;
+      const row = document.createElement("div"); row.className = "map-flow-row";
+      const built = {}; (cdd.gates || []).forEach((ga) => { built[ga.name] = ga; });
+      const opps = cdd.opportunities || [];
+      const gateName = {}; (cdd.gates || []).forEach((ga) => { gateName[ga.gate_id] = ga.name; });
+      FLOW_GATES.forEach((name) => {
+        const ga = built[name];
+        const cell = document.createElement("div"); cell.className = "map-gate-cell";
+        const node = document.createElement("button"); node.type = "button";
+        node.className = "map-gate" + (ga ? " built" : " dashed");
+        const here = opps.filter((o) => ga && o.current_gate_id === ga.gate_id);
+        node.innerHTML = `<span class="map-gate-name">${escapeHtml(name)}</span>` +
+          (here.length ? `<span class="map-gate-opps">${here.map((o) => escapeHtml(o.name)).join(", ")}</span>` : "");
+        cell.appendChild(node);
+        if (ga) {
+          const portal = document.createElement("div"); portal.className = "map-portal"; portal.style.display = "none";
+          node.onclick = () => {
+            const open = portal.style.display !== "none";
+            portal.style.display = open ? "none" : "block";
+            node.classList.toggle("open", !open);
+            if (!open && !portal.dataset.built) { buildGatePortal(portal, cdd, ga); portal.dataset.built = "1"; }
+          };
+          cell.appendChild(portal);
+        }
+        row.appendChild(cell);
+      });
+      spine.appendChild(row);
+      // Unplaced opportunities (past the built gates).
+      const unplaced = opps.filter((o) => !o.current_gate_id);
+      if (unplaced.length) {
+        const u = document.createElement("div"); u.className = "map-unplaced";
+        u.innerHTML = `<span class="map-row-h">Unplaced (past the built gates — land in two-C)</span> ` +
+          unplaced.map((o) => `${escapeHtml(o.name)} (${o.unit_count})`).join(", ");
+        spine.appendChild(u);
+      }
+      return spine;
+    }
+    function buildGatePortal(portal, cdd, gate) {
+      const gels = (cdd.elements || []).filter((e) => e.gate_id === gate.gate_id);
+      const lo = document.createElement("div"); lo.className = "map-gate-outcome";
+      lo.innerHTML = `<span class="field-label">Local outcome</span> ${escapeHtml(gate.local_outcome || "")}`;
+      portal.appendChild(lo);
+      const inner = document.createElement("div"); inner.className = "map-layer"; inner.dataset.svg = "1";
+      ["lever", "intermediary", "external"].forEach((k) => {
+        const row = mapRow(k + "s", gels.filter((e) => e.kind === k), k);
+        inner.appendChild(row);
+      });
+      // the gate node itself is the local-outcome endpoint
+      const gn = document.createElement("div"); gn.className = "map-row map-row-out";
+      const gnode = document.createElement("div"); gnode.className = "map-n map-n-gate st-ok";
+      gnode.dataset.nid = String(gate.gate_id);
+      gnode.innerHTML = `<span class="map-n-kind">gate outcome</span><span class="map-n-label">${escapeHtml(gate.name)}</span>`;
+      gn.appendChild(gnode); inner.appendChild(gn);
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "map-edges"); inner.appendChild(svg);
+      portal.appendChild(inner);
+      requestAnimationFrame(() => drawEdges(inner, svg, cdd, gate.gate_id));
+    }
+    // D210: node-tap opens the proof drawer — reuses the existing CDD proof
+    // controls (cddElementRow / cddOutcomeRow: accept/edit/reject + honest-why +
+    // strength + unlink, S102/S103c-fix-4). The render reimplements nothing.
+    function openProofNode(ctx, el) {
+      if (!ctx || !el) return;
+      const { grp } = ctx;
+      const reload = async () => {
+        let fresh; try { fresh = await api(`/daily-driver/cdd/${grp.outcome_id}`); } catch { return; }
+        const freshEl = el.kind === "outcome" ? el :
+          (fresh.elements || []).find((x) => String(x.element_id) === String(el.element_id));
+        openProofNode({ grp, cdd: fresh }, freshEl || el);
+      };
+      const fresh = ctx.cdd;
+      const body = document.createElement("div"); body.className = "map-proof";
+      const row = el.kind === "outcome"
+        ? cddOutcomeRow(grp, fresh, reload)
+        : cddElementRow(body, grp, el, fresh, reload);
+      const title = (el.kind === "outcome" ? (fresh.expected_outcome || "Outcome") : (el.label || ""))
+        .split(":")[0];
+      openNodePanel(title || "Element", "work", "");
+      const pb = document.getElementById("panel-body");
+      pb.innerHTML = ""; pb.appendChild(body); body.appendChild(row);
+      // cddElementRow already carries the evidence expand (honest-why + strength +
+      // unlink/relink, S103c-fix-4) off the global cddEvidence/cddBindings, loaded
+      // by renderAssessMap before any node is tappable.
     }
     // The measurable outcome (D163/D199) — the result, distinct from the goal
     // (the aim). Derived from the carried mode + target fields, recomputed nowhere.

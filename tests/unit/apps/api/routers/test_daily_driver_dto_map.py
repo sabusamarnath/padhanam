@@ -224,3 +224,17 @@ def test_goal_cdd_to_dto_carries_opportunities():
     assert dto.opportunities[0].name == "Acme"
     assert dto.opportunities[0].unit_count == 5
     assert dto.opportunities[0].current_gate_id == gate_id
+
+
+def test_goal_cdd_to_dto_carries_disposition():
+    # S103j (D210): the precision disposition counts reach the wire for the Map.
+    from uuid import uuid4 as _uuid4
+    from apps.api.routers._daily_driver_dto import goal_cdd_to_dto
+    from contexts.daily_driver.domain.cdd import DispositionCounts, GoalCddView
+
+    view = GoalCddView(
+        outcome_id=_uuid4(), expected_outcome="Role secured", elements=(), edges=(),
+        disposition=DispositionCounts(moat=166, pipeline=108, market=74, parked=249),
+    )
+    dto = goal_cdd_to_dto(view)
+    assert dto.disposition.moat == 166 and dto.disposition.parked == 249
