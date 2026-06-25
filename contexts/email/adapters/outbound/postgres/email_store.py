@@ -201,6 +201,22 @@ class PostgresEmailStore:
             row = (await s.execute(stmt)).mappings().first()
         return _row_to_email(dict(row), tenant_id=self._bound) if row else None
 
+    async def get_by_id(
+        self, *, tenant_context: TenantContext, email_id: UUID
+    ) -> Email | None:
+        """Read one email by its row id (the email facet's id, S103l/D212) — a
+        single indexed read + decrypt, for the verification drawer's openable
+        source. Tenant-scoped; returns None when absent or cross-tenant."""
+        self._assert_bound(tenant_context)
+        stmt = sa.select(emails_table).where(
+            emails_table.c.tenant_id == str(self._bound),
+            emails_table.c.id == str(email_id),
+        )
+        sm = await self._resolve(self._bound)
+        async with sm() as s:
+            row = (await s.execute(stmt)).mappings().first()
+        return _row_to_email(dict(row), tenant_id=self._bound) if row else None
+
     async def list_emails(
         self, *, tenant_context: TenantContext, include_deleted: bool = False
     ) -> tuple[Email, ...]:

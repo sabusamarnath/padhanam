@@ -48,6 +48,7 @@ from apps.api.routers._daily_driver_dto import (
     AddedCddElementDTO,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
+    EmailSourceDTO,
     ReclassifyCddElementRequest,
     RelinkCddEvidenceRequest,
     RematchResultDTO,
@@ -210,6 +211,12 @@ def get_email_job_search_source(request: Request):
 def get_email_source_metadata(request: Request):
     """FastAPI dependency: the EmailSourceMetadataSource (D209), if wired."""
     return getattr(request.app.state, "daily_driver_email_source_metadata", None)
+
+
+def get_email_content_source(request: Request):
+    """FastAPI dependency: the EmailContentSource (D212) for the drawer's openable
+    read-only source, if wired."""
+    return getattr(request.app.state, "daily_driver_email_content_source", None)
 
 
 def get_goal_graph_optional(request: Request):
@@ -509,6 +516,34 @@ async def get_cdd_bindings(
         goal_graph=goal_graph, actor=actor,
     )
     return [element_binding_to_dto(b) for b in bindings]
+
+
+@router.get("/cdd/email-source/{facet_id}", response_model=EmailSourceDTO)
+async def get_cdd_email_source(
+    facet_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    email_content_source: Annotated[
+        object | None, Depends(get_email_content_source)
+    ],
+) -> EmailSourceDTO:
+    """The read-only ingested source (sender, date, subject, body) of one email
+    facet, for the verification drawer's openable-source leg (D212). Read-only — it
+    shows ingested content, never fetches or writes (§9). 404 when not an email or
+    absent."""
+    if email_content_source is None:
+        raise HTTPException(status_code=503, detail="email source not configured")
+    content = await email_content_source.get_email_content(
+        actor=actor, facet_id=facet_id
+    )
+    if content is None:
+        raise HTTPException(status_code=404, detail="no email source for this item")
+    return EmailSourceDTO(
+        facet_id=content.facet_id,
+        sender=content.sender,
+        received_at=content.received_at,
+        subject=content.subject,
+        body=content.body,
+    )
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)

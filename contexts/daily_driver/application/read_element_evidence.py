@@ -62,6 +62,19 @@ async def read_element_bindings(
         tuple(records), {(f.facet_type, f.facet_id): f for f in facets}
     )
     title_by_unit = {v.unit_id: v.title for v in views}
+    # D212: the unit's primary facet, so the drawer can open its read-only source.
+    # Prefer the email facet (the verification target); fall back to the first
+    # present facet (task/calendar). None when the unit has no present facet.
+    from contexts.daily_driver.domain.work_unit import FacetType
+    source_by_unit: dict = {}
+    for v in views:
+        present = [f for f in v.facets if f.present]
+        email_f = next(
+            (f for f in present if f.facet_type is FacetType.EMAIL), None
+        )
+        chosen = email_f or (present[0] if present else None)
+        if chosen is not None:
+            source_by_unit[v.unit_id] = (chosen.facet_type.value, chosen.facet_id)
     owned = await unit_graph.list_user_owned_unit_ids(
         tenant_context=actor.tenant_context
     )
@@ -114,6 +127,7 @@ async def read_element_bindings(
             goal_tokens=goal_tokens_by_outcome.get(e.outcome_id, frozenset()),
             unit_token_counts=unit_token_counts,
         )
+        src = source_by_unit.get(e.unit_id)
         bindings.append(
             ElementBinding(
                 unit_id=e.unit_id,
@@ -125,6 +139,8 @@ async def read_element_bindings(
                 user_owned=e.unit_id in owned,
                 matched_term=matched_term,
                 strength=strength,
+                source_facet_type=src[0] if src else "",
+                source_facet_id=src[1] if src else None,
             )
         )
     return tuple(bindings)

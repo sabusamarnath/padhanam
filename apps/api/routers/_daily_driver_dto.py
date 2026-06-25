@@ -694,6 +694,9 @@ class ElementBindingDTO(BaseModel):
     user_owned: bool
     matched_term: str = ""
     strength: str = ""
+    # D212: the unit's primary facet, so the drawer can open its read-only source.
+    source_facet_type: str = ""
+    source_facet_id: UUID | None = None
 
 
 def element_binding_to_dto(b) -> "ElementBindingDTO":
@@ -701,7 +704,20 @@ def element_binding_to_dto(b) -> "ElementBindingDTO":
         unit_id=b.unit_id, title=b.title, element_kind=b.element_kind,
         element_id=b.element_id, outcome_id=b.outcome_id, tier=b.tier,
         user_owned=b.user_owned, matched_term=b.matched_term, strength=b.strength,
+        source_facet_type=getattr(b, "source_facet_type", ""),
+        source_facet_id=getattr(b, "source_facet_id", None),
     )
+
+
+class EmailSourceDTO(BaseModel):
+    """The read-only ingested source of one email facet, for the verification
+    drawer's openable-source leg (D212): sender, date, subject, body."""
+
+    facet_id: UUID
+    sender: str | None = None
+    received_at: datetime | None = None
+    subject: str | None = None
+    body: str | None = None
 
 
 class RematchResultDTO(BaseModel):

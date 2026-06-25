@@ -229,9 +229,12 @@ def test_cdd_lens_is_interactive_relink_unlink_rematch():
 
 
 def test_cdd_bindings_show_rationale_and_match_strength():
-    # S103c-fix: each binding shows the why (matched term) + a match-strength band
-    # labelled as strength (not correctness); recomputed on read.
-    assert "matched on" in _HTML            # the why
+    # D212: each binding shows a prominent WHY-LINKED basis row (the discriminative
+    # term, or a "no clear basis" flag) + a match-strength band labelled as strength
+    # (not correctness); recomputed on read.
+    assert "why linked" in _HTML            # the basis row label (leg 1)
+    assert "cdd-basis-term" in _HTML        # the discriminative-term presentation
+    assert "no clear basis" in _HTML        # the generic-only flag
     assert "cdd-strength" in _HTML          # the strength badge
     assert "match strength, not" in _HTML   # the honest framing in a tooltip
 
@@ -286,9 +289,12 @@ def test_correction_interaction_is_single_sourced():
 
 
 def test_correction_row_shows_why_and_strength_consistently():
-    # AC4: the why + strength render from the one source (so all three views match).
+    # D212: the basis row + strength + the openable source all render from the one
+    # shared list (so every view — Map drawer + the flat lens — matches).
     src = _fn_body("renderCorrectionList")
-    assert "matched on" in src and "cdd-strength" in src
+    assert "cdd-strength" in src
+    assert "bindingBasisRow(" in src      # leg 1: the discriminative basis row
+    assert "bindingSourceBlock(" in src   # leg 2: the openable read-only source
 
 
 def test_draft_missing_has_a_clear_empty_state():

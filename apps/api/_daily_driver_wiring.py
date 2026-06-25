@@ -103,6 +103,7 @@ from contexts.matcher_policy.adapters.outbound.postgres import (
 from contexts.daily_driver.ports.email_job_search_source import (
     EmailJobSearchClassification,
 )
+from contexts.daily_driver.ports.email_content_source import EmailContent
 from contexts.daily_driver.ports.email_source_metadata import EmailSourceMetadata
 from contexts.daily_driver.ports.unit_graph import UnitFacetRef, UnitRecord
 from contexts.email.adapters.outbound.postgres.email_store import (
@@ -1082,6 +1083,56 @@ def build_email_source_metadata(
 ) -> EmailSourceMetadataAdapter:
     """Wire the daily-driver EmailSourceMetadataSource over the email store (D209)."""
     return EmailSourceMetadataAdapter(
+        session_factory_for_tenant=_session_factory_builder(
+            tenant_registry=tenant_registry,
+            session_factory_cache=session_factory_cache,
+            operator_principal=operator_principal,
+            security_events=security_events,
+        )
+    )
+
+
+class EmailContentSourceAdapter:
+    """apps/ adapter implementing daily-driver's ``EmailContentSource`` (D212): one
+    email facet's read-only sender/date/subject/body for the verification drawer.
+    Reads the email store by id (a single indexed read + decrypt) without the
+    daily-driver context importing it (the EmailSourceMetadata precedent).
+    Read-only — it shows ingested content, never fetches or writes (§9, D148)."""
+
+    def __init__(self, *, session_factory_for_tenant: _SessionFactoryForTenant) -> None:
+        self._session_factory_for_tenant = session_factory_for_tenant
+
+    async def get_email_content(
+        self, *, actor: ActorContext, facet_id: UUID
+    ) -> EmailContent | None:
+        sessionmaker = await self._session_factory_for_tenant(actor.tenant_context)
+        emails = PostgresEmailStore(
+            per_tenant_sessionmaker_resolver=_resolver_for(sessionmaker),
+            bound_tenant_id=TenantId(str(actor.tenant_context.tenant_id)),
+        )
+        email = await emails.get_by_id(
+            tenant_context=actor.tenant_context, email_id=facet_id
+        )
+        if email is None:
+            return None
+        return EmailContent(
+            facet_id=email.id,
+            sender=email.from_address,
+            received_at=email.received_at,
+            subject=email.subject,
+            body=email.body,
+        )
+
+
+def build_email_content_source(
+    *,
+    tenant_registry: PostgresTenantRegistry,
+    session_factory_cache: TenantSessionFactoryCache,
+    operator_principal: Principal,
+    security_events: SecurityEventLogger,
+) -> EmailContentSourceAdapter:
+    """Wire the daily-driver EmailContentSource over the email store (D212)."""
+    return EmailContentSourceAdapter(
         session_factory_for_tenant=_session_factory_builder(
             tenant_registry=tenant_registry,
             session_factory_cache=session_factory_cache,

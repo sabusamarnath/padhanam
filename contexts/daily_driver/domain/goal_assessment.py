@@ -793,6 +793,11 @@ class ElementBinding:
     user_owned: bool
     matched_term: str = ""
     strength: str = ""  # strong / medium / weak (lexical match strength)
+    # D212: the unit's primary facet, so the verification drawer can open its
+    # read-only source (an email facet opens to sender/date/body). None when the
+    # unit has no present facet.
+    source_facet_type: str = ""
+    source_facet_id: UUID | None = None
 
 
 # Match-strength bands (S103c-fix). NOT a correctness/trust score — the matcher is

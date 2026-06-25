@@ -245,6 +245,20 @@
     /* D203/S103c: the bound-units expand with relink/unlink */
     .cdd-bindings { margin: 2px 0 8px 14px; border-left: 2px solid var(--hairline); padding-left: 10px; }
     .cdd-triage { display: flex; align-items: center; gap: 12px; padding: 4px 0 6px; flex-wrap: wrap; }
+    /* D212: the verification card — a linked item with its basis + openable source */
+    .cdd-vcard { border: 1px solid var(--hairline); border-radius: 8px; padding: 6px 10px; margin: 6px 0; background: var(--surface-work); }
+    .cdd-basis { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 6px; }
+    .cdd-basis-h { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); flex-shrink: 0; }
+    .cdd-basis-term { font-size: 12.5px; font-weight: 600; color: var(--ink-1); }
+    .cdd-basis.no-basis .cdd-basis-flag { font-size: 11.5px; color: var(--needs-fg); background: var(--needs-bg); border: 1px solid var(--needs-fg); border-radius: 6px; padding: 1px 7px; }
+    .cdd-source { font-size: 12px; color: var(--ink-2); background: var(--page); border: 1px solid var(--hairline); border-radius: 6px; padding: 7px 9px; }
+    .cdd-source-none { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
+    .cdd-source-meta { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .cdd-source-from { font-weight: 600; color: var(--ink-1); }
+    .cdd-source-date { font-size: 10.5px; color: var(--ink-3); }
+    .cdd-source-subj { font-weight: 600; color: var(--ink-1); margin: 3px 0; }
+    .cdd-source-body { white-space: pre-wrap; max-height: 220px; overflow-y: auto; color: var(--ink-2); line-height: 1.4; margin-top: 3px; }
+    .cdd-source-loading { font-size: 11.5px; color: var(--ink-3); }
     .cdd-binding { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
     .cdd-pick { flex-shrink: 0; }
     .cdd-binding-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
@@ -847,6 +861,47 @@
       return api("/daily-driver/cdd/evidence/unlink", { method: "POST",
         body: JSON.stringify({ unit_id: b.unit_id, kind: b.element_kind, element_id: b.element_id }) });
     }
+    const NO_CLEAR_BASIS = "no clear basis";
+    // Leg 1 (D212): the WHY-LINKED basis row — the discriminative term it linked on,
+    // or a flagged "no clear basis" when the recompute finds only generic tokens.
+    function bindingBasisRow(b) {
+      const row = document.createElement("div"); row.className = "cdd-basis";
+      const term = b.matched_term || "";
+      if (!term || term === NO_CLEAR_BASIS) {
+        row.classList.add("no-basis");
+        row.innerHTML = `<span class="cdd-basis-h">why linked</span>` +
+          `<span class="cdd-basis-flag" title="only generic tokens overlap — verify against the source, then unlink if wrong">no clear basis</span>`;
+      } else {
+        row.innerHTML = `<span class="cdd-basis-h">why linked</span>` +
+          `<span class="cdd-basis-term">${escapeHtml(term)}</span>`;
+      }
+      return row;
+    }
+    // Leg 2 (D212): the openable read-only source — sender, date, body — shown by
+    // default for an email item, so reading it to confirm is the default action.
+    // Read-only; it shows ingested content (§9), fetched lazily on render.
+    function bindingSourceBlock(b) {
+      const box = document.createElement("div"); box.className = "cdd-source";
+      if (b.source_facet_type !== "email" || !b.source_facet_id) {
+        box.classList.add("cdd-source-none");
+        box.textContent = b.source_facet_type
+          ? `(no openable source — ${b.source_facet_type})`
+          : "(no openable source)";
+        return box;
+      }
+      box.innerHTML = `<span class="cdd-source-loading">opening source…</span>`;
+      api(`/daily-driver/cdd/email-source/${b.source_facet_id}`).then((s) => {
+        const when = s.received_at ? new Date(s.received_at).toLocaleString() : "";
+        box.innerHTML =
+          `<div class="cdd-source-meta">` +
+            `<span class="cdd-source-from">${escapeHtml(s.sender || "(unknown sender)")}</span>` +
+            (when ? `<span class="cdd-source-date">${escapeHtml(when)}</span>` : "") +
+          `</div>` +
+          (s.subject ? `<div class="cdd-source-subj">${escapeHtml(s.subject)}</div>` : "") +
+          `<div class="cdd-source-body">${escapeHtml(s.body || "(no body ingested)")}</div>`;
+      }).catch(() => { box.innerHTML = `<span class="cdd-source-none">(source unavailable)</span>`; });
+      return box;
+    }
     function renderCorrectionList(container, opts) {
       const { bindings, refresh, relinkControlFor, emptyMsg } = opts;
       container.innerHTML = "";
@@ -874,15 +929,16 @@
       const shown = cddWeakOnly ? all.filter((b) => b.strength === "weak") : all;
       if (!shown.length) { const e = document.createElement("div"); e.className = "evidence-note"; e.textContent = "No weak matches here."; container.appendChild(e); return; }
       shown.slice(0, 50).forEach((b) => {
+        // D212: each linked item is a verification card — header (title + basis +
+        // strength + actions), then its openable read-only source shown by default.
+        const card = document.createElement("div"); card.className = "cdd-vcard";
         const r = document.createElement("div"); r.className = "cdd-binding";
         const pick = document.createElement("input"); pick.type = "checkbox"; pick.className = "cdd-pick";
         pick.onchange = () => { if (pick.checked) selected.add(b); else selected.delete(b); bulk.disabled = selected.size === 0; };
         r.appendChild(pick);
-        const why = b.matched_term ? `matched on “${escapeHtml(b.matched_term)}”` : "";
         const meta = document.createElement("span"); meta.style.cssText = "flex:1 1 auto;display:flex;gap:8px;align-items:center;overflow:hidden;";
         meta.innerHTML =
           `<span class="cdd-binding-title">${escapeHtml(b.title)}</span>` +
-          (why ? `<span class="cdd-why" title="what the matcher matched on — string match, not correctness">${why}</span>` : "") +
           (b.strength ? `<span class="cdd-badge cdd-strength s-${b.strength}" title="lexical match strength, not a trust score">${b.strength}</span>` : "") +
           `<span class="cdd-badge cdd-tier">${escapeHtml(b.element_kind)}</span>` +
           (b.user_owned ? `<span class="cdd-badge cdd-owned" title="you have corrected this unit">yours</span>` : "");
@@ -892,7 +948,13 @@
         if (rc) acts.appendChild(rc);
         const un = document.createElement("button"); un.className = "btn-ghost cdd-btn cdd-reject"; un.textContent = "Unlink";
         un.onclick = async () => { try { await unlinkBinding(b); await refresh(); } catch { toast("Unlink failed", true); } };
-        acts.appendChild(un); r.appendChild(acts); container.appendChild(r);
+        acts.appendChild(un); r.appendChild(acts); card.appendChild(r);
+        // Leg 1 — the discriminative basis row (D212): the most discriminative term
+        // it linked on, or a flagged "no clear basis" when only generic tokens match.
+        card.appendChild(bindingBasisRow(b));
+        // Leg 2 — the openable read-only source (D212), shown by default.
+        card.appendChild(bindingSourceBlock(b));
+        container.appendChild(card);
       });
       if (shown.length > 50) {
         const more = document.createElement("div"); more.className = "evidence-note";
