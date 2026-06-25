@@ -1190,9 +1190,19 @@
       openNodePanel(title || "Element", "work", "");
       const pb = document.getElementById("panel-body");
       pb.innerHTML = ""; pb.appendChild(body); body.appendChild(row);
-      // cddElementRow already carries the evidence expand (honest-why + strength +
-      // unlink/relink, S103c-fix-4) off the global cddEvidence/cddBindings, loaded
-      // by renderAssessMap before any node is tappable.
+      // Show the linked work items DIRECTLY in the drawer (D210 fix): the graph
+      // draws elements, so on node-tap the operator must see *what is linked* —
+      // the actual emails/tasks/calendar bound here, with their why/strength and
+      // unlink — without a second click. The data (cddBindings) carries each
+      // unit's title; render it open, reusing renderBindings (S103c-fix-4).
+      if (el.element_id) {
+        const h = document.createElement("div"); h.className = "feeder-label";
+        const n = (cddBindings || []).filter((b) => String(b.element_id) === String(el.element_id)).length;
+        h.textContent = `Linked work — the ${n} item${n === 1 ? "" : "s"} bound here`;
+        body.appendChild(h);
+        const sub = document.createElement("div"); body.appendChild(sub);
+        renderBindings(sub, grp, el, fresh, reload);
+      }
     }
     // The measurable outcome (D163/D199) — the result, distinct from the goal
     // (the aim). Derived from the carried mode + target fields, recomputed nowhere.
