@@ -660,10 +660,10 @@ def _build_default_compositions() -> AppCompositions:
     # D183/S89: the rule-confirmed job-search emails (the persisted classifier
     # verdict) — feeds the moat's count-by-kind fold + the active reading.
     daily_driver_email_source_metadata = build_email_source_metadata(
-        tenant_registry=tenant_registry,
+        tenant_registry=registry,
         session_factory_cache=session_factory_cache,
         operator_principal=operator_principal,
-        security_events=security_events,
+        security_events=sec,
     )
     daily_driver_email_job_search_source = build_email_job_search_source(
         tenant_registry=registry,
