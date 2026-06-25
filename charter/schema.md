@@ -682,6 +682,14 @@ is set/removed only via `archive_outcome` / `unarchive_outcome` (S103e, D205) �
 a schemaless property, **no migration** (the S102/S103a schemaless-prop
 precedent); a never-archived goal simply lacks the property.
 
+The `:Outcome` also carries the precision pass's **disposition counts** (S103i/D210)
+— `disposition_moat` (confirmed job emails), `disposition_pipeline` (one-touch acks
+routed to Pipeline-depth), `disposition_market` (board listings routed to the
+Labor-market external), `disposition_parked` (un-bound by the genuine-match bar).
+Set each correlate by `set_outcome_disposition` (derived state, D155), read by the
+CDD lens for the Map's recommendation-shaped summary. Schemaless, **no migration**;
+absent until the first correlate.
+
 ### `:Lever` nodes (S62, D163)
 
 A thin *reference* to the Commitment that serves as a goal's lever — it carries

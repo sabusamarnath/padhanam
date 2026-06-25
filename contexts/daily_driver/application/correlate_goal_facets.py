@@ -236,6 +236,19 @@ async def correlate_goal_facets(
     await unit_graph.replace_element_evidence(
         tenant_context=actor.tenant_context, evidence=evidence
     )
+
+    # D210: persist the precision pass's disposition counts on the job-search goal
+    # so the Map's recommendation-shaped summary reads them (the moat is the
+    # confirmed job-email count). Derived state, set each correlate.
+    job_goal = next(
+        (g for g in goals if g.name.strip().lower() == _JOB_SEARCH_GOAL_NAME), None
+    )
+    if job_goal is not None:
+        await goal_graph.set_disposition_counts(
+            tenant_context=actor.tenant_context, outcome_id=job_goal.id,
+            moat=len(confirmed_ids), pipeline=len(precision.pipeline_units),
+            market=len(precision.market_units), parked=len(precision.parked_units),
+        )
     return len(evidence)
 
 

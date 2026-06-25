@@ -180,6 +180,13 @@ class AuthoredCddRecord:
     expected_outcome: str | None = None
     expected_outcome_origin: str | None = None
     expected_outcome_proof_state: str | None = None
+    # The precision pass's disposition counts (S103i, D210), or None when never
+    # correlated: moat (confirmed job emails), pipeline + market (routed counts),
+    # parked (un-bound by the genuine-match bar).
+    disposition_moat: int | None = None
+    disposition_pipeline: int | None = None
+    disposition_market: int | None = None
+    disposition_parked: int | None = None
 
 
 class OutcomeGraphPort(Protocol):
@@ -359,6 +366,20 @@ class OutcomeGraphPort(Protocol):
         self, *, tenant_context: TenantContext, outcome_id: UUID
     ) -> Sequence[OpportunityRecord]:
         """Return a goal's opportunities with their unit counts (D208)."""
+        ...
+
+    async def set_outcome_disposition(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        moat: int,
+        pipeline: int,
+        market: int,
+        parked: int,
+    ) -> None:
+        """Persist the precision pass's disposition counts on the goal (S103i/D210)
+        so the Map's recommendation-shaped summary reads them."""
         ...
 
     async def attach_unit_to_opportunity(

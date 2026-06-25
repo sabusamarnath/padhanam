@@ -38,6 +38,7 @@ from contexts.daily_driver.domain.cdd import (
     DRAFT_SCHEMA,
     AuthoredEdgeView,
     AuthoredElement,
+    DispositionCounts,
     DraftedCdd,
     ElementKind,
     GateView,
@@ -657,6 +658,20 @@ class GoalGraphAdapter:
             expected_outcome_proof_state=outcome_proof,
             gates=gates,
             opportunities=opportunities,
+            disposition=DispositionCounts(
+                moat=record.disposition_moat or 0,
+                pipeline=record.disposition_pipeline or 0,
+                market=record.disposition_market or 0,
+                parked=record.disposition_parked or 0,
+            ),
+        )
+
+    async def set_disposition_counts(
+        self, *, tenant_context, outcome_id, moat, pipeline, market, parked,
+    ) -> None:
+        await self._outcome_graph.set_outcome_disposition(
+            tenant_context=tenant_context, outcome_id=outcome_id,
+            moat=moat, pipeline=pipeline, market=market, parked=parked,
         )
 
     async def accept_authored_element(

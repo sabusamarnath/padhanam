@@ -618,6 +618,18 @@ class GoalCddDTO(BaseModel):
     gates: list[GateDTO] = []
     # The opportunities (process instances, S103h, D208) moving through the gates.
     opportunities: list[OpportunityDTO] = []
+    # The precision pass's disposition summary (S103i/D210) for the Map.
+    disposition: "DispositionDTO | None" = None
+
+
+class DispositionDTO(BaseModel):
+    """The Map's disposition summary (S103i/D210): the confirmed-email moat, the
+    pipeline + market routed counts, and the parked residual."""
+
+    moat: int
+    pipeline: int
+    market: int
+    parked: int
 
 
 class CorrectCddElementRequest(BaseModel):
@@ -786,6 +798,16 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
             )
             for o in getattr(view, "opportunities", ())
         ],
+        disposition=(
+            DispositionDTO(
+                moat=view.disposition.moat,
+                pipeline=view.disposition.pipeline,
+                market=view.disposition.market,
+                parked=view.disposition.parked,
+            )
+            if getattr(view, "disposition", None) is not None
+            else None
+        ),
     )
 
 

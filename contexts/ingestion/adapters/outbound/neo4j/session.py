@@ -547,7 +547,23 @@ _READ_AUTHORED_OUTCOME = """
 MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
 RETURN o.authored_expected_outcome AS expected_outcome,
        o.authored_outcome_origin AS provenance_origin,
-       o.authored_outcome_proof_state AS proof_state
+       o.authored_outcome_proof_state AS proof_state,
+       o.disposition_moat AS disposition_moat,
+       o.disposition_pipeline AS disposition_pipeline,
+       o.disposition_market AS disposition_market,
+       o.disposition_parked AS disposition_parked
+"""
+
+# S103j (D210): the precision pass's disposition counts (S103i), persisted on the
+# goal so the Map's recommendation-shaped summary reads them — schemaless, set
+# each correlate (derived state, D155). No migration.
+_SET_OUTCOME_DISPOSITION = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET o.disposition_moat = $moat,
+    o.disposition_pipeline = $pipeline,
+    o.disposition_market = $market,
+    o.disposition_parked = $parked
+RETURN o.outcome_id AS outcome_id
 """
 _ACCEPT_AUTHORED_OUTCOME = """
 MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
@@ -1423,7 +1439,31 @@ class TenantScopedNeo4jSession:
             expected_outcome=expected_outcome,
             expected_outcome_origin=outcome_origin,
             expected_outcome_proof_state=outcome_proof,
+            disposition_moat=(
+                outcome_row["disposition_moat"] if outcome_row else None
+            ),
+            disposition_pipeline=(
+                outcome_row["disposition_pipeline"] if outcome_row else None
+            ),
+            disposition_market=(
+                outcome_row["disposition_market"] if outcome_row else None
+            ),
+            disposition_parked=(
+                outcome_row["disposition_parked"] if outcome_row else None
+            ),
         )
+
+    async def set_outcome_disposition(
+        self, *, outcome_id: UUID, moat: int, pipeline: int, market: int,
+        parked: int,
+    ) -> None:
+        """Persist the precision pass's disposition counts on the goal (D210)."""
+        session = self._bound_session
+        await session.run(_SET_OUTCOME_DISPOSITION, {
+            "tenant_id": self._tenant_id, "outcome_id": str(outcome_id),
+            "moat": moat, "pipeline": pipeline, "market": market,
+            "parked": parked,
+        })
 
     async def set_authored_outcome(
         self,

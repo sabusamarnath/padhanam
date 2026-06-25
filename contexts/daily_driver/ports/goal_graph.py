@@ -117,6 +117,20 @@ class GoalGraphPort(Protocol):
         """Read a goal's authored CDD for proof review (S102, D200)."""
         ...
 
+    async def set_disposition_counts(
+        self,
+        *,
+        tenant_context: TenantContext,
+        outcome_id: UUID,
+        moat: int,
+        pipeline: int,
+        market: int,
+        parked: int,
+    ) -> None:
+        """Persist the precision pass's disposition counts on the goal (S103i/D210)
+        for the Map's recommendation-shaped summary."""
+        ...
+
     async def accept_authored_element(
         self,
         *,

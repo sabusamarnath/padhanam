@@ -129,6 +129,8 @@ class GoalCddView:
     # The opportunities (process instances, S103h, D208) moving through the gates;
     # each is positioned at its ``current_gate_id`` and groups ``unit_count`` units.
     opportunities: tuple["OpportunityView", ...] = ()
+    # The precision pass's disposition counts (S103i/D210) for the Map summary.
+    disposition: "DispositionCounts | None" = None
 
 
 @dataclass(frozen=True)
@@ -165,6 +167,18 @@ class OpportunityView:
     provenance_origin: ProvenanceOrigin
     proof_state: ProofState
     source: str | None = None
+
+
+@dataclass(frozen=True)
+class DispositionCounts:
+    """The precision pass's disposition summary (S103i/D210) for the Map: the
+    confirmed-job-email ``moat``, the ``pipeline`` (one-touch acks) and ``market``
+    (board listings) routed counts, and the ``parked`` residual (un-bound)."""
+
+    moat: int
+    pipeline: int
+    market: int
+    parked: int
 
 
 # The JSON Schema the structured-output port constrains the model to.
