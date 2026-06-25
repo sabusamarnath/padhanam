@@ -67,6 +67,12 @@ _STOPWORDS = frozenset(
         "for", "with", "my", "your", "our", "get", "got", "do", "did",
         "doing", "be", "is", "are", "was", "this", "that", "these", "those",
         "it", "as", "by", "from", "into",
+        # D212: true grammatical stopwords that were slipping through as
+        # "significant" and getting offered as a basis (the Acme "you" bug). The
+        # corpus-specific generics ("stage"/"interview"/"warm"/"next"/"steps") are
+        # NOT listed here — they are caught by the corpus-IDF where they are
+        # actually corpus-common, not by a hand-maintained blocklist.
+        "you", "we", "i", "me", "us", "will", "can",
     }
 )
 
@@ -805,6 +811,38 @@ _STRENGTH_WEAK = "weak"
 NO_CLEAR_BASIS = "no clear basis"
 
 
+# D209/D212: a single shared token in more than this many of the tenant's units is
+# corpus-generic (a "first"/"you"-class word) even if it is rare among element
+# labels, so it is not a discriminative basis. Lives here (the lexical-match home,
+# D204) so the bar (precision.is_genuine_bind) and the read-side basis
+# (binding_rationale) import the SAME threshold and predicate and cannot diverge.
+CORPUS_GENERIC_THRESHOLD = 10
+
+
+def is_discriminative_token(
+    token: str,
+    *,
+    token_element_counts: dict[str, int],
+    unit_token_counts: dict[str, int] | None = None,
+    corpus_threshold: int = CORPUS_GENERIC_THRESHOLD,
+) -> bool:
+    """Is ``token`` a discriminative basis (D204/D212)? True when it is BOTH
+    element-distinctive (shared by <= 1 authored element label, so not an
+    incidental cross-element token) AND not corpus-generic (in <=
+    ``corpus_threshold`` of the tenant's units, when corpus counts are known — the
+    IDF that catches an element-rare but corpus-common word like "you"/"first").
+
+    The single predicate the genuine-match bar and the read-side basis both use, so
+    the why never offers a token the bar would not bind on (the D212 tie)."""
+    if token_element_counts.get(token, 1) > 1:
+        return False
+    if unit_token_counts is not None and (
+        unit_token_counts.get(token, 0) > corpus_threshold
+    ):
+        return False
+    return True
+
+
 def binding_rationale(
     *,
     unit_title: str,
@@ -813,17 +851,23 @@ def binding_rationale(
     basis: str = "",
     token_element_counts: dict[str, int],
     goal_tokens: frozenset[str] = frozenset(),
+    unit_token_counts: dict[str, int] | None = None,
 ) -> tuple[str, str]:
     """Recompute the *why* (matched term) + the lexical match-strength band for a
-    binding (S103c-fix; honesty hardened S103c-fix-3), deterministically from the
-    unit title, the element label (or, for the alias tier, the goal-name/alias
-    ``goal_tokens``), the tier, the basis, and how many elements share each token.
+    binding (S103c-fix; honesty hardened S103c-fix-3; discriminative basis D212),
+    deterministically from the unit title, the element label (or, for the alias
+    tier, the goal-name/alias ``goal_tokens``), the tier, the basis, how many
+    elements share each token, and — D212 — how many of the tenant's units contain
+    each token (``unit_token_counts``, the corpus-IDF).
 
-    Shows the **real overlapping token** where the recompute finds one, and
-    ``NO_CLEAR_BASIS`` where it cannot — replacing the earlier placeholders. An
-    exact tier is strong; a keyword match on a token
-    unique to one element is medium; a keyword match on a widely-shared (incidental)
-    token, or an alias match, is weak — the trap the why exposes.
+    Shows the **most discriminative** shared token (``is_discriminative_token``:
+    element-distinctive AND not corpus-generic), not the first or most generic one
+    — "Acme", not "you". When no shared token is discriminative, reads
+    ``NO_CLEAR_BASIS`` rather than offering a generic word as a fake reason. This is
+    single-sourced with the genuine-match bar (D204/D212): a surviving keyword bind
+    has a discriminative token and the basis surfaces it; a stale generic-only bind
+    reads honestly as no clear basis. An exact tier is strong; a discriminative
+    keyword token is medium; an alias match is weak.
     """
     # The classifier-fed (D183) binding is a rule verdict, not a string match —
     # show the rule honestly rather than the outcome label (S103c-fix live find).
@@ -840,20 +884,32 @@ def binding_rationale(
         if not shared:
             return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
         return (sorted(shared)[0], _STRENGTH_WEAK)
-    # keyword: the shared significant tokens; show the most distinctive one.
+    # keyword: among the shared significant tokens, show the most discriminative one
+    # (D212). A token that is only element-shared or corpus-generic is not a basis;
+    # if none is discriminative, the why is "no clear basis" (the bar parks these at
+    # bind time, so a live keyword bind normally has one — this stays honest for any
+    # stale bind read before a re-correlate).
     elem_tokens = significant_tokens(element_label)
     shared = unit_tokens & elem_tokens
-    if not shared:
-        # no shared significant token — no clear basis (since S103d the matcher
-        # no longer binds this case, so a live keyword binding always shares one).
+    discriminative = {
+        t for t in shared
+        if is_discriminative_token(
+            t,
+            token_element_counts=token_element_counts,
+            unit_token_counts=unit_token_counts,
+        )
+    }
+    if not discriminative:
         return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
-    term = min(shared, key=lambda t: token_element_counts.get(t, 1))
-    strength = (
-        _STRENGTH_MEDIUM
-        if token_element_counts.get(term, 1) <= 1
-        else _STRENGTH_WEAK
+    # most discriminative = rarest in the corpus, then rarest across element labels.
+    term = min(
+        discriminative,
+        key=lambda t: (
+            unit_token_counts.get(t, 0) if unit_token_counts is not None else 0,
+            token_element_counts.get(t, 1),
+        ),
     )
-    return (term, strength)
+    return (term, _STRENGTH_MEDIUM)
 
 
 def element_token_counts(labels: tuple[str, ...]) -> dict[str, int]:

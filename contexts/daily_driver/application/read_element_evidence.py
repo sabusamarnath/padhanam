@@ -13,6 +13,7 @@ from contexts.daily_driver.domain.goal_assessment import (
     ElementEvidenceSummary,
     binding_rationale,
     element_token_counts,
+    significant_tokens,
     summarise_element_evidence,
 )
 from contexts.daily_driver.domain.unit_view import build_unit_views
@@ -86,6 +87,19 @@ async def read_element_bindings(
             element_token_counts((goal.name, *goal.aliases)).keys()
         )
     token_counts = element_token_counts(tuple(all_labels))
+    # D212: the corpus-IDF the discriminative basis ranks on — how many of the
+    # tenant's units contain each significant token. Computed from the same unit
+    # titles the correlate's bar reads, so the read-side basis and the bind-time bar
+    # share the corpus frequencies and cannot diverge (D204/D212). Counts per unit
+    # (a token in a unit's title counts once for that unit).
+    unit_token_counts: dict[str, int] = {}
+    for v in views:
+        seen: set[str] = set()
+        for f in v.facets:
+            if f.present and f.title:
+                seen |= significant_tokens(f.title)
+        for tok in seen:
+            unit_token_counts[tok] = unit_token_counts.get(tok, 0) + 1
 
     bindings: list[ElementBinding] = []
     for e in evidence:
@@ -98,6 +112,7 @@ async def read_element_bindings(
             basis=e.basis,
             token_element_counts=token_counts,
             goal_tokens=goal_tokens_by_outcome.get(e.outcome_id, frozenset()),
+            unit_token_counts=unit_token_counts,
         )
         bindings.append(
             ElementBinding(

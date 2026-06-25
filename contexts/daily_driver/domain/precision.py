@@ -32,7 +32,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from contexts.daily_driver.domain.goal_assessment import (
+    CORPUS_GENERIC_THRESHOLD,
     ElementEvidence,
+    is_discriminative_token,
     shared_significant_tokens,
     significant_tokens,
 )
@@ -104,11 +106,10 @@ def source_disposition(
     return None
 
 
-# A single shared token in more than this many of the tenant's units is corpus-
-# generic (an "first"/"dose"-class word) even if it is rare among element labels,
-# so it is not a genuine match on its own. Separates "acme" (~5 units) from
-# "first" (~120 medication units).
-CORPUS_GENERIC_THRESHOLD = 10
+# ``CORPUS_GENERIC_THRESHOLD`` + ``is_discriminative_token`` are single-sourced in
+# goal_assessment (the lexical-match home, D204) so the bar here and the read-side
+# basis (binding_rationale) share the same notion of a discriminative token — the
+# why never offers a token the bar would not bind on (D212). Re-exported below.
 
 
 def is_genuine_bind(
@@ -117,27 +118,34 @@ def is_genuine_bind(
     token_element_counts: dict[str, int],
     unit_token_counts: dict[str, int] | None = None,
 ) -> bool:
-    """Mechanism B: is this keyword/alias bind a genuine match? Kept with two-plus
-    corroborating shared tokens, or a single token that is **both** discriminative
-    among element labels (the honest-why's STRONG, ``token_element_counts`` <= 1)
-    **and** not corpus-generic (in <= ``CORPUS_GENERIC_THRESHOLD`` of the tenant's
-    units — the IDF refinement that catches an element-rare but corpus-common token
-    like "first"). A single generic token is not a match. Exact-tier binds are
-    genuine by construction and never reach here."""
+    """Mechanism B: is this keyword bind a genuine match (D209, sharpened D212)?
+
+    Stopword-grade and corpus-generic tokens do not count toward a genuine match:
+    a token is admitted only when it is not corpus-generic (in <=
+    ``CORPUS_GENERIC_THRESHOLD`` of the tenant's units). A bind is genuine with
+    **two-plus** such non-generic shared tokens (they corroborate), or a **single**
+    one that is also element-distinctive (``token_element_counts`` <= 1 — the
+    discriminative-token predicate the read-side basis shares). A bind resting only
+    on generic tokens (the Acme "you", the warm-ups "warm") is not a match and is
+    parked. Exact-tier binds are genuine by construction and never reach here."""
     shared: set[str] = set()
     for t in unit_titles:
         shared |= shared_significant_tokens(t, element_label)
-    if len(shared) >= 2:
+    # Drop corpus-generic tokens before counting — they do not corroborate (D212).
+    non_generic = {
+        t for t in shared
+        if unit_token_counts is None
+        or unit_token_counts.get(t, 0) <= CORPUS_GENERIC_THRESHOLD
+    }
+    if len(non_generic) >= 2:
         return True
-    if len(shared) == 1:
-        tok = next(iter(shared))
-        if token_element_counts.get(tok, 1) > 1:
-            return False
-        if unit_token_counts is not None and (
-            unit_token_counts.get(tok, 0) > CORPUS_GENERIC_THRESHOLD
-        ):
-            return False
-        return True
+    if len(non_generic) == 1:
+        tok = next(iter(non_generic))
+        return is_discriminative_token(
+            tok,
+            token_element_counts=token_element_counts,
+            unit_token_counts=unit_token_counts,
+        )
     return False
 
 

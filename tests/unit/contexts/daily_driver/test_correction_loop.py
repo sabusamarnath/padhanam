@@ -40,6 +40,7 @@ from contexts.daily_driver.domain.goal import (
     Subject,
 )
 from contexts.daily_driver.domain.goal_assessment import (
+    NO_CLEAR_BASIS,
     ElementEvidence,
     binding_rationale,
     element_token_counts,
@@ -176,15 +177,42 @@ def test_binding_rationale_distinctive_keyword_is_medium():
     assert term == "network" and strength == "medium"
 
 
-def test_binding_rationale_incidental_shared_token_is_weak():
-    # 'review' appears across multiple element labels -> incidental. The only token
-    # this unit shares with the element is the incidental one -> weak (the trap).
+def test_binding_rationale_incidental_shared_token_is_no_clear_basis():
+    # 'review' appears across multiple element labels -> incidental (element-common,
+    # not discriminative). D212: an incidental token is not offered as a fake reason;
+    # the why reads "no clear basis" rather than the trap token (AC2).
     counts = element_token_counts(("Review applications", "Review interviews"))
     term, strength = binding_rationale(
         unit_title="Review notes", element_label="Review interviews",
         tier="lexical_keyword", token_element_counts=counts,
     )
-    assert term == "review" and strength == "weak"  # high string match, incidental
+    assert term == NO_CLEAR_BASIS and strength == "weak"
+
+
+def test_binding_rationale_picks_discriminative_over_corpus_generic():
+    # D212/AC1: the Acme case — the unit shares both "acme" (corpus-rare,
+    # element-distinctive) and a generic word with the element; the basis shows
+    # "acme", never the generic one, even though both are shared.
+    counts = element_token_counts(("Acme application",))
+    term, strength = binding_rationale(
+        unit_title="your acme application update",
+        element_label="Acme application",
+        tier="lexical_keyword", token_element_counts=counts,
+        unit_token_counts={"acme": 3, "application": 60},
+    )
+    assert term == "acme" and strength == "medium"
+
+
+def test_binding_rationale_corpus_generic_only_is_no_clear_basis():
+    # D212/AC2: the only shared token is corpus-common ("application" in 60 units),
+    # so it is not a discriminative basis -> "no clear basis", not a fake reason.
+    counts = element_token_counts(("Acme application",))
+    term, strength = binding_rationale(
+        unit_title="my application notes", element_label="Acme application",
+        tier="lexical_keyword", token_element_counts=counts,
+        unit_token_counts={"application": 60},
+    )
+    assert term == NO_CLEAR_BASIS and strength == "weak"
 
 
 def test_binding_rationale_alias_is_weak():

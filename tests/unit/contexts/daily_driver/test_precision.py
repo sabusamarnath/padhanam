@@ -84,6 +84,28 @@ def test_two_corroborating_tokens_are_genuine():
                            "Tailoring effort per application investment", counts) is True
 
 
+def test_two_corpus_generic_tokens_do_not_corroborate():
+    # D212: stopword-grade/corpus-generic tokens do not count toward a genuine
+    # match. Two shared tokens that are BOTH corpus-common (in >threshold units)
+    # are parked, not kept on the old "two-plus tokens" rule.
+    counts = element_token_counts(("Interview stage scheduling",))
+    corpus = {"interview": 40, "stage": 35}  # both corpus-common
+    assert is_genuine_bind(
+        ("interview stage for the role",), "Interview stage scheduling",
+        counts, corpus,
+    ) is False
+
+
+def test_discriminative_plus_generic_is_still_genuine():
+    # D212: a corpus-rare discriminative token survives even alongside a generic
+    # one — the Acme case is kept, only the basis ignores the generic word.
+    counts = element_token_counts(("Acme application",))
+    corpus = {"acme": 3, "application": 60}
+    assert is_genuine_bind(
+        ("your acme application update",), "Acme application", counts, corpus,
+    ) is True
+
+
 def test_bar_is_consistent_with_the_read_side_honest_why():
     # D204 tie: the bar un-binds exactly what the honest-why rates weak on a
     # single token. A generic single token reads weak; the bar rejects it.
