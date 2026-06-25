@@ -822,7 +822,6 @@ async def get_units_by_goal(
         goal_graph=goal_graph,
         actor=actor,
         email_job_search_source=email_job_search_source,
-        email_source_metadata=email_source_metadata,
         commitment_repository=commitment_repository,
     )
     return grouped_units_to_dto(grouped)

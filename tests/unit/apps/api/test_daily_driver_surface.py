@@ -341,3 +341,21 @@ def test_map_renders_the_real_causal_graph():
 def test_map_teal_is_interactive_only():
     # design-language §4: teal (#2BA692) only on interactive/active affordances.
     assert "#2BA692" in _HTML  # used for hover/focus/open states
+
+
+def test_units_by_goal_endpoint_does_not_pass_email_source_metadata():
+    # S103j regression: an S103i sed added email_source_metadata to the
+    # list_units_by_goal call (which doesn't accept it), 500ing the assess view.
+    # Guard the call shape: only correlate_goal_facets takes that kwarg.
+    import inspect
+    from contexts.daily_driver.application.list_units_by_goal import (
+        list_units_by_goal,
+    )
+    assert "email_source_metadata" not in inspect.signature(list_units_by_goal).parameters
+    src = (
+        Path(__file__).resolve().parents[4]
+        / "apps" / "api" / "routers" / "daily_driver.py"
+    ).read_text()
+    # the list_units_by_goal( ... ) call block must not carry the kwarg
+    call = src.split("grouped = await list_units_by_goal(")[1].split(")")[0]
+    assert "email_source_metadata" not in call
