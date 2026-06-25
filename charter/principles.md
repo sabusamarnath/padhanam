@@ -168,6 +168,12 @@ Padhanam also correlates across sources to assemble a unit of work that no singl
 
 The platform's edge is this assessment across the user's own tools, not a unified store that asks the user to switch. The moment Padhanam becomes the one tool that holds everything, it competes on UX with the time-blockers. Assessing across the tools the user keeps is the differentiated position, and it governs every connector the platform will ever add.
 
+### Verification, not just honesty, is what assess-not-replace requires
+
+A binding the user cannot open, verify, and correct does not satisfy assess-not-replace. Being honest *about* the match — showing the literal token that linked — is necessary but not sufficient: a correct bind justified by a generic token ("matched on you") reads as arbitrary, and a binding the user cannot check against its source is still a claim, not a verifiable assessment. The human-proof gate (the graph's meaning is authored, not only derived) can only run on a binding the user can actually adjudicate, which means three things must be present at the point of proof: the *discriminative reason* it linked (or an honest "no clear basis" when only generic tokens match), the *openable read-only source* to confirm it against, and the *editable match surface* (the words an element links on, with what each pulls in) to correct it. The reason and the bar that admits it are single-sourced, so the system cannot offer as a reason a token it would not bind on.
+
+Origin: S103l. The S103j export proved the gap — a correct Acme bind justified by the stopword "you", with no item openable to read. D204's honest-why was honest but unverifiable; D212 makes the drawer a verification surface. This generalises the fix: every assessment the platform asks a user to proof must be openable, checkable, and correctable, not merely transparent about its own string match.
+
 ### Coverage honesty in assessment
 
 The assessment layer never presents the absence of ingested-and-linked evidence as the user's neglect. A neglected-goal or orphan-work read is valid only inside the boundary of what Padhanam has ingested and linked. Outside that boundary the honest read is "no work visible for this," not "you are not doing this."
