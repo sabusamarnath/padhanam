@@ -24,6 +24,7 @@ from contexts.daily_driver.domain.goal_assessment import (
     derive_goal_edges,
     element_token_counts,
     infer_element_evidence,
+    significant_tokens,
     infer_email_job_search_evidence,
 )
 from contexts.daily_driver.domain.precision import UnitSource, apply_precision
@@ -132,15 +133,19 @@ async def correlate_goal_facets(
     # bar in the use case, gating each lexical candidate before it persists. A
     # board listing routes to market signal, a one-touch ack to pipeline volume,
     # an incidental-token match un-binds, and work no goal genuinely matches parks
-    # unbound (coverage honesty at bind time, D171/D193). Protected: units carrying
-    # a rule-confirmed job email (D183-vetted). Computed here, not in the matcher
-    # domain (D16/D184).
+    # unbound (coverage honesty at bind time, D171/D193). Protected: units that
+    # BELONG_TO a confirmed opportunity (their real work is kept untouched); a
+    # confirmed-but-unclustered job email (e.g. a one-touch ack) flows through, so
+    # its lexical gate binds route to pipeline while its D183 outcome bind stays.
+    # Computed here, not in the matcher domain (D16/D184).
+    clustered = await unit_graph.list_clustered_unit_ids(
+        tenant_context=actor.tenant_context
+    )
     meta_by_facet = {}
     if email_source_metadata is not None:
         for m in await email_source_metadata.list_source_metadata(actor=actor):
             meta_by_facet[m.facet_id] = m
     unit_source: dict = {}
-    protected: set = set()
     for v in views:
         present = [f for f in v.facets if f.present]
         email_f = next(
@@ -155,8 +160,6 @@ async def correlate_goal_facets(
                 thread_size=m.thread_size if m else 1,
                 titles=tuple(f.title for f in present if f.title),
             )
-            if email_f.facet_id in confirmed_ids:
-                protected.add(v.unit_id)
         elif present:
             f0 = present[0]
             unit_source[v.unit_id] = UnitSource(
@@ -172,12 +175,24 @@ async def correlate_goal_facets(
     tok_counts = element_token_counts(
         tuple(element_label_by_id.values())
     )
+    # Corpus token frequency (D209 IDF refinement): how many units contain each
+    # significant token, so the bar rejects an element-rare but corpus-common
+    # token ("first"/"dose") that floods on its single share.
+    unit_token_counts: dict[str, int] = {}
+    for v in views:
+        seen = set()
+        for f in v.facets:
+            if f.present and f.title:
+                seen |= significant_tokens(f.title)
+        for tok in seen:
+            unit_token_counts[tok] = unit_token_counts.get(tok, 0) + 1
     precision = apply_precision(
         evidence,
         unit_source=unit_source,
         element_label_by_id=element_label_by_id,
         token_element_counts=tok_counts,
-        protected_unit_ids=frozenset(protected),
+        protected_unit_ids=frozenset(clustered),
+        unit_token_counts=unit_token_counts,
     )
     evidence = precision.kept
     _log.info(

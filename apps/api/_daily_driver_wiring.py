@@ -930,6 +930,13 @@ class UnitGraphAdapter:
             tenant_context=tenant_context
         )
 
+    async def list_clustered_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set:
+        return await self._unit_graph.list_clustered_unit_ids(
+            tenant_context=tenant_context
+        )
+
     async def unlink_element_evidence(
         self, *, tenant_context: TenantContext, unit_id, element_kind, element_id
     ) -> bool:

@@ -92,6 +92,13 @@ class UnitGraphPort(Protocol):
         skips these so a correction is never overwritten."""
         ...
 
+    async def list_clustered_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set[UUID]:
+        """Return the unit ids belonging to an opportunity (D209) — the precision
+        filter protects these (a confirmed real opportunity's work is kept)."""
+        ...
+
     async def unlink_element_evidence(
         self,
         *,

@@ -815,6 +815,19 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def list_clustered_unit_ids(
+        self, *, tenant_context: TenantContext
+    ) -> set[UUID]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.list_clustered_unit_ids()
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     async def unlink_element_evidence(
         self,
         *,

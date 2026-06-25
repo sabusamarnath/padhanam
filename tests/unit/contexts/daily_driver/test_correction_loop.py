@@ -312,6 +312,10 @@ class _ModelGraph:
     async def list_user_owned_unit_ids(self, *, tenant_context):
         return set(self.owned)
 
+    async def list_clustered_unit_ids(self, *, tenant_context):
+        return set()
+
+
     async def list_element_evidence(self, *, tenant_context):
         return tuple(
             ElementEvidence(

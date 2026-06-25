@@ -104,15 +104,26 @@ def source_disposition(
     return None
 
 
+# A single shared token in more than this many of the tenant's units is corpus-
+# generic (an "first"/"dose"-class word) even if it is rare among element labels,
+# so it is not a genuine match on its own. Separates "acme" (~5 units) from
+# "first" (~120 medication units).
+CORPUS_GENERIC_THRESHOLD = 10
+
+
 def is_genuine_bind(
     unit_titles: tuple[str, ...],
     element_label: str,
     token_element_counts: dict[str, int],
+    unit_token_counts: dict[str, int] | None = None,
 ) -> bool:
-    """Mechanism B: is this keyword/alias bind a genuine match? Kept when it has a
-    discriminative shared token (in <= 1 element label, the honest-why's STRONG)
-    or two-plus corroborating shared tokens. A single generic token is not a
-    match. Exact-tier binds are genuine by construction and never reach here."""
+    """Mechanism B: is this keyword/alias bind a genuine match? Kept with two-plus
+    corroborating shared tokens, or a single token that is **both** discriminative
+    among element labels (the honest-why's STRONG, ``token_element_counts`` <= 1)
+    **and** not corpus-generic (in <= ``CORPUS_GENERIC_THRESHOLD`` of the tenant's
+    units — the IDF refinement that catches an element-rare but corpus-common token
+    like "first"). A single generic token is not a match. Exact-tier binds are
+    genuine by construction and never reach here."""
     shared: set[str] = set()
     for t in unit_titles:
         shared |= shared_significant_tokens(t, element_label)
@@ -120,7 +131,13 @@ def is_genuine_bind(
         return True
     if len(shared) == 1:
         tok = next(iter(shared))
-        return token_element_counts.get(tok, 1) <= 1
+        if token_element_counts.get(tok, 1) > 1:
+            return False
+        if unit_token_counts is not None and (
+            unit_token_counts.get(tok, 0) > CORPUS_GENERIC_THRESHOLD
+        ):
+            return False
+        return True
     return False
 
 
@@ -157,6 +174,7 @@ def apply_precision(
     element_label_by_id: dict[UUID, str],
     token_element_counts: dict[str, int],
     protected_unit_ids: frozenset[UUID],
+    unit_token_counts: dict[str, int] | None = None,
 ) -> PrecisionResult:
     """Gate the lexical candidate binds (D209). Per unit: a protected unit
     (rule-confirmed job email or a clustered opportunity unit) is kept untouched;
@@ -199,7 +217,7 @@ def apply_precision(
             if b.tier in ("lexical_exact", "alias")
             or is_genuine_bind(
                 titles, element_label_by_id.get(b.element_id, ""),
-                token_element_counts,
+                token_element_counts, unit_token_counts,
             )
         ]
         if genuine:

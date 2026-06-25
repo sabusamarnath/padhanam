@@ -683,6 +683,14 @@ WHERE u.user_owned = true
 RETURN u.unit_id AS unit_id
 """
 
+# S103i (D209): units belonging to an opportunity — protected from the precision
+# filter (a confirmed real opportunity's work is kept untouched).
+_LIST_CLUSTERED_UNITS = """
+MATCH (u:Unit {tenant_id: $tenant_id})
+      -[:BELONGS_TO {tenant_id: $tenant_id}]->(:Opportunity {tenant_id: $tenant_id})
+RETURN DISTINCT u.unit_id AS unit_id
+"""
+
 
 def _merge_element_evidence_cypher(tlabel: str, tid: str) -> str:
     return f"""
@@ -1705,6 +1713,15 @@ class TenantScopedNeo4jSession:
         session = self._bound_session
         result = await session.run(
             _LIST_USER_OWNED_UNITS, {"tenant_id": self._tenant_id}
+        )
+        return {UUID(row["unit_id"]) for row in await result.data()}
+
+    async def list_clustered_unit_ids(self) -> set[UUID]:
+        """Unit ids belonging to an opportunity (D209) — protected from the
+        precision filter so a confirmed real opportunity's work is kept."""
+        session = self._bound_session
+        result = await session.run(
+            _LIST_CLUSTERED_UNITS, {"tenant_id": self._tenant_id}
         )
         return {UUID(row["unit_id"]) for row in await result.data()}
 

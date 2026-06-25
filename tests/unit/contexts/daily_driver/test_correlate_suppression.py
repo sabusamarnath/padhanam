@@ -99,6 +99,9 @@ class _FakeUnitGraph:
     async def list_user_owned_unit_ids(self, *, tenant_context):
         return set()
 
+    async def list_clustered_unit_ids(self, *, tenant_context):
+        return set()
+
     async def replace_element_evidence(self, *, tenant_context, evidence):
         self.replaced = tuple(evidence)
 
