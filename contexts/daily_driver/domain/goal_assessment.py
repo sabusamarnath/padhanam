@@ -904,17 +904,34 @@ def binding_rationale(
             unit_token_counts=unit_token_counts,
         )
     }
-    if not discriminative:
+    # Single-sourced with the bar (precision.is_genuine_bind): the bar keeps a bind
+    # on one discriminative token OR two-plus non-corpus-generic tokens
+    # (corroboration). The basis shows whichever justified survival — the most
+    # discriminative token if there is one, else the rarest of the corroborating
+    # non-generic tokens — and only reads "no clear basis" when neither holds (the
+    # generic-only case the bar parks). So a surviving bind always shows a real term.
+    non_generic = {
+        t for t in shared
+        if unit_token_counts is None
+        or unit_token_counts.get(t, 0) <= CORPUS_GENERIC_THRESHOLD
+    }
+    if discriminative:
+        candidates = discriminative
+        strength = _STRENGTH_MEDIUM
+    elif len(non_generic) >= 2:
+        candidates = non_generic  # corroboration basis (matches the bar's 2-token branch)
+        strength = _STRENGTH_WEAK
+    else:
         return (NO_CLEAR_BASIS, _STRENGTH_WEAK)
     # most discriminative = rarest in the corpus, then rarest across element labels.
     term = min(
-        discriminative,
+        candidates,
         key=lambda t: (
             unit_token_counts.get(t, 0) if unit_token_counts is not None else 0,
             token_element_counts.get(t, 1),
         ),
     )
-    return (term, _STRENGTH_MEDIUM)
+    return (term, strength)
 
 
 def element_token_counts(labels: tuple[str, ...]) -> dict[str, int]:
