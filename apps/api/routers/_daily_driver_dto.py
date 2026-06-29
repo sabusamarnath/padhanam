@@ -602,6 +602,40 @@ class CloseOpportunityRequest(BaseModel):
     reason: str
 
 
+class PipelineAssessmentDTO(BaseModel):
+    """The "how am I doing" assessment for a goal (S103p, D216): a
+    recommendation-shaped verdict whose headline is label-independent, plus the
+    funnel counts and the proof-dependent close-reason split."""
+
+    verdict_label: str
+    verdict_text: str
+    because: str
+    move: str
+    confirmed_live: int
+    suggested_live: int
+    closed: int
+    engaged: int
+    interviewed: int
+    offers: int
+    one_touch_volume: int
+    activity: int
+    closed_reasons: dict[str, int]
+    suggested_closed: int
+    split_proof_dependent: bool
+
+
+def pipeline_assessment_to_dto(a) -> "PipelineAssessmentDTO":
+    return PipelineAssessmentDTO(
+        verdict_label=a.verdict_label, verdict_text=a.verdict_text,
+        because=a.because, move=a.move,
+        confirmed_live=a.confirmed_live, suggested_live=a.suggested_live,
+        closed=a.closed, engaged=a.engaged, interviewed=a.interviewed,
+        offers=a.offers, one_touch_volume=a.one_touch_volume, activity=a.activity,
+        closed_reasons=a.closed_reasons, suggested_closed=a.suggested_closed,
+        split_proof_dependent=a.split_proof_dependent,
+    )
+
+
 class AuthoredEdgeDTO(BaseModel):
     """One authored causal edge for proof (S102, D200).
 

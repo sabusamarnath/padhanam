@@ -51,6 +51,8 @@ from apps.api.routers._daily_driver_dto import (
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
+    PipelineAssessmentDTO,
+    pipeline_assessment_to_dto,
     ReclassifyCddElementRequest,
     RelinkCddEvidenceRequest,
     RematchResultDTO,
@@ -103,6 +105,9 @@ from contexts.daily_driver.application.correlate_goal_facets import (
 from contexts.daily_driver.application.read_element_evidence import (
     read_element_bindings,
     read_element_evidence,
+)
+from contexts.daily_driver.application.read_pipeline_assessment import (
+    read_pipeline_assessment,
 )
 from contexts.daily_driver.application.correct_cdd_evidence import (
     relink_cdd_evidence,
@@ -518,6 +523,22 @@ async def get_cdd_bindings(
         goal_graph=goal_graph, actor=actor,
     )
     return [element_binding_to_dto(b) for b in bindings]
+
+
+@router.get("/cdd/assessment/{outcome_id}", response_model=PipelineAssessmentDTO)
+async def get_cdd_assessment(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> PipelineAssessmentDTO:
+    """The "how am I doing" assessment for a goal (D216): a recommendation-shaped
+    verdict whose headline is label-independent, the funnel counts, and the
+    proof-dependent close-reason split. Declared before ``/cdd/{outcome_id}`` so
+    ``assessment`` is not parsed as an outcome id."""
+    assessment = await read_pipeline_assessment(
+        goal_graph=goal_graph, outcome_id=outcome_id, actor=actor
+    )
+    return pipeline_assessment_to_dto(assessment)
 
 
 @router.get("/cdd/email-source/{facet_id}", response_model=EmailSourceDTO)

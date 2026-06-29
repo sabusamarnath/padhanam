@@ -881,3 +881,66 @@ def test_confirm_unknown_opportunity_404() -> None:
     client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
     res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/confirm")
     assert res.status_code == 404, res.text
+
+
+# --- D216: the how-am-i-doing assessment endpoint ---------------------------
+
+class _AssessGoalGraph:
+    """A goal graph returning a GoalCddView for the assessment read (D216)."""
+
+    def __init__(self, view) -> None:
+        self._view = view
+
+    async def read_goal_cdd(self, *, tenant_context, outcome_id):
+        return self._view
+
+
+def _assess_view():
+    from contexts.daily_driver.domain.cdd import (
+        DispositionCounts, GateView, GoalCddView, OpportunityView,
+        ProofState, ProvenanceOrigin,
+    )
+
+    apply_g, screen_g = uuid4(), uuid4()
+    gates = (
+        GateView(gate_id=apply_g, name="Apply", gate_order=3, local_outcome="",
+                 local_goal="", provenance_origin=ProvenanceOrigin.LLM_DRAFTED,
+                 proof_state=ProofState.PENDING),
+        GateView(gate_id=screen_g, name="Screening", gate_order=4, local_outcome="",
+                 local_goal="", provenance_origin=ProvenanceOrigin.LLM_DRAFTED,
+                 proof_state=ProofState.PENDING),
+    )
+
+    def opp(prov, status, reason=None, gate=None):
+        return OpportunityView(
+            opportunity_id=uuid4(), name="Co", current_gate_id=gate, unit_count=2,
+            provenance_origin=prov, proof_state=ProofState.PENDING,
+            status=status, closed_reason=reason,
+        )
+
+    opps = (
+        opp(ProvenanceOrigin.SYSTEM_SUGGESTED, "closed", "rejected"),
+        opp(ProvenanceOrigin.USER_AUTHORED, "closed", "rejected", screen_g),  # interviewed
+        opp(ProvenanceOrigin.SYSTEM_SUGGESTED, "live"),
+    )
+    return GoalCddView(
+        outcome_id=uuid4(), expected_outcome="Secure a great-fit role",
+        elements=(), edges=(), gates=gates, opportunities=opps,
+        disposition=DispositionCounts(moat=166, pipeline=102, market=96, parked=247),
+    )
+
+
+def test_assessment_route_reads_label_independent_verdict() -> None:
+    client = _client(
+        _FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()),
+        goal_graph=_AssessGoalGraph(_assess_view()),
+    )
+    res = client.get(f"/api/v1/daily-driver/cdd/assessment/{uuid4()}")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["verdict_label"] == "pipeline empty"
+    assert body["confirmed_live"] == 0 and body["offers"] == 0
+    assert body["interviewed"] == 1  # the Screening opp, gate beyond Apply
+    assert body["one_touch_volume"] == 102 and body["activity"] == 166
+    assert body["split_proof_dependent"] is True  # a suggested closed opp exists
+    assert "targeting" in body["move"]
