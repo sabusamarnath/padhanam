@@ -564,6 +564,21 @@ SET o.status = 'live'
 REMOVE o.closed_reason, o.closed_at
 RETURN o.opportunity_id AS opportunity_id
 """
+# The proof actions on a system-suggested opportunity (S103o, D215, D200): confirm
+# flips provenance to user_authored (the operator vouches it is real); reject
+# DETACH-DELETEs the suggested cluster (the units + their EVIDENCES survive — only
+# the :Opportunity node + its BELONGS_TO membership edges go, so the units return to
+# the unclustered set). Rejecting a system suggestion is the user-initiated delete
+# the no-auto-deletion posture allows (the rejected-LLM-element precedent).
+_CONFIRM_OPPORTUNITY = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.provenance_origin = 'user_authored', o.proof_state = 'accepted'
+RETURN o.opportunity_id AS opportunity_id
+"""
+_DELETE_OPPORTUNITY = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+DETACH DELETE o
+"""
 # Idempotent membership: MERGE the BELONGS_TO edge keyed on (unit, opportunity).
 _ATTACH_UNIT_TO_OPPORTUNITY = """
 MATCH (u:Unit {tenant_id: $tenant_id, unit_id: $unit_id})
@@ -1386,6 +1401,28 @@ class TenantScopedNeo4jSession:
             "opportunity_id": str(opportunity_id),
         })
         return await result.single() is not None
+
+    async def confirm_opportunity(self, *, opportunity_id: UUID) -> bool:
+        """Confirm a system-suggested opportunity → user_authored (S103o, D215/D200).
+        Returns True when matched."""
+        session = self._bound_session
+        result = await session.run(_CONFIRM_OPPORTUNITY, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        })
+        return await result.single() is not None
+
+    async def delete_opportunity(self, *, opportunity_id: UUID) -> bool:
+        """Reject (delete) a suggested opportunity (S103o, D215) — DETACH DELETE the
+        node + its BELONGS_TO; the units + their binds survive. Detected from the
+        summary's nodes-deleted counter."""
+        session = self._bound_session
+        result = await session.run(_DELETE_OPPORTUNITY, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        })
+        summary = await result.consume()
+        return summary.counters.nodes_deleted > 0
 
     async def set_element_gate(
         self, *, element_kind: str, element_id: UUID, gate_id: UUID

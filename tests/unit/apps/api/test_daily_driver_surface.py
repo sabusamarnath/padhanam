@@ -317,6 +317,9 @@ def test_opportunity_close_state_in_the_lens():
     assert "buildCloseControl(" in sel        # the close/reopen control wired in
     ctl = _fn_body("buildCloseControl")
     assert "/close" in ctl and "/reopen" in ctl  # both actions
+    # D215: a system-suggested (extracted) opportunity carries confirm/reject proof
+    assert "system_suggested" in ctl
+    assert "/confirm" in ctl and "/reject" in ctl
     assert "reason: reason.value" in ctl or "reason:" in ctl  # close sends a reason
     # the flow marks a closed opportunity at its gate as closed, not live
     assert "closed:" in _fn_body("buildFlowSpine")

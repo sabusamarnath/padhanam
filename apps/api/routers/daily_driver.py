@@ -588,6 +588,39 @@ async def post_opportunity_reopen(
     return Response(status_code=204)
 
 
+@router.post("/cdd/opportunity/{opportunity_id}/confirm", status_code=204)
+async def post_opportunity_confirm(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Confirm a system-suggested opportunity → user_authored (D215/D200): the
+    operator vouches the extracted cluster is real. 404 when absent."""
+    ok = await goal_graph.confirm_opportunity(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/reject", status_code=204)
+async def post_opportunity_reject(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Reject (delete) a suggested opportunity (D215): the operator rejects the
+    extracted cluster. The units + their binds survive (only the node + BELONGS_TO
+    go), so the units return to the unclustered set. 404 when absent."""
+    ok = await goal_graph.delete_opportunity(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
+
+
 @router.post("/cdd/rematch", response_model=RematchResultDTO)
 async def post_cdd_rematch(
     actor: Annotated[ActorContext, Depends(get_actor_context)],

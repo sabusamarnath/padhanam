@@ -317,6 +317,8 @@
     .map-close-ctl { display: inline-flex; align-items: center; gap: 8px; }
     .map-closed-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
       color: var(--behind-fg); background: var(--behind-bg); border: 1px solid var(--behind-fg); border-radius: 9999px; padding: 1px 8px; }
+    .map-suggested-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--needs-fg); background: var(--needs-bg); border: 1px solid var(--needs-fg); border-radius: 9999px; padding: 1px 8px; } /* D215: system-suggested, awaiting proof */
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -1227,6 +1229,23 @@
           catch { toast("Close failed", true); }
         };
         box.appendChild(reason);
+      }
+      // D215: a system-suggested (extracted) opportunity carries proof actions —
+      // confirm it is real (-> user_authored) or reject the cluster (deletes the
+      // suggestion; the units return to unclustered, their binds survive).
+      if (opp.provenance_origin === "system_suggested") {
+        const tag = document.createElement("span"); tag.className = "map-suggested-badge"; tag.textContent = "suggested";
+        const conf = document.createElement("button"); conf.type = "button"; conf.className = "btn-ghost cdd-btn"; conf.textContent = "Confirm";
+        conf.onclick = async () => {
+          try { await api(`/daily-driver/cdd/opportunity/${opp.opportunity_id}/confirm`, { method: "POST" }); await reload(); }
+          catch { toast("Confirm failed", true); }
+        };
+        const rej = document.createElement("button"); rej.type = "button"; rej.className = "btn-ghost cdd-btn cdd-reject"; rej.textContent = "Reject";
+        rej.onclick = async () => {
+          try { await api(`/daily-driver/cdd/opportunity/${opp.opportunity_id}/reject`, { method: "POST" }); lensOpp = null; await reload(); }
+          catch { toast("Reject failed", true); }
+        };
+        box.appendChild(tag); box.appendChild(conf); box.appendChild(rej);
       }
       return box;
     }

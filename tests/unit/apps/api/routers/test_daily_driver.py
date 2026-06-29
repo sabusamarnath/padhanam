@@ -787,6 +787,8 @@ class _FakeOppGraph:
         self.known = known if known is not None else {_OPP}
         self.closed: dict = {}
         self.reopened: list = []
+        self.confirmed: list = []
+        self.rejected: list = []
 
     async def close_opportunity(self, *, tenant_context, opportunity_id, closed_reason):
         if opportunity_id not in self.known:
@@ -798,6 +800,18 @@ class _FakeOppGraph:
         if opportunity_id not in self.known:
             return False
         self.reopened.append(opportunity_id)
+        return True
+
+    async def confirm_opportunity(self, *, tenant_context, opportunity_id):
+        if opportunity_id not in self.known:
+            return False
+        self.confirmed.append(opportunity_id)
+        return True
+
+    async def delete_opportunity(self, *, tenant_context, opportunity_id):
+        if opportunity_id not in self.known:
+            return False
+        self.rejected.append(opportunity_id)
         return True
 
 
@@ -843,3 +857,27 @@ def test_reopen_opportunity_route() -> None:
     res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/reopen")
     assert res.status_code == 204, res.text
     assert graph.reopened == [_OPP]
+
+
+def test_confirm_opportunity_route() -> None:
+    # D215: confirm a system-suggested opportunity -> user_authored.
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/confirm")
+    assert res.status_code == 204, res.text
+    assert graph.confirmed == [_OPP]
+
+
+def test_reject_opportunity_route_deletes_the_cluster() -> None:
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/reject")
+    assert res.status_code == 204, res.text
+    assert graph.rejected == [_OPP]
+
+
+def test_confirm_unknown_opportunity_404() -> None:
+    graph = _FakeOppGraph(known=set())
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/confirm")
+    assert res.status_code == 404, res.text

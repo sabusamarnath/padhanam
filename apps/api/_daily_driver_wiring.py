@@ -596,6 +596,16 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, opportunity_id=opportunity_id
         )
 
+    async def confirm_opportunity(self, *, tenant_context, opportunity_id) -> bool:
+        return await self._outcome_graph.confirm_opportunity(
+            tenant_context=tenant_context, opportunity_id=opportunity_id
+        )
+
+    async def delete_opportunity(self, *, tenant_context, opportunity_id) -> bool:
+        return await self._outcome_graph.delete_opportunity(
+            tenant_context=tenant_context, opportunity_id=opportunity_id
+        )
+
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:
         record = await self._outcome_graph.read_authored_cdd(
             tenant_context=tenant_context, outcome_id=outcome_id

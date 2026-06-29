@@ -131,6 +131,19 @@ class GoalGraphPort(Protocol):
         """Reopen a closed opportunity back to live, whole (S103n, D214)."""
         ...
 
+    async def confirm_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Confirm a system-suggested opportunity → user_authored (S103o, D215)."""
+        ...
+
+    async def delete_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Reject (delete) a suggested opportunity (S103o, D215); units + binds
+        survive."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,

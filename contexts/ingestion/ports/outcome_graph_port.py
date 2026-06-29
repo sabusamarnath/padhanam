@@ -405,6 +405,19 @@ class OutcomeGraphPort(Protocol):
         """Reopen a closed opportunity back to live, whole (S103n, D214)."""
         ...
 
+    async def confirm_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Confirm a system-suggested opportunity → user_authored (S103o, D215)."""
+        ...
+
+    async def delete_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Reject (delete) a suggested opportunity (S103o, D215) — the units + binds
+        survive; only the node + BELONGS_TO go. True when a node was deleted."""
+        ...
+
     async def attach_unit_to_opportunity(
         self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
     ) -> None:
