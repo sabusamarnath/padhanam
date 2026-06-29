@@ -878,6 +878,51 @@ metrics:
 
 ---
 
+## S103m — the opportunity lens: filter the set down to one process (D213) (build mode, view-layer)
+
+roles: architect (D213 — the lens model, the leanest-path call to ride the existing payloads), engineer (the opportunity_id/occurred_at plumb, the selector + thread + flow highlight + scoped binds), analyst (Step 0 + the live breadth measure), technical writer (D213, this entry).
+
+- **Step 0 — no contradicted premise; the lens data is already on the wire.** Two-B's opportunity model is queryable without a model change — `list_opportunities` (id, name, current_gate_id, unit_count), `ElementEvidenceRecord.opportunity_id` on every bind (S103h/D208), units' BELONGS_TO. The two payloads the Map already fetches carry it: the CDD read (`cdd.opportunities` with `current_gate_id` — the flow spine already places them) and the bindings read. The one plumb: `opportunity_id` was dropped at the adapter's `ElementEvidenceRecord`→`ElementEvidence` mapping, so it (plus the unit's representative `occurred_at`) is threaded onto the binding. Stamp S103m/D213, no migration.
+
+- **The build.** A selector at the top of get-a-job (All / the three opportunities with unit counts / an honest Unclustered(N)); selecting one drives a global `lensOpp` + a `lensMatch(b)` predicate. The client builds the lens from data already on the wire: the **correspondence thread** (the lens's distinct units, time-ordered by `occurred_at`, each opening the S103l read-only source block), the **flow position** (the opportunity's `current_gate_id` marked "▸ here" on the spine), and the **scoped binds** (`renderBindings` + the node badge filter by `lensMatch`, so the verification drawer proofs one opportunity's binds). No new endpoint.
+
+- **Reflection 1 — did the lens make per-opportunity proof doable (substantive)?** Yes, and the mechanism is exactly the declutter the proof pass needed. Across the live corpus the bindings read returns 350 binds; filtering to Acme via the selector reduces the node-tap drawer to *that* process's binds (Acme carries a handful, not the flat 350), with its correspondence thread above it in time order and its gate marked on the flow. Before, proofing meant scanning a flat set where Acme's emails were interleaved with 229 unclustered units and two other opportunities; now it is: select Acme, read its thread top-to-bottom, tap each element, keep or unlink against the basis + source. The lens does not change a single bind — it is pure projection over `opportunity_id` — but it turns "proof the set" into "proof a process," which is the only way the per-opportunity proof pass is tractable while clustering is still pending. The honest limit it respects: it covers the three instantiated opportunities and names the rest plainly (Unclustered 229), so the operator is never misled that the lens spans the corpus.
+
+- **Reflection 2 — the breadth boundary (sizes the clustering session).** Live: the three opportunities cover **13 units** (Acme 5, Globex Legal 5, Initech AI 3); **229 distinct bound units are unclustered**. So the lens is real but narrow — 13 of ~242 bound units sit in an opportunity today. That 229 is the clustering session's job: content-extraction clustering extends the lens from three hand-instantiated processes to the whole correspondence set, and the unclustered count is the honest size of that work.
+
+- **Reflection 3 — methodology.** A pure view feature riding the model already built: two-B's opportunity data (BELONGS_TO, gate position) + S103l's verification drawer + S103j's flow spine, joined by one field plumbed onto the binding. No model change, no migration, no new endpoint — the cheap thing that makes the expensive thing (the per-opportunity proof pass) tractable, the same move as the Map render unblocking proof and the drawer making binds verifiable.
+
+- **AC verdicts.** AC1 (selector lists All + 3 opportunities + unclustered) ✓ — served markup + live data (Unclustered 229). AC2 (thread scopes to the opportunity's units in time order) ✓ — `lensMatch` filter, `occurred_at` on 350/350, sorted. AC3 (current gate marked: Acme→Screening, Globex Legal→Apply) ✓ — live read confirms the gate positions; "▸ here" highlight. AC4 (binds scoped, each opens the verification drawer with basis + source) ✓ — `renderBindings`/node badge filter by `lensMatch`, drawer reused. AC5 (unclustered shown with an honest count) ✓ — 229. AC6 (boots before pin; suite green; import-linter; no migration) ✓ — `create_app` + `/app` lens markup verified before the pin; daily_driver + apps green (incl. the new lens surface test); import-linter 48/0; no migration.
+
+- Close state: **four commits — charter-first D213 (`19d9572`), the opportunity-scoped reads (`71c739f`), the selector + scoped surface + drawer-in-lens (`d02ea53`), this live-verify + re-pin + log**. Selecting an opportunity now scopes its correspondence, its flow position, and its proofable binds. Deployed and boot-verified before the pin (digest `e0655c4…`).
+
+- methodology: the leanest-path call (ride the CDD + bindings payloads, plumb one field, build the lens client-side) kept a whole navigation feature to a 4-line domain change + a render — the discipline of "what is already on the wire?" before reaching for a new endpoint, the same restraint as S103j's "the graph data is already on the wire."
+
+```
+metrics:
+  classification: build session (S103m — the opportunity lens: a selector scopes the correspondence thread, the flow position, and the proofable binds to one process; D213; view-layer, no model change)
+  session_started: 2026-06-29
+  session_closed: 2026-06-29
+  step0: no contradicted premise; two-B's opportunity model queryable (list_opportunities, ElementEvidenceRecord.opportunity_id, BELONGS_TO); lens data rides the CDD (cdd.opportunities.current_gate_id) + bindings payloads; the one plumb = opportunity_id dropped at the ElementEvidenceRecord->ElementEvidence adapter mapping
+  plumb: ElementEvidence + ElementBinding + ElementBindingDTO gain opportunity_id (from the record) + occurred_at (the unit's earliest present-facet time); matcher leaves opportunity_id None, the read populates it
+  lens: selector (All / 3 opportunities w/ unit counts / Unclustered(N)) -> global lensOpp + lensMatch(b); correspondence thread (distinct units, occurred_at-ordered, source block per item); flow gate "▸ here" highlight; renderBindings + node badge filter by lensMatch
+  live_validation: 350 bindings; 42 carry opportunity_id across 3 distinct opportunities (13 units); occurred_at on 350/350; Unclustered = 229 distinct units; gate positions Acme->Screening, Globex Legal->Apply, Initech AI unplaced
+  reflection_1_per_opportunity_proof: filtering to Acme reduces the drawer from the flat 350 to that process's binds, with its thread above + its gate marked; turns "proof the set" into "proof a process"; pure projection over opportunity_id, no bind changed
+  reflection_2_breadth: 3 opportunities cover 13 units; 229 distinct bound units unclustered — the honest size of the clustering session that extends the lens
+  reflection_3_methodology: a view feature riding two-B's data + S103l's drawer + S103j's spine joined by one plumbed field; no model change/migration/endpoint
+  tests: test_opportunity_lens_scopes_thread_flow_and_binds (selector + thread + lensMatch + flow highlight + scoped binds); daily_driver + apps green; import-linter 48/0
+  boot_verify: create_app builds; /app serves map-lens-bar + buildThreadPanel + "Lens — focus" + Unclustered; Up (healthy) — verified BEFORE the pin
+  commits: 19d9572 (charter D213), 71c739f (opportunity-scoped reads), d02ea53 (selector + scoped surface + drawer-in-lens), <this commit> (live-verify + re-pin + session log; image e0655c4)
+  charter_touchpoints: charter/decisions.md (D213 + index), charter/current-package.md (S103m line + deferrals), contexts/daily_driver/domain/goal_assessment.py (ElementEvidence/ElementBinding opportunity_id+occurred_at), contexts/daily_driver/application/read_element_evidence.py, apps/api/_daily_driver_wiring.py (adapter map), apps/api/routers/_daily_driver_dto.py, apps/api/static/daily_driver.html (the lens), tests/unit/apps/api/test_daily_driver_surface.py, log/sessions.md (this entry), compose.yaml (pin)
+  numbering: S103m (the opportunity lens); D213 the live decision max; S104 reserved for direction
+  operator_next: proof a process end-to-end through the lens (filter Acme, read thread, proof binds); the operator's full proof pass on the now-navigable chain
+  next: content-extraction clustering to extend the lens from 13 -> the 229 unclustered units (the breadth boundary sizes it); the "how am I doing" assessment view (spec a mock); per-opportunity process configuration after two-C; leg 3 (match surface) + the drill-path breadcrumb; the 6 pre-existing red live-stack e2e tests
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
