@@ -446,6 +446,9 @@ class Neo4jGraphRepository:
                         proof_state=r["proof_state"],
                         unit_count=r["unit_count"],
                         source=r.get("source"),
+                        status=r.get("status") or "live",
+                        closed_reason=r.get("closed_reason"),
+                        closed_at=r.get("closed_at"),
                     )
                     for r in rows
                 ]
@@ -466,6 +469,35 @@ class Neo4jGraphRepository:
                     outcome_id=outcome_id, moat=moat, pipeline=pipeline,
                     market=market, parked=parked,
                 )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def close_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        closed_reason: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.close_opportunity(
+                    opportunity_id=opportunity_id, closed_reason=closed_reason
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def reopen_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.reopen_opportunity(opportunity_id=opportunity_id)
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

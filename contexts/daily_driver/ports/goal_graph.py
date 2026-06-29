@@ -117,6 +117,20 @@ class GoalGraphPort(Protocol):
         """Read a goal's authored CDD for proof review (S102, D200)."""
         ...
 
+    async def close_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        closed_reason: str,
+    ) -> bool:
+        """Close an opportunity with its outcome reason (S103n, D214) —
+        archive-not-erase; the binds + correspondence stay. True when matched."""
+        ...
+
+    async def reopen_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Reopen a closed opportunity back to live, whole (S103n, D214)."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,

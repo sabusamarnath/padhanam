@@ -583,6 +583,19 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, outcome_id=outcome_id
         )
 
+    async def close_opportunity(
+        self, *, tenant_context, opportunity_id, closed_reason
+    ) -> bool:
+        return await self._outcome_graph.close_opportunity(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            closed_reason=closed_reason,
+        )
+
+    async def reopen_opportunity(self, *, tenant_context, opportunity_id) -> bool:
+        return await self._outcome_graph.reopen_opportunity(
+            tenant_context=tenant_context, opportunity_id=opportunity_id
+        )
+
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:
         record = await self._outcome_graph.read_authored_cdd(
             tenant_context=tenant_context, outcome_id=outcome_id
@@ -647,6 +660,9 @@ class GoalGraphAdapter:
                 provenance_origin=ProvenanceOrigin(o.provenance_origin),
                 proof_state=ProofState(o.proof_state),
                 source=o.source,
+                status=getattr(o, "status", "live"),
+                closed_reason=getattr(o, "closed_reason", None),
+                closed_at=getattr(o, "closed_at", None),
             )
             for o in opp_records
         )

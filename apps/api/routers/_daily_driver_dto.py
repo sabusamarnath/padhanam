@@ -582,6 +582,24 @@ class OpportunityDTO(BaseModel):
     provenance_origin: str
     proof_state: str
     source: str | None = None
+    # The closed state (S103n, D214): status live/closed, the outcome reason + when.
+    status: str = "live"
+    closed_reason: str | None = None
+    closed_at: datetime | None = None
+
+
+# D214: the five outcome reasons a close must carry (a well-declined process is
+# value, not loss). Validated at the router so the model never holds a free-text
+# reason. With the furthest gate, the reason gives the real-outcome-vs-non-start read.
+CLOSE_REASONS: frozenset[str] = frozenset(
+    {"won", "declined", "withdrawn_or_killed", "rejected", "went_cold"}
+)
+
+
+class CloseOpportunityRequest(BaseModel):
+    """Close an opportunity with a required outcome reason (S103n, D214)."""
+
+    reason: str
 
 
 class AuthoredEdgeDTO(BaseModel):
@@ -817,6 +835,9 @@ def goal_cdd_to_dto(view) -> "GoalCddDTO":
                 provenance_origin=o.provenance_origin.value,
                 proof_state=o.proof_state.value,
                 source=o.source,
+                status=getattr(o, "status", "live"),
+                closed_reason=getattr(o, "closed_reason", None),
+                closed_at=getattr(o, "closed_at", None),
             )
             for o in getattr(view, "opportunities", ())
         ],

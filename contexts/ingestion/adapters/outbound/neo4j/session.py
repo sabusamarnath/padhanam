@@ -542,8 +542,27 @@ OPTIONAL MATCH (u:Unit {tenant_id: $tenant_id})-[:BELONGS_TO {tenant_id: $tenant
 RETURN o.opportunity_id AS opportunity_id, o.name AS name,
        o.current_gate_id AS current_gate_id,
        o.provenance_origin AS provenance_origin, o.proof_state AS proof_state,
-       o.source AS source, count(u) AS unit_count
+       o.source AS source, count(u) AS unit_count,
+       coalesce(o.status, 'live') AS status,
+       o.closed_reason AS closed_reason, o.closed_at AS closed_at
 ORDER BY o.name ASC
+"""
+# The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
+# the required reason + closed_at; the node, its BELONGS_TO memberships, and its
+# units' binds are untouched — a closed process is read-only history, reopenable.
+# Schemaless (no migration), RETURN detects success (no row = absent/cross-tenant).
+_CLOSE_OPPORTUNITY = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.status = 'closed',
+    o.closed_reason = $closed_reason,
+    o.closed_at = $closed_at
+RETURN o.opportunity_id AS opportunity_id
+"""
+_REOPEN_OPPORTUNITY = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.status = 'live'
+REMOVE o.closed_reason, o.closed_at
+RETURN o.opportunity_id AS opportunity_id
 """
 # Idempotent membership: MERGE the BELONGS_TO edge keyed on (unit, opportunity).
 _ATTACH_UNIT_TO_OPPORTUNITY = """
@@ -1342,6 +1361,31 @@ class TenantScopedNeo4jSession:
             "opportunity_id": str(opportunity_id),
         }
         await session.run(_CLEAR_OPPORTUNITY_UNITS, params)
+
+    async def close_opportunity(
+        self, *, opportunity_id: UUID, closed_reason: str
+    ) -> bool:
+        """Close an opportunity with its outcome reason (S103n, D214) —
+        archive-not-erase: sets status/reason/closed_at, leaves the node, its
+        memberships, and its binds intact. Returns True when matched."""
+        session = self._bound_session
+        result = await session.run(_CLOSE_OPPORTUNITY, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "closed_reason": closed_reason,
+            "closed_at": _now_utc(),
+        })
+        return await result.single() is not None
+
+    async def reopen_opportunity(self, *, opportunity_id: UUID) -> bool:
+        """Reopen a closed opportunity (S103n, D214) — back to live, whole.
+        Returns True when matched."""
+        session = self._bound_session
+        result = await session.run(_REOPEN_OPPORTUNITY, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        })
+        return await result.single() is not None
 
     async def set_element_gate(
         self, *, element_kind: str, element_id: UUID, gate_id: UUID

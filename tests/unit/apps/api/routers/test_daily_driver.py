@@ -776,3 +776,70 @@ def test_goals_route_returns_unblock_or_drop_for_sequence() -> None:
     assert g["terminal_state"] == "pending"
     assert len(g["steps"]) == 2
     assert g["current_target"] is None  # no ladder on a sequence goal
+
+
+# --- D214: close / reopen an opportunity (the closed state) -------------------
+
+class _FakeOppGraph:
+    """A goal graph that records close/reopen calls (S103n, D214)."""
+
+    def __init__(self, *, known: set | None = None) -> None:
+        self.known = known if known is not None else {_OPP}
+        self.closed: dict = {}
+        self.reopened: list = []
+
+    async def close_opportunity(self, *, tenant_context, opportunity_id, closed_reason):
+        if opportunity_id not in self.known:
+            return False
+        self.closed[opportunity_id] = closed_reason
+        return True
+
+    async def reopen_opportunity(self, *, tenant_context, opportunity_id):
+        if opportunity_id not in self.known:
+            return False
+        self.reopened.append(opportunity_id)
+        return True
+
+
+_OPP = uuid4()
+
+
+def test_close_opportunity_requires_a_valid_reason() -> None:
+    # AC1: a close is rejected unless the reason is one of the five types.
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(
+        f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/close",
+        json={"reason": "ghosted-them"},
+    )
+    assert res.status_code == 422, res.text
+    assert graph.closed == {}  # nothing written on an invalid reason
+
+
+def test_close_opportunity_with_valid_reason_persists() -> None:
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(
+        f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/close",
+        json={"reason": "rejected"},
+    )
+    assert res.status_code == 204, res.text
+    assert graph.closed[_OPP] == "rejected"
+
+
+def test_close_unknown_opportunity_404() -> None:
+    graph = _FakeOppGraph(known=set())
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(
+        f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/close",
+        json={"reason": "won"},
+    )
+    assert res.status_code == 404, res.text
+
+
+def test_reopen_opportunity_route() -> None:
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/reopen")
+    assert res.status_code == 204, res.text
+    assert graph.reopened == [_OPP]

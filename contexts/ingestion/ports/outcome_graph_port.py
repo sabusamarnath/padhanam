@@ -32,6 +32,7 @@ from ``graph_repository_port`` so callers handle one error taxonomy.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol, Sequence
 from uuid import UUID
 
@@ -141,6 +142,13 @@ class OpportunityRecord:
     proof_state: str
     unit_count: int
     source: str | None = None
+    # The closed state (S103n, D214). ``status`` is ``live`` or ``closed``
+    # (coalesced from a missing value to ``live`` for pre-D214 opportunities);
+    # ``closed_reason`` (one of the five outcome types) + ``closed_at`` are set when
+    # closed. Closing is archive-not-erase — the binds + correspondence stay.
+    status: str = "live"
+    closed_reason: str | None = None
+    closed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -380,6 +388,21 @@ class OutcomeGraphPort(Protocol):
     ) -> None:
         """Persist the precision pass's disposition counts on the goal (S103i/D210)
         so the Map's recommendation-shaped summary reads them."""
+        ...
+
+    async def close_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        closed_reason: str,
+    ) -> bool:
+        """Close an opportunity with its outcome reason (S103n, D214) —
+        archive-not-erase: sets status/reason/closed_at, leaves the node, its
+        memberships, and its binds intact. Returns True when matched."""
+        ...
+
+    async def reopen_opportunity(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID
+    ) -> bool:
+        """Reopen a closed opportunity back to live, whole (S103n, D214)."""
         ...
 
     async def attach_unit_to_opportunity(

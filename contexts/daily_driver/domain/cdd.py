@@ -12,6 +12,7 @@ the proof read returns. The LLM call itself lives in an adapter behind the
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID
@@ -174,6 +175,12 @@ class OpportunityView:
     provenance_origin: ProvenanceOrigin
     proof_state: ProofState
     source: str | None = None
+    # The closed state (S103n, D214): ``status`` live/closed, ``closed_reason`` (one
+    # of the five outcome types) + ``closed_at`` when closed. The lens marks closed
+    # opportunities and reads the live set as live-only.
+    status: str = "live"
+    closed_reason: str | None = None
+    closed_at: datetime | None = None
 
 
 @dataclass(frozen=True)

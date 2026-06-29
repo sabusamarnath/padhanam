@@ -46,6 +46,8 @@ from apps.api.routers._daily_driver_dto import (
     RecordObservedOutcomeRequest,
     AddCddElementRequest,
     AddedCddElementDTO,
+    CLOSE_REASONS,
+    CloseOpportunityRequest,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -544,6 +546,46 @@ async def get_cdd_email_source(
         subject=content.subject,
         body=content.body,
     )
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/close", status_code=204)
+async def post_opportunity_close(
+    opportunity_id: UUID,
+    body: CloseOpportunityRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Close an opportunity with a required outcome reason (D214). Archive-not-erase
+    — the binds + correspondence stay, reopenable. 422 on an unknown reason, 404
+    when the opportunity is absent."""
+    reason = (body.reason or "").strip()
+    if reason not in CLOSE_REASONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"reason must be one of {sorted(CLOSE_REASONS)}",
+        )
+    ok = await goal_graph.close_opportunity(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
+        closed_reason=reason,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/reopen", status_code=204)
+async def post_opportunity_reopen(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Reopen a closed opportunity back to live, whole (D214)."""
+    ok = await goal_graph.reopen_opportunity(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)
