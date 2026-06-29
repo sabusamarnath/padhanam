@@ -297,6 +297,22 @@
     .cdd-gate-count { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
     .cdd-gate-outcome { font-size: 12px; color: var(--ink-2); padding: 4px 2px 8px; }
     .feeder-label-gate { margin-top: 8px; }
+    /* D213: the opportunity lens — selector, correspondence thread, gate highlight */
+    .map-lens-bar { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; flex-wrap: wrap; }
+    .map-lens-h { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+    .map-lens-select { font-family: var(--font-sans); font-size: 12.5px; color: var(--ink-1); background: var(--surface-work);
+      border: 1px solid var(--hairline-strong); border-radius: 8px; padding: 5px 10px; max-width: 360px; }
+    .map-thread { border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 10px; margin: 0 0 14px; background: var(--surface-work); }
+    .thread-item { border-top: 1px solid var(--hairline); }
+    .thread-item:first-of-type { border-top: none; }
+    .thread-head { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+      background: none; border: none; font: inherit; padding: 6px 2px; color: var(--ink-1); }
+    .thread-head:hover { background: var(--page); }
+    .thread-date { flex-shrink: 0; font-size: 10.5px; color: var(--ink-3); min-width: 78px; }
+    .thread-title { flex: 1 1 auto; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thread-src { padding: 2px 2px 8px; }
+    .map-gate.lens-here { border-color: #2BA692; box-shadow: 0 0 0 1px #2BA692; }
+    .map-gate-here { font-size: 9.5px; font-weight: 700; color: #2BA692; text-transform: uppercase; letter-spacing: 0.05em; }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -983,11 +999,13 @@
     // D203/S103c: the bound units under an element — a thin renderer over the shared
     // correction interaction (S103c-fix-4), with the CDD same-goal relink control.
     function renderBindings(sub, grp, el, cdd, refresh) {
+      // D213: scope the bound units to the lens opportunity, so proofing happens
+      // per process — Acme's binds without the rest of the set in the way.
       renderCorrectionList(sub, {
-        bindings: (cddBindings || []).filter((b) => b.element_id === el.element_id),
+        bindings: (cddBindings || []).filter((b) => b.element_id === el.element_id && lensMatch(b)),
         refresh,
         relinkControlFor: (b, ref) => cddElementRelink(b, grp, el, cdd, ref),
-        emptyMsg: "No bound units.",
+        emptyMsg: lensOpp ? "No bound units for this opportunity." : "No bound units.",
       });
     }
     // S103a-fix: in-place edit. Clicking Edit swaps the row for a labelled input
@@ -1118,10 +1136,52 @@
       return n;
     }
     let cdd_ctx = null;
+    // D213: the opportunity lens — null = All; an opportunity_id; or UNCLUSTERED.
+    // Scopes the correspondence thread, the flow highlight, and the binds (drawer +
+    // node badges) to one process so the proof pass runs per opportunity.
+    let lensOpp = null;
+    const UNCLUSTERED = "__unclustered__";
+    // Does this binding belong to the selected lens? (All -> every bind.)
+    function lensMatch(b) {
+      if (!lensOpp) return true;
+      if (lensOpp === UNCLUSTERED) return !b.opportunity_id;
+      return String(b.opportunity_id) === String(lensOpp);
+    }
     function buildCausalMap(grp, cdd) {
       cdd_ctx = { grp, cdd };
       const wrap = document.createElement("div"); wrap.className = "map-graph";
       const strip = dispStrip(cdd); if (strip) wrap.appendChild(strip);
+      wrap.appendChild(buildLensSelector(grp, cdd));
+      const inner = document.createElement("div"); inner.className = "map-lens-inner";
+      wrap.appendChild(inner);
+      renderMapInner(inner, grp, cdd);
+      return wrap;
+    }
+    // D213: the selector at the top of get-a-job — All, the instantiated
+    // opportunities, and an honest "unclustered" entry (coverage honesty, D171).
+    function buildLensSelector(grp, cdd) {
+      const bar = document.createElement("div"); bar.className = "map-lens-bar";
+      const opps = (cdd.opportunities || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      const unclustered = new Set((cddBindings || []).filter((b) => !b.opportunity_id).map((b) => String(b.unit_id))).size;
+      const sel = document.createElement("select"); sel.className = "map-lens-select";
+      const opt = (v, label) => `<option value="${v}"${(lensOpp || "") === v ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      sel.innerHTML =
+        opt("", `All — the whole set (${opps.length} opportunities)`) +
+        opps.map((o) => opt(String(o.opportunity_id), `${o.name} (${o.unit_count})`)).join("") +
+        opt(UNCLUSTERED, `Unclustered (${unclustered}) — not yet in an opportunity`);
+      sel.onchange = () => {
+        lensOpp = sel.value || null;
+        renderMapInner(bar.parentNode.querySelector(".map-lens-inner"), grp, cdd);
+      };
+      bar.innerHTML = `<span class="map-lens-h">Lens — focus one process</span>`;
+      bar.appendChild(sel);
+      return bar;
+    }
+    function renderMapInner(inner, grp, cdd) {
+      inner.innerHTML = "";
+      // The correspondence thread for the selected opportunity (the operator's
+      // first ask — read a thread amongst the set), units in time order.
+      if (lensOpp) inner.appendChild(buildThreadPanel(grp, cdd));
       const goalEls = (cdd.elements || []).filter((e) => !e.gate_id);
       const by = (k) => goalEls.filter((e) => e.kind === k);
       // The control layer (goal-level CDD): levers -> intermediaries -> outcome,
@@ -1143,12 +1203,48 @@
       [rowLev, rowExt, rowInt, rowMout, rowOut].forEach((r) => ctrl.appendChild(r));
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("class", "map-edges"); ctrl.appendChild(svg);
-      wrap.appendChild(ctrl);
+      inner.appendChild(ctrl);
       // The flow spine: gates in execution order, built solid + portals, rest dashed.
-      wrap.appendChild(buildFlowSpine(cdd));
+      inner.appendChild(buildFlowSpine(cdd));
       // Draw the control-layer edges once laid out.
       requestAnimationFrame(() => drawEdges(ctrl, svg, cdd, null));
-      return wrap;
+    }
+    // D213: the correspondence thread — the selected opportunity's units in time
+    // order, each opening its read-only source (reusing the S103l source block).
+    function buildThreadPanel(grp, cdd) {
+      const panel = document.createElement("div"); panel.className = "map-thread";
+      const opp = (cdd.opportunities || []).find((o) => String(o.opportunity_id) === String(lensOpp));
+      const name = lensOpp === UNCLUSTERED ? "Unclustered" : (opp ? opp.name : "—");
+      // Distinct units of the lens, time-ordered (occurred_at asc; undated last).
+      const seen = new Set(); const units = [];
+      (cddBindings || []).filter(lensMatch).forEach((b) => {
+        if (seen.has(String(b.unit_id))) return;
+        seen.add(String(b.unit_id)); units.push(b);
+      });
+      units.sort((a, c) => {
+        const ta = a.occurred_at ? Date.parse(a.occurred_at) : Infinity;
+        const tc = c.occurred_at ? Date.parse(c.occurred_at) : Infinity;
+        return ta - tc;
+      });
+      panel.innerHTML = `<div class="map-layer-h">Correspondence — ${escapeHtml(name)} (${units.length} ${units.length === 1 ? "item" : "items"} in time order)</div>`;
+      if (!units.length) {
+        const e = document.createElement("div"); e.className = "map-empty"; e.textContent = "No correspondence in this lens.";
+        panel.appendChild(e); return panel;
+      }
+      units.forEach((b) => {
+        const row = document.createElement("div"); row.className = "thread-item";
+        const when = b.occurred_at ? new Date(b.occurred_at).toLocaleDateString() : "—";
+        const head = document.createElement("button"); head.type = "button"; head.className = "thread-head";
+        head.innerHTML = `<span class="thread-date">${escapeHtml(when)}</span><span class="thread-title">${escapeHtml(b.title || "(untitled)")}</span>`;
+        const src = document.createElement("div"); src.className = "thread-src"; src.style.display = "none";
+        head.onclick = () => {
+          const open = src.style.display !== "none";
+          src.style.display = open ? "none" : "block";
+          if (!open && !src.dataset.built) { src.appendChild(bindingSourceBlock(b)); src.dataset.built = "1"; }
+        };
+        row.appendChild(head); row.appendChild(src); panel.appendChild(row);
+      });
+      return panel;
     }
     function mapRow(label, els, kind) {
       const r = document.createElement("div"); r.className = "map-row";
@@ -1189,13 +1285,21 @@
       const built = {}; (cdd.gates || []).forEach((ga) => { built[ga.name] = ga; });
       const opps = cdd.opportunities || [];
       const gateName = {}; (cdd.gates || []).forEach((ga) => { gateName[ga.gate_id] = ga.name; });
+      // D213: the lens opportunity's gate, to mark where this process sits.
+      const lensGate = (lensOpp && lensOpp !== UNCLUSTERED)
+        ? (opps.find((o) => String(o.opportunity_id) === String(lensOpp)) || {}).current_gate_id
+        : null;
       FLOW_GATES.forEach((name) => {
         const ga = built[name];
         const cell = document.createElement("div"); cell.className = "map-gate-cell";
         const node = document.createElement("button"); node.type = "button";
-        node.className = "map-gate" + (ga ? " built" : " dashed");
-        const here = opps.filter((o) => ga && o.current_gate_id === ga.gate_id);
+        const isLensGate = ga && lensGate && String(ga.gate_id) === String(lensGate);
+        node.className = "map-gate" + (ga ? " built" : " dashed") + (isLensGate ? " lens-here" : "");
+        // When a lens is on, show only its opportunity here; else show all.
+        const here = opps.filter((o) => ga && o.current_gate_id === ga.gate_id
+          && (!lensOpp || lensOpp === UNCLUSTERED || String(o.opportunity_id) === String(lensOpp)));
         node.innerHTML = `<span class="map-gate-name">${escapeHtml(name)}</span>` +
+          (isLensGate ? `<span class="map-gate-here">▸ here</span>` : "") +
           (here.length ? `<span class="map-gate-opps">${here.map((o) => escapeHtml(o.name)).join(", ")}</span>` : "");
         cell.appendChild(node);
         if (ga) {
@@ -1271,8 +1375,8 @@
       // unit's title; render it open, reusing renderBindings (S103c-fix-4).
       if (el.element_id) {
         const h = document.createElement("div"); h.className = "feeder-label";
-        const n = (cddBindings || []).filter((b) => String(b.element_id) === String(el.element_id)).length;
-        h.textContent = `Linked work — the ${n} item${n === 1 ? "" : "s"} bound here`;
+        const n = (cddBindings || []).filter((b) => String(b.element_id) === String(el.element_id) && lensMatch(b)).length;
+        h.textContent = `Linked work — the ${n} item${n === 1 ? "" : "s"} bound here` + (lensOpp ? " (this opportunity)" : "");
         body.appendChild(h);
         const sub = document.createElement("div"); body.appendChild(sub);
         renderBindings(sub, grp, el, fresh, reload);

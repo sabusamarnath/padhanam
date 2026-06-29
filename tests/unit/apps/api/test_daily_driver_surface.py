@@ -288,6 +288,25 @@ def test_correction_interaction_is_single_sourced():
     assert "renderCorrectionList(" in _fn_body("renderGoalCorrections")
 
 
+def test_opportunity_lens_scopes_thread_flow_and_binds():
+    # D213: the opportunity lens — a selector (All / opportunities / unclustered),
+    # a correspondence thread, a flow gate highlight, and binds scoped to the lens.
+    assert "function buildLensSelector" in _HTML
+    assert "function buildThreadPanel" in _HTML
+    assert "function lensMatch" in _HTML
+    # the honest unclustered entry (coverage honesty, D171)
+    assert "Unclustered" in _HTML
+    # the selector lists the opportunities from the CDD read
+    assert "cdd.opportunities" in _fn_body("buildLensSelector")
+    # the binds drawer scopes to the lens (proof per opportunity)
+    assert "lensMatch(b)" in _fn_body("renderBindings")
+    # the flow marks the lens opportunity's gate
+    assert "lens-here" in _fn_body("buildFlowSpine")
+    # the thread time-orders the opportunity's units and opens their source
+    thread = _fn_body("buildThreadPanel")
+    assert "occurred_at" in thread and "bindingSourceBlock(" in thread
+
+
 def test_correction_row_shows_why_and_strength_consistently():
     # D212: the basis row + strength + the openable source all render from the one
     # shared list (so every view — Map drawer + the flat lens — matches).
