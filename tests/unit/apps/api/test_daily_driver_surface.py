@@ -307,6 +307,21 @@ def test_opportunity_lens_scopes_thread_flow_and_binds():
     assert "occurred_at" in thread and "bindingSourceBlock(" in thread
 
 
+def test_opportunity_close_state_in_the_lens():
+    # D214: the lens marks closed opportunities with their reason, the live set is
+    # live-only, and a close/reopen control acts on the selected opportunity.
+    assert "function buildCloseControl" in _HTML
+    sel = _fn_body("buildLensSelector")
+    assert "the live set" in sel              # All counts live only
+    assert "closed:" in sel                   # closed opportunities marked with reason
+    assert "buildCloseControl(" in sel        # the close/reopen control wired in
+    ctl = _fn_body("buildCloseControl")
+    assert "/close" in ctl and "/reopen" in ctl  # both actions
+    assert "reason: reason.value" in ctl or "reason:" in ctl  # close sends a reason
+    # the flow marks a closed opportunity at its gate as closed, not live
+    assert "closed:" in _fn_body("buildFlowSpine")
+
+
 def test_correction_row_shows_why_and_strength_consistently():
     # D212: the basis row + strength + the openable source all render from the one
     # shared list (so every view — Map drawer + the flat lens — matches).
