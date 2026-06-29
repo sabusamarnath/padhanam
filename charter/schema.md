@@ -932,6 +932,9 @@ evidence distributes across opportunities plus an honest unclustered residual
 | `provenance_origin` | `String`        | `system_suggested` at instantiation, `user_authored` once the operator confirms (D200) |
 | `proof_state`       | `String`        | `pending` / `accepted`                                            |
 | `source`            | `String`/`null` | the clustering signature (e.g. the company domain)                |
+| `status`            | `String`        | `live` or `closed` (S103n, D214). Absent on opportunities created before D214; the read coalesces a missing value to `live`, so the live-set filter needs no backfill. Closing sets `closed`; reopen sets `live` |
+| `closed_reason`     | `String`/`null` | required when `closed` (S103n, D214): one of `won`, `declined`, `withdrawn_or_killed`, `rejected`, `went_cold`. `null` when live. With `current_gate_id` it gives the real-outcome-versus-non-start signal (closed at Apply = response problem; closed after a final round = conversion problem) |
+| `closed_at`         | `DateTime`/`null` | when the opportunity was closed (S103n, D214); cleared on reopen |
 | `created_at`        | `DateTime`      | set on initial MERGE                                               |
 
 Uniqueness constraint: `opportunity_unique_per_tenant` on `(tenant_id,
@@ -940,6 +943,15 @@ range index `belongs_to_tenant_id` on `tenant_id`, and is idempotent via the MER
 pattern (no relationship-property uniqueness in Community Edition). Units matching
 no confirmed opportunity stay unclustered (no `BELONGS_TO`), reading
 `opportunity_id = null` in the evidence — the honest residual, never neglect.
+
+The **closed state** (S103n, D214) is a **schemaless property add** — no new label and
+no property-existence constraint in Community Edition, so **no migration** (the
+`:Outcome.archived_at` / S103j disposition precedent). Closing is **archive-not-erase**
+(D114, invariant 4): `status`/`closed_reason`/`closed_at` are set, but the
+opportunity node, its `BELONGS_TO` memberships, its units' binds, and its
+correspondence all stay intact and reopenable — a closed process is read-only
+history, never deleted. The live set is the read filtered to `coalesce(status,
+'live') <> 'closed'`; closed opportunities still list, marked with their reason.
 
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
