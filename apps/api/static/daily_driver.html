@@ -319,6 +319,40 @@
       color: var(--behind-fg); background: var(--behind-bg); border: 1px solid var(--behind-fg); border-radius: 9999px; padding: 1px 8px; }
     .map-suggested-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
       color: var(--needs-fg); background: var(--needs-bg); border: 1px solid var(--needs-fg); border-radius: 9999px; padding: 1px 8px; } /* D215: system-suggested, awaiting proof */
+    /* D216: the "how am I doing" assessment (recommendation-shaped) */
+    .asmt { display: flex; flex-direction: column; gap: 14px; }
+    .asmt-verdict { background: var(--surface-work); border: 1px solid var(--hairline-strong); border-left: 4px solid var(--needs-fg); border-radius: 11px; padding: 16px; }
+    .asmt-verdict.v-live { border-left-color: #97c459; }
+    .asmt-vlab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--needs-fg); text-transform: uppercase; }
+    .asmt-verdict.v-live .asmt-vlab { color: #97c459; }
+    .asmt-vtext { font-size: 16px; font-weight: 700; margin: 6px 0 2px; line-height: 1.35; color: var(--ink-1); }
+    .asmt-block { margin-top: 12px; }
+    .asmt-bl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 4px; }
+    .asmt-bt { font-size: 13px; color: var(--ink-1); }
+    .asmt-block.move .asmt-bl { color: #2BA692; }
+    .asmt-block.move .asmt-bt { font-weight: 600; }
+    .asmt-split { background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 11px; padding: 14px; }
+    .asmt-split.unproofed { border-color: var(--needs-fg); }
+    .asmt-sh { font-size: 11.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 9px; }
+    .asmt-split.unproofed .asmt-sh { color: var(--needs-fg); }
+    .asmt-mix { display: flex; flex-wrap: wrap; gap: 6px; }
+    .asmt-pill { font-size: 11px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 2px 9px; }
+    .asmt-snote { font-size: 12px; color: var(--ink-2); margin-top: 9px; line-height: 1.45; }
+    .asmt-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .asmt-cols { grid-template-columns: 1fr; } }
+    .asmt-card { background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 11px; padding: 14px; }
+    .asmt-card h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 11px; }
+    .asmt-stage { margin-bottom: 9px; }
+    .asmt-row { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 3px; color: var(--ink-1); }
+    .asmt-row b { font-family: var(--font-mono); }
+    .asmt-bar { height: 7px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+    .asmt-bar i { display: block; height: 100%; border-radius: 4px; background: var(--navy); }
+    .asmt-conv { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-mono); margin-top: 2px; }
+    .asmt-conv.leak { color: var(--needs-fg); }
+    .asmt-gauge { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+    .asmt-big { font-size: 28px; font-weight: 700; font-family: var(--font-mono); color: var(--ink-1); }
+    .asmt-of { font-size: 12.5px; color: var(--ink-3); }
+    .asmt-sub { font-size: 11.5px; color: var(--ink-2); line-height: 1.45; }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -551,6 +585,7 @@
         view.innerHTML = `
           <p class="sub">Your work under the goal it serves. <strong>List</strong> is one verdict line per goal; <strong>Map</strong> shows each goal as a causal node with the levers and work feeding it.</p>
           <div class="assess-toggle" id="assess-toggle" role="tablist">
+            <button class="seg ${assessMode === "doing" ? "on" : ""}" data-mode="doing" type="button" role="tab">Doing</button>
             <button class="seg ${assessMode === "list" ? "on" : ""}" data-mode="list" type="button" role="tab">List</button>
             <button class="seg ${assessMode === "map" ? "on" : ""}" data-mode="map" type="button" role="tab">Map</button>
             <button class="seg ${assessMode === "cdd" ? "on" : ""}" data-mode="cdd" type="button" role="tab">CDD</button>
@@ -620,8 +655,83 @@
     }
     function renderAssess() {
       const box = document.getElementById("moat"); if (!box || !assessData) return;
+      if (assessMode === "doing") return renderAssessDoing(box, assessData);
       if (assessMode === "cdd") return renderAssessCdd(box, assessData);
       (assessMode === "map" ? renderAssessMap : renderAssessList)(box, assessData);
+    }
+    // D216: the "how am I doing" assessment — a recommendation-shaped verdict per
+    // goal, headline anchored on the label-independent funnel, the close-reason
+    // split shown as the proof-dependent sharpener. Reads /cdd/assessment live.
+    async function renderAssessDoing(box, g) {
+      box.innerHTML = "";
+      for (const grp of (g.groups || [])) {
+        if (!grp.outcome_id) continue;
+        let a; try { a = await api(`/daily-driver/cdd/assessment/${grp.outcome_id}`); } catch { continue; }
+        box.appendChild(buildAssessment(grp, a));
+      }
+    }
+    function buildAssessment(grp, a) {
+      const wrap = document.createElement("div"); wrap.className = "asmt";
+      const empty = a.verdict_label === "pipeline empty";
+      // The verdict card (recommendation-shaped: verdict + because + move).
+      const v = document.createElement("div"); v.className = "asmt-verdict " + (empty ? "v-empty" : "v-live");
+      v.innerHTML =
+        `<div class="asmt-vlab">${escapeHtml(a.verdict_label)}</div>` +
+        `<div class="asmt-vtext">${escapeHtml(a.verdict_text)}</div>` +
+        `<div class="asmt-block"><div class="asmt-bl">Because</div><div class="asmt-bt">${escapeHtml(a.because)}</div></div>` +
+        `<div class="asmt-block move"><div class="asmt-bl">Move</div><div class="asmt-bt">${escapeHtml(a.move)}</div></div>`;
+      wrap.appendChild(v);
+      // The proof-dependent split — the one thing that sharpens on the operator's
+      // proof; never flips the verdict above.
+      if (a.closed > 0) {
+        const mix = Object.entries(a.closed_reasons || {})
+          .sort((x, y) => y[1] - x[1])
+          .map(([r, n]) => `<span class="asmt-pill">${escapeHtml(reasonLabel(r))} ${n}</span>`).join("");
+        const s = document.createElement("div"); s.className = "asmt-split" + (a.split_proof_dependent ? " unproofed" : "");
+        s.innerHTML =
+          `<div class="asmt-sh">${a.split_proof_dependent
+            ? `⚠ This is the one read that depends on labels you haven't proofed yet (${a.suggested_closed} of ${a.closed} closes unconfirmed)`
+            : "Closed-reason split (proofed)"}</div>` +
+          `<div class="asmt-mix">${mix || "—"}</div>` +
+          (a.split_proof_dependent
+            ? `<div class="asmt-snote">Rejection reads as a <b>conversion</b> problem (fix interviewing); silence/cold reads as a <b>response</b> problem (fix targeting). The verdict above does not depend on which — proof the reasons in the <b>Map → Lens</b> to sharpen it.</div>`
+            : "")
+        wrap.appendChild(s);
+      }
+      // The funnel (every number a live read) + the gauge.
+      const cols = document.createElement("div"); cols.className = "asmt-cols";
+      cols.appendChild(asmtFunnel(a));
+      cols.appendChild(asmtGauge(a));
+      wrap.appendChild(cols);
+      return wrap;
+    }
+    function asmtFunnel(a) {
+      const c = document.createElement("div"); c.className = "asmt-card";
+      const rows = [
+        ["Job-search activity", a.activity, "emails"],
+        ["Engaged (multi-touch)", a.engaged, "processes that drew a reply"],
+        ["Reached interview", a.interviewed, "beyond apply"],
+        ["Offers", a.offers, ""],
+      ];
+      const max = Math.max(a.activity, 1);
+      c.innerHTML = `<h3>The funnel</h3>` + rows.map(([label, n, note], i) => {
+        const pct = Math.max(1, Math.round((n / max) * 100));
+        const leak = i === 1 ? " leak" : "";
+        return `<div class="asmt-stage"><div class="asmt-row"><span>${escapeHtml(label)}</span><b>${n}</b></div>` +
+          `<div class="asmt-bar"><i style="width:${pct}%"></i></div>` +
+          (note ? `<div class="asmt-conv${leak}">${escapeHtml(note)}</div>` : "") + `</div>`;
+      }).join("") +
+      `<div class="asmt-conv">+ ~${a.one_touch_volume} applications drew only an automated acknowledgement (one-touch volume)</div>`;
+      return c;
+    }
+    function asmtGauge(a) {
+      const c = document.createElement("div"); c.className = "asmt-card";
+      c.innerHTML =
+        `<h3>The opportunity set</h3>` +
+        `<div class="asmt-gauge"><span class="asmt-big">${a.confirmed_live}</span><span class="asmt-of">/ ${a.engaged} confirmed live</span></div>` +
+        `<div class="asmt-sub">${a.closed} closed · ${a.suggested_live} system-suggested live, awaiting your proof. Until you confirm one, the live count is zero and the verdict holds.</div>` +
+        `<div class="asmt-sub" style="margin-top:8px">The ${a.closed} closed are your first win-probability calibration — they only mean something once the reasons are proofed.</div>`;
+      return c;
     }
     // D200/S102: the authored-CDD proof surface. The LLM drafts each goal's CDD;
     // the user proofs each element (accept / edit / reject). Recommendation-

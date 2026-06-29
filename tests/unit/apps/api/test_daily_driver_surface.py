@@ -288,6 +288,20 @@ def test_correction_interaction_is_single_sourced():
     assert "renderCorrectionList(" in _fn_body("renderGoalCorrections")
 
 
+def test_how_am_i_doing_assessment_render():
+    # D216: a "Doing" mode renders the recommendation-shaped assessment reading
+    # /cdd/assessment; the close-reason split is flagged proof-dependent and never
+    # presented as the verdict's basis.
+    assert 'data-mode="doing"' in _HTML
+    assert "function renderAssessDoing" in _HTML and "function buildAssessment" in _HTML
+    doing = _fn_body("renderAssessDoing")
+    assert "/cdd/assessment/" in doing
+    body = _fn_body("buildAssessment")
+    assert "Because" in body and "Move" in body           # recommendation-shaped
+    assert "split_proof_dependent" in body                # the proof-dependent split
+    assert "does not depend on which" in body             # the headline-independence note
+
+
 def test_opportunity_lens_scopes_thread_flow_and_binds():
     # D213: the opportunity lens — a selector (All / opportunities / unclustered),
     # a correspondence thread, a flow gate highlight, and binds scoped to the lens.
