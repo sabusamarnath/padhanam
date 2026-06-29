@@ -1019,6 +1019,52 @@ metrics:
 
 ---
 
+## S103p — the "how am I doing" assessment (D216) (build mode, view-layer)
+
+roles: architect (D216 — the label-independent-headline rule, the pure-verdict design, the no-model-change sizing), engineer (the pure assess_pipeline, the read use case + endpoint + DTO, the Doing render), analyst (Step 0 + the live verdict verification), technical writer (D216, the brief, this entry).
+
+- **Step 0 — no model change; a pure projection over the `GoalCddView`.** The assessment reads what S103m/n/o/i/j already expose — opportunities (status/closed_reason/current_gate_id/provenance), gates (gate_order), the disposition block (moat 166, pipeline 102, market 96, parked 247). Live shape: 17 opportunities — 0 confirmed-live, 6 system-suggested live, 11 closed; interviewed = 1 (Acme at Screening, gate_order > Apply); offers = 0. No clean "applied" denominator (one-touch acks are unit counts, not distinct applications), so the funnel shows the counts + one-touch volume separately (D171). Brief preserved at `briefs/p2b/s103p.md`. Stamp S103p/D216, no migration.
+
+- **The build.** A pure `assess_pipeline` (the goal_assessment precedent, no LLM) emits verdict/because/move + the funnel counts + the close-reason split; a read use case feeds it from the CDD view (deriving the interview gates as those beyond the earliest); a `GET /cdd/assessment/{outcome_id}` endpoint; a "Doing" mode on the assess toggle rendering the verdict card, the proof-dependent split, the funnel, and the gauge.
+
+- **Reflection 1 — did the verdict hold without the proof (substantive)?** Yes — and this was the session's whole point. The live verdict reads **"pipeline empty … you are not being read,"** and its because cites only label-independent numbers: 17 processes drew a reply, 1 reached interview, 0 offers, ~102 one-touch acks of ~166 job-search emails. It reads none of the ambiguous rejected/declined/went-cold mix. The unit test makes this a guarantee, not an accident: flipping the closed reasons from 9-rejected to mostly-went-cold leaves `verdict_label`/`verdict_text`/`because`/`move` byte-identical, changing only the split. So the operator's proof pass cannot embarrass the verdict — the worst it can do is sharpen the move's emphasis. This is the fix the v2-mock review demanded: the mock asserted "response failure" as settled while leaning on the unproofed labels (which actually argued the opposite, conversion failure); anchoring on the funnel collapse — which holds whichever way the reasons resolve — is both honest and the stronger reading, because the dominant signal is the silence behind the ~102 one-touch tail, not the close reasons of the 11 that engaged.
+
+- **Reflection 2 — did the surface motivate the proof (substantive)?** Yes. The split renders flagged "⚠ the one read that depends on labels you haven't proofed yet (8 of 11 closes unconfirmed)," states plainly that rejection reads as a conversion problem and silence as a response problem, and points to the Map → Lens to proof — immediately followed by "the verdict above does not depend on which." So the operator sees exactly what proofing buys (a sharper response-vs-conversion read + real calibration) and exactly what it does *not* buy (it won't move the headline). That is the honest motivation: proof to sharpen, not to fix a broken verdict. The gauge reinforces it — "0 / 17 confirmed live, 6 system-suggested awaiting your proof" — so the empty-pipeline verdict is visibly conditional on confirming none of the suggested-live are real.
+
+- **Reflection 3 — methodology.** The assessment reused the pure-verdict pattern (deterministic, traceable, no LLM, D16) and read live off the layer S103m/n/o built with no model change — the cheap payoff riding the expensive things already in place. The load-bearing design rule (headline label-independent) came not from the brief's first draft but from the v2-mock review catching the flip-on-unproofed-input; the build then encoded it as a test invariant, so the rule is enforced, not just intended.
+
+- **AC verdicts.** AC1 (headline cites only label-independent numbers; invariant to the reason mix) ✓ — unit test flips 9-rejected↔mostly-cold, headline byte-identical. AC2 (split flagged proof-dependent, links to the lens, changes emphasis not headline) ✓ — the "does not depend on which" note + the lens pointer. AC3 (every number a live read; no invented denominator) ✓ — counts + one-touch volume shown separately, all from the CDD view. AC4 (gauge: 0 confirmed live distinct from suggested-live; names the calibration set) ✓. AC5 (recommendation-shaped, not a metrics wall) ✓ — verdict + because + move lead, funnel supports (D9). AC6 (boots before pin; suite; import-linter; no migration) ✓ — `create_app` + `/app` Doing markup verified before the pin; daily_driver + apps green; import-linter 48/0; no migration.
+
+- Close state: **four commits — charter-first D216 (`2deff88`), the pure assessment (`dad5208`), the read endpoint (`8348928`), the Doing render (`30b2171`), this live-verify + re-pin + log**. The "how am I doing" answer the whole opportunity layer was built to give now renders: an empty-pipeline, response-failure verdict that holds whatever the operator proofs, with the close-reason split as the one thing proof sharpens. Deployed and boot-verified before the pin (digest `bb6180a…`).
+
+- methodology: encoding the design rule as a test invariant (the headline can't move when the reason mix flips) is the discipline that turns a review insight into a guarantee — the next person who edits the verdict can't accidentally make it depend on the unproofed labels without the suite catching it.
+
+```
+metrics:
+  classification: build session (S103p — the "how am I doing" assessment: a recommendation-shaped verdict anchored on the label-independent funnel, the close-reason split as the proof-dependent sharpener; D216)
+  session_started: 2026-06-29
+  session_closed: 2026-06-29
+  step0: no model change — pure projection over GoalCddView (opportunities, gates/gate_order, S103i/j disposition); live shape 17 opps (0 confirmed-live, 6 suggested-live, 11 closed), interviewed 1, offers 0; no clean applied denominator -> counts + one-touch volume shown separately (D171); no migration
+  domain: assess_pipeline (pure, goal_assessment precedent, no LLM/D16) — headline reads confirmed_live/offers(won)/interviewed/engaged/one-touch, INVARIANT to the ambiguous rejected/declined/went_cold/withdrawn mix; the split (closed_reasons + suggested_closed) is the proof-dependent sharpener
+  endpoint: read_pipeline_assessment (DAILY_DRIVER_ASSESSMENT_READ) derives interview gates (beyond earliest) + one-touch/activity from disposition; GET /cdd/assessment/{outcome_id} -> PipelineAssessmentDTO
+  render: "Doing" mode on the assess toggle — verdict card (label/text/because/move), proof-dependent split (flagged, response-vs-conversion note, "verdict does not depend on which", lens pointer), funnel (activity/engaged/interviewed/offers + one-touch, leak marked), gauge (confirmed/engaged, suggested awaiting proof, calibration set)
+  live_verify: verdict "pipeline empty / you are not being read"; because cites 17 engaged, 1 interview, 0 offers, ~102 one-touch of ~166 emails; funnel confirmed_live=0 suggested_live=6 closed=11 engaged=17 interviewed=1 offers=0; split {rejected:9, went_cold:1, declined:1} suggested_closed=8 proof_dependent=True
+  reflection_1_verdict_holds: headline cites only label-independent numbers; unit test flips 9-rejected<->mostly-cold and the headline is byte-identical (only the split changes) — the operator's proof can sharpen the move but cannot move the verdict; the dominant signal is the ~102 one-touch silence, not the 11 close reasons
+  reflection_2_motivates_proof: split flagged "the one read that depends on labels you haven't proofed (8 of 11)", states response-vs-conversion, points to the lens, "verdict does not depend on which" — proof to sharpen, not to fix; gauge shows 0/17 confirmed live
+  reflection_3_methodology: pure-verdict pattern (no LLM), read live off S103m/n/o with no model change; the headline-label-independent rule came from the v2-mock review and is encoded as a test invariant
+  tests: pipeline_assessment (real-shape verdict, headline-invariant-to-reason-mix, confirmed-live flips off empty, offer reads, split proof-dependent); assessment endpoint (label-independent verdict + gate-derived interviewed + split flag); Doing surface guard; daily_driver + apps green; import-linter 48/0
+  boot_verify: create_app builds; /app serves data-mode="doing" + renderAssessDoing + asmt-verdict; Up (healthy) — verified BEFORE the pin
+  commits: 2deff88 (charter D216), dad5208 (pure assess_pipeline), 8348928 (read endpoint + DTO), 30b2171 (Doing render), <this commit> (live-verify + re-pin + session log; image bb6180a)
+  charter_touchpoints: charter/decisions.md (D216 + index), charter/current-package.md (S103p line + deferrals), briefs/p2b/s103p.md (the brief), contexts/daily_driver/domain/pipeline_assessment.py, contexts/daily_driver/application/read_pipeline_assessment.py, apps/api/routers/_daily_driver_dto.py + daily_driver.py, apps/api/static/daily_driver.html, tests (pipeline_assessment, test_daily_driver, surface), log/sessions.md (this entry), compose.yaml (pin)
+  numbering: S103p (the assessment); D216 the live decision max; S104 reserved for direction
+  operator_next: proof the 14 suggested opportunities in the lens (the assessment sharpens as you do); the verdict already holds at "pipeline empty, originate"
+  next: the per-process win-probability engine (slice three, reads the proofed closed reasons as calibration); per-opportunity process configuration; correct-company rename + core-action discoverability (the drill-path session); the 6 pre-existing red live-stack e2e tests
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
