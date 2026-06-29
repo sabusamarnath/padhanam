@@ -926,6 +926,7 @@ class UnitGraphAdapter:
                 tier=record.tier,
                 status=LinkStatus(record.status),
                 basis=record.basis,
+                opportunity_id=record.opportunity_id,
             )
             for record in records
         )

@@ -697,6 +697,10 @@ class ElementBindingDTO(BaseModel):
     # D212: the unit's primary facet, so the drawer can open its read-only source.
     source_facet_type: str = ""
     source_facet_id: UUID | None = None
+    # D213: the opportunity the unit belongs to + its representative time, so the
+    # opportunity lens scopes the binds and time-orders the correspondence thread.
+    opportunity_id: UUID | None = None
+    occurred_at: datetime | None = None
 
 
 def element_binding_to_dto(b) -> "ElementBindingDTO":
@@ -706,6 +710,8 @@ def element_binding_to_dto(b) -> "ElementBindingDTO":
         user_owned=b.user_owned, matched_term=b.matched_term, strength=b.strength,
         source_facet_type=getattr(b, "source_facet_type", ""),
         source_facet_id=getattr(b, "source_facet_id", None),
+        opportunity_id=getattr(b, "opportunity_id", None),
+        occurred_at=getattr(b, "occurred_at", None),
     )
 
 

@@ -132,6 +132,10 @@ class ElementEvidence:
     tier: str
     status: LinkStatus
     basis: str
+    # D213: the opportunity the unit belongs to (BELONGS_TO, S103h/D208), carried
+    # through to the binding read so the opportunity lens can scope. Not a match
+    # output — the matcher leaves it None; the read populates it from the record.
+    opportunity_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -798,6 +802,12 @@ class ElementBinding:
     # unit has no present facet.
     source_facet_type: str = ""
     source_facet_id: UUID | None = None
+    # D213: the opportunity this bind's unit belongs to (BELONGS_TO, S103h/D208),
+    # and the unit's representative time, so the opportunity lens can scope the
+    # binds + build the time-ordered correspondence thread client-side. None when
+    # the unit is unclustered (the honest residual) or has no dated facet.
+    opportunity_id: UUID | None = None
+    occurred_at: datetime | None = None
 
 
 # Match-strength bands (S103c-fix). NOT a correctness/trust score — the matcher is

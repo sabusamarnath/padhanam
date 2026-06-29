@@ -67,6 +67,9 @@ async def read_element_bindings(
     # present facet (task/calendar). None when the unit has no present facet.
     from contexts.daily_driver.domain.work_unit import FacetType
     source_by_unit: dict = {}
+    # D213: the unit's representative time, for the opportunity lens's time-ordered
+    # correspondence thread (the earliest present facet's occurred_at).
+    occurred_by_unit: dict = {}
     for v in views:
         present = [f for f in v.facets if f.present]
         email_f = next(
@@ -75,6 +78,9 @@ async def read_element_bindings(
         chosen = email_f or (present[0] if present else None)
         if chosen is not None:
             source_by_unit[v.unit_id] = (chosen.facet_type.value, chosen.facet_id)
+        times = [f.occurred_at for f in present if f.occurred_at is not None]
+        if times:
+            occurred_by_unit[v.unit_id] = min(times)
     owned = await unit_graph.list_user_owned_unit_ids(
         tenant_context=actor.tenant_context
     )
@@ -141,6 +147,8 @@ async def read_element_bindings(
                 strength=strength,
                 source_facet_type=src[0] if src else "",
                 source_facet_id=src[1] if src else None,
+                opportunity_id=e.opportunity_id,
+                occurred_at=occurred_by_unit.get(e.unit_id),
             )
         )
     return tuple(bindings)
