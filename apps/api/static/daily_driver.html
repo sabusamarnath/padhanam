@@ -387,6 +387,13 @@
     .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #97c459; }
     .pipe-ctouch, .pipe-csilent { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-cact { font-size: 11.5px; color: #2BA692; line-height: 1.35; }
+    .pipe-outgrp { margin-bottom: 12px; }
+    .pipe-outh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+    .pipe-outlab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--behind-fg); }
+    .pipe-outn { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+    .pipe-outbreak { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-mono); }
+    .pipe-closedgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+    .pipe-cstage { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -860,6 +867,45 @@
         board.appendChild(e);
       }
       wrap.appendChild(board);
+      // D218: the closed record — terminal processes grouped by OUTCOME, with
+      // stage-at-close as the within-outcome depth-of-death breakdown. No live
+      // columns, no next best actions; a closed process is history + calibration.
+      const closedCards = cards.filter((c) => c.status === "closed");
+      const rec = document.createElement("div"); rec.className = "pipe-closed";
+      rec.innerHTML = `<h3>Closed record <span class="pipe-grain">— ${closedCards.length} terminal, by outcome (stage = depth of death)</span></h3>`;
+      const ORDER = ["won", "rejected", "went_cold", "declined", "withdrawn_or_killed"];
+      const byReason = {};
+      closedCards.forEach((c) => { (byReason[c.closed_reason] || (byReason[c.closed_reason] = [])).push(c); });
+      const reasons = ORDER.filter((r) => byReason[r]).concat(
+        Object.keys(byReason).filter((r) => !ORDER.includes(r)));
+      reasons.forEach((r) => {
+        const grp = byReason[r];
+        // stage-at-close breakdown within this outcome (the depth-of-death read).
+        const byStage = {};
+        grp.forEach((c) => { byStage[c.stage] = (byStage[c.stage] || 0) + 1; });
+        const breakdown = Object.entries(byStage).sort((a, b) => b[1] - a[1])
+          .map(([st, n]) => `${escapeHtml(st)} ${n}`).join(" · ");
+        const sec = document.createElement("div"); sec.className = "pipe-outgrp";
+        sec.innerHTML = `<div class="pipe-outh"><span class="pipe-outlab">${escapeHtml(reasonLabel(r))}</span>` +
+          `<span class="pipe-outn">${grp.length}</span>` +
+          `<span class="pipe-outbreak">${breakdown}</span></div>`;
+        const grid = document.createElement("div"); grid.className = "pipe-closedgrid";
+        grp.forEach((c) => grid.appendChild(closedCard(c, s, reload)));
+        sec.appendChild(grid); rec.appendChild(sec);
+      });
+      if (closedCards.length) wrap.appendChild(rec);
+    }
+    // A closed-record card: company/role, its stage-at-close, no action (history).
+    function closedCard(c, s, reload) {
+      const el = document.createElement("div"); el.className = "pipe-card closed";
+      el.innerHTML =
+        `<div class="pipe-cco">${escapeHtml(c.company)}</div>` +
+        (c.role ? `<div class="pipe-cro">${escapeHtml(c.role)}</div>` : "") +
+        `<div class="pipe-cmeta">` +
+          `<span class="pipe-cstage">died at: ${escapeHtml(c.stage)}</span>` +
+          `<span class="pipe-ctouch">${c.touches} touch${c.touches === 1 ? "" : "es"}</span>` +
+        `</div>`;
+      return el;
     }
     function pipeCard(c, opts) {
       const active = opts && opts.active;
