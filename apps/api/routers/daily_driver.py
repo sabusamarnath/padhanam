@@ -53,7 +53,9 @@ from apps.api.routers._daily_driver_dto import (
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
     PipelineAssessmentDTO,
+    PipelineStatsDTO,
     pipeline_assessment_to_dto,
+    pipeline_stats_to_dto,
     ReclassifyCddElementRequest,
     RelinkCddEvidenceRequest,
     RematchResultDTO,
@@ -109,6 +111,9 @@ from contexts.daily_driver.application.read_element_evidence import (
 )
 from contexts.daily_driver.application.read_pipeline_assessment import (
     read_pipeline_assessment,
+)
+from contexts.daily_driver.application.read_pipeline_stats import (
+    read_pipeline_stats,
 )
 from contexts.daily_driver.application.correct_cdd_evidence import (
     relink_cdd_evidence,
@@ -524,6 +529,29 @@ async def get_cdd_bindings(
         goal_graph=goal_graph, actor=actor,
     )
     return [element_binding_to_dto(b) for b in bindings]
+
+
+@router.get("/cdd/pipeline-stats/{outcome_id}", response_model=PipelineStatsDTO)
+async def get_cdd_pipeline_stats(
+    outcome_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+) -> PipelineStatsDTO:
+    """The Pipeline stats for a goal (D217): the three-way split, the depth ladder,
+    and the engaged Kanban (gate columns + cards with next-best-action). Declared
+    before ``/cdd/{outcome_id}``."""
+    if unit_graph is None or facet_source is None:
+        raise HTTPException(status_code=503, detail="pipeline-stats seams not configured")
+    stats = await read_pipeline_stats(
+        goal_graph=goal_graph, unit_graph=unit_graph, facet_source=facet_source,
+        outcome_id=outcome_id, actor=actor,
+    )
+    cdd = await goal_graph.read_goal_cdd(
+        tenant_context=actor.tenant_context, outcome_id=outcome_id
+    )
+    return pipeline_stats_to_dto(stats, gates=cdd.gates)
 
 
 @router.get("/cdd/assessment/{outcome_id}", response_model=PipelineAssessmentDTO)

@@ -631,6 +631,72 @@ class PipelineAssessmentDTO(BaseModel):
     split_proof_dependent: bool
 
 
+class SplitBucketDTO(BaseModel):
+    key: str
+    label: str
+    count: int
+    opportunity_ids: list[UUID]
+
+
+class LadderRungDTO(BaseModel):
+    stage: str
+    gate_order: int | None = None
+    count: int
+    opportunity_ids: list[UUID]
+
+
+class GateColumnDTO(BaseModel):
+    gate_id: UUID
+    name: str
+    gate_order: int
+
+
+class PipelineCardDTO(BaseModel):
+    opportunity_id: UUID
+    company: str
+    role: str
+    stage: str
+    gate_order: int | None = None
+    status: str
+    closed_reason: str | None = None
+    days_silent: int | None = None
+    touches: int
+    next_action: str
+
+
+class PipelineStatsDTO(BaseModel):
+    """The Pipeline stats for a goal (S103q, D217): the three-way split (parts, no
+    faked total), the depth ladder, the Kanban gate columns + opportunity cards."""
+
+    rejected: SplitBucketDTO
+    no_response: SplitBucketDTO
+    engaged: SplitBucketDTO
+    one_touch_volume: int
+    gates: list[GateColumnDTO]
+    ladder: list[LadderRungDTO]
+    cards: list[PipelineCardDTO]
+
+
+def pipeline_stats_to_dto(s, *, gates) -> "PipelineStatsDTO":
+    def bucket(b):
+        return SplitBucketDTO(key=b.key, label=b.label, count=b.count,
+                              opportunity_ids=list(b.opportunity_ids))
+    return PipelineStatsDTO(
+        rejected=bucket(s.rejected), no_response=bucket(s.no_response),
+        engaged=bucket(s.engaged), one_touch_volume=s.one_touch_volume,
+        gates=[GateColumnDTO(gate_id=g.gate_id, name=g.name, gate_order=g.gate_order)
+               for g in sorted(gates, key=lambda g: g.gate_order)],
+        ladder=[LadderRungDTO(stage=r.stage, gate_order=r.gate_order, count=r.count,
+                              opportunity_ids=list(r.opportunity_ids)) for r in s.ladder],
+        cards=[PipelineCardDTO(
+            opportunity_id=c.opportunity_id, company=c.company, role=c.role,
+            stage=c.stage, gate_order=c.gate_order, status=c.status,
+            closed_reason=c.closed_reason, days_silent=c.days_silent,
+            touches=c.touches, next_action=c.next_action,
+        ) for c in s.cards],
+    )
+
+
 def pipeline_assessment_to_dto(a) -> "PipelineAssessmentDTO":
     return PipelineAssessmentDTO(
         verdict_label=a.verdict_label, verdict_text=a.verdict_text,
