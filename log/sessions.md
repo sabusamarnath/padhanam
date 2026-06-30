@@ -1116,6 +1116,53 @@ metrics:
 
 ---
 
+## S103r — split the board: live active board, closed record by outcome (D218) (build mode, view restructure)
+
+roles: architect (D218 — the sales-pipeline split, the stage-at-close-as-gate reuse, the supersede), engineer (the active/closed split + the outcome-led closed record + the stage-at-close picker in buildPipeline), analyst (Step 0 + the live split + the stage-at-close→ladder check + the not-empty finding), technical writer (D218, this entry).
+
+- **Step 0 — pure view restructure, no model change.** A restructure of the S103q `buildPipeline` Kanban: the DTO cards already carry status/closed_reason/stage/gate_order/next_action, the read returns the gate ladder, and stage-at-close = the gate position via the existing `set_opportunity_gate` (POST /stage). The depth ladder already reads the gate, so it stays correct once closed cards carry their stage-at-close. No backend touched, no migration. Stamp S103r/D218, superseding the S103q single-Kanban placement.
+
+- **The build.** The active board (live cards only, in stage columns — Needs-staging + the gate ladder — draggable, next-best-action on each); the closed record below it (terminal cards grouped by outcome — won/rejected/went-cold/declined/withdrawn — each group showing its stage-at-close breakdown, cards reading "died at: <stage>", no action); and a stage-at-close picker on each closed card offering the full gate ladder, reusing the gate write. `pipeCard` gained an `{active}` flag gating the drag + the action; closed cards render via `closedCard`.
+
+- **Reflection 1 — the honest active board (substantive, and the brief's premise corrected).** The brief expected the active board *empty* ("everything currently closed"). The live read says otherwise, and the correction is itself the value of the split: the active board holds **6 processes** — all the `system_suggested` live ones S103o extracted and left live (unproofed) — while the closed record holds **11**. So the board is not empty; it is the **proof queue**. This is *more* honest than "empty," and it threads exactly with the Doing verdict (D216): the active board shows the **6 live-status** processes, the Doing gauge shows **0 confirmed-live**, and both are true — there are 6 things with live status, none of them confirmed real, so "nothing confirmed is live, originate" still holds while the operator has 6 cards to confirm or close. The single Kanban hid this distinction by mixing the 11 closed into the stage columns; the split surfaces it — the active board is what to work, the closed record is history. The brutal read the brief wanted (nothing live) is the Doing verdict's; the active board's honest read is "6 to proof, 0 confirmed."
+
+- **Reflection 2 — the depth-of-death shape (substantive).** Now that closed cards carry stage-at-close as a field (not a stranded position), the closed record reads the diagnosis. Live: of the **9 rejected**, the stage-at-close breakdown is **Unplaced 8 · Screening 1** — eight rejections landed before any gate was evidenced (response-stage: applied, auto-rejected or rejected pre-screen), and exactly one after interview (Screening — Acme, a conversion-stage rejection). That shape *is* the response-vs-conversion calibration the win-probability engine will read: this search is being rejected overwhelmingly at the top of the funnel, not at conversion, which is the same diagnosis the Doing verdict and the depth ladder give, now visible as the depth distribution within the rejected outcome. And it is correctable: stage-at-close set on a card propagates — setting one rejected Unplaced→Apply moved the ladder Apply 2→3, Unplaced 14→13 (reverted after, no fabricated stage left), so the operator can record where each really died and the calibration sharpens.
+
+- **Reflection 3 — methodology.** A pure view restructure that reused everything: the `set_opportunity_gate` write (now serving both re-stage-on-the-active-board and set-stage-at-close-on-the-closed-record — one write, two surfaces), the next-best-action rules (now active-only), the depth ladder (unchanged, reads the same gate). The split was driven by the operator's sales-pipeline framing — closed-lost leaves the active pipeline — which superseded the S103q single-Kanban placement. No model change, no migration, no new endpoint; the bug (rejected stranded in Unplaced) was a *placement* error the split corrects by giving closed processes a different home where stage is a field, not a column.
+
+- **AC verdicts.** AC1 (active board live-only; no closed on it) ✓ — 6 live cards, the 11 closed filtered out. AC2 (closed record grouped by outcome with stage-at-close) ✓ — rejected 9 / went-cold 1 / declined 1, each with "died at:". AC3 (stage-at-close settable via a full-gate-ladder picker, reuses set_opportunity_gate, no new field) ✓. AC4 (setting stage-at-close updates the depth ladder) ✓ — Apply 2→3 live. AC5 (the unplaced-rejected fix: rejected in the closed record under rejected with stage-at-close, not an active column) ✓ — the 8 Unplaced-rejected are in the closed record now. AC6 (next best actions on active cards only) ✓ — `closedCard` carries none. AC7 (boots before pin; suite; import-linter; no migration) ✓ — verified before the pin; apps green; import-linter 48/0; no migration.
+
+- Close state: **four commits — charter-first D218 + the S103q supersede (`09bef8e`), the active board live-only (`42de28c`), the closed record outcome-led (`61fe8ee`), the stage-at-close setter (`3344d73`), this live-verify + re-pin + log**. The board adopts the sales-pipeline shape: live deals on the active board, closed deals in the closed record by outcome with stage-at-close. The unplaced-rejected nonsense is gone; the active board is the 6-card proof queue; the rejected-at-Unplaced=8 shape is the response-stage diagnosis. Deployed and boot-verified before the pin (digest `ea7c592…`).
+
+- methodology: the brief's "empty active board" premise was wrong in a productive way — the split *revealed* 6 live-status processes the single Kanban had buried, and surfacing them as the proof queue (distinct from the 0 confirmed-live the verdict reads) is a better outcome than the expected emptiness; reporting the real state over the briefed-expected state is the substance-not-shape discipline.
+
+```
+metrics:
+  classification: build session (S103r — split the engaged board into a live active board + a closed record grouped by outcome with stage-at-close; view restructure of the S103q Kanban; D218)
+  session_started: 2026-06-30
+  session_closed: 2026-06-30
+  step0: pure view restructure of buildPipeline — DTO cards already carry status/closed_reason/stage/gate_order/next_action, the read returns the gate ladder, stage-at-close = the gate via existing set_opportunity_gate (POST /stage); depth ladder already reads the gate; no backend, no model change, no migration; supersedes the S103q single-Kanban placement
+  active_board: live cards only, stage columns (Needs-staging + gate ladder), draggable + next-best-action; pipeCard gained an {active} flag gating drag + action
+  closed_record: terminal cards grouped by outcome (won/rejected/went-cold/declined/withdrawn), each group with its stage-at-close breakdown, cards 'died at: <stage>', no action (closedCard); a stage-at-close picker (full gate ladder) reuses the gate write
+  live_split: ACTIVE 6 (all system_suggested live, unproofed) + CLOSED 11 — the active board is NOT empty (brief premise corrected); it is the proof queue; Doing still reads 0 confirmed-live (both true)
+  live_depth_of_death: closed by outcome rejected=9 went_cold=1 declined=1; rejected stage-at-close Unplaced=8 Screening=1 (8 rejected before any gate = response-stage; 1 after interview = conversion-stage) — the response-vs-conversion calibration
+  live_restage_propagation: set one rejected Unplaced->Apply -> ladder Apply 2->3, Unplaced 14->13 (reverted, no fabricated stage left) — stage-at-close updates the depth ladder
+  reflection_1_active_board: not empty (6 suggested-live) — the split reveals the proof queue the single Kanban buried; threads with Doing (6 live-status, 0 confirmed-live, both honest); the 'nothing confirmed live, originate' verdict holds
+  reflection_2_depth_of_death: rejected Unplaced=8 / Screening=1 — rejected overwhelmingly at the top of the funnel (response), 1 at conversion; the calibration body, correctable via stage-at-close (propagates to the ladder)
+  reflection_3_methodology: reused set_opportunity_gate (one write serving re-stage + set-stage-at-close), the NBA rules (active-only), the depth ladder (unchanged); the bug was a placement error the split corrects; no model change/migration/endpoint
+  tests: pipeline_board_splits_active_from_closed_record (active live-only + 'Nothing is live', closed by outcome + 'died at:' + no action, stage-at-close setter reuses the gate write); the S103q split/ladder/restage test still green; apps suite green; import-linter 48/0
+  boot_verify: create_app builds; /app serves Active board + Closed record + Set stage-at-close + Nothing is live; Up (healthy) — verified BEFORE the pin
+  commits: 09bef8e (charter D218 + S103q supersede), 42de28c (active board live-only), 61fe8ee (closed record outcome-led), 3344d73 (stage-at-close setter), <this commit> (live-verify + re-pin + session log; image ea7c592)
+  charter_touchpoints: charter/decisions.md (D218 + index + D217 supersede annotation), charter/current-package.md (S103r line + deferrals), apps/api/static/daily_driver.html (the split board), tests/unit/apps/api/test_daily_driver_surface.py, log/sessions.md (this entry), compose.yaml (pin)
+  numbering: S103r (split the board); D218 the live decision max; S104 reserved for direction
+  operator_next: proof the 6 active-board processes (confirm the real, close the dead); set stage-at-close on the 8 Unplaced-rejected closed cards (each propagates to the depth ladder + the calibration); proof the suggested opportunities
+  next: the period filter (next session, all-time now); finer interview-round stages (two-C gate library); the per-process win-probability engine (slice three, replaces the NBA without changing the active board); per-opportunity process config; the 6 pre-existing red live-stack e2e tests
+  corrects: S103q/D217 (the single-Kanban placement that stranded rejected cards in Unplaced)
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
