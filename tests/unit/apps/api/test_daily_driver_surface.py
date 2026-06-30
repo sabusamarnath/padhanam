@@ -304,6 +304,23 @@ def test_pipeline_stats_tab_split_ladder_kanban_restage():
     assert "function renderAssessDoing" in _HTML and "/cdd/assessment/" in _HTML
 
 
+def test_pipeline_board_splits_active_from_closed_record():
+    # D218: the board splits — active board is live-only, closed record is grouped
+    # by outcome with stage-at-close; closed cards carry no next action.
+    p = _fn_body("buildPipeline")
+    assert "Active board" in p and "live processes only" in p
+    assert 'c.status !== "closed"' in p          # active board filters to live
+    assert "Closed record" in p and "by outcome" in p
+    assert "Nothing is live" in p                # the honest empty active board
+    # active cards carry the action + drag; closed cards do not
+    pc = _fn_body("pipeCard")
+    assert "opts && opts.active" in pc and "active ?" in pc  # action/drag gated on active
+    cc = _fn_body("closedCard")
+    assert "died at:" in cc and "next_action" not in cc      # stage-at-close, no action
+    # the stage-at-close setter reuses the gate write
+    assert "Set stage-at-close" in cc and "/stage" in cc
+
+
 def test_how_am_i_doing_assessment_render():
     # D216: a "Doing" mode renders the recommendation-shaped assessment reading
     # /cdd/assessment; the close-reason split is flagged proof-dependent and never

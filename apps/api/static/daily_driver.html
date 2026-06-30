@@ -394,6 +394,7 @@
     .pipe-outbreak { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-closedgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
     .pipe-cstage { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+    .pipe-stageset { margin-top: 6px; width: 100%; font-size: 11px; padding: 3px 6px; }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -896,6 +897,8 @@
       if (closedCards.length) wrap.appendChild(rec);
     }
     // A closed-record card: company/role, its stage-at-close, no action (history).
+    // D218: a picker sets stage-at-close where unknown, reusing the gate write
+    // (set_opportunity_gate) — the depth ladder + the breakdown read it.
     function closedCard(c, s, reload) {
       const el = document.createElement("div"); el.className = "pipe-card closed";
       el.innerHTML =
@@ -905,6 +908,18 @@
           `<span class="pipe-cstage">died at: ${escapeHtml(c.stage)}</span>` +
           `<span class="pipe-ctouch">${c.touches} touch${c.touches === 1 ? "" : "es"}</span>` +
         `</div>`;
+      // The stage-at-close picker — the full gate ladder + Unplaced.
+      const opts = [{ gate_id: null, name: "Unplaced" }]
+        .concat((s.gates || []).map((g) => ({ gate_id: g.gate_id, name: g.name })));
+      const sel = document.createElement("select"); sel.className = "pipe-stageset cdd-btn";
+      sel.innerHTML = `<option value="" selected disabled>Set stage-at-close…</option>` +
+        opts.map((o, i) => `<option value="${i}"${o.name === c.stage ? " disabled" : ""}>${escapeHtml(o.name)}</option>`).join("");
+      sel.onchange = async () => {
+        const o = opts[sel.value]; if (!o) return;
+        try { await api(`/daily-driver/cdd/opportunity/${c.opportunity_id}/stage`, { method: "POST", body: JSON.stringify({ gate_id: o.gate_id }) }); await reload(); }
+        catch { toast("Set stage failed", true); }
+      };
+      el.appendChild(sel);
       return el;
     }
     function pipeCard(c, opts) {
