@@ -288,6 +288,22 @@ def test_correction_interaction_is_single_sourced():
     assert "renderCorrectionList(" in _fn_body("renderGoalCorrections")
 
 
+def test_pipeline_stats_tab_split_ladder_kanban_restage():
+    # D217: a Pipeline stats tab (additive) — three-way split, depth ladder, engaged
+    # Kanban with drag-to-re-stage + a next-best-action; Doing is untouched.
+    assert 'data-mode="pipeline"' in _HTML
+    assert "function renderAssessPipeline" in _HTML and "function buildPipeline" in _HTML
+    p = _fn_body("buildPipeline")
+    assert "/cdd/pipeline-stats/" in _fn_body("renderAssessPipeline")
+    assert "split three ways" in p and "Depth ladder" in p and "pipe-kanban" in p
+    assert "not summed" in p  # the grain honesty (no faked total)
+    # drag-to-re-stage writes the gate (the proof action)
+    assert "/stage" in p and 'setData("text/opp"' in _fn_body("pipeCard")
+    assert "next_action" in _fn_body("pipeCard")
+    # additive: the Doing render + the assessment endpoint are still present, untouched
+    assert "function renderAssessDoing" in _HTML and "/cdd/assessment/" in _HTML
+
+
 def test_how_am_i_doing_assessment_render():
     # D216: a "Doing" mode renders the recommendation-shaped assessment reading
     # /cdd/assessment; the close-reason split is flagged proof-dependent and never

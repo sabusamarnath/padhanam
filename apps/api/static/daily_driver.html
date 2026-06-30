@@ -353,6 +353,37 @@
     .asmt-big { font-size: 28px; font-weight: 700; font-family: var(--font-mono); color: var(--ink-1); }
     .asmt-of { font-size: 12.5px; color: var(--ink-3); }
     .asmt-sub { font-size: 11.5px; color: var(--ink-2); line-height: 1.45; }
+    /* D217: Pipeline stats — split, depth ladder, engaged Kanban */
+    .pipe { display: flex; flex-direction: column; gap: 16px; }
+    .pipe-split, .pipe-ladder { background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 11px; padding: 14px; }
+    .pipe-split h3, .pipe-ladder h3, .pipe-kanban h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 11px; }
+    .pipe-grain { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-3); font-size: 10.5px; }
+    .pipe-splitrow, .pipe-rung { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; font: inherit; padding: 5px 2px; color: var(--ink-1); text-align: left; }
+    .pipe-splitrow.drillable, .pipe-rung.drillable { cursor: pointer; }
+    .pipe-splitrow.drillable:hover, .pipe-rung.drillable:hover { background: var(--page); }
+    .pipe-sl, .pipe-rl { flex: 0 0 130px; font-size: 12.5px; }
+    .pipe-sbar, .pipe-rbar { flex: 1 1 auto; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+    .pipe-sbar i, .pipe-rbar i { display: block; height: 100%; border-radius: 4px; }
+    .pipe-splitrow.b-rejected .pipe-sbar i { background: var(--behind-fg); }
+    .pipe-splitrow.b-no_response .pipe-sbar i { background: var(--ink-3); }
+    .pipe-splitrow.b-engaged .pipe-sbar i { background: #97c459; }
+    .pipe-rbar i { background: var(--navy); }
+    .pipe-sn, .pipe-rn { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); min-width: 72px; text-align: right; }
+    .pipe-drill { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
+    .pipe-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(180px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .pipe-col { background: var(--page); border: 1px solid var(--hairline); border-radius: 10px; padding: 8px; min-height: 80px; }
+    .pipe-col.over { border-color: #2BA692; box-shadow: 0 0 0 1px #2BA692; }
+    .pipe-colh { font-size: 11px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .pipe-coln { font-family: var(--font-mono); color: var(--ink-3); }
+    .pipe-card { background: var(--surface-work); border: 1px solid var(--hairline-strong); border-radius: 8px; padding: 8px 9px; margin-bottom: 7px; cursor: grab; }
+    .pipe-card.dragging { opacity: 0.5; }
+    .pipe-card.closed { opacity: 0.8; border-left: 3px solid var(--behind-fg); }
+    .pipe-cco { font-size: 12.5px; font-weight: 600; color: var(--ink-1); }
+    .pipe-cro { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+    .pipe-cmeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+    .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #97c459; }
+    .pipe-ctouch, .pipe-csilent { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+    .pipe-cact { font-size: 11.5px; color: #2BA692; line-height: 1.35; }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -586,6 +617,7 @@
           <p class="sub">Your work under the goal it serves. <strong>List</strong> is one verdict line per goal; <strong>Map</strong> shows each goal as a causal node with the levers and work feeding it.</p>
           <div class="assess-toggle" id="assess-toggle" role="tablist">
             <button class="seg ${assessMode === "doing" ? "on" : ""}" data-mode="doing" type="button" role="tab">Doing</button>
+            <button class="seg ${assessMode === "pipeline" ? "on" : ""}" data-mode="pipeline" type="button" role="tab">Pipeline stats</button>
             <button class="seg ${assessMode === "list" ? "on" : ""}" data-mode="list" type="button" role="tab">List</button>
             <button class="seg ${assessMode === "map" ? "on" : ""}" data-mode="map" type="button" role="tab">Map</button>
             <button class="seg ${assessMode === "cdd" ? "on" : ""}" data-mode="cdd" type="button" role="tab">CDD</button>
@@ -656,6 +688,7 @@
     function renderAssess() {
       const box = document.getElementById("moat"); if (!box || !assessData) return;
       if (assessMode === "doing") return renderAssessDoing(box, assessData);
+      if (assessMode === "pipeline") return renderAssessPipeline(box, assessData);
       if (assessMode === "cdd") return renderAssessCdd(box, assessData);
       (assessMode === "map" ? renderAssessMap : renderAssessList)(box, assessData);
     }
@@ -732,6 +765,102 @@
         `<div class="asmt-sub">${a.closed} closed · ${a.suggested_live} system-suggested live, awaiting your proof. Until you confirm one, the live count is zero and the verdict holds.</div>` +
         `<div class="asmt-sub" style="margin-top:8px">The ${a.closed} closed are your first win-probability calibration — they only mean something once the reasons are proofed.</div>`;
       return c;
+    }
+    // D217: the Pipeline stats tab — the operator's funnel model. Additive; Doing
+    // untouched. Three-way split (parts, not a faked total), the depth ladder, and
+    // the engaged Kanban with drag-to-re-stage (the proof action) + a rules-based
+    // next best action. Reads /cdd/pipeline-stats live.
+    let pipeDrill = null;  // {ids:Set, label} — a drill filter on the cards
+    async function renderAssessPipeline(box, g) {
+      box.innerHTML = "";
+      for (const grp of (g.groups || [])) {
+        if (!grp.outcome_id) continue;
+        let s; try { s = await api(`/daily-driver/cdd/pipeline-stats/${grp.outcome_id}`); } catch { continue; }
+        const wrap = document.createElement("div"); wrap.className = "pipe";
+        const reload = async () => {
+          let fresh; try { fresh = await api(`/daily-driver/cdd/pipeline-stats/${grp.outcome_id}`); } catch { return; }
+          wrap.innerHTML = ""; buildPipeline(wrap, grp, fresh, reload);
+        };
+        buildPipeline(wrap, grp, s, reload);
+        box.appendChild(wrap);
+      }
+    }
+    function buildPipeline(wrap, grp, s, reload) {
+      // 1. The three-way split (parts, grain surfaced — no faked total).
+      const split = document.createElement("div"); split.className = "pipe-split";
+      split.innerHTML = `<h3>Applied, split three ways <span class="pipe-grain">— ${s.engaged.count + s.rejected.count} tracked processes that replied + ${s.one_touch_volume} one-touch applications (different grains, not summed)</span></h3>`;
+      const total = Math.max(1, s.rejected.count + s.engaged.count + s.no_response.count);
+      [s.rejected, s.no_response, s.engaged].forEach((b) => {
+        const pct = Math.round((b.count / total) * 100);
+        const row = document.createElement("button"); row.type = "button";
+        row.className = "pipe-splitrow b-" + b.key + (b.opportunity_ids.length ? " drillable" : "");
+        row.innerHTML = `<span class="pipe-sl">${escapeHtml(b.label)}</span>` +
+          `<span class="pipe-sbar"><i style="width:${Math.max(2, pct)}%"></i></span>` +
+          `<span class="pipe-sn">${b.count}${b.key === "no_response" ? " (one-touch)" : ""}</span>`;
+        if (b.opportunity_ids.length) row.onclick = () => { pipeDrill = { ids: new Set(b.opportunity_ids.map(String)), label: b.label }; reload(); };
+        split.appendChild(row);
+      });
+      wrap.appendChild(split);
+      // 2. The depth ladder — descending staircase; the collapse point is the diagnosis.
+      const ladder = document.createElement("div"); ladder.className = "pipe-ladder";
+      ladder.innerHTML = `<h3>Depth ladder — engaged processes by furthest stage</h3>`;
+      const lmax = Math.max(1, ...s.ladder.map((r) => r.count));
+      s.ladder.forEach((r) => {
+        const row = document.createElement("button"); row.type = "button"; row.className = "pipe-rung drillable";
+        row.innerHTML = `<span class="pipe-rl">${escapeHtml(r.stage)}</span>` +
+          `<span class="pipe-rbar"><i style="width:${Math.round((r.count / lmax) * 100)}%"></i></span>` +
+          `<span class="pipe-rn">${r.count}</span>`;
+        row.onclick = () => { pipeDrill = { ids: new Set(r.opportunity_ids.map(String)), label: r.stage }; reload(); };
+        ladder.appendChild(row);
+      });
+      wrap.appendChild(ladder);
+      // The drill indicator.
+      if (pipeDrill) {
+        const d = document.createElement("div"); d.className = "pipe-drill";
+        d.innerHTML = `<span>Showing: <b>${escapeHtml(pipeDrill.label)}</b> (${pipeDrill.ids.size})</span>`;
+        const clr = document.createElement("button"); clr.type = "button"; clr.className = "btn-ghost cdd-btn"; clr.textContent = "Clear";
+        clr.onclick = () => { pipeDrill = null; reload(); };
+        d.appendChild(clr); wrap.appendChild(d);
+      }
+      // 3. The engaged Kanban — columns by gate + Unplaced; drag-to-re-stage.
+      const kan = document.createElement("div"); kan.className = "pipe-kanban";
+      const columns = [{ gate_id: null, name: "Unplaced", gate_order: -1 }].concat(s.gates);
+      const cards = (s.cards || []).filter((c) => !pipeDrill || pipeDrill.ids.has(String(c.opportunity_id)));
+      columns.forEach((col) => {
+        const cells = cards.filter((c) => (c.stage === col.name) || (col.name === "Unplaced" && c.stage === "Unplaced"));
+        const colEl = document.createElement("div"); colEl.className = "pipe-col";
+        colEl.innerHTML = `<div class="pipe-colh">${escapeHtml(col.name)} <span class="pipe-coln">${cells.length}</span></div>`;
+        colEl.ondragover = (e) => { e.preventDefault(); colEl.classList.add("over"); };
+        colEl.ondragleave = () => colEl.classList.remove("over");
+        colEl.ondrop = async (e) => {
+          e.preventDefault(); colEl.classList.remove("over");
+          const oid = e.dataTransfer.getData("text/opp"); if (!oid) return;
+          try { await api(`/daily-driver/cdd/opportunity/${oid}/stage`, { method: "POST", body: JSON.stringify({ gate_id: col.gate_id }) });
+            try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+            await reload(); }
+          catch { toast("Re-stage failed", true); }
+        };
+        cells.forEach((c) => colEl.appendChild(pipeCard(c)));
+        kan.appendChild(colEl);
+      });
+      wrap.appendChild(kan);
+    }
+    function pipeCard(c) {
+      const el = document.createElement("div"); el.className = "pipe-card" + (c.status === "closed" ? " closed" : "");
+      el.draggable = true;
+      el.ondragstart = (e) => { e.dataTransfer.setData("text/opp", String(c.opportunity_id)); el.classList.add("dragging"); };
+      el.ondragend = () => el.classList.remove("dragging");
+      const silent = c.days_silent === null || c.days_silent === undefined ? "" : `${c.days_silent}d silent`;
+      el.innerHTML =
+        `<div class="pipe-cco">${escapeHtml(c.company)}</div>` +
+        (c.role ? `<div class="pipe-cro">${escapeHtml(c.role)}</div>` : "") +
+        `<div class="pipe-cmeta">` +
+          (c.status === "closed" ? `<span class="map-closed-badge">closed: ${escapeHtml(reasonLabel(c.closed_reason))}</span>` : `<span class="pipe-clive">live</span>`) +
+          `<span class="pipe-ctouch">${c.touches} touch${c.touches === 1 ? "" : "es"}</span>` +
+          (silent ? `<span class="pipe-csilent">${escapeHtml(silent)}</span>` : "") +
+        `</div>` +
+        `<div class="pipe-cact">▸ ${escapeHtml(c.next_action)}</div>`;
+      return el;
     }
     // D200/S102: the authored-CDD proof surface. The LLM drafts each goal's CDD;
     // the user proofs each element (accept / edit / reject). Recommendation-
