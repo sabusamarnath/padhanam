@@ -601,6 +601,14 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, opportunity_id=opportunity_id
         )
 
+    async def set_opportunity_gate(
+        self, *, tenant_context, opportunity_id, current_gate_id
+    ) -> bool:
+        return await self._outcome_graph.set_opportunity_gate(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            current_gate_id=current_gate_id,
+        )
+
     async def delete_opportunity(self, *, tenant_context, opportunity_id) -> bool:
         return await self._outcome_graph.delete_opportunity(
             tenant_context=tenant_context, opportunity_id=opportunity_id

@@ -789,6 +789,7 @@ class _FakeOppGraph:
         self.reopened: list = []
         self.confirmed: list = []
         self.rejected: list = []
+        self.restaged: list = []
 
     async def close_opportunity(self, *, tenant_context, opportunity_id, closed_reason):
         if opportunity_id not in self.known:
@@ -812,6 +813,12 @@ class _FakeOppGraph:
         if opportunity_id not in self.known:
             return False
         self.rejected.append(opportunity_id)
+        return True
+
+    async def set_opportunity_gate(self, *, tenant_context, opportunity_id, current_gate_id):
+        if opportunity_id not in self.known:
+            return False
+        self.restaged.append((opportunity_id, current_gate_id))
         return True
 
 
@@ -944,3 +951,24 @@ def test_assessment_route_reads_label_independent_verdict() -> None:
     assert body["one_touch_volume"] == 102 and body["activity"] == 166
     assert body["split_proof_dependent"] is True  # a suggested closed opp exists
     assert "targeting" in body["move"]
+
+
+def test_restage_opportunity_writes_the_gate() -> None:
+    # D217: drag-to-re-stage writes the opportunity's gate (the proof action).
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    gate = uuid4()
+    res = client.post(
+        f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/stage",
+        json={"gate_id": str(gate)},
+    )
+    assert res.status_code == 204, res.text
+    assert graph.restaged == [(_OPP, gate)]
+
+
+def test_restage_to_unplaced_clears_the_gate() -> None:
+    graph = _FakeOppGraph()
+    client = _client(_FakeCommitmentRepo(), _FakeDayRepo(), _FakeOpenCases(()), goal_graph=graph)
+    res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/stage", json={"gate_id": None})
+    assert res.status_code == 204, res.text
+    assert graph.restaged == [(_OPP, None)]

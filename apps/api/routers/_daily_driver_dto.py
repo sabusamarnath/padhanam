@@ -602,6 +602,13 @@ class CloseOpportunityRequest(BaseModel):
     reason: str
 
 
+class RestageOpportunityRequest(BaseModel):
+    """Re-stage an opportunity to a gate (S103q, D217); ``gate_id`` null clears it
+    to Unplaced. The operator proofing the gate position."""
+
+    gate_id: UUID | None = None
+
+
 class PipelineAssessmentDTO(BaseModel):
     """The "how am I doing" assessment for a goal (S103p, D216): a
     recommendation-shaped verdict whose headline is label-independent, plus the

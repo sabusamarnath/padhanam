@@ -48,6 +48,7 @@ from apps.api.routers._daily_driver_dto import (
     AddedCddElementDTO,
     CLOSE_REASONS,
     CloseOpportunityRequest,
+    RestageOpportunityRequest,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -619,6 +620,25 @@ async def post_opportunity_confirm(
     operator vouches the extracted cluster is real. 404 when absent."""
     ok = await goal_graph.confirm_opportunity(
         tenant_context=actor.tenant_context, opportunity_id=opportunity_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/stage", status_code=204)
+async def post_opportunity_restage(
+    opportunity_id: UUID,
+    body: RestageOpportunityRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Re-stage an opportunity to a gate (D217) — the operator proofing its gate
+    position; ``gate_id`` null clears it to Unplaced. The Doing assessment + the
+    depth ladder read ``current_gate_id``, so the correction propagates. 404 absent."""
+    ok = await goal_graph.set_opportunity_gate(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
+        current_gate_id=body.gate_id,
     )
     if not ok:
         raise HTTPException(status_code=404, detail="opportunity not found")

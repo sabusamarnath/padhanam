@@ -575,6 +575,16 @@ MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
 SET o.provenance_origin = 'user_authored', o.proof_state = 'accepted'
 RETURN o.opportunity_id AS opportunity_id
 """
+# Re-stage (S103q, D217): the operator proofs an opportunity's gate position by
+# moving it on the Kanban. Writes current_gate_id directly (overriding the
+# furthest-evidenced default); null clears it to Unplaced. The Doing assessment +
+# the depth ladder read current_gate_id, so the correction propagates. Sticks until
+# the next operator-gated re-cluster (the proof-vs-derived-state tension).
+_SET_OPPORTUNITY_GATE = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.current_gate_id = $current_gate_id
+RETURN o.opportunity_id AS opportunity_id
+"""
 _DELETE_OPPORTUNITY = """
 MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
 DETACH DELETE o
@@ -1409,6 +1419,21 @@ class TenantScopedNeo4jSession:
         result = await session.run(_CONFIRM_OPPORTUNITY, {
             "tenant_id": self._tenant_id,
             "opportunity_id": str(opportunity_id),
+        })
+        return await result.single() is not None
+
+    async def set_opportunity_gate(
+        self, *, opportunity_id: UUID, current_gate_id: UUID | None
+    ) -> bool:
+        """Re-stage an opportunity by writing its gate position (S103q, D217) — the
+        operator proofing the gate; null clears to Unplaced. Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_OPPORTUNITY_GATE, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "current_gate_id": (
+                str(current_gate_id) if current_gate_id is not None else None
+            ),
         })
         return await result.single() is not None
 

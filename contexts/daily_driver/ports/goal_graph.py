@@ -137,6 +137,13 @@ class GoalGraphPort(Protocol):
         """Confirm a system-suggested opportunity → user_authored (S103o, D215)."""
         ...
 
+    async def set_opportunity_gate(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        current_gate_id: UUID | None,
+    ) -> bool:
+        """Re-stage an opportunity by writing its gate position (S103q, D217)."""
+        ...
+
     async def delete_opportunity(
         self, *, tenant_context: TenantContext, opportunity_id: UUID
     ) -> bool:

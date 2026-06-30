@@ -518,6 +518,22 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def set_opportunity_gate(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        current_gate_id: UUID | None,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_opportunity_gate(
+                    opportunity_id=opportunity_id, current_gate_id=current_gate_id
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     async def delete_opportunity(
         self, *, tenant_context: TenantContext, opportunity_id: UUID
     ) -> bool:
