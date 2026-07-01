@@ -972,3 +972,16 @@ def test_restage_to_unplaced_clears_the_gate() -> None:
     res = client.post(f"/api/v1/daily-driver/cdd/opportunity/{_OPP}/stage", json={"gate_id": None})
     assert res.status_code == 204, res.text
     assert graph.restaged == [(_OPP, None)]
+
+
+def test_app_surface_served_with_no_store_so_fixes_are_never_cached() -> None:
+    """The operator surface is a single self-contained HTML whose inline JS
+    changes every deploy; ``FileResponse`` alone would let a browser hold a
+    stale copy and read every fix as "no change" (the S103s relink loop). The
+    ``/app`` route must send ``Cache-Control: no-store`` so the current bytes
+    are always fetched."""
+    app = FastAPI()
+    app.include_router(daily_driver_router.ui_router)
+    res = TestClient(app).get("/app")
+    assert res.status_code == 200
+    assert "no-store" in res.headers.get("cache-control", "")

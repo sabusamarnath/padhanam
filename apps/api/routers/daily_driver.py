@@ -1067,8 +1067,18 @@ async def post_done(
 
 @ui_router.get("/app", include_in_schema=False)
 async def daily_driver_page() -> FileResponse:
-    """Serve the self-contained daily-driver operator surface (auth-exempt)."""
-    return FileResponse(_PAGE_PATH, media_type="text/html")
+    """Serve the self-contained daily-driver operator surface (auth-exempt).
+
+    ``no-store`` on the HTML: the surface is a single self-contained file whose
+    inline JS changes every deploy, and ``FileResponse`` otherwise emits only an
+    etag/last-modified (no ``Cache-Control``), so a browser can serve a stale
+    copy and every fix reads as "no change" (the S103s relink loop). The surface
+    is tiny and under active daily change; always fetch the current bytes."""
+    return FileResponse(
+        _PAGE_PATH,
+        media_type="text/html",
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
 
 
 __all__ = ["router", "ui_router"]
