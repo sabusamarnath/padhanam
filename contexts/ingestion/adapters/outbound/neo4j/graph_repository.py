@@ -448,7 +448,15 @@ class Neo4jGraphRepository:
                         source=r.get("source"),
                         status=r.get("status") or "live",
                         closed_reason=r.get("closed_reason"),
-                        closed_at=r.get("closed_at"),
+                        # neo4j returns a neo4j.time.DateTime; convert to a native
+                        # python datetime so it validates through the DTO (S103n
+                        # missed this — a closed opportunity 500'd the CDD read).
+                        closed_at=(
+                            r["closed_at"].to_native()
+                            if r.get("closed_at") is not None
+                            and hasattr(r["closed_at"], "to_native")
+                            else r.get("closed_at")
+                        ),
                     )
                     for r in rows
                 ]
