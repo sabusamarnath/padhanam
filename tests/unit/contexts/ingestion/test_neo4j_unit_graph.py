@@ -236,3 +236,58 @@ def test_list_units_aggregates_facets_per_unit() -> None:
     assert meeting_link.confidence == 0.9
     assert meeting_link.basis == "title+time"
     assert meeting_link.facet_id == _MEETING_ID
+
+
+# --- S103s hardening: the kind-vocabulary sync invariant (enforcement layer) ---
+# The relink/unlink bug class this session chased one report at a time was always
+# the same shape: a bindable kind added to one vocabulary but not swept into the
+# adapter that resolves or normalises it. These three guards turn "every site was
+# swept by hand" into "CI fails if a site is missed" — each would have caught a
+# real S103k/S103s bug (D211's measurable_outcome) before it reached the browser.
+
+
+def test_every_evidence_kind_resolves_to_a_cypher_endpoint():
+    """Every kind a unit can bind to (EVIDENCE_KINDS — the router's relink/unlink
+    whitelist) MUST resolve to a (label, id-property) Cypher endpoint. A kind in
+    EVIDENCE_KINDS with no endpoint makes relink silently MATCH NOTHING — the
+    "relink failed / no change" symptom. Adding a bindable kind without its
+    endpoint fails here, not in the operator's browser."""
+    from contexts.daily_driver.domain.cdd import EVIDENCE_KINDS
+    from contexts.ingestion.adapters.outbound.neo4j.session import (
+        _AUTHORED_ENDPOINT,
+    )
+
+    missing = EVIDENCE_KINDS - set(_AUTHORED_ENDPOINT)
+    assert not missing, f"EVIDENCE_KINDS with no Cypher endpoint: {missing}"
+
+
+def test_every_authored_element_kind_is_bindable():
+    """Every authored ElementKind (lever/intermediary/external/measurable_outcome)
+    MUST be in EVIDENCE_KINDS, or relink/unlink to it 422s at the router — the
+    exact S103s bug where D211's measurable_outcome was authored but never added
+    to the evidence whitelist."""
+    from contexts.daily_driver.domain.cdd import EVIDENCE_KINDS, ElementKind
+
+    missing = {k.value for k in ElementKind} - EVIDENCE_KINDS
+    assert not missing, f"authored kinds that are not bindable: {missing}"
+
+
+def test_every_evidence_kind_label_normalises_back_to_its_kind():
+    """The read round-trip: bindings read a unit's endpoint kind from the node
+    label (``labels(n)[0].lower()`` then ``_norm_edge_kind``). For every bindable
+    kind that path MUST reproduce the kind string, or the read emits a kind the
+    router rejects. :MeasurableOutcome lowercases to "measurableoutcome" and needs
+    the alias (S103s) — a new underscore-bearing kind without its alias fails
+    here rather than silently breaking relink."""
+    from contexts.daily_driver.domain.cdd import EVIDENCE_KINDS
+    from contexts.ingestion.adapters.outbound.neo4j.session import (
+        _AUTHORED_ENDPOINT,
+        _norm_edge_kind,
+    )
+
+    for kind in EVIDENCE_KINDS:
+        label = _AUTHORED_ENDPOINT[kind][0]  # e.g. "MeasurableOutcome"
+        assert _norm_edge_kind(label) == kind, (
+            f"{label!r} normalises to {_norm_edge_kind(label)!r}, not {kind!r} — "
+            "add its alias to _EDGE_KIND_ALIASES"
+        )
