@@ -395,6 +395,15 @@
     .pipe-closedgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
     .pipe-cstage { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-stageset { margin-top: 6px; width: 100%; font-size: 11px; padding: 3px 6px; }
+    /* D219: the process detail view (in the §3 panel) */
+    .pd-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); }
+    .pd-meta { display: flex; gap: 8px; align-items: center; flex: 1 1 auto; }
+    .pd-stage { font-size: 11px; color: var(--ink-2); font-family: var(--font-mono); }
+    .pd-nba { font-size: 12.5px; color: #2BA692; }
+    .pd-sec { display: flex; flex-direction: column; gap: 2px; }
+    .pd-lab { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 4px; }
+    .pd-close { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+    .pd-open { margin-top: 6px; font-size: 10.5px; color: #2BA692; background: none; border: none; cursor: pointer; padding: 2px 0; text-align: left; }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -1895,6 +1904,95 @@
     // A read-only node drawer (design-language §3: the ~420px panel, the 220ms
     // slide). Reuses the item panel chrome; no foot actions — the Map writes
     // nothing.
+    // D219: the process detail view — a process is a first-class object you open,
+    // work, and close. Assembles the built pieces into one panel: header + stage
+    // picker (S103q gate write), the correspondence thread with openable sources
+    // (S103m/S103l), the binds with verification (S103l), the next best action
+    // (S103q), and a close row (S103n). No new backend — pure assembly.
+    async function openProcessDetail(oppId, grp) {
+      if (!oppId || !grp || !grp.outcome_id) return;
+      openNodePanel("Process", "work", "");
+      const pb = document.getElementById("panel-body"); pb.innerHTML = "<div class='sub'>Opening…</div>";
+      const reload = async () => {
+        try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+        let s; try { s = await api(`/daily-driver/cdd/pipeline-stats/${grp.outcome_id}`); } catch { pb.innerHTML = "<div class='sub'>Could not load.</div>"; return; }
+        const card = (s.cards || []).find((c) => String(c.opportunity_id) === String(oppId));
+        if (!card) { pb.innerHTML = "<div class='sub'>Process not found.</div>"; return; }
+        renderProcessDetail(pb, grp, oppId, card, s, reload);
+        try { renderAssess(); } catch {}  // keep the board behind in sync
+      };
+      await reload();
+    }
+    function renderProcessDetail(pb, grp, oppId, card, s, reload) {
+      document.getElementById("panel-title").textContent = card.company + (card.role ? " — " + card.role : "");
+      pb.innerHTML = "";
+      const closed = card.status === "closed";
+      // Header — stage + (live) the stage picker; (closed) the outcome + reopen.
+      const head = document.createElement("div"); head.className = "pd-head";
+      head.innerHTML = `<div class="pd-meta">` +
+        (closed ? `<span class="map-closed-badge">${escapeHtml(reasonLabel(card.closed_reason))}</span>` : `<span class="pipe-clive">live</span>`) +
+        `<span class="pd-stage">${closed ? "died at" : "stage"}: ${escapeHtml(card.stage)}</span>` +
+        `<span class="pipe-ctouch">${card.touches} touch${card.touches === 1 ? "" : "es"}</span></div>`;
+      // Stage picker (reuses the gate write) — sets stage / stage-at-close.
+      const stageOpts = [{ gate_id: null, name: "Unplaced" }].concat((s.gates || []).map((g) => ({ gate_id: g.gate_id, name: g.name })));
+      const stageSel = document.createElement("select"); stageSel.className = "cdd-btn";
+      stageSel.innerHTML = `<option value="" selected disabled>${closed ? "Set stage-at-close…" : "Set stage…"}</option>` +
+        stageOpts.map((o, i) => `<option value="${i}"${o.name === card.stage ? " disabled" : ""}>${escapeHtml(o.name)}</option>`).join("");
+      stageSel.onchange = async () => { const o = stageOpts[stageSel.value]; if (!o) return;
+        try { await api(`/daily-driver/cdd/opportunity/${oppId}/stage`, { method: "POST", body: JSON.stringify({ gate_id: o.gate_id }) }); await reload(); } catch { toast("Set stage failed", true); } };
+      head.appendChild(stageSel); pb.appendChild(head);
+      // Next best action (live only).
+      if (!closed && card.next_action) {
+        const nba = document.createElement("div"); nba.className = "pd-nba"; nba.innerHTML = `<span class="pd-lab">Next</span> ▸ ${escapeHtml(card.next_action)}`;
+        pb.appendChild(nba);
+      }
+      // Correspondence — the whole thread in time order, sources openable (S103l/m).
+      const th = document.createElement("div"); th.className = "pd-sec";
+      th.innerHTML = `<div class="pd-lab">Correspondence</div>`;
+      const seen = new Set(); const units = [];
+      (cddBindings || []).filter((b) => String(b.opportunity_id) === String(oppId)).forEach((b) => {
+        if (seen.has(String(b.unit_id))) return; seen.add(String(b.unit_id)); units.push(b);
+      });
+      units.sort((a, c) => (a.occurred_at ? Date.parse(a.occurred_at) : Infinity) - (c.occurred_at ? Date.parse(c.occurred_at) : Infinity));
+      if (!units.length) { const e = document.createElement("div"); e.className = "map-empty"; e.textContent = "No correspondence."; th.appendChild(e); }
+      units.forEach((b) => {
+        const row = document.createElement("div"); row.className = "thread-item";
+        const when = b.occurred_at ? new Date(b.occurred_at).toLocaleDateString() : "—";
+        const hd = document.createElement("button"); hd.type = "button"; hd.className = "thread-head";
+        hd.innerHTML = `<span class="thread-date">${escapeHtml(when)}</span><span class="thread-title">${escapeHtml(b.title || "(untitled)")}</span>`;
+        const src = document.createElement("div"); src.className = "thread-src"; src.style.display = "none";
+        hd.onclick = () => { const open = src.style.display !== "none"; src.style.display = open ? "none" : "block"; if (!open && !src.dataset.built) { src.appendChild(bindingSourceBlock(b)); src.dataset.built = "1"; } };
+        row.appendChild(hd); row.appendChild(src); th.appendChild(row);
+      });
+      pb.appendChild(th);
+      // Binds — the process's bound units, verifiable through the drawer (S103l).
+      const bd = document.createElement("div"); bd.className = "pd-sec";
+      bd.innerHTML = `<div class="pd-lab">Binds — verify each</div>`;
+      const bsub = document.createElement("div"); bd.appendChild(bsub);
+      renderCorrectionList(bsub, { bindings: (cddBindings || []).filter((b) => String(b.opportunity_id) === String(oppId)), refresh: reload, emptyMsg: "No binds for this process." });
+      pb.appendChild(bd);
+      // Close row (live) — close with an outcome; (closed) — reopen.
+      const cr = document.createElement("div"); cr.className = "pd-close";
+      if (closed) {
+        const re = document.createElement("button"); re.type = "button"; re.className = "btn-ghost cdd-btn"; re.textContent = "Reopen (back to live)";
+        re.onclick = async () => { try { await api(`/daily-driver/cdd/opportunity/${oppId}/reopen`, { method: "POST" }); await reload(); } catch { toast("Reopen failed", true); } };
+        cr.appendChild(re);
+      } else {
+        cr.innerHTML = `<span class="pd-lab">Close this process</span>`;
+        cr.appendChild(closeReasonPicker(oppId, reload));
+      }
+      pb.appendChild(cr);
+    }
+    // A close-with-outcome picker (reuses S103n /close); the process moves to the
+    // closed record. Shared by the detail view's close row and the active cards.
+    function closeReasonPicker(oppId, reload) {
+      const sel = document.createElement("select"); sel.className = "cdd-btn cdd-reject";
+      sel.innerHTML = `<option value="" selected disabled>Close as…</option>` +
+        CLOSE_REASONS.map(([v, l]) => `<option value="${v}">${escapeHtml(l)}</option>`).join("");
+      sel.onchange = async () => { if (!sel.value) return;
+        try { await api(`/daily-driver/cdd/opportunity/${oppId}/close`, { method: "POST", body: JSON.stringify({ reason: sel.value }) }); await reload(); } catch { toast("Close failed", true); } };
+      return sel;
+    }
     function openNodePanel(title, tier, bodyHtml) {
       const panel = document.getElementById("panel");
       panel.dataset.tier = tier || "work";
