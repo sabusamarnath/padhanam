@@ -202,3 +202,11 @@ Active package details. Updated when a new package starts. Archived to `docs/arc
 
 **Scope cut:** the active/closed split + the outcome-led closed record + the stage-at-close setter only. **Out:** the period filter (next session); finer interview-round stages (two-C); the win-probability engine (slice three); per-opportunity process config; the 6 pre-existing red live-stack e2e tests.
 
+## Phase 2-B, the CDD authoring-and-correction layer (D200, roadmap v13); S103s — the process detail view: open it, work it, close it (D219) (build mode, view assembly) — IN FLIGHT
+
+**The process becomes a first-class object you open, work, and close.** A detail view opened from any card (active board, closed record, lens, Map opp chip) assembles the built pieces into one panel: header + stage picker (S103q gate write), the correspondence thread with openable read-only sources (S103m/S103l), the binds each verifiable through the drawer (S103l), the next best action (S103q), and a close row (S103n). Every active card also gets a direct close control. The process-level answer to the drill gap and the close gap — open, verify, act, close in one motion.
+
+**Step 0 reconciliations (live tree):** pure assembly, no backend — the thread (S103m), the openable source + verification drawer (S103l), the stage picker + NBA (S103q), and the close (S103n) all exist and are reused; the detail view is hosted in the existing §3 panel and reads the pipeline-stats DTO (card + gates) + the global bindings. No model change, no migration. Stamped S103s/D219.
+
+**Scope cut:** the detail view (assembly) + open-from-any-card + close-on-active-cards only. **Out:** the aging rule (recent applications live until a configurable silence threshold, then confirm-close) + the period filter — the next session, built together as time windows with confirm-not-auto; finer interview-round stages (two-C); the win-probability engine (slice three); the 6 pre-existing red live-stack e2e tests.
+
