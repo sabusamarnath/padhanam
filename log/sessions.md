@@ -1163,6 +1163,52 @@ metrics:
 
 ---
 
+## S103s — the process detail view: open it, work it, close it (D219) (build mode, view assembly)
+
+roles: architect (D219 — the process-as-first-class-object framing, the assembly-not-rebuild call), engineer (openProcessDetail assembling thread/source/binds/stage/NBA/close, the open-from-four-surfaces wiring, close-from-board), analyst (Step 0 + the live detail-data + close-from-board round-trip), technical writer (D219, this entry).
+
+- **Step 0 — pure assembly, no backend.** Every piece exists and is reused: the correspondence thread (S103m), the openable read-only source + the verification drawer with basis/source/unlink (S103l), the stage picker via the gate write + the next-best-action (S103q), and the close with outcome (S103n). The detail view is hosted in the existing §3 panel and reads the pipeline-stats DTO (the card + the gates) plus the global bindings. No model change, no new endpoint, no migration. Stamp S103s/D219.
+
+- **The build.** `openProcessDetail` assembles one panel: a header (company/role/stage) + the stage picker (gate write), the next best action, the correspondence thread in time order (each item opening its read-only source), the binds (each verifiable through `renderCorrectionList` — basis/source/unlink), and a close row (a close-with-outcome picker for live, a reopen for closed). It opens from four surfaces — the active-board card, the closed-record card, the lens (selected opportunity), and the Map flow-spine opportunity chips (moved out of the gate button into clickable spans). Every active card also carries a direct close-with-outcome picker (`closeReasonPicker`, shared with the detail's close row).
+
+- **Reflection 1 — did assembly unblock the proof (substantive)?** Yes — the proof pass is now one motion instead of four. Opening 'Wingtip Toys' live shows, in a single panel: its stage (Apply) with the picker to correct it, its next action ("silent 25 days — follow up once, then let it go"), its correspondence thread (2 dated items, each opening its real email source), and its binds (2, each with its basis + source + an unlink) — then a close row to end it. Before this, verifying a process meant the thread in the lens, the binds in the drawer, the stage on the board, and the close control somewhere else; the operator could see a card but not open the process to its full picture. Now "read the thread, verify the binds, set the stage, close" is one surface, which is exactly what makes setting stage-at-close and verifying binds a clean single action — the justification for building it now. It reuses everything: the same `bindingSourceBlock`, `renderCorrectionList`, gate write, and `/close` the scattered surfaces used, composed into one place.
+
+- **Reflection 2 — the process as an object (substantive).** Reading one process whole surfaced its state at a glance in a way the scattered surfaces did not: Wingtip Toys is 2 touches, at Apply, silent 25 days, with 2 openable emails and 2 binds — a stalled early-stage process, which the next-best-action already names ("follow up once, then let it go"). The scattered views showed each fact in isolation; the object shows the *disposition* — where it is, what's bound, what to do, how to close — so the operator can decide (chase or close) in one read. What it revealed the split board could not: the active board's "6 live" are individually inspectable now, and most look like Wingtip Toys — early, silent, stalled — which is the same "not being read" story at the per-process grain, and the reason the aging rule (auto-suggest close past a silence threshold) is the right next step: the detail view shows the operator will be closing many of these by hand until the threshold does it for them. Nothing it needs for the current shape is missing; the aging rule + period filter (the time windows) are the named next session.
+
+- **Reflection 3 — methodology.** Pure assembly of built capabilities (S103m thread, S103l source + drawer, S103q stage picker + NBA, S103n close) with no model change, no new backend, no migration — the payoff of having built each piece behind a clean seam is that the process object was a composition, not a construction. Close-from-board reused the existing `/close`; open-from-any-card reused one `openProcessDetail` from four call sites; the one shared `closeReasonPicker` serves both the detail's close row and every active card. The only non-assembly touch was moving the Map opp chips out of the gate button so they could be clickable (a button cannot nest a button) — a rendering fix, not new capability.
+
+- **AC verdicts.** AC1 (detail opens from active card, closed card, lens, Map node — same view) ✓ — `openProcessDetail` wired from all four. AC2 (whole thread in time order, each opening its source) ✓ — live: 2 dated items, 2 openable sources. AC3 (binds, each opening the verification drawer with basis + source) ✓ — `renderCorrectionList` on the process's binds. AC4 (stage picker sets the stage; close row closes with an outcome → closed record) ✓ — the gate write + `/close`; live close-from-board moved active 6→5. AC5 (every active card has a close control → moves off the active board) ✓ — `closeReasonPicker` on active cards, verified. AC6 (reuses gate + close paths; no model change, no migration) ✓. AC7 (boots before pin; suite; import-linter) ✓ — verified before the pin; apps green; import-linter 48/0.
+
+- Close state: **three commits — charter-first D219 (`abda00f`), the detail view (`a2f3af5`), open-from-any-card + close-from-board (`655a2d4`), this live-verify + re-pin + log**. A process is now a first-class object: open it from any card into one panel with its thread, sources, binds, stage, next action, and close; close it from the board directly. Deployed and boot-verified before the pin (digest `bda7bd2…`).
+
+- methodology: the whole session is the dividend of seam discipline — every capability this composes (thread, source, drawer, stage, NBA, close) was built behind a clean function or endpoint, so the "first-class process object" was assembly with no new backend; when the pieces are clean, the composition is cheap.
+
+```
+metrics:
+  classification: build session (S103s — the process detail view: a first-class process object opened from any card assembling thread/sources/binds/stage/NBA/close, plus close-from-board; view assembly; D219)
+  session_started: 2026-06-30
+  session_closed: 2026-06-30
+  step0: pure assembly, no backend — thread (S103m), openable source + verification drawer (S103l), stage picker + NBA (S103q), close (S103n) all reused; detail hosted in the S3 panel, reads pipeline-stats DTO (card + gates) + global bindings; no model change/endpoint/migration
+  detail: openProcessDetail -> renderProcessDetail assembles header (company/role/stage + stage picker/gate write) + NBA + correspondence thread (time-ordered, bindingSourceBlock per item) + binds (renderCorrectionList: basis/source/unlink) + close row (closeReasonPicker live / reopen closed)
+  open_from: active-board card, closed-record card, lens (selected opp), Map flow-spine opp chips (moved out of the gate button to clickable spans) — one openProcessDetail
+  close_from_board: every active card carries closeReasonPicker (shared with the detail close row) -> POST /close -> moves to the closed record
+  live_verify: active board 6 live; detail for 'Wingtip Toys' stage=Apply next_action='silent 25 days — follow up' thread=2 binds across 2 units 2 openable sources touches=2; close-from-board went_cold -> active 6->5, target status=closed; reverted -> active 6
+  reflection_1_unblock_proof: proof pass now one motion (thread + binds + stage + close in one panel) vs four scattered surfaces; reuses the same bindingSourceBlock/renderCorrectionList/gate write/close composed into one place
+  reflection_2_process_object: reading Wingtip Toys whole shows the disposition (2 touches, Apply, silent 25d, 2 emails, 2 binds — early stalled); the 6 live are individually inspectable now, mostly early+silent (the per-process 'not being read'); nothing missing for the current shape; aging rule is the natural next
+  reflection_3_methodology: assembly of S103m/l/q/n, no model change/backend/migration; close-from-board reused /close; open reused one openProcessDetail x4; the one non-assembly touch was moving Map opp chips out of the gate button (button-in-button) — a rendering fix
+  tests: process_detail_view_and_close_from_board (assembled thread/source/binds/stage/NBA/close, the 4 open surfaces, close-from-board reusing /close); daily_driver + apps green; import-linter 48/0
+  boot_verify: create_app builds; /app serves openProcessDetail + renderProcessDetail + 'Open process' + closeReasonPicker; Up (healthy) — verified BEFORE the pin
+  commits: abda00f (charter D219), a2f3af5 (detail view), 655a2d4 (open-from-any-card + close-from-board), <this commit> (live-verify + re-pin + session log; image bda7bd2)
+  charter_touchpoints: charter/decisions.md (D219 + index), charter/current-package.md (S103s line + deferrals), apps/api/static/daily_driver.html (openProcessDetail + open/close wiring), tests/unit/apps/api/test_daily_driver_surface.py, log/sessions.md (this entry), compose.yaml (pin)
+  numbering: S103s (the process detail view); D219 the live decision max; S104 reserved for direction
+  operator_next: open + work the 6 active processes in the detail view (verify binds, set stage, close the dead ones from the board); the proof pass is now one motion per process
+  next: the aging rule (recent applications live until a configurable silence threshold, then confirm-close) + the period filter — built together as time windows, confirm-not-auto; finer interview-round stages (two-C); the per-process win-probability engine (slice three, replaces the NBA); the 6 pre-existing red live-stack e2e tests
+  corrects:
+  corrected_by:
+```
+
+---
+
 ## Archive pointer
 
 Prior sessions are windowed out at package close per the charter-and-log retention rule
