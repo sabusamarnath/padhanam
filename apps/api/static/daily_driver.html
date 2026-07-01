@@ -1367,7 +1367,8 @@
         targets.map((t, i) => `<option value="${i}">${escapeHtml(t.label)}</option>`).join("");
       mv.onchange = async () => {
         const t = targets[mv.value]; if (!t) return;
-        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: t.kind, to_element_id: t.id }) }); await refresh(); }
+        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: t.kind, to_element_id: t.id }) });
+          toast(`Moved to “${(t.label || "").split(":")[0]}”`); await refresh(); }
         catch { toast("Relink failed", true); }
       };
       return mv;
@@ -2211,7 +2212,11 @@
       };
       elemSel.onchange = async () => {
         const o = (elemSel._opts || [])[elemSel.value]; if (!o) return;
-        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.kind, to_element_id: o.id }) }); await (refresh ? refresh() : loadAssess()); }
+        // D219-fix: confirm the save. The relink persists (marks the unit
+        // user-owned), but with one active goal the item stays in the goal's list,
+        // so a silent refresh read as "nothing happened". Toast the change.
+        try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.kind, to_element_id: o.id }) });
+          toast(`Moved to “${(o.label || "").split(":")[0]}”`); await (refresh ? refresh() : loadAssess()); }
         catch { toast("Relink failed", true); }
       };
       wrap.appendChild(goalSel); wrap.appendChild(elemSel);

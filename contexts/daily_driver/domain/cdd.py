@@ -53,10 +53,13 @@ class ElementKind(str, Enum):
 # The kinds an EVIDENCES edge can target (D202) — the authored elements *plus* the
 # outcome goal node a unit can be bound to. Distinct from ``ElementKind`` (which is
 # the authored-element kinds only): unlink/relink operate on EVIDENCES endpoints, so
-# they accept ``outcome`` too. (S103c-fix-3: the Map-unlink 422 was the router
-# rejecting ``outcome`` via ``ElementKind`` while the graph endpoint supported it.)
+# they accept ``outcome`` (the goal node) and ``measurable_outcome`` (the D211
+# outcome-layer element) too. (S103c-fix-3: the Map-unlink 422 was the router
+# rejecting ``outcome`` via ``ElementKind`` while the graph endpoint supported it;
+# S103s-fix: ``measurable_outcome`` was the same gap for relinking to an outcome
+# element after D211.)
 EVIDENCE_KINDS: frozenset[str] = frozenset(
-    {"lever", "intermediary", "external", "outcome"}
+    {"lever", "intermediary", "external", "outcome", "measurable_outcome"}
 )
 
 
