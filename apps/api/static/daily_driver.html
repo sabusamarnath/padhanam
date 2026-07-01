@@ -1369,7 +1369,7 @@
         const t = targets[mv.value]; if (!t) return;
         try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: t.kind, to_element_id: t.id }) });
           toast(`Moved to “${(t.label || "").split(":")[0]}”`); await refresh(); }
-        catch { toast("Relink failed", true); }
+        catch { toast("Relink failed — refreshing", true); try { await refresh(); } catch {} }
       };
       return mv;
     }
@@ -2217,7 +2217,9 @@
         // so a silent refresh read as "nothing happened". Toast the change.
         try { await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.kind, to_element_id: o.id }) });
           toast(`Moved to “${(o.label || "").split(":")[0]}”`); await (refresh ? refresh() : loadAssess()); }
-        catch { toast("Relink failed", true); }
+        // On failure (e.g. a 404 from a stale from-bind) refresh so the list
+        // recovers to the current state and the operator can retry on fresh data.
+        catch { toast("Relink failed — refreshing", true); try { await (refresh ? refresh() : loadAssess()); } catch {} }
       };
       wrap.appendChild(goalSel); wrap.appendChild(elemSel);
       return wrap;

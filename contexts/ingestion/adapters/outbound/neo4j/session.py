@@ -1871,7 +1871,11 @@ class TenantScopedNeo4jSession:
             out.append(
                 ElementEvidenceRecord(
                     unit_id=UUID(row["unit_id"]),
-                    element_kind=str(row["element_kind"]).lower(),
+                    # Normalise the label→kind round-trip: a :MeasurableOutcome node
+                    # lowercases to "measurableoutcome", not the "measurable_outcome"
+                    # kind string, which would break relink/unlink on an outcome-layer
+                    # bind (S103s-fix; the S103k edge-read fix, applied here too).
+                    element_kind=_norm_edge_kind(row["element_kind"]),
                     element_id=UUID(row["element_id"]),
                     outcome_id=UUID(row["outcome_id"]),
                     tier=row["tier"],
