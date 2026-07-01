@@ -671,6 +671,7 @@ class PipelineStatsDTO(BaseModel):
     rejected: SplitBucketDTO
     no_response: SplitBucketDTO
     engaged: SplitBucketDTO
+    closed_other: SplitBucketDTO
     one_touch_volume: int
     gates: list[GateColumnDTO]
     ladder: list[LadderRungDTO]
@@ -683,7 +684,8 @@ def pipeline_stats_to_dto(s, *, gates) -> "PipelineStatsDTO":
                               opportunity_ids=list(b.opportunity_ids))
     return PipelineStatsDTO(
         rejected=bucket(s.rejected), no_response=bucket(s.no_response),
-        engaged=bucket(s.engaged), one_touch_volume=s.one_touch_volume,
+        engaged=bucket(s.engaged), closed_other=bucket(s.closed_other),
+        one_touch_volume=s.one_touch_volume,
         gates=[GateColumnDTO(gate_id=g.gate_id, name=g.name, gate_order=g.gate_order)
                for g in sorted(gates, key=lambda g: g.gate_order)],
         ladder=[LadderRungDTO(stage=r.stage, gate_order=r.gate_order, count=r.count,

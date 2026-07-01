@@ -23,16 +23,21 @@ def _opp(*, status="live", reason=None, stage="", order=None, days_ago=2, touche
     )
 
 
-def test_three_way_split_rejected_engaged_and_one_touch_grain():
+def test_split_engaged_is_live_only_closed_go_to_their_buckets():
+    # S103s-fix: "engaged" = actually engaged (LIVE); a closed went-cold/declined is
+    # NOT engaged (it left the pipeline) — it lands in rejected or closed-other, so
+    # closing a process drops it out of engaged.
     opps = (
         _opp(status="closed", reason="rejected"),
         _opp(status="closed", reason="rejected"),
         _opp(status="closed", reason="went_cold"),
+        _opp(status="closed", reason="declined"),
         _opp(status="live"),
     )
     s = build_pipeline_stats(opportunities=opps, one_touch_volume=102, now=_NOW)
     assert s.rejected.count == 2
-    assert s.engaged.count == 2  # the cold + the live (non-rejected)
+    assert s.engaged.count == 1                # only the live one
+    assert s.closed_other.count == 2           # went-cold + declined (closed, not rejected)
     assert s.no_response.count == 102 and s.no_response.opportunity_ids == ()  # grain: count only
 
 

@@ -367,6 +367,7 @@
     .pipe-splitrow.b-rejected .pipe-sbar i { background: var(--behind-fg); }
     .pipe-splitrow.b-no_response .pipe-sbar i { background: var(--ink-3); }
     .pipe-splitrow.b-engaged .pipe-sbar i { background: #97c459; }
+    .pipe-splitrow.b-closed_other .pipe-sbar i { background: var(--warm); }
     .pipe-rbar i { background: var(--navy); }
     .pipe-sn, .pipe-rn { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); min-width: 72px; text-align: right; }
     .pipe-drill { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
@@ -809,11 +810,14 @@
       }
     }
     function buildPipeline(wrap, grp, s, reload) {
-      // 1. The three-way split (parts, grain surfaced — no faked total).
+      // 1. The split — engaged is LIVE processes only; rejected + closed-other are
+      // terminal (in the closed record); no-response is the one-touch grain (D171).
       const split = document.createElement("div"); split.className = "pipe-split";
-      split.innerHTML = `<h3>Applied, split three ways <span class="pipe-grain">— ${s.engaged.count + s.rejected.count} tracked processes that replied + ${s.one_touch_volume} one-touch applications (different grains, not summed)</span></h3>`;
-      const total = Math.max(1, s.rejected.count + s.engaged.count + s.no_response.count);
-      [s.rejected, s.no_response, s.engaged].forEach((b) => {
+      const replied = s.rejected.count + s.engaged.count + s.closed_other.count;
+      split.innerHTML = `<h3>Applied, split by outcome <span class="pipe-grain">— ${replied} tracked processes that replied + ${s.one_touch_volume} one-touch applications (different grains, not summed)</span></h3>`;
+      const total = Math.max(1, s.rejected.count + s.engaged.count + s.closed_other.count + s.no_response.count);
+      [s.engaged, s.rejected, s.closed_other, s.no_response].forEach((b) => {
+        if (b.key === "closed_other" && !b.count) return;
         const pct = Math.round((b.count / total) * 100);
         const row = document.createElement("button"); row.type = "button";
         row.className = "pipe-splitrow b-" + b.key + (b.opportunity_ids.length ? " drillable" : "");

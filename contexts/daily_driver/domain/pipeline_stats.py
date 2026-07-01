@@ -80,6 +80,7 @@ class PipelineStats:
     rejected: SplitBucket
     no_response: SplitBucket
     engaged: SplitBucket
+    closed_other: SplitBucket  # closed but not rejected (went-cold/declined/won)
     one_touch_volume: int
     ladder: tuple[LadderRung, ...]
     cards: tuple[CardStat, ...]
@@ -121,17 +122,30 @@ def build_pipeline_stats(
         o.opportunity_id for o in opportunities
         if o.status == _CLOSED and o.closed_reason == "rejected"
     )
-    rejected_set = set(rejected_ids)
+    # D219-fix (S103s follow-up): "engaged" means *actually engaged* — a LIVE
+    # process still in conversation, consistent with the active board. A closed
+    # process (rejected, went-cold, declined, won) is NOT engaged: it left the
+    # pipeline, so closing it drops it out of the engaged count. (The earlier
+    # "everything not rejected" definition wrongly counted closed went-cold/declined
+    # as engaged, so closing them never reduced the number.) The other closed
+    # outcomes live in the closed record, grouped by outcome.
     engaged_ids = tuple(
+        o.opportunity_id for o in opportunities if o.status != _CLOSED
+    )
+    closed_other_ids = tuple(
         o.opportunity_id for o in opportunities
-        if o.opportunity_id not in rejected_set
+        if o.status == _CLOSED and o.closed_reason != "rejected"
     )
 
     rejected = SplitBucket("rejected", "Rejected", len(rejected_ids), rejected_ids)
-    engaged = SplitBucket("engaged", "Engaged", len(engaged_ids), engaged_ids)
+    engaged = SplitBucket("engaged", "Engaged (live)", len(engaged_ids), engaged_ids)
     # no_response is the one-touch silence — a different grain (applications, not
     # processes), so it carries the count only, no opportunity constituents (D171).
     no_response = SplitBucket("no_response", "No response", one_touch_volume, ())
+    closed_other = SplitBucket(
+        "closed_other", "Closed (other outcomes)", len(closed_other_ids),
+        closed_other_ids,
+    )
 
     # The depth ladder — every tracked opportunity by furthest gate, deepest rung
     # first, Unplaced last. Rejected ones are included (they reached gates too).
@@ -180,7 +194,8 @@ def build_pipeline_stats(
     )
     return PipelineStats(
         rejected=rejected, no_response=no_response, engaged=engaged,
-        one_touch_volume=one_touch_volume, ladder=ladder, cards=cards,
+        closed_other=closed_other, one_touch_volume=one_touch_volume,
+        ladder=ladder, cards=cards,
     )
 
 

@@ -295,7 +295,7 @@ def test_pipeline_stats_tab_split_ladder_kanban_restage():
     assert "function renderAssessPipeline" in _HTML and "function buildPipeline" in _HTML
     p = _fn_body("buildPipeline")
     assert "/cdd/pipeline-stats/" in _fn_body("renderAssessPipeline")
-    assert "split three ways" in p and "Depth ladder" in p and "pipe-kanban" in p
+    assert "split by outcome" in p and "Depth ladder" in p and "pipe-kanban" in p
     assert "not summed" in p  # the grain honesty (no faked total)
     # drag-to-re-stage writes the gate (the proof action)
     assert "/stage" in p and 'setData("text/opp"' in _fn_body("pipeCard")
