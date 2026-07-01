@@ -395,6 +395,18 @@ def test_opportunity_close_state_in_the_lens():
     assert "closed:" in _fn_body("buildFlowSpine")
 
 
+def test_goal_and_process_corrections_dedupe_by_unit():
+    # D219-fix: a whole-goal/process corrections list dedupes by unit (a unit bound
+    # to several elements repeats once per element otherwise — the "duplicates in
+    # the list"); renderCorrectionList keeps the weakest bind + a "+N" hint.
+    rl = _fn_body("renderCorrectionList")
+    assert "opts.dedupeByUnit" in rl and "moreByUnit" in rl
+    # the whole-goal + whole-process callers dedupe; the per-element drawer does not
+    assert "dedupeByUnit: true" in _fn_body("renderGoalCorrections")
+    assert "dedupeByUnit: true" in _fn_body("renderProcessDetail")
+    assert "dedupeByUnit" not in _fn_body("renderBindings")  # per-element: no dedupe
+
+
 def test_correction_row_shows_why_and_strength_consistently():
     # D212: the basis row + strength + the openable source all render from the one
     # shared list (so every view — Map drawer + the flat lens — matches).
