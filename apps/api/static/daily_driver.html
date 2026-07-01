@@ -404,6 +404,9 @@
     .pd-lab { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 4px; }
     .pd-close { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--hairline); }
     .pd-open { margin-top: 6px; font-size: 10.5px; color: #2BA692; background: none; border: none; cursor: pointer; padding: 2px 0; text-align: left; }
+    .pipe-cbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .map-opp-chip { display: block; font-size: 11px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 8px; padding: 2px 8px; margin-top: 4px; cursor: pointer; text-align: left; width: 100%; }
+    .map-opp-chip:hover { border-color: #2BA692; color: var(--ink-1); }
     /* S103h: opportunities (process instances) */
     .cdd-opp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
     .cdd-opp-chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2);
@@ -867,7 +870,7 @@
             await reload(); }
           catch { toast("Re-stage failed", true); }
         };
-        cells.forEach((c) => colEl.appendChild(pipeCard(c, { active: true })));
+        cells.forEach((c) => colEl.appendChild(pipeCard(c, { active: true, grp, reload })));
         kan.appendChild(colEl);
       });
       board.appendChild(kan);
@@ -889,18 +892,18 @@
       const reasons = ORDER.filter((r) => byReason[r]).concat(
         Object.keys(byReason).filter((r) => !ORDER.includes(r)));
       reasons.forEach((r) => {
-        const grp = byReason[r];
+        const members = byReason[r];
         // stage-at-close breakdown within this outcome (the depth-of-death read).
         const byStage = {};
-        grp.forEach((c) => { byStage[c.stage] = (byStage[c.stage] || 0) + 1; });
+        members.forEach((c) => { byStage[c.stage] = (byStage[c.stage] || 0) + 1; });
         const breakdown = Object.entries(byStage).sort((a, b) => b[1] - a[1])
           .map(([st, n]) => `${escapeHtml(st)} ${n}`).join(" · ");
         const sec = document.createElement("div"); sec.className = "pipe-outgrp";
         sec.innerHTML = `<div class="pipe-outh"><span class="pipe-outlab">${escapeHtml(reasonLabel(r))}</span>` +
-          `<span class="pipe-outn">${grp.length}</span>` +
+          `<span class="pipe-outn">${members.length}</span>` +
           `<span class="pipe-outbreak">${breakdown}</span></div>`;
         const grid = document.createElement("div"); grid.className = "pipe-closedgrid";
-        grp.forEach((c) => grid.appendChild(closedCard(c, s, reload)));
+        members.forEach((c) => grid.appendChild(closedCard(c, s, reload, grp)));
         sec.appendChild(grid); rec.appendChild(sec);
       });
       if (closedCards.length) wrap.appendChild(rec);
@@ -908,7 +911,7 @@
     // A closed-record card: company/role, its stage-at-close, no action (history).
     // D218: a picker sets stage-at-close where unknown, reusing the gate write
     // (set_opportunity_gate) — the depth ladder + the breakdown read it.
-    function closedCard(c, s, reload) {
+    function closedCard(c, s, reload, grp) {
       const el = document.createElement("div"); el.className = "pipe-card closed";
       el.innerHTML =
         `<div class="pipe-cco">${escapeHtml(c.company)}</div>` +
@@ -917,6 +920,9 @@
           `<span class="pipe-cstage">died at: ${escapeHtml(c.stage)}</span>` +
           `<span class="pipe-ctouch">${c.touches} touch${c.touches === 1 ? "" : "es"}</span>` +
         `</div>`;
+      // D219: open the process detail view (thread, binds, stage, reopen).
+      if (grp) { const op = document.createElement("button"); op.type = "button"; op.className = "pd-open"; op.textContent = "Open process ▸";
+        op.onclick = () => openProcessDetail(c.opportunity_id, grp); el.appendChild(op); }
       // The stage-at-close picker — the full gate ladder + Unplaced.
       const opts = [{ gate_id: null, name: "Unplaced" }]
         .concat((s.gates || []).map((g) => ({ gate_id: g.gate_id, name: g.name })));
@@ -950,6 +956,15 @@
         `</div>` +
         // Next best actions live on the active board only; closed cards are history.
         (active ? `<div class="pipe-cact">▸ ${escapeHtml(c.next_action)}</div>` : "");
+      // D219: open the process detail, and (active) close it from the board directly.
+      if (opts && opts.grp) {
+        const bar = document.createElement("div"); bar.className = "pipe-cbar";
+        const op = document.createElement("button"); op.type = "button"; op.className = "pd-open"; op.textContent = "Open process ▸";
+        op.onclick = () => openProcessDetail(c.opportunity_id, opts.grp);
+        bar.appendChild(op);
+        if (active && opts.reload) bar.appendChild(closeReasonPicker(c.opportunity_id, opts.reload));
+        el.appendChild(bar);
+      }
       return el;
     }
     // D200/S102: the authored-CDD proof surface. The LLM drafts each goal's CDD;
@@ -1533,7 +1548,13 @@
       // The close / reopen control for the selected opportunity (D214).
       const opp = (lensOpp && lensOpp !== UNCLUSTERED)
         ? opps.find((o) => String(o.opportunity_id) === String(lensOpp)) : null;
-      if (opp) bar.appendChild(buildCloseControl(opp, reload));
+      if (opp) {
+        // D219: open the selected process's detail view from the lens.
+        const op = document.createElement("button"); op.type = "button"; op.className = "pd-open"; op.textContent = "Open process ▸";
+        op.onclick = () => openProcessDetail(opp.opportunity_id, { outcome_id: cdd.outcome_id });
+        bar.appendChild(op);
+        bar.appendChild(buildCloseControl(opp, reload));
+      }
       return bar;
     }
     // D214: close (with a required reason) or reopen the selected opportunity;
@@ -1701,12 +1722,21 @@
         // When a lens is on, show only its opportunity here; else show all.
         const here = opps.filter((o) => ga && o.current_gate_id === ga.gate_id
           && (!lensOpp || lensOpp === UNCLUSTERED || String(o.opportunity_id) === String(lensOpp)));
-        // D214: a closed opportunity at a gate is marked closed, not shown as live.
-        const chip = (o) => escapeHtml(o.name) + (o.status === "closed" ? ` (closed: ${reasonLabel(o.closed_reason)})` : "");
         node.innerHTML = `<span class="map-gate-name">${escapeHtml(name)}</span>` +
-          (isLensGate ? `<span class="map-gate-here">▸ here</span>` : "") +
-          (here.length ? `<span class="map-gate-opps">${here.map(chip).join(", ")}</span>` : "");
+          (isLensGate ? `<span class="map-gate-here">▸ here</span>` : "");
         cell.appendChild(node);
+        // D214/D219: the opportunities at this gate — closed marked, each a chip
+        // that opens the process detail view (outside the gate button so it clicks).
+        if (here.length) {
+          const chips = document.createElement("div"); chips.className = "map-gate-opps";
+          here.forEach((o) => {
+            const c = document.createElement("button"); c.type = "button"; c.className = "map-opp-chip";
+            c.textContent = o.name + (o.status === "closed" ? ` (closed: ${reasonLabel(o.closed_reason)})` : "");
+            c.onclick = () => openProcessDetail(o.opportunity_id, { outcome_id: cdd.outcome_id });
+            chips.appendChild(c);
+          });
+          cell.appendChild(chips);
+        }
         if (ga) {
           const portal = document.createElement("div"); portal.className = "map-portal"; portal.style.display = "none";
           node.onclick = () => {

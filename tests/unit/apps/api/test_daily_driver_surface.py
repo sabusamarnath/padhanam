@@ -304,6 +304,29 @@ def test_pipeline_stats_tab_split_ladder_kanban_restage():
     assert "function renderAssessDoing" in _HTML and "/cdd/assessment/" in _HTML
 
 
+def test_process_detail_view_and_close_from_board():
+    # D219: a process is a first-class object — a detail view (thread, sources,
+    # binds, stage picker, next action, close) opened from any card, plus a
+    # close control on active cards. Pure assembly, reuses the built pieces.
+    assert "function openProcessDetail" in _HTML and "function renderProcessDetail" in _HTML
+    d = _fn_body("renderProcessDetail")
+    # the detail assembles the reused pieces
+    assert "Correspondence" in d and "bindingSourceBlock(" in d   # thread + openable source
+    assert "renderCorrectionList(" in d                           # binds verification drawer
+    assert "/stage" in d                                          # the stage picker (gate write)
+    assert "next_action" in d                                     # the NBA
+    assert "closeReasonPicker(" in d                              # the close row
+    # close-with-outcome reuses the S103n /close write
+    assert "/close" in _fn_body("closeReasonPicker")
+    # open-from-card: active + closed cards, the lens, and the Map opp chips
+    assert "openProcessDetail(" in _fn_body("pipeCard")
+    assert "openProcessDetail(" in _fn_body("closedCard")
+    assert "openProcessDetail(" in _fn_body("buildLensSelector")
+    assert "openProcessDetail(" in _fn_body("buildFlowSpine")
+    # close-from-board: an active card carries the close-with-outcome picker
+    assert "closeReasonPicker(c.opportunity_id, opts.reload)" in _fn_body("pipeCard")
+
+
 def test_pipeline_board_splits_active_from_closed_record():
     # D218: the board splits — active board is live-only, closed record is grouped
     # by outcome with stage-at-close; closed cards carry no next action.
