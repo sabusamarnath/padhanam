@@ -403,6 +403,10 @@ def test_goal_and_process_corrections_dedupe_by_unit():
     assert "opts.dedupeByUnit" in rl and "moreByUnit" in rl
     # the whole-goal + whole-process callers dedupe; the per-element drawer does not
     assert "dedupeByUnit: true" in _fn_body("renderGoalCorrections")
+    # D219-fix: the goal corrections list is a shrinking queue — corrected
+    # (user_owned) units leave it, with a "corrected" count for progress.
+    gc = _fn_body("renderGoalCorrections")
+    assert "!b.user_owned" in gc and "corrected" in gc
     assert "dedupeByUnit: true" in _fn_body("renderProcessDetail")
     assert "dedupeByUnit" not in _fn_body("renderBindings")  # per-element: no dedupe
 

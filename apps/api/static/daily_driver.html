@@ -2170,9 +2170,18 @@
     // select, and triage, identical to CDD. Grouped by the goal's bound units; the
     // cross-goal relinkPicker is the context-specific relink control.
     function renderGoalCorrections(body, grp) {
-      const initial = (cddBindings || []).filter((b) => b.outcome_id === grp.outcome_id);
+      // D219-fix: the corrections list is a shrinking "to fix" queue — once you
+      // correct a unit (relink/unlink marks it user-owned), it LEAVES the list, so
+      // your work produces visible change instead of the item staying put. Corrected
+      // units are counted, not shown here (they're your handled pile).
+      const goalBinds = (b) => b.outcome_id === grp.outcome_id;
+      const toFix = (b) => goalBinds(b) && !b.user_owned;
+      const initial = (cddBindings || []).filter(goalBinds);
       if (!initial.length) return;
-      const lbl = document.createElement("div"); lbl.className = "feeder-label"; lbl.textContent = "Corrections — fix what's bound here";
+      const correctedUnits = (bs) => new Set(bs.filter((b) => goalBinds(b) && b.user_owned).map((b) => String(b.unit_id))).size;
+      const lbl = document.createElement("div"); lbl.className = "feeder-label";
+      const doneNote = () => { const n = correctedUnits(cddBindings || []); return n ? ` · ${n} corrected` : ""; };
+      lbl.textContent = "Corrections — fix what's bound here" + doneNote();
       body.appendChild(lbl);
       const corr = document.createElement("div"); body.appendChild(corr);
       // In-place refresh: re-read the shared bindings cache, re-render just this
@@ -2180,15 +2189,16 @@
       const refresh = async () => {
         try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
         try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
+        lbl.textContent = "Corrections — fix what's bound here" + doneNote();
         renderCorrectionList(corr, {
-          bindings: (cddBindings || []).filter((b) => b.outcome_id === grp.outcome_id),
-          refresh, relinkControlFor: relinkPicker, emptyMsg: "No bound units.",
+          bindings: (cddBindings || []).filter(toFix),
+          refresh, relinkControlFor: relinkPicker, emptyMsg: "All corrected — nothing left to fix here.",
           dedupeByUnit: true,
         });
       };
       renderCorrectionList(corr, {
-        bindings: initial, refresh, relinkControlFor: relinkPicker,
-        emptyMsg: "No bound units.", dedupeByUnit: true,
+        bindings: initial.filter((b) => !b.user_owned), refresh, relinkControlFor: relinkPicker,
+        emptyMsg: "All corrected — nothing left to fix here.", dedupeByUnit: true,
       });
     }
     // The cross-goal element picker (S103c-fix-2): choose a goal, then an element
