@@ -151,6 +151,16 @@ class GoalGraphPort(Protocol):
         survive."""
         ...
 
+    async def create_lead(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        outcome_id: UUID, name: str, lead_gate_id: UUID,
+        fit_tier: str, warm_access_available: str, origination_source: str,
+    ) -> None:
+        """Create a user-authored lead :Opportunity at the Lead gate (S103t, D221) —
+        zero touches, no thread; reuses the D215 merge_opportunity write with
+        provenance user_authored / accepted and the three origination properties."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,

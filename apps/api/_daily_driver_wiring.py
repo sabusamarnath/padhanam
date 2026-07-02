@@ -614,6 +614,20 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, opportunity_id=opportunity_id
         )
 
+    async def create_lead(
+        self, *, tenant_context, opportunity_id, outcome_id, name, lead_gate_id,
+        fit_tier, warm_access_available, origination_source,
+    ) -> None:
+        # A lead reuses the D215 merge_opportunity write — user_authored / accepted,
+        # positioned at the Lead gate, with the three origination properties (D221).
+        await self._outcome_graph.merge_opportunity(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            outcome_id=outcome_id, name=name, current_gate_id=lead_gate_id,
+            provenance_origin="user_authored", proof_state="accepted",
+            fit_tier=fit_tier, warm_access_available=warm_access_available,
+            origination_source=origination_source,
+        )
+
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:
         record = await self._outcome_graph.read_authored_cdd(
             tenant_context=tenant_context, outcome_id=outcome_id
@@ -681,6 +695,9 @@ class GoalGraphAdapter:
                 status=getattr(o, "status", "live"),
                 closed_reason=getattr(o, "closed_reason", None),
                 closed_at=getattr(o, "closed_at", None),
+                fit_tier=getattr(o, "fit_tier", None),
+                warm_access_available=getattr(o, "warm_access_available", None),
+                origination_source=getattr(o, "origination_source", None),
             )
             for o in opp_records
         )

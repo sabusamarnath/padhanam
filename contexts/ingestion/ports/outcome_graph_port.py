@@ -149,6 +149,12 @@ class OpportunityRecord:
     status: str = "live"
     closed_reason: str | None = None
     closed_at: datetime | None = None
+    # The lead-origination properties (S103t, D221) — operator-set on a lead, ``None``
+    # on a clustered opportunity. ``fit_tier`` bullseye/strong/opportunistic;
+    # ``warm_access_available`` warm/cold; ``origination_source`` inbound/outbound.
+    fit_tier: str | None = None
+    warm_access_available: str | None = None
+    origination_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -365,9 +371,14 @@ class OutcomeGraphPort(Protocol):
         provenance_origin: str,
         proof_state: str,
         source: str | None = None,
+        fit_tier: str | None = None,
+        warm_access_available: str | None = None,
+        origination_source: str | None = None,
     ) -> None:
         """Idempotently MERGE an opportunity Flow item (D208) — a process instance
-        belonging to the goal, positioned at its furthest-evidenced gate."""
+        belonging to the goal, positioned at its furthest-evidenced gate. The three
+        lead-origination properties (S103t, D221) are ``None`` for clustered
+        opportunities and set for a user-authored lead at the Lead gate."""
         ...
 
     async def list_opportunities(

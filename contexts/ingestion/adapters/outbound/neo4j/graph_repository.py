@@ -412,6 +412,9 @@ class Neo4jGraphRepository:
         provenance_origin: str,
         proof_state: str,
         source: str | None = None,
+        fit_tier: str | None = None,
+        warm_access_available: str | None = None,
+        origination_source: str | None = None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
@@ -419,7 +422,9 @@ class Neo4jGraphRepository:
                     opportunity_id=opportunity_id, outcome_id=outcome_id,
                     name=name, current_gate_id=current_gate_id,
                     provenance_origin=provenance_origin, proof_state=proof_state,
-                    source=source,
+                    source=source, fit_tier=fit_tier,
+                    warm_access_available=warm_access_available,
+                    origination_source=origination_source,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
@@ -457,6 +462,9 @@ class Neo4jGraphRepository:
                             and hasattr(r["closed_at"], "to_native")
                             else r.get("closed_at")
                         ),
+                        fit_tier=r.get("fit_tier"),
+                        warm_access_available=r.get("warm_access_available"),
+                        origination_source=r.get("origination_source"),
                     )
                     for r in rows
                 ]

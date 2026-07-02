@@ -49,6 +49,8 @@ from apps.api.routers._daily_driver_dto import (
     CLOSE_REASONS,
     CloseOpportunityRequest,
     RestageOpportunityRequest,
+    CreateLeadRequest,
+    CreateLeadResponse,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -97,6 +99,10 @@ from contexts.daily_driver.application import (
     raise_goal_target,
     record_observed_outcome,
     set_today_order,
+)
+from contexts.daily_driver.application.create_lead import (
+    LeadValidationError,
+    create_lead,
 )
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
@@ -688,6 +694,28 @@ async def post_opportunity_reject(
     if not ok:
         raise HTTPException(status_code=404, detail="opportunity not found")
     return Response(status_code=204)
+
+
+@router.post("/cdd/lead", status_code=201)
+async def post_create_lead(
+    body: CreateLeadRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> CreateLeadResponse:
+    """Create a new lead at the goal's Lead gate (D221): a user_authored
+    opportunity with zero touches and no thread, carrying the operator-set fit
+    tier, warm access, and origination source. The apply-advance (Lead -> Apply)
+    reuses the /stage endpoint. 422 on a bad field or a missing Lead gate."""
+    try:
+        opportunity_id = await create_lead(
+            goal_graph=goal_graph, actor=actor, outcome_id=body.outcome_id,
+            company=body.company, role=body.role, fit_tier=body.fit_tier,
+            warm_access_available=body.warm_access_available,
+            origination_source=body.origination_source,
+        )
+    except LeadValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return CreateLeadResponse(opportunity_id=opportunity_id)
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)

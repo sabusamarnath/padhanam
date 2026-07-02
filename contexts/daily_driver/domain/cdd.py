@@ -184,6 +184,12 @@ class OpportunityView:
     status: str = "live"
     closed_reason: str | None = None
     closed_at: datetime | None = None
+    # The lead-origination properties (S103t, D221): operator-set on a lead at the
+    # Lead gate, ``None`` on a clustered opportunity. The origination Lead column
+    # sorts on ``fit_tier`` (primary) then ``warm_access_available`` (secondary).
+    fit_tier: str | None = None
+    warm_access_available: str | None = None
+    origination_source: str | None = None
 
 
 @dataclass(frozen=True)

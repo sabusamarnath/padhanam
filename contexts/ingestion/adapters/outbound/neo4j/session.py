@@ -534,7 +534,10 @@ SET
     o.current_gate_id = $current_gate_id,
     o.provenance_origin = $provenance_origin,
     o.proof_state = $proof_state,
-    o.source = $source
+    o.source = $source,
+    o.fit_tier = $fit_tier,
+    o.warm_access_available = $warm_access_available,
+    o.origination_source = $origination_source
 """
 _LIST_OPPORTUNITIES = """
 MATCH (o:Opportunity {tenant_id: $tenant_id, outcome_id: $outcome_id})
@@ -544,7 +547,10 @@ RETURN o.opportunity_id AS opportunity_id, o.name AS name,
        o.provenance_origin AS provenance_origin, o.proof_state AS proof_state,
        o.source AS source, count(u) AS unit_count,
        coalesce(o.status, 'live') AS status,
-       o.closed_reason AS closed_reason, o.closed_at AS closed_at
+       o.closed_reason AS closed_reason, o.closed_at AS closed_at,
+       o.fit_tier AS fit_tier,
+       o.warm_access_available AS warm_access_available,
+       o.origination_source AS origination_source
 ORDER BY o.name ASC
 """
 # The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
@@ -1337,8 +1343,13 @@ class TenantScopedNeo4jSession:
         provenance_origin: str,
         proof_state: str,
         source: str | None = None,
+        fit_tier: str | None = None,
+        warm_access_available: str | None = None,
+        origination_source: str | None = None,
     ) -> None:
-        """MERGE an opportunity Flow item (D208)."""
+        """MERGE an opportunity Flow item (D208). ``fit_tier`` /
+        ``warm_access_available`` / ``origination_source`` are the lead-origination
+        properties (S103t, D221); ``None`` for clustered opportunities."""
         session = self._bound_session
         params = {
             "tenant_id": self._tenant_id,
@@ -1352,6 +1363,9 @@ class TenantScopedNeo4jSession:
             "provenance_origin": provenance_origin,
             "proof_state": proof_state,
             "source": source,
+            "fit_tier": fit_tier,
+            "warm_access_available": warm_access_available,
+            "origination_source": origination_source,
             "created_at": _now_utc(),
         }
         await session.run(_MERGE_OPPORTUNITY, params)

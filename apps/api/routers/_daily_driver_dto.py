@@ -609,6 +609,25 @@ class RestageOpportunityRequest(BaseModel):
     gate_id: UUID | None = None
 
 
+class CreateLeadRequest(BaseModel):
+    """Create a new lead at the Lead gate (S103t, D221). The operator sets the fit
+    tier + warm access by reading the authored fit rubric (D200); the three fields
+    are validated against their vocabularies in the use case."""
+
+    outcome_id: UUID
+    company: str
+    role: str = ""
+    fit_tier: str
+    warm_access_available: str
+    origination_source: str
+
+
+class CreateLeadResponse(BaseModel):
+    """The id of the created lead opportunity (S103t, D221)."""
+
+    opportunity_id: UUID
+
+
 class PipelineAssessmentDTO(BaseModel):
     """The "how am I doing" assessment for a goal (S103p, D216): a
     recommendation-shaped verdict whose headline is label-independent, plus the

@@ -1,7 +1,8 @@
 """Author the Apply and Screening gate CDDs from the framework (S103g, D207).
 
-Slice two-A: the first build of the step-as-portal depth. Seeds two process-flow
-gates (Apply, Screening) on get-a-job, each a portal into its local CDD with
+Slice two-A: the first build of the step-as-portal depth. Seeds the process-flow
+gates on get-a-job — the Lead origination gate (S103t/D221, gate_order 2, no local
+CDD this session) plus Apply and Screening, each a portal into its local CDD with
 Pratt's wiring — levers FEED the intermediary, externals INFLUENCE the
 intermediary, the intermediary FEEDS the gate (the gate node is the local-outcome
 endpoint). Gate elements carry gate_id (their gate) + outcome_id (the goal, so
@@ -41,6 +42,14 @@ GOAL_WIN_PROBABILITY_ID = UUID("00000000-0000-4000-8000-00000063f102")
 
 # D163 step 2 (Apply to target roles) — the Apply gate references it.
 APPLY_STEP_COMMITMENT_ID = UUID("00000000-0000-4000-8000-0000006300c2")
+
+# --- Lead gate (origination, S103t/D221) ------------------------------------
+# The origination stage below Apply (gate_order 2). A lead is a user_authored
+# :Opportunity positioned here with zero touches; the operator advances it to
+# Apply once applied. Its local CDD is not authored this session — the fit rubric
+# that governs origination is a goal-level lever (seed_get_a_job_cdd), not a
+# Lead-gate-local element.
+LEAD_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0000")
 
 # --- Apply gate -------------------------------------------------------------
 APPLY_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0001")
@@ -117,7 +126,21 @@ async def _seed() -> None:
         )
 
     try:
-        # 1. The two gates (the local-outcome endpoints).
+        # 1. The gates (the local-outcome endpoints). Lead (origination) sits below
+        # Apply; the ladder reads Lead -> Apply -> Screening.
+        await g.merge_gate(
+            tenant_context=tc, gate_id=LEAD_GATE_ID,
+            outcome_id=GET_A_JOB_OUTCOME_ID, name="Lead", gate_order=2,
+            local_outcome=(
+                "A qualified lead ready to apply to — high-fit and reachable"
+            ),
+            local_goal=(
+                "originate the right leads and spend warm access on the highest "
+                "tier (fit x warm, D221)"
+            ),
+            provenance_origin="llm_drafted", proof_state="pending",
+            step_commitment_id=None,
+        )
         await g.merge_gate(
             tenant_context=tc, gate_id=APPLY_GATE_ID,
             outcome_id=GET_A_JOB_OUTCOME_ID, name="Apply", gate_order=3,
@@ -142,7 +165,10 @@ async def _seed() -> None:
             provenance_origin="llm_drafted", proof_state="pending",
             step_commitment_id=None,
         )
-        log.info("seeded 2 gates (Apply gate_order=3, Screening gate_order=4)")
+        log.info(
+            "seeded 3 gates (Lead gate_order=2, Apply gate_order=3, "
+            "Screening gate_order=4)"
+        )
 
         # 2. Apply gate CDD. Relocate Tailoring effort in (carry provenance,
         # migrate its edge), seed the other levers/intermediary/externals.
