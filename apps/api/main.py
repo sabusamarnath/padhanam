@@ -1036,6 +1036,11 @@ def create_app(
         compositions.daily_driver_email_job_search_source
     )
     app.state.daily_driver_unit_graph = compositions.daily_driver_unit_graph
+    # The CDD audit port (D203 correction capture, S103v warming steps): the
+    # compositions field was never exposed on app.state, so get_cdd_audit_port
+    # always read None — correction capture silently no-op'd and warming steps 503'd.
+    # Wiring it here fixes both (S103v).
+    app.state.daily_driver_audit_port = compositions.daily_driver_audit_port
     app.state.connections_status_reader = (
         compositions.connections_status_reader
     )

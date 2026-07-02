@@ -526,3 +526,16 @@ def test_contacts_proof_panel_and_inline_contacts_render():
     assert "le.contacts" in _HTML
     # capture_source, never the reused 'source' name, on the add form
     assert 'name="capture_source"' in _HTML
+
+
+def test_contact_network_map_and_warming_surface():
+    # S103v/D225: the contacts panel has a List/Map toggle; the map groups by company
+    # with leads + derived-warm + a per-contact warming block (D224).
+    assert "function renderContactsMap(" in _HTML
+    assert "function buildContactsPanel(s, reload)" in _HTML
+    assert "buildContactsPanel(s, reload)" in _HTML          # called with pipeline stats
+    assert "cmap-toggle" in _HTML                            # List/Map toggle
+    assert "function warmingBlock(" in _HTML
+    assert '"/daily-driver/cdd/warming"' in _HTML            # log a warming step
+    assert "/daily-driver/cdd/warming/" in _HTML             # read steps per subject
+    assert "proofed — warm derives" in _HTML                 # honest unproofed note (D171)

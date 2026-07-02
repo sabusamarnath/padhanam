@@ -33,7 +33,7 @@ from shared_kernel.authorisation import (
 
 _SUBJECT_TYPES = (RESOURCE_TYPE_CONTACT, RESOURCE_TYPE_OPPORTUNITY)
 _PER_TENANT = "per_tenant"
-_PAGE_SIZE = 200
+_PAGE_SIZE = 50  # the audit reader caps page_size at [1, 50]
 
 
 class WarmingStepError(ValueError):

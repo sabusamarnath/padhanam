@@ -125,7 +125,7 @@ async def _warming_last_by_opportunity(
             action_verbs=(ACTION_WARMING_STEP,),
         ),
         cursor=None,
-        page_size=500,
+        page_size=50,  # the audit reader caps page_size at [1, 50]; newest 50 events
         tenant_context=actor.tenant_context,
     )
     # Events sort newest-first (timestamp DESC), so the first per subject is latest.

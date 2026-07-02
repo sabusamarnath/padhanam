@@ -99,6 +99,18 @@ def test_leads_warm_derives_from_contacts_override_wins_and_sort_is_effective():
     assert by["Acme"].contacts[0].usable and by["BigBank"].contacts[0].usable is False
 
 
+def test_warming_action_advances_on_a_logged_step():
+    # S103v/D224: a logged warming step advances the lead's warming action past the
+    # generic contact prompt.
+    lead = _lead(company="Acme", tier="bullseye", warm=None)
+    s = build_pipeline_stats(
+        opportunities=(lead,), one_touch_volume=0, now=_NOW, contacts=(),
+        warming_last={lead.opportunity_id: ("intro_requested", 6)},
+    )
+    nba = s.leads[0].warming_action
+    assert "Intro requested 6 days ago" in nba and "follow up" in nba.lower()
+
+
 def test_no_leads_yields_empty_leads_bucket():
     s = build_pipeline_stats(
         opportunities=(_opp(status="live", stage="Apply", order=3),),
