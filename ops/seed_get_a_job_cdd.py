@@ -47,9 +47,10 @@ OUTCOME_STANCE = (
     "defined up front so the Accept decision scores rather than guesses."
 )
 
-# The seven controllable portfolio levers (framework §2, §3, §6, §7). Each is a
+# The controllable portfolio levers (framework §2, §3, §6, §7). Each is a
 # (lever_id, label) pair; the label carries the framework name plus the key
-# tokens the lexical matcher reads.
+# tokens the lexical matcher reads. The eighth (the origination fit rubric) is the
+# S103t/D221 authored rule the operator proofs and scores leads against.
 LEVERS: tuple[tuple[UUID, str], ...] = (
     (UUID("00000000-0000-4000-8000-00000063f001"),
      "Origination: open new processes via inbound brand and outbound outreach"),
@@ -65,6 +66,25 @@ LEVERS: tuple[tuple[UUID, str], ...] = (
      "Capacity allocation: kill weak processes, hold the portfolio budget"),
     (UUID("00000000-0000-4000-8000-00000063f007"),
      "Preparation by stage type: spend prep on discriminators and fit-and-sell rounds"),
+    # The origination fit rubric (S103t, D221) — the authored rule behind
+    # Origination + Targeting: which leads to originate and how to spend warm
+    # access. A goal-level (portfolio) lever feeding Pipeline depth; the operator
+    # proofs it live and sets fit_tier / warm_access_available per lead against it.
+    (UUID("00000000-0000-4000-8000-00000063f008"),
+     "Origination fit rubric — spend warm access on the highest tier (fit x warm). "
+     "Tier 1 Bullseye: regulated enterprises building or buying agentic platforms "
+     "where the build must be defensible under regulation (G-SIBs, large banks and "
+     "insurers, regulated infrastructure); the load-bearing intersection is "
+     "agentic-platform build meeting a regulated, audit-heavy buyer; BNY sits here. "
+     "Tier 2 Strong: one axis fully present — regulated but not G-SIB, or an "
+     "agentic-platform builder without the regulatory intensity. Tier 3 "
+     "Opportunistic: real fit but neither the regulatory-defensibility edge nor the "
+     "enterprise-procurement edge is load-bearing; apply when warm or when capacity "
+     "is spare. Below tier: neither axis applies, do not originate. The "
+     "fit-times-warm rule: Bullseye or Strong and warm apply now; Bullseye or "
+     "Strong and cold build a warm path before applying (do not cold-apply a "
+     "bullseye); Opportunistic and warm apply if capacity; Opportunistic and cold "
+     "skip unless idle; Below tier skip."),
 )
 
 # The five measured intermediaries (framework §2, §4, §5) — positions, not
@@ -115,6 +135,7 @@ LEVER_FEEDS: tuple[tuple[UUID, UUID], ...] = (
     (LEVERS[4][0], OFFERSYNC),    # Synchronization -> Offer synchronization
     (LEVERS[5][0], PIPELINE),     # Capacity allocation -> Pipeline depth
     (LEVERS[6][0], WINPROB),      # Preparation by stage type -> Aggregate win-probability
+    (LEVERS[7][0], PIPELINE),     # Origination fit rubric -> Pipeline depth (S103t, D221)
 )
 EXTERNAL_INFLUENCES: tuple[tuple[UUID, UUID], ...] = (
     (EXTERNALS[0][0], PIPELINE),   # Labor-market demand -> Pipeline depth
