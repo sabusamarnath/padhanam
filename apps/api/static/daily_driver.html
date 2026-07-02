@@ -173,6 +173,10 @@
     .assess-altitude { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface-2);
       border: 1px solid var(--hairline); border-radius: 9999px; margin: 0 0 12px; }
     .assess-altitude .seg { font-size: 11px; padding: 3px 12px; }
+    /* the pipeline -> assessment inline cross-link (S103y, D231) */
+    .assess-xlink { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--teal);
+      background: none; border: none; cursor: pointer; padding: 0; margin: 0 0 10px; }
+    .assess-xlink:hover { text-decoration: underline; }
     .map-platform-note { font-size: 12px; color: var(--ink-2); background: var(--surface-2);
       border: 1px solid var(--hairline); border-radius: var(--radius-card); padding: 9px 12px; margin: 0 0 12px; }
     .mapnode { margin: 6px 0; }
@@ -806,6 +810,13 @@
       if (assessMode === "cdd") return renderAssessCdd(box, assessData);
       (assessMode === "map" ? renderAssessMap : renderAssessList)(box, assessData);
     }
+    // S103y/D231: switch the assess lens tab programmatically (the pipeline cross-link).
+    function switchAssess(mode) {
+      assessMode = mode;
+      if (mode === "assessment") assessAltitude = "verdict";
+      document.querySelectorAll("#assess-toggle .seg").forEach((x) => x.classList.toggle("on", x.dataset.mode === mode));
+      renderAssess();
+    }
     // S103y/D231: the assessment lens carries BOTH altitudes under one tab — the D216
     // recommendation-shaped verdict and the D199 by-goal view — folding the former
     // separate "Doing" (verdict) and "List" (by-goal) tabs into one honest lens.
@@ -917,6 +928,12 @@
       }
     }
     function buildPipeline(wrap, grp, s, reload) {
+      // S103y/D231: an inline cross-link to the assessment (the two are adjacent
+      // toggle modes; this makes the verdict one click, not a tab-hunt).
+      const xl = document.createElement("button"); xl.type = "button"; xl.className = "assess-xlink";
+      xl.innerHTML = "How am I doing? — see the assessment ▸";
+      xl.onclick = () => switchAssess("assessment");
+      wrap.appendChild(xl);
       // 0. The contact graph behind warm access (S103u, D222): proof the
       // email-seeded contacts + add ones email missed; a lead's warm derives from
       // a usable contact at its company.
@@ -1002,8 +1019,19 @@
       });
       board.appendChild(kan);
       if (!liveCards.length) {
+        // S103y/D231 drill-filter fix: during a drill the board is narrowed to the
+        // filtered set (which may be all closed), so "every process is closed" is a
+        // lie when live processes exist outside the filter. Be drill-aware.
         const e = document.createElement("div"); e.className = "pipe-empty";
-        e.textContent = "Nothing is live — every process is closed. The board is empty: originate.";
+        if (pipeDrill) {
+          e.textContent = `No live processes in “${pipeDrill.label}”. `;
+          const clr = document.createElement("button"); clr.type = "button";
+          clr.className = "btn-ghost cdd-btn"; clr.textContent = "Clear filter";
+          clr.onclick = () => { pipeDrill = null; reload(); };
+          e.appendChild(clr);
+        } else {
+          e.textContent = "Nothing is live — every process is closed. The board is empty: originate.";
+        }
         board.appendChild(e);
       }
       wrap.appendChild(board);
