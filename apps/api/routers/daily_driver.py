@@ -63,6 +63,9 @@ from apps.api.routers._daily_driver_dto import (
     QualificationFieldDTO,
     SetQualificationRequest,
     qualification_to_dto,
+    LogActivityRequest,
+    ActivityEntryDTO,
+    activity_to_dto,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -134,6 +137,11 @@ from contexts.daily_driver.application.qualification import (
     QualificationError,
     read_opportunity_qualification as read_qualification_uc,
     set_qualification_field as set_qualification_field_uc,
+)
+from contexts.daily_driver.application.activity import (
+    ActivityError,
+    list_opportunity_activity as list_activity_uc,
+    log_opportunity_activity as log_activity_uc,
 )
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
@@ -899,6 +907,46 @@ async def post_set_qualification(
     if not ok:
         raise HTTPException(status_code=404, detail="opportunity not found")
     return Response(status_code=204)
+
+
+# --- Opportunity activity history (S103w, D229) — append-only -----------------
+
+@router.post("/cdd/opportunity/{opportunity_id}/activity", status_code=204)
+async def post_log_activity(
+    opportunity_id: UUID,
+    body: LogActivityRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    audit_port: Annotated[object | None, Depends(get_cdd_audit_port)],
+) -> Response:
+    """Log an activity against an opportunity (D229); a named field bumps its
+    freshness. 422 on a bad field, 503 when the audit trail is unwired."""
+    try:
+        await log_activity_uc(
+            goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+            kind=body.kind, note=body.note, touches_field=body.touches_field,
+            audit_port=audit_port,
+        )
+    except ActivityError as e:
+        code = 503 if "audit port" in str(e) else 422
+        raise HTTPException(status_code=code, detail=str(e)) from e
+    return Response(status_code=204)
+
+
+@router.get(
+    "/cdd/opportunity/{opportunity_id}/activity",
+    response_model=list[ActivityEntryDTO],
+)
+async def get_activity(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    audit_reader: Annotated[object | None, Depends(get_audit_reader)],
+) -> list[ActivityEntryDTO]:
+    """The opportunity's activity history, newest first (D229)."""
+    entries = await list_activity_uc(
+        actor=actor, opportunity_id=opportunity_id, audit_reader=audit_reader,
+    )
+    return [activity_to_dto(a) for a in entries]
 
 
 # --- Warming steps (S103v, D224) — append-only, per subject -------------------

@@ -711,6 +711,31 @@ def qualification_to_dto(f) -> "QualificationFieldDTO":
     )
 
 
+class LogActivityRequest(BaseModel):
+    """Log an activity against an opportunity (S103w, D229)."""
+
+    kind: str
+    note: str = ""
+    touches_field: str | None = None
+
+
+class ActivityEntryDTO(BaseModel):
+    """One activity in an opportunity's history (S103w, D229)."""
+
+    kind: str
+    note: str
+    touches_field: str | None = None
+    occurred_at: datetime
+    actor: str
+
+
+def activity_to_dto(a) -> "ActivityEntryDTO":
+    return ActivityEntryDTO(
+        kind=a.kind, note=a.note, touches_field=a.touches_field,
+        occurred_at=a.occurred_at, actor=a.actor,
+    )
+
+
 class LogWarmingStepRequest(BaseModel):
     """Log a warming step against a contact or a lead (S103v, D224)."""
 

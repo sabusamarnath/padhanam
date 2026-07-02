@@ -32,6 +32,10 @@ ACTION_CDD_UNLINK: str = "cdd.unlink"
 # Warming steps (S103v, D224): a warming action against a contact or a lead, stored
 # as an append-only audit event and read back per subject via the faceted reader.
 ACTION_WARMING_STEP: str = "warming.step"
+# A general per-opportunity activity (S103w, D229) — the union of this + warming.step
+# is the opportunity's append-only history; an entry may name a qualification field it
+# touched, bumping that field's last_touched.
+ACTION_OPPORTUNITY_ACTIVITY: str = "opportunity.activity"
 RESOURCE_TYPE_CONTACT: str = "contact"
 RESOURCE_TYPE_OPPORTUNITY: str = "opportunity"
 WARMING_STEP_KINDS: tuple[str, ...] = (
@@ -103,6 +107,29 @@ def warming_step_event(
     )
 
 
+def opportunity_activity_event(
+    *,
+    tenant_context: TenantContext,
+    actor: str,
+    opportunity_id: UUID,
+    kind: str,
+    note: str = "",
+    touches_field: str | None = None,
+) -> AuditEvent:
+    """The append-only record of a general opportunity activity (D229). ``kind`` is a
+    short label (e.g. call, email, applied, interview); ``touches_field`` names a
+    qualification field the activity refreshed (bumped separately by the use case)."""
+    return _draft(
+        tenant_context=tenant_context,
+        actor=actor,
+        action_verb=ACTION_OPPORTUNITY_ACTIVITY,
+        resource_type=RESOURCE_TYPE_OPPORTUNITY,
+        resource_id=str(opportunity_id),
+        before_state={},
+        after_state={"kind": kind, "note": note, "touches_field": touches_field or ""},
+    )
+
+
 def relink_correction_event(
     *,
     tenant_context: TenantContext,
@@ -158,11 +185,13 @@ def unlink_correction_event(
 __all__ = [
     "ACTION_CDD_RELINK",
     "ACTION_CDD_UNLINK",
+    "ACTION_OPPORTUNITY_ACTIVITY",
     "ACTION_WARMING_STEP",
     "RESOURCE_TYPE_CDD_EVIDENCE",
     "RESOURCE_TYPE_CONTACT",
     "RESOURCE_TYPE_OPPORTUNITY",
     "WARMING_STEP_KINDS",
+    "opportunity_activity_event",
     "relink_correction_event",
     "unlink_correction_event",
     "warming_step_event",
