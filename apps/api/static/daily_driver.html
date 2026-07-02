@@ -1058,7 +1058,7 @@
       };
       col.appendChild(form);
       // lead cards, each with an apply action.
-      const applyGate = (s.gates || []).find((g) => g.name === "Apply");
+      const applyGate = (s.gates || []).find((g) => g.name === "Application");
       leads.forEach((le) => {
         const card = document.createElement("div"); card.className = "pipe-card lead-card";
         // Warm access is derived (D222): show the effective value + whether it is a
@@ -1809,8 +1809,8 @@
     // Node-tap opens the proof drawer. Supersedes D199's depth-two stopgap.
     // The framework's full flow (charter/frameworks) — built gates render solid,
     // the rest dashed placeholders so the flow reads whole and two-C has its slots.
-    const FLOW_GATES = ["Pre-search", "Target", "Apply", "Screening", "Intro",
-      "CV", "Case", "Group", "Meet the team", "CxO", "References", "Negotiate", "Accept"];
+    const FLOW_GATES = ["Lead", "Application", "Screening", "Interviewing", "Intro",
+      "CV", "Case", "Group", "Meet the team", "CxO", "Offer", "References", "Negotiate", "Accept"];
     // proof_state -> semantic node status (§4 palette): pending needs you (violet),
     // accepted is settled (green). Worst-status ripples: an outcome with any
     // pending feeder reads needs-you.
@@ -1860,7 +1860,7 @@
     }
     // D214: the five outcome reasons a close carries (the lens close control).
     const CLOSE_REASONS = [
-      ["won", "won"], ["declined", "declined (by you)"],
+      ["won", "In role / hired"], ["declined", "declined (by you)"],
       ["withdrawn_or_killed", "withdrawn / killed"], ["rejected", "rejected"],
       ["went_cold", "went cold"],
     ];

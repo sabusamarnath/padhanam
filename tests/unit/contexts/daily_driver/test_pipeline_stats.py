@@ -113,14 +113,14 @@ def test_warming_action_advances_on_a_logged_step():
 
 def test_no_leads_yields_empty_leads_bucket():
     s = build_pipeline_stats(
-        opportunities=(_opp(status="live", stage="Apply", order=3),),
+        opportunities=(_opp(status="live", stage="Application", order=3),),
         one_touch_volume=0, now=_NOW,
     )
     assert s.leads == ()
 
 
 def test_depth_ladder_deepest_first_unplaced_last_includes_rejected():
-    apply_g, screen_g = "Apply", "Screening"
+    apply_g, screen_g = "Application", "Screening"
     opps = (
         _opp(stage=screen_g, order=4, status="closed", reason="rejected"),  # Acme
         _opp(stage=apply_g, order=3),
@@ -128,7 +128,7 @@ def test_depth_ladder_deepest_first_unplaced_last_includes_rejected():
         _opp(stage="", order=None),
     )
     s = build_pipeline_stats(opportunities=opps, one_touch_volume=0, now=_NOW)
-    assert [r.stage for r in s.ladder] == ["Screening", "Apply", "Unplaced"]
+    assert [r.stage for r in s.ladder] == ["Screening", "Application", "Unplaced"]
     assert s.ladder[0].count == 1 and s.ladder[-1].count == 2
     # the rejected-at-screening still occupies the Screening rung (depth, not outcome)
     assert s.ladder[0].stage == "Screening"
@@ -136,9 +136,9 @@ def test_depth_ladder_deepest_first_unplaced_last_includes_rejected():
 
 def test_next_best_action_rules():
     # silent applied -> follow up
-    assert "follow up" in next_best_action(status="live", closed_reason=None, stage="Apply", days_silent=30)
+    assert "follow up" in next_best_action(status="live", closed_reason=None, stage="Application", days_silent=30)
     # recent applied -> await
-    assert "await" in next_best_action(status="live", closed_reason=None, stage="Apply", days_silent=1).lower()
+    assert "await" in next_best_action(status="live", closed_reason=None, stage="Application", days_silent=1).lower()
     # in screening, recent -> prepare
     assert "prepare" in next_best_action(status="live", closed_reason=None, stage="Screening", days_silent=2)
     # in screening, silent -> chase

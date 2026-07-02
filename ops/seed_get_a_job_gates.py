@@ -77,6 +77,10 @@ APPLY_EXTERNALS = (
 # --- Screening gate ---------------------------------------------------------
 SCREENING_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0002")
 SCREENING_CLEARING_ID = UUID("00000000-0000-4000-8000-0000063a2101")
+# Interviewing + Offer (S103w, D226) — the ladder's later stages; no local CDD
+# this session (their texture lives in the qualification, D228).
+INTERVIEWING_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0003")
+OFFER_GATE_ID = UUID("00000000-0000-4000-8000-0000063a0004")
 SCREENING_LEVERS = (
     (UUID("00000000-0000-4000-8000-0000063a2001"),
      "Take-home quality and time: investment in the take-home or assessment"),
@@ -143,7 +147,7 @@ async def _seed() -> None:
         )
         await g.merge_gate(
             tenant_context=tc, gate_id=APPLY_GATE_ID,
-            outcome_id=GET_A_JOB_OUTCOME_ID, name="Apply", gate_order=3,
+            outcome_id=GET_A_JOB_OUTCOME_ID, name="Application", gate_order=3,
             local_outcome=(
                 "Expected interviews generated vs the opportunity cost of the "
                 "same effort elsewhere"
@@ -165,9 +169,25 @@ async def _seed() -> None:
             provenance_origin="llm_drafted", proof_state="pending",
             step_commitment_id=None,
         )
+        await g.merge_gate(
+            tenant_context=tc, gate_id=INTERVIEWING_GATE_ID,
+            outcome_id=GET_A_JOB_OUTCOME_ID, name="Interviewing", gate_order=5,
+            local_outcome="Advance through the rounds vs screened out",
+            local_goal="convert each round; read the process and build leverage",
+            provenance_origin="llm_drafted", proof_state="pending",
+            step_commitment_id=None,
+        )
+        await g.merge_gate(
+            tenant_context=tc, gate_id=OFFER_GATE_ID,
+            outcome_id=GET_A_JOB_OUTCOME_ID, name="Offer", gate_order=6,
+            local_outcome="An offer accepted on the best terms",
+            local_goal="negotiate from strength; clear vetting; land In role",
+            provenance_origin="llm_drafted", proof_state="pending",
+            step_commitment_id=None,
+        )
         log.info(
-            "seeded 3 gates (Lead gate_order=2, Apply gate_order=3, "
-            "Screening gate_order=4)"
+            "seeded 5 gates (Lead=2, Application=3, Screening=4, "
+            "Interviewing=5, Offer=6)"
         )
 
         # 2. Apply gate CDD. Relocate Tailoring effort in (carry provenance,

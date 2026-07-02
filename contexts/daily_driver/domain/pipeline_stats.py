@@ -152,7 +152,7 @@ def next_best_action(
         return f"Closed ({r.replace('_', ' ')}) — reopen if it is still live."
     silent = days_silent is not None and days_silent >= silent_days
     # past the apply gate (screening or deeper) — Unplaced/Apply/none are still early.
-    deep = stage not in ("", "Apply", _UNPLACED)
+    deep = stage not in ("", "Application", _UNPLACED)
     if deep:
         if silent:
             return f"Silent {days_silent} days since {stage.lower()} — chase the next round or a decision timeline."
