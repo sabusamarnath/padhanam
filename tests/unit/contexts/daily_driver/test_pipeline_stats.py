@@ -71,6 +71,34 @@ def test_leads_partitioned_out_and_sorted_fit_then_warm():
     assert all(r.stage != "Lead" for r in s.ladder)
 
 
+def test_leads_warm_derives_from_contacts_override_wins_and_sort_is_effective():
+    # S103u/D222: warm derives from a usable contact at the lead's company; the S103t
+    # manual tag is the override (effective = override ?? derived); the fit×warm sort
+    # reads the effective value; the warming action names the contact.
+    from contexts.daily_driver.domain.contacts import ContactView
+
+    acme = _lead(company="Acme", tier="bullseye", warm=None)          # derives warm
+    bigbank = _lead(company="BigBank", tier="bullseye", warm=None)      # derives cold
+    coldco = _lead(company="ColdCo", tier="bullseye", warm="warm")      # override warm
+    contacts = (
+        ContactView(uuid4(), "Jane", "j@acme.example", "Acme", "first", "close", "easy", "email", "user_authored"),
+        ContactView(uuid4(), "Bob", "b@x.com", "BigBank", None, None, None, "email", "system_suggested"),
+    )
+    s = build_pipeline_stats(
+        opportunities=(bigbank, acme, coldco), one_touch_volume=0, now=_NOW,
+        contacts=contacts,
+    )
+    by = {lc.company: lc for lc in s.leads}
+    assert by["Acme"].warm_derived == "warm" and by["Acme"].warm_access_available == "warm"
+    assert by["BigBank"].warm_derived == "cold" and by["BigBank"].warm_access_available == "cold"
+    assert by["ColdCo"].warm_override == "warm" and by["ColdCo"].warm_derived == "cold"
+    assert by["ColdCo"].warm_access_available == "warm"  # override wins
+    # sort: same tier, warm (Acme, ColdCo) before cold (BigBank)
+    assert [lc.company for lc in s.leads][-1] == "BigBank"
+    assert "Jane" in by["Acme"].warming_action
+    assert by["Acme"].contacts[0].usable and by["BigBank"].contacts[0].usable is False
+
+
 def test_no_leads_yields_empty_leads_bucket():
     s = build_pipeline_stats(
         opportunities=(_opp(status="live", stage="Apply", order=3),),

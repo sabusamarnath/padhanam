@@ -404,6 +404,10 @@
     .lead-warm.w-warm { color: #b0997e; border-color: #b0997e; }
     .lead-warm.w-cold { color: var(--ink-3); }
     .lead-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+    .lead-contacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 2px; }
+    .lead-kontact { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--hairline-strong); color: var(--ink-3); }
+    .lead-kontact.usable { border-color: #1a8070; color: #1a8070; font-weight: 600; }
+    .lead-warm-nba { font-size: 11px; color: #2BA692; line-height: 1.35; margin-top: 4px; }
     /* Contact proof surface (S103u, D222) */
     .contacts-panel { border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 12px; margin-bottom: 16px; background: var(--page); }
     .contacts-panel summary { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); cursor: pointer; }
@@ -1027,14 +1031,27 @@
       const applyGate = (s.gates || []).find((g) => g.name === "Apply");
       leads.forEach((le) => {
         const card = document.createElement("div"); card.className = "pipe-card lead-card";
+        // Warm access is derived (D222): show the effective value + whether it is a
+        // manual override or derived from the contact graph.
+        const isOverride = le.warm_override === "warm" || le.warm_override === "cold";
+        const warmTitle = isOverride ? "manual override" : "derived from contacts";
+        // The lead's linked contacts, inline (list, not a graph — S103v is the map).
+        const kk = le.contacts || [];
+        const contactsHtml = kk.length
+          ? `<div class="lead-contacts">` + kk.map((k) =>
+              `<span class="lead-kontact${k.usable ? " usable" : ""}" title="${escapeHtml([k.degree, k.strength, k.reachability].filter(Boolean).join(" · ") || "unproofed")}">${escapeHtml(k.name)}</span>`
+            ).join("") + `</div>`
+          : "";
         card.innerHTML =
           `<div class="pipe-cco">${escapeHtml(le.company)}</div>` +
           (le.role ? `<div class="pipe-cro">${escapeHtml(le.role)}</div>` : "") +
           `<div class="lead-tags">` +
             `<span class="lead-tier t-${escapeHtml(le.fit_tier || "")}">${escapeHtml(FIT_LABELS[le.fit_tier] || le.fit_tier || "?")}</span>` +
-            `<span class="lead-warm w-${escapeHtml(le.warm_access_available || "")}">${escapeHtml(le.warm_access_available || "?")}</span>` +
+            `<span class="lead-warm w-${escapeHtml(le.warm_access_available || "")}" title="${warmTitle}">${escapeHtml(le.warm_access_available || "?")}${isOverride ? " ✎" : ""}</span>` +
             `<span class="lead-src">${escapeHtml(le.origination_source || "")}</span>` +
-          `</div>`;
+          `</div>` +
+          contactsHtml +
+          (le.warming_action ? `<div class="lead-warm-nba">▸ ${escapeHtml(le.warming_action)}</div>` : "");
         const bar = document.createElement("div"); bar.className = "pipe-cbar";
         const applyBtn = document.createElement("button"); applyBtn.type = "button"; applyBtn.className = "btn-primary cdd-btn";
         applyBtn.textContent = "Apply ▸";

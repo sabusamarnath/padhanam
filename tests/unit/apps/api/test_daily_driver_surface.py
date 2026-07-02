@@ -508,3 +508,21 @@ def test_origination_lead_column_renders_with_form_and_apply():
     assert "/stage" in _HTML
     # the Lead gate is not double-rendered as an empty normal column
     assert 'g.name !== "Lead"' in _HTML
+
+
+def test_contacts_proof_panel_and_inline_contacts_render():
+    # S103u/D222: the pipeline view carries a contact proof panel (add + confirm /
+    # enrich / reject) and a lead card renders its linked contacts inline + the
+    # contact-specific warming next-best-action.
+    assert "function buildContactsPanel(" in _HTML
+    assert "wrap.appendChild(buildContactsPanel(" in _HTML
+    assert '"/daily-driver/cdd/contacts"' in _HTML            # list + add
+    assert "/confirm" in _HTML and "/enrich" in _HTML and "/reject" in _HTML
+    assert "Add contact" in _HTML
+    # inline contacts + warming NBA on the lead card
+    assert "lead-contacts" in _HTML
+    assert "lead-warm-nba" in _HTML
+    assert "le.warming_action" in _HTML
+    assert "le.contacts" in _HTML
+    # capture_source, never the reused 'source' name, on the add form
+    assert 'name="capture_source"' in _HTML

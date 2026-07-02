@@ -490,6 +490,46 @@ def test_list_opportunities_returns_lead_origination_properties() -> None:
     assert "tenant_id: $tenant_id" in cypher  # tenant-scoped read
 
 
+def test_merge_contact_binds_tenant_and_capture_source() -> None:
+    # S103u/D222: a contact is a person keyed by (tenant_id, contact_id); the channel
+    # field is capture_source (not source). All binds under the tenant scope.
+    driver, session = _mock_driver()
+    cid = UUID("00000000-0000-4000-8000-0000063c0001")
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_contact(
+                contact_id=cid, name="Jane Doe", email="jane@acme.example",
+                company="Acme", degree=None, strength=None, reachability=None,
+                capture_source="email", provenance_origin="system_suggested",
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "MERGE (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})" in cypher
+    assert "c.capture_source = $capture_source" in cypher
+    assert "c.source" not in cypher  # never the reused 'source' name
+    assert params["tenant_id"] == _TENANT.tenant_id
+    assert params["capture_source"] == "email"
+    assert params["provenance_origin"] == "system_suggested"
+
+
+def test_list_contacts_scoped_to_tenant() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.list_contacts()
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "MATCH (c:Contact {tenant_id: $tenant_id})" in cypher
+    assert "c.capture_source AS capture_source" in cypher
+
+
 def test_attach_unit_to_opportunity_merges_belongs_to() -> None:
     driver, session = _mock_driver()
 
