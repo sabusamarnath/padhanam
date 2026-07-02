@@ -36,7 +36,8 @@
       --not_tracked-bg: #f2f1ef; --not_tracked-fg: #6b6a64;
       --backdrop: rgba(0,0,0,0.2); --shadow-panel: 0 8px 28px rgba(0,0,0,0.18);
       --radius-row: 6px; --radius-card: 8px; --radius-input: 4px;
-      --warm: #b0997e; --cool: #7a8190;
+      --warm: #b0997e;
+      --ok: #97c459; --cool: #7a8190;
     }
     [data-theme="dark"] {
       --ink-1: #f0eeea; --ink-2: #b4b2a9; --ink-3: #888780;
@@ -210,7 +211,7 @@
     .map-n-kind { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
     .map-n-label { font-size: 12.5px; color: var(--ink-1); line-height: 1.25; }
     .map-n.st-needs { border-left: 3px solid var(--needs-fg); }
-    .map-n.st-ok { border-left: 3px solid #97c459; }
+    .map-n.st-ok { border-left: 3px solid var(--ok); }
     .map-n-outcome { background: var(--needs-bg); }
     .map-n-measurable_outcome { background: var(--needs-bg); border-style: dashed; } /* D211: the measurable-outcome layer, distinct from the goal node */
     .map-n-gate { background: var(--surface-2); }
@@ -322,9 +323,9 @@
     /* D216: the "how am I doing" assessment (recommendation-shaped) */
     .asmt { display: flex; flex-direction: column; gap: 14px; }
     .asmt-verdict { background: var(--surface-work); border: 1px solid var(--hairline-strong); border-left: 4px solid var(--needs-fg); border-radius: 11px; padding: 16px; }
-    .asmt-verdict.v-live { border-left-color: #97c459; }
+    .asmt-verdict.v-live { border-left-color: var(--ok); }
     .asmt-vlab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--needs-fg); text-transform: uppercase; }
-    .asmt-verdict.v-live .asmt-vlab { color: #97c459; }
+    .asmt-verdict.v-live .asmt-vlab { color: var(--ok); }
     .asmt-vtext { font-size: 16px; font-weight: 700; margin: 6px 0 2px; line-height: 1.35; color: var(--ink-1); }
     .asmt-block { margin-top: 12px; }
     .asmt-bl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 4px; }
@@ -366,11 +367,11 @@
     .pipe-sbar i, .pipe-rbar i { display: block; height: 100%; border-radius: 4px; }
     .pipe-splitrow.b-rejected .pipe-sbar i { background: var(--behind-fg); }
     .pipe-splitrow.b-no_response .pipe-sbar i { background: var(--ink-3); }
-    .pipe-splitrow.b-engaged .pipe-sbar i { background: #97c459; }
+    .pipe-splitrow.b-engaged .pipe-sbar i { background: var(--ok); }
     .pipe-splitrow.b-closed_other .pipe-sbar i { background: var(--warm); }
     .pipe-rbar i { background: var(--navy); }
     .pipe-sn, .pipe-rn { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); min-width: 72px; text-align: right; }
-    .pipe-rlive { color: #97c459; font-size: 10px; }
+    .pipe-rlive { color: var(--ok); font-size: 10px; }
     .pipe-drill { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
     .pipe-board, .pipe-closed { background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 11px; padding: 14px; }
     .pipe-board h3, .pipe-closed h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 11px; }
@@ -386,7 +387,7 @@
     .pipe-cco { font-size: 12.5px; font-weight: 600; color: var(--ink-1); }
     .pipe-cro { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
     .pipe-cmeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
-    .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #97c459; }
+    .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: var(--ok); }
     .pipe-ctouch, .pipe-csilent { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-cact { font-size: 11.5px; color: var(--teal); line-height: 1.35; }
     /* Origination Lead column (S103t, D221) */
@@ -398,7 +399,7 @@
     .lead-card .lead-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; align-items: center; }
     .lead-tier { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 999px; color: #fff; }
     .lead-tier.t-bullseye { background: var(--teal); }
-    .lead-tier.t-strong { background: #7a8190; }
+    .lead-tier.t-strong { background: var(--cool); }
     .lead-tier.t-opportunistic { background: var(--warm); }
     .lead-warm { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--hairline-strong); }
     .lead-warm.w-warm { color: var(--warm); border-color: var(--warm); }
