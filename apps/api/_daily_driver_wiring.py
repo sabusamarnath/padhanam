@@ -49,6 +49,7 @@ from contexts.daily_driver.domain.cdd import (
     build_draft_prompt,
     parse_cdd_draft,
 )
+from contexts.daily_driver.domain.contacts import ContactView
 from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
 from shared_kernel.structured_output import (
     StructuredOutputParseFailure,
@@ -626,6 +627,49 @@ class GoalGraphAdapter:
             provenance_origin="user_authored", proof_state="accepted",
             fit_tier=fit_tier, warm_access_available=warm_access_available,
             origination_source=origination_source,
+        )
+
+    # --- Contacts (S103u, D222) --------------------------------------------
+
+    async def list_contacts(self, *, tenant_context) -> tuple[ContactView, ...]:
+        recs = await self._outcome_graph.list_contacts(tenant_context=tenant_context)
+        return tuple(
+            ContactView(
+                contact_id=r.contact_id, name=r.name, email=r.email,
+                company=r.company, degree=r.degree, strength=r.strength,
+                reachability=r.reachability, capture_source=r.capture_source,
+                provenance_origin=r.provenance_origin,
+            )
+            for r in recs
+        )
+
+    async def create_contact(
+        self, *, tenant_context, contact_id, name, company, degree, strength,
+        reachability, capture_source,
+    ) -> None:
+        await self._outcome_graph.merge_contact(
+            tenant_context=tenant_context, contact_id=contact_id, name=name,
+            email=None, company=company, degree=degree, strength=strength,
+            reachability=reachability, capture_source=capture_source,
+            provenance_origin="user_authored",
+        )
+
+    async def confirm_contact(self, *, tenant_context, contact_id) -> bool:
+        return await self._outcome_graph.confirm_contact(
+            tenant_context=tenant_context, contact_id=contact_id
+        )
+
+    async def enrich_contact(
+        self, *, tenant_context, contact_id, degree, strength, reachability
+    ) -> bool:
+        return await self._outcome_graph.enrich_contact(
+            tenant_context=tenant_context, contact_id=contact_id, degree=degree,
+            strength=strength, reachability=reachability,
+        )
+
+    async def reject_contact(self, *, tenant_context, contact_id) -> bool:
+        return await self._outcome_graph.delete_contact(
+            tenant_context=tenant_context, contact_id=contact_id
         )
 
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:

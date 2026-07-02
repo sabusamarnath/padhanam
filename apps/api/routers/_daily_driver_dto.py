@@ -628,6 +628,55 @@ class CreateLeadResponse(BaseModel):
     opportunity_id: UUID
 
 
+class ContactDTO(BaseModel):
+    """One contact in the operator's network (S103u, D222)."""
+
+    contact_id: UUID
+    name: str
+    email: str | None = None
+    company: str | None = None
+    degree: str | None = None
+    strength: str | None = None
+    reachability: str | None = None
+    capture_source: str
+    provenance_origin: str
+
+
+class AddContactRequest(BaseModel):
+    """Add a contact email did not surface (S103u, D222) — the manual capture route.
+    ``capture_source`` is ``manual`` (hand-added) or ``linkedin`` (known via
+    LinkedIn, until the S103v bulk file adapter)."""
+
+    name: str
+    company: str = ""
+    degree: str | None = None
+    strength: str | None = None
+    reachability: str | None = None
+    capture_source: str = "manual"
+
+
+class EnrichContactRequest(BaseModel):
+    """Enrich a contact with the operator-authored relationship (S103u, D222)."""
+
+    degree: str | None = None
+    strength: str | None = None
+    reachability: str | None = None
+
+
+class AddContactResponse(BaseModel):
+    """The id of the added contact (S103u, D222)."""
+
+    contact_id: UUID
+
+
+def contact_to_dto(c) -> "ContactDTO":
+    return ContactDTO(
+        contact_id=c.contact_id, name=c.name, email=c.email, company=c.company,
+        degree=c.degree, strength=c.strength, reachability=c.reachability,
+        capture_source=c.capture_source, provenance_origin=c.provenance_origin,
+    )
+
+
 class PipelineAssessmentDTO(BaseModel):
     """The "how am I doing" assessment for a goal (S103p, D216): a
     recommendation-shaped verdict whose headline is label-independent, plus the

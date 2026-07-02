@@ -24,6 +24,7 @@ from contexts.daily_driver.domain.cdd import (
     ProofState,
     ProvenanceOrigin,
 )
+from contexts.daily_driver.domain.contacts import ContactView
 from contexts.daily_driver.domain.goal import Goal
 from shared_kernel import TenantContext
 
@@ -159,6 +160,44 @@ class GoalGraphPort(Protocol):
         """Create a user-authored lead :Opportunity at the Lead gate (S103t, D221) —
         zero touches, no thread; reuses the D215 merge_opportunity write with
         provenance user_authored / accepted and the three origination properties."""
+        ...
+
+    # --- Contacts (S103u, D222) --------------------------------------------
+
+    async def list_contacts(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[ContactView, ...]:
+        """The tenant's contacts (D222) — read for the derive, the proof surface, and
+        a lead's inline contacts."""
+        ...
+
+    async def create_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID, name: str,
+        company: str | None, degree: str | None, strength: str | None,
+        reachability: str | None, capture_source: str,
+    ) -> None:
+        """Add a user-authored contact (D222) — the manual capture route (a hand-added
+        or LinkedIn-known person email did not surface). Provenance user_authored."""
+        ...
+
+    async def confirm_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        """Confirm a system-suggested contact → user_authored (D222)."""
+        ...
+
+    async def enrich_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        degree: str | None, strength: str | None, reachability: str | None,
+    ) -> bool:
+        """Enrich a contact with degree/strength/reachability (D222) — also flips
+        provenance to user_authored (the operator authors the relationship)."""
+        ...
+
+    async def reject_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        """Reject (delete) a contact (D222)."""
         ...
 
     async def set_disposition_counts(

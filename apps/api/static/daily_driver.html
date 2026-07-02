@@ -404,6 +404,23 @@
     .lead-warm.w-warm { color: #b0997e; border-color: #b0997e; }
     .lead-warm.w-cold { color: var(--ink-3); }
     .lead-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+    /* Contact proof surface (S103u, D222) */
+    .contacts-panel { border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 12px; margin-bottom: 16px; background: var(--page); }
+    .contacts-panel summary { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); cursor: pointer; }
+    .contacts-body { margin-top: 10px; }
+    .contact-add-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+    .contact-add-form input, .contact-add-form select, .contact-enrich select { font: inherit; font-size: 11.5px; padding: 4px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--surface-work); color: var(--ink-1); }
+    .contact-group { margin-bottom: 10px; }
+    .contact-company { font-size: 11px; font-weight: 700; color: var(--behind-fg); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .contact-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 0.5px solid var(--hairline); }
+    .contact-name { font-size: 12.5px; font-weight: 600; color: var(--ink-1); }
+    .contact-email { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-mono); }
+    .contact-prov { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 5px; border-radius: 999px; }
+    .contact-prov.sug { background: var(--behind-bg); color: var(--behind-fg); }
+    .contact-prov.auth { background: #1a8070; color: #fff; }
+    .contact-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+    .contact-enrich { display: flex; gap: 5px; }
+    .contact-bar { display: flex; gap: 5px; margin-left: auto; }
     .pipe-outgrp { margin-bottom: 12px; }
     .pipe-outh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
     .pipe-outlab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--behind-fg); }
@@ -826,6 +843,10 @@
       }
     }
     function buildPipeline(wrap, grp, s, reload) {
+      // 0. The contact graph behind warm access (S103u, D222): proof the
+      // email-seeded contacts + add ones email missed; a lead's warm derives from
+      // a usable contact at its company.
+      wrap.appendChild(buildContactsPanel(reload));
       // 1. The split — engaged is LIVE processes only; rejected + closed-other are
       // terminal (in the closed record); no-response is the one-touch grain (D171).
       const split = document.createElement("div"); split.className = "pipe-split";
@@ -1034,6 +1055,93 @@
         col.appendChild(e);
       }
       return col;
+    }
+    // The contact proof surface (S103u, D222): confirm / enrich / reject the
+    // email-seeded contacts + add ones email missed. Backs derived warm access.
+    const _DEG = ["first", "second"], _STR = ["close", "medium", "weak"], _REA = ["easy", "hard"];
+    function contactSel(name, opts, val) {
+      return `<select name="${name}" title="${name}"><option value="">${name}…</option>` +
+        opts.map((o) => `<option value="${o}"${o === val ? " selected" : ""}>${o}</option>`).join("") +
+        `</select>`;
+    }
+    function contactBtn(text, cls, fn) {
+      const b = document.createElement("button"); b.type = "button";
+      b.className = cls + " cdd-btn"; b.textContent = text; b.onclick = fn; return b;
+    }
+    function contactRow(c, refresh, reload) {
+      const row = document.createElement("div"); row.className = "contact-row";
+      const suggested = c.provenance_origin === "system_suggested";
+      row.innerHTML =
+        `<div class="contact-id"><span class="contact-name">${escapeHtml(c.name)}</span>` +
+        (c.email ? ` <span class="contact-email">${escapeHtml(c.email)}</span>` : "") +
+        ` <span class="contact-prov ${suggested ? "sug" : "auth"}">${suggested ? "suggested" : "yours"}</span>` +
+        ` <span class="contact-src">${escapeHtml(c.capture_source)}</span></div>`;
+      const enr = document.createElement("div"); enr.className = "contact-enrich";
+      enr.innerHTML = contactSel("degree", _DEG, c.degree) +
+        contactSel("strength", _STR, c.strength) + contactSel("reachability", _REA, c.reachability);
+      row.appendChild(enr);
+      const bar = document.createElement("div"); bar.className = "contact-bar";
+      bar.appendChild(contactBtn("Save", "btn-primary", async () => {
+        const sels = enr.querySelectorAll("select");
+        const bd = { degree: sels[0].value || null, strength: sels[1].value || null, reachability: sels[2].value || null };
+        try { await api(`/daily-driver/cdd/contacts/${c.contact_id}/enrich`, { method: "POST", body: JSON.stringify(bd) }); toast("Contact updated"); await refresh(); await reload(); }
+        catch { toast("Update failed", true); }
+      }));
+      if (suggested) bar.appendChild(contactBtn("Confirm", "btn-ghost", async () => {
+        try { await api(`/daily-driver/cdd/contacts/${c.contact_id}/confirm`, { method: "POST" }); toast("Confirmed"); await refresh(); await reload(); }
+        catch { toast("Confirm failed", true); }
+      }));
+      bar.appendChild(contactBtn("Reject", "btn-ghost", async () => {
+        try { await api(`/daily-driver/cdd/contacts/${c.contact_id}/reject`, { method: "POST" }); toast("Rejected"); await refresh(); await reload(); }
+        catch { toast("Reject failed", true); }
+      }));
+      row.appendChild(bar);
+      return row;
+    }
+    function buildContactsPanel(reload) {
+      const panel = document.createElement("details"); panel.className = "contacts-panel";
+      const summary = document.createElement("summary"); summary.textContent = "Contacts — the network behind warm access";
+      panel.appendChild(summary);
+      const body = document.createElement("div"); body.className = "contacts-body";
+      panel.appendChild(body);
+      const refresh = async () => {
+        let contacts = [];
+        try { contacts = await api("/daily-driver/cdd/contacts"); } catch { body.innerHTML = "<div class='pipe-empty'>Could not load contacts.</div>"; return; }
+        summary.textContent = `Contacts (${contacts.length}) — the network behind warm access`;
+        body.innerHTML = "";
+        const form = document.createElement("form"); form.className = "contact-add-form";
+        form.innerHTML =
+          `<input name="name" placeholder="Name" autocomplete="off" required>` +
+          `<input name="company" placeholder="Company" autocomplete="off">` +
+          contactSel("degree", _DEG, "") + contactSel("strength", _STR, "") + contactSel("reachability", _REA, "") +
+          `<select name="capture_source" title="capture source"><option value="manual">Manual</option><option value="linkedin">LinkedIn</option></select>` +
+          `<button type="submit" class="btn-primary cdd-btn">Add contact</button>`;
+        form.onsubmit = async (e) => {
+          e.preventDefault(); const fd = new FormData(form);
+          const name = String(fd.get("name") || "").trim(); if (!name) return;
+          const bd = { name, company: String(fd.get("company") || "").trim(),
+            degree: fd.get("degree") || null, strength: fd.get("strength") || null,
+            reachability: fd.get("reachability") || null, capture_source: fd.get("capture_source") };
+          try { await api("/daily-driver/cdd/contacts", { method: "POST", body: JSON.stringify(bd) }); toast("Contact added"); form.reset(); await refresh(); await reload(); }
+          catch { toast("Add contact failed", true); }
+        };
+        body.appendChild(form);
+        const groups = {};
+        contacts.forEach((c) => { const k = c.company || "(no company)"; (groups[k] = groups[k] || []).push(c); });
+        Object.keys(groups).sort().forEach((company) => {
+          const grp = document.createElement("div"); grp.className = "contact-group";
+          grp.innerHTML = `<div class="contact-company">${escapeHtml(company)}</div>`;
+          groups[company].forEach((c) => grp.appendChild(contactRow(c, refresh, reload)));
+          body.appendChild(grp);
+        });
+        if (!contacts.length) {
+          const e = document.createElement("div"); e.className = "pipe-empty";
+          e.textContent = "No contacts yet — seed from email (make seed-contacts) or add one above.";
+          body.appendChild(e);
+        }
+      };
+      refresh();
+      return panel;
     }
     function pipeCard(c, opts) {
       const active = opts && opts.active;

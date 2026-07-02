@@ -51,6 +51,11 @@ from apps.api.routers._daily_driver_dto import (
     RestageOpportunityRequest,
     CreateLeadRequest,
     CreateLeadResponse,
+    AddContactRequest,
+    AddContactResponse,
+    ContactDTO,
+    EnrichContactRequest,
+    contact_to_dto,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -103,6 +108,14 @@ from contexts.daily_driver.application import (
 from contexts.daily_driver.application.create_lead import (
     LeadValidationError,
     create_lead,
+)
+from contexts.daily_driver.application.manage_contacts import (
+    ContactValidationError,
+    add_contact,
+    confirm_contact as confirm_contact_uc,
+    enrich_contact as enrich_contact_uc,
+    list_contacts as list_contacts_uc,
+    reject_contact as reject_contact_uc,
 )
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
@@ -716,6 +729,89 @@ async def post_create_lead(
     except LeadValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return CreateLeadResponse(opportunity_id=opportunity_id)
+
+
+# --- Contacts (S103u, D222) — the network behind warm access ----------------
+
+@router.get("/cdd/contacts", response_model=list[ContactDTO])
+async def get_contacts(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[ContactDTO]:
+    """The tenant's contacts (D222) for the proof surface + a lead's inline list."""
+    contacts = await list_contacts_uc(goal_graph=goal_graph, actor=actor)
+    return [contact_to_dto(c) for c in contacts]
+
+
+@router.post("/cdd/contacts", status_code=201)
+async def post_add_contact(
+    body: AddContactRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> AddContactResponse:
+    """Add a contact email did not surface (D222) — the manual capture route
+    (hand-added or LinkedIn-known). 422 on a bad vocabulary or an empty name."""
+    try:
+        contact_id = await add_contact(
+            goal_graph=goal_graph, actor=actor, name=body.name, company=body.company,
+            degree=body.degree, strength=body.strength,
+            reachability=body.reachability, capture_source=body.capture_source,
+        )
+    except ContactValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return AddContactResponse(contact_id=contact_id)
+
+
+@router.post("/cdd/contacts/{contact_id}/confirm", status_code=204)
+async def post_confirm_contact(
+    contact_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Confirm a system-suggested contact → user_authored (D222). 404 when absent."""
+    ok = await confirm_contact_uc(
+        goal_graph=goal_graph, actor=actor, contact_id=contact_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/contacts/{contact_id}/enrich", status_code=204)
+async def post_enrich_contact(
+    contact_id: UUID,
+    body: EnrichContactRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Enrich a contact with degree/strength/reachability (D222) — flips it to
+    user_authored. 422 on a bad vocabulary, 404 when absent."""
+    try:
+        ok = await enrich_contact_uc(
+            goal_graph=goal_graph, actor=actor, contact_id=contact_id,
+            degree=body.degree, strength=body.strength,
+            reachability=body.reachability,
+        )
+    except ContactValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not ok:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/contacts/{contact_id}/reject", status_code=204)
+async def post_reject_contact(
+    contact_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Reject (delete) a contact (D222). 404 when absent."""
+    ok = await reject_contact_uc(
+        goal_graph=goal_graph, actor=actor, contact_id=contact_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)
