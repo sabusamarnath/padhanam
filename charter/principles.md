@@ -184,6 +184,14 @@ Binds every assessment surface and every future connector. Each new source widen
 
 Origin: the first dogfood correlate pass. Five of seven goals linked; the two dark goals (Strength, Get a job) were uncovered, not neglected, and the S70 coverage read (D171) rendered that distinction correctly on live data. The principle generalises the validated behaviour — D171 recorded the fix; this records the law it instances — so later connectors inherit it.
 
+### Assessment surfaces are verdict-first with evidence-on-demand
+
+Any surface that answers "how am I doing" leads with the verdict and its one or two load-bearing reasons. Supporting evidence — linked work, raw items, per-item detail — sits one interaction down, behind a toggle or drawer, never in the body. A verdict stapled to a flat evidence list is chart-shaped: it makes the user synthesise the answer from the sources, the exact work the platform exists to do for them.
+
+This specialises "Optimization output is recommendation-shaped, not chart-shaped" (D9) for the surface layer, and it is auditable: a surface either leads with the verdict or it does not — the first rendered block is a verdict, not a list. It binds every assessment surface, present and future; a new "how am I doing" surface that opens with evidence is a defect against the platform's core claim, not a style choice.
+
+Origin: the by-goal assessment view (D199) predated the recommendation-shaped verdict (D216) and the act lens, so it stapled the full linked-work moat under a thin verdict head — verdict-shaped at the top, chart-shaped below. D233 records the law; the by-goal fix instances it and the assessment-surface sweep enforces it across the siblings.
+
 ### Quality is a process property, not a cleanup task
 
 The optimization layer (D108, D111) improves matching system-wide from structural and implicit signal read from producer contexts; the human approves rules, never edits rows. Per-item correction is rejected as the design centre: it makes the user a data-janitor and contradicts the platform's differentiator. A systematic matcher error is fixed once, as a rule that addresses the whole class — observed before and re-measured after — the human approving the process change rather than touching individual items.
