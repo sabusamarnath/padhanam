@@ -165,10 +165,15 @@ def next_best_action(
     return "Recently active — await their reply."
 
 
-def _lead_card(o: PipelineOpp, contacts: tuple[ContactView, ...]) -> LeadCard:
+def _lead_card(
+    o: PipelineOpp,
+    contacts: tuple[ContactView, ...],
+    warming_last: dict[UUID, tuple[str, int]],
+) -> LeadCard:
     """Build a lead card with its derived warm access + contact-specific warming
     action (S103u, D222). The S103t manual tag (``o.warm_access_available``) is the
-    override; the effective value is override-else-derived (D217)."""
+    override; the effective value is override-else-derived (D217). A logged warming
+    step (D224) advances the warming action."""
     derived = derive_warm(o.company, contacts)
     override = o.warm_access_available if o.warm_access_available in ("warm", "cold") else None
     effective = effective_warm(override, o.company, contacts)
@@ -177,7 +182,10 @@ def _lead_card(o: PipelineOpp, contacts: tuple[ContactView, ...]) -> LeadCard:
         opportunity_id=o.opportunity_id, company=o.company, role=o.role,
         fit_tier=o.fit_tier, warm_access_available=effective,
         origination_source=o.origination_source, warm_derived=derived,
-        warm_override=override, warming_action=warming_action(o.company, contacts),
+        warm_override=override,
+        warming_action=warming_action(
+            o.company, contacts, warming_last.get(o.opportunity_id)
+        ),
         contacts=tuple(
             LeadContact(name=c.name, degree=c.degree, strength=c.strength,
                         reachability=c.reachability, usable=is_usable(c))
@@ -193,10 +201,13 @@ def build_pipeline_stats(
     now: datetime,
     silent_days: int = SILENT_DAYS,
     contacts: tuple[ContactView, ...] = (),
+    warming_last: dict[UUID, tuple[str, int]] | None = None,
 ) -> PipelineStats:
     """Assemble the three-way split, the depth ladder, the cards, and the
     origination leads (D217, D221). ``contacts`` back a lead's derived warm access
-    (D222)."""
+    (D222); ``warming_last`` (opportunity_id → (kind, days_ago)) advances the warming
+    action from the last logged step (D224)."""
+    warming_last = warming_last or {}
     # Partition off the leads (S103t, D221): a live opportunity at the Lead gate is
     # origination, not yet an application, so it is excluded from the applied
     # funnel, the depth ladder, and the engaged cards — it lives only in the leads
@@ -209,7 +220,7 @@ def build_pipeline_stats(
         o for o in opportunities if o.opportunity_id not in lead_ids
     )
     # Warm access is derived from contacts; the sort reads the effective warm (D222).
-    lead_cards = [_lead_card(o, contacts) for o in lead_opps]
+    lead_cards = [_lead_card(o, contacts, warming_last) for o in lead_opps]
     leads = tuple(
         sorted(
             lead_cards,

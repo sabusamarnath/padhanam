@@ -56,6 +56,9 @@ from apps.api.routers._daily_driver_dto import (
     ContactDTO,
     EnrichContactRequest,
     contact_to_dto,
+    LogWarmingStepRequest,
+    WarmingStepDTO,
+    warming_step_to_dto,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -116,6 +119,11 @@ from contexts.daily_driver.application.manage_contacts import (
     enrich_contact as enrich_contact_uc,
     list_contacts as list_contacts_uc,
     reject_contact as reject_contact_uc,
+)
+from contexts.daily_driver.application.warming_steps import (
+    WarmingStepError,
+    list_warming_steps as list_warming_steps_uc,
+    log_warming_step as log_warming_step_uc,
 )
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
@@ -209,6 +217,12 @@ def get_cdd_audit_port(request: Request):
     """FastAPI dependency: the audit port for CDD-correction capture (D203,
     S103c), if wired. None degrades to mutate-without-capture."""
     return getattr(request.app.state, "daily_driver_audit_port", None)
+
+
+def get_audit_reader(request: Request):
+    """FastAPI dependency: the faceted audit reader (D102), for reading warming
+    steps back per subject (S103v, D224). None when unwired."""
+    return getattr(request.app.state, "audit_event_reader", None)
 
 
 def get_cdd_drafter(request: Request):
@@ -557,6 +571,7 @@ async def get_cdd_pipeline_stats(
     goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
     unit_graph: Annotated[object | None, Depends(get_unit_graph)],
     facet_source: Annotated[object | None, Depends(get_facet_source)],
+    audit_reader: Annotated[object | None, Depends(get_audit_reader)],
 ) -> PipelineStatsDTO:
     """The Pipeline stats for a goal (D217): the three-way split, the depth ladder,
     and the engaged Kanban (gate columns + cards with next-best-action). Declared
@@ -565,7 +580,7 @@ async def get_cdd_pipeline_stats(
         raise HTTPException(status_code=503, detail="pipeline-stats seams not configured")
     stats = await read_pipeline_stats(
         goal_graph=goal_graph, unit_graph=unit_graph, facet_source=facet_source,
-        outcome_id=outcome_id, actor=actor,
+        outcome_id=outcome_id, actor=actor, audit_reader=audit_reader,
     )
     cdd = await goal_graph.read_goal_cdd(
         tenant_context=actor.tenant_context, outcome_id=outcome_id
@@ -812,6 +827,44 @@ async def post_reject_contact(
     if not ok:
         raise HTTPException(status_code=404, detail="contact not found")
     return Response(status_code=204)
+
+
+# --- Warming steps (S103v, D224) — append-only, per subject -------------------
+
+@router.post("/cdd/warming", status_code=204)
+async def post_log_warming_step(
+    body: LogWarmingStepRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    audit_port: Annotated[object | None, Depends(get_cdd_audit_port)],
+) -> Response:
+    """Log a warming step against a contact or a lead (D224) — an append-only audit
+    event. 422 on a bad vocabulary, 503 when the audit trail is unwired."""
+    try:
+        await log_warming_step_uc(
+            actor=actor, subject_type=body.subject_type, subject_id=body.subject_id,
+            kind=body.kind, note=body.note, audit_port=audit_port,
+        )
+    except WarmingStepError as e:
+        code = 503 if "audit port" in str(e) else 422
+        raise HTTPException(status_code=code, detail=str(e)) from e
+    return Response(status_code=204)
+
+
+@router.get(
+    "/cdd/warming/{subject_type}/{subject_id}", response_model=list[WarmingStepDTO]
+)
+async def get_warming_steps(
+    subject_type: str,
+    subject_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    audit_reader: Annotated[object | None, Depends(get_audit_reader)],
+) -> list[WarmingStepDTO]:
+    """The warming steps logged against a subject, newest first (D224)."""
+    steps = await list_warming_steps_uc(
+        actor=actor, subject_type=subject_type, subject_id=subject_id,
+        audit_reader=audit_reader,
+    )
+    return [warming_step_to_dto(s) for s in steps]
 
 
 @router.post("/cdd/rematch", response_model=RematchResultDTO)

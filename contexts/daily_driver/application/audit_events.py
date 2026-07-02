@@ -29,6 +29,15 @@ RESOURCE_TYPE_CDD_EVIDENCE: str = "cdd_element_evidence"
 ACTION_CDD_RELINK: str = "cdd.relink"
 ACTION_CDD_UNLINK: str = "cdd.unlink"
 
+# Warming steps (S103v, D224): a warming action against a contact or a lead, stored
+# as an append-only audit event and read back per subject via the faceted reader.
+ACTION_WARMING_STEP: str = "warming.step"
+RESOURCE_TYPE_CONTACT: str = "contact"
+RESOURCE_TYPE_OPPORTUNITY: str = "opportunity"
+WARMING_STEP_KINDS: tuple[str, ...] = (
+    "intro_requested", "follow_up_sent", "referral_asked", "message_sent",
+)
+
 
 def _draft(
     *,
@@ -38,6 +47,7 @@ def _draft(
     resource_id: str,
     before_state: dict,
     after_state: dict,
+    resource_type: str = RESOURCE_TYPE_CDD_EVIDENCE,
     correlation_id: str = "",
 ) -> AuditEvent:
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -47,7 +57,7 @@ def _draft(
         jurisdiction=tenant_context.jurisdiction,
         timestamp=timestamp,
         action_verb=action_verb,
-        resource_type=RESOURCE_TYPE_CDD_EVIDENCE,
+        resource_type=resource_type,
         resource_id=resource_id,
         before_state=before_state,
         after_state=after_state,
@@ -60,13 +70,36 @@ def _draft(
         jurisdiction=tenant_context.jurisdiction,
         timestamp=timestamp,
         action_verb=action_verb,
-        resource_type=RESOURCE_TYPE_CDD_EVIDENCE,
+        resource_type=resource_type,
         resource_id=resource_id,
         before_state=before_state,
         after_state=after_state,
         correlation_id=correlation_id,
         previous_event_hash=GENESIS_HASH,
         this_event_hash=draft_hash,
+    )
+
+
+def warming_step_event(
+    *,
+    tenant_context: TenantContext,
+    actor: str,
+    subject_type: str,
+    subject_id: UUID,
+    kind: str,
+    note: str = "",
+) -> AuditEvent:
+    """The append-only record of a warming step (D224) — a state change on tenant
+    data, so the compliance log and the future warming-learning signal are the same
+    hash-chained artefact. ``subject_type`` is ``contact`` or ``opportunity``."""
+    return _draft(
+        tenant_context=tenant_context,
+        actor=actor,
+        action_verb=ACTION_WARMING_STEP,
+        resource_type=subject_type,
+        resource_id=str(subject_id),
+        before_state={},
+        after_state={"kind": kind, "note": note, "subject_type": subject_type},
     )
 
 
@@ -125,7 +158,12 @@ def unlink_correction_event(
 __all__ = [
     "ACTION_CDD_RELINK",
     "ACTION_CDD_UNLINK",
+    "ACTION_WARMING_STEP",
     "RESOURCE_TYPE_CDD_EVIDENCE",
+    "RESOURCE_TYPE_CONTACT",
+    "RESOURCE_TYPE_OPPORTUNITY",
+    "WARMING_STEP_KINDS",
     "relink_correction_event",
     "unlink_correction_event",
+    "warming_step_event",
 ]

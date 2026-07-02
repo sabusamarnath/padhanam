@@ -677,6 +677,30 @@ def contact_to_dto(c) -> "ContactDTO":
     )
 
 
+class LogWarmingStepRequest(BaseModel):
+    """Log a warming step against a contact or a lead (S103v, D224)."""
+
+    subject_type: str            # "contact" | "opportunity"
+    subject_id: UUID
+    kind: str                    # intro_requested / follow_up_sent / referral_asked / message_sent
+    note: str = ""
+
+
+class WarmingStepDTO(BaseModel):
+    """One logged warming step read back for a subject (S103v, D224)."""
+
+    kind: str
+    note: str
+    occurred_at: datetime
+    actor: str
+
+
+def warming_step_to_dto(s) -> "WarmingStepDTO":
+    return WarmingStepDTO(
+        kind=s.kind, note=s.note, occurred_at=s.occurred_at, actor=s.actor,
+    )
+
+
 class PipelineAssessmentDTO(BaseModel):
     """The "how am I doing" assessment for a goal (S103p, D216): a
     recommendation-shaped verdict whose headline is label-independent, plus the

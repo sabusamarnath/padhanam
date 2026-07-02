@@ -97,9 +97,34 @@ def _best(contacts: tuple[ContactView, ...]) -> ContactView:
     )
 
 
-def warming_action(company: str, contacts: tuple[ContactView, ...]) -> str:
+_STEP_LABELS = {
+    "intro_requested": "intro requested", "follow_up_sent": "follow-up sent",
+    "referral_asked": "referral asked", "message_sent": "message sent",
+}
+
+
+def warming_action(
+    company: str,
+    contacts: tuple[ContactView, ...],
+    last_step: tuple[str, int] | None = None,
+) -> str:
     """The contact-specific warming next-best-action (D222) — names the real
-    contact and the act (referral vs intro), or nudges to proof / add a contact."""
+    contact and the act (referral vs intro), or nudges to proof / add a contact.
+
+    When a warming step has been logged against the lead (D224), the action advances
+    to reflect it ("intro requested 6 days ago — follow up"), reading ``last_step``
+    as ``(kind, days_ago)``."""
+    if last_step is not None:
+        kind, days_ago = last_step
+        label = _STEP_LABELS.get(kind, kind.replace("_", " "))
+        when = "today" if days_ago <= 0 else (
+            "yesterday" if days_ago == 1 else f"{days_ago} days ago"
+        )
+        if kind == "intro_requested":
+            return f"Intro requested {when} — follow up if there is no reply."
+        if kind == "referral_asked":
+            return f"Referral asked {when} — follow up or thank them."
+        return f"Last warming: {label} {when} — keep the thread warm."
     matches = contacts_for_company(company, contacts)
     usable = tuple(c for c in matches if is_usable(c))
     if usable:

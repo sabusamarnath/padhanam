@@ -46,8 +46,11 @@ async def read_pipeline_stats(
     outcome_id: UUID,
     actor: ActorContext,
     now: datetime | None = None,
+    audit_reader: object | None = None,
 ) -> PipelineStats:
-    """Assemble the Pipeline stats for a goal from its CDD view + bindings (D217)."""
+    """Assemble the Pipeline stats for a goal from its CDD view + bindings (D217).
+    ``audit_reader`` (optional) supplies the last logged warming step per lead so the
+    warming action can advance it (D224)."""
     cdd = await goal_graph.read_goal_cdd(
         tenant_context=actor.tenant_context, outcome_id=outcome_id
     )
@@ -88,12 +91,55 @@ async def read_pipeline_stats(
     one_touch = cdd.disposition.pipeline if cdd.disposition is not None else 0
     # The contact graph backs a lead's derived warm access (S103u, D222).
     contacts = await goal_graph.list_contacts(tenant_context=actor.tenant_context)
+    now = now or datetime.now(timezone.utc)
+    # The last logged warming step per lead advances the warming action (D224).
+    warming_last = await _warming_last_by_opportunity(
+        audit_reader=audit_reader, actor=actor, now=now
+    )
     return build_pipeline_stats(
         opportunities=tuple(opps),
         one_touch_volume=one_touch,
-        now=now or datetime.now(timezone.utc),
+        now=now,
         contacts=contacts,
+        warming_last=warming_last,
     )
+
+
+async def _warming_last_by_opportunity(
+    *, audit_reader: object | None, actor: ActorContext, now: datetime
+) -> dict[UUID, tuple[str, int]]:
+    """The most-recent warming step per lead (opportunity), as (kind, days_ago),
+    from the audit trail (D224). Empty when the reader is unwired."""
+    if audit_reader is None:
+        return {}
+    from contexts.audit.domain.query_filters import AuditEventListFilters
+    from contexts.daily_driver.application.audit_events import (
+        ACTION_WARMING_STEP,
+        RESOURCE_TYPE_OPPORTUNITY,
+    )
+
+    page = await audit_reader.list_audit_events_with_filters(
+        destination="per_tenant",
+        filters=AuditEventListFilters(
+            resource_type=RESOURCE_TYPE_OPPORTUNITY,
+            action_verbs=(ACTION_WARMING_STEP,),
+        ),
+        cursor=None,
+        page_size=500,
+        tenant_context=actor.tenant_context,
+    )
+    # Events sort newest-first (timestamp DESC), so the first per subject is latest.
+    out: dict[UUID, tuple[str, int]] = {}
+    for e in page.events:
+        try:
+            oid = UUID(e.resource_id)
+        except (ValueError, TypeError):
+            continue
+        if oid in out:
+            continue
+        days_ago = max(0, (now - e.timestamp).days)
+        out[oid] = (str(e.after_state.get("kind", "")), days_ago)
+    return out
 
 
 __all__ = ["read_pipeline_stats"]
