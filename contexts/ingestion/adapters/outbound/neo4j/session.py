@@ -610,6 +610,58 @@ MATCH (:Unit {tenant_id: $tenant_id})
 DELETE r
 """
 
+# --- Contacts (S103u, D222) — the network behind warm access -----------------
+# A :Contact is a person in the operator's network, tenant-scoped, linked to a
+# company by a normalized company string (no :Company node — the S103o signature
+# precedent). Seeded system_suggested from the moat senders (read-only), proofed to
+# user_authored. Idempotent MERGE on (tenant_id, contact_id) (the 0010 constraint).
+_MERGE_CONTACT = """
+MERGE (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+ON CREATE SET
+    c.jurisdiction = $jurisdiction,
+    c.created_at = $created_at
+SET
+    c.name = $name,
+    c.email = $email,
+    c.company = $company,
+    c.degree = $degree,
+    c.strength = $strength,
+    c.reachability = $reachability,
+    c.capture_source = $capture_source,
+    c.provenance_origin = $provenance_origin
+"""
+_LIST_CONTACTS = """
+MATCH (c:Contact {tenant_id: $tenant_id})
+RETURN c.contact_id AS contact_id, c.name AS name, c.email AS email,
+       c.company AS company, c.degree AS degree, c.strength AS strength,
+       c.reachability AS reachability, c.capture_source AS capture_source,
+       c.provenance_origin AS provenance_origin
+ORDER BY c.company ASC, c.name ASC
+"""
+# Confirm a system-suggested contact → user_authored (the operator vouches it is a
+# real person, the merge_opportunity/confirm precedent). RETURN detects match.
+_CONFIRM_CONTACT = """
+MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+SET c.provenance_origin = 'user_authored'
+RETURN c.contact_id AS contact_id
+"""
+# Enrich a contact with degree/strength/reachability — authoring the relationship,
+# so it also flips provenance to user_authored (the operator is now ground truth).
+_ENRICH_CONTACT = """
+MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+SET c.degree = $degree,
+    c.strength = $strength,
+    c.reachability = $reachability,
+    c.provenance_origin = 'user_authored'
+RETURN c.contact_id AS contact_id
+"""
+# Reject (delete) a contact — the user-initiated delete the no-auto-deletion posture
+# allows (the reject-suggested-opportunity precedent, D215).
+_DELETE_CONTACT = """
+MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+DETACH DELETE c
+"""
+
 # The authored stance on the outcome — the measurable result that means the goal
 # is met (D200), stored on the existing :Outcome node (D199's two faces). S103a
 # makes it proofable: it carries an origin + proof_state alongside the text, all
@@ -1459,6 +1511,84 @@ class TenantScopedNeo4jSession:
         result = await session.run(_DELETE_OPPORTUNITY, {
             "tenant_id": self._tenant_id,
             "opportunity_id": str(opportunity_id),
+        })
+        summary = await result.consume()
+        return summary.counters.nodes_deleted > 0
+
+    # --- Contacts (S103u, D222) --------------------------------------------
+
+    async def merge_contact(
+        self,
+        *,
+        contact_id: UUID,
+        name: str,
+        email: str | None,
+        company: str | None,
+        degree: str | None,
+        strength: str | None,
+        reachability: str | None,
+        capture_source: str,
+        provenance_origin: str,
+    ) -> None:
+        """MERGE a :Contact (D222) — a person in the operator's network, linked to a
+        company by a normalized string. ``capture_source`` is the channel the contact
+        came from (email / linkedin / manual), distinct from a lead's
+        ``origination_source``. Idempotent on (tenant_id, contact_id)."""
+        session = self._bound_session
+        await session.run(_MERGE_CONTACT, {
+            "tenant_id": self._tenant_id,
+            "jurisdiction": self._jurisdiction,
+            "contact_id": str(contact_id),
+            "name": name,
+            "email": email,
+            "company": company,
+            "degree": degree,
+            "strength": strength,
+            "reachability": reachability,
+            "capture_source": capture_source,
+            "provenance_origin": provenance_origin,
+            "created_at": _now_utc(),
+        })
+
+    async def list_contacts(self) -> list[dict]:
+        """Return the tenant's contacts (D222)."""
+        session = self._bound_session
+        result = await session.run(_LIST_CONTACTS, {"tenant_id": self._tenant_id})
+        return list(await result.data())
+
+    async def confirm_contact(self, *, contact_id: UUID) -> bool:
+        """Confirm a system-suggested contact → user_authored (D222/D215).
+        Returns True when matched."""
+        session = self._bound_session
+        result = await session.run(_CONFIRM_CONTACT, {
+            "tenant_id": self._tenant_id,
+            "contact_id": str(contact_id),
+        })
+        return await result.single() is not None
+
+    async def enrich_contact(
+        self, *, contact_id: UUID, degree: str | None,
+        strength: str | None, reachability: str | None,
+    ) -> bool:
+        """Enrich a contact with degree/strength/reachability (D222) — authoring the
+        relationship, so it also flips provenance to user_authored. True on match."""
+        session = self._bound_session
+        result = await session.run(_ENRICH_CONTACT, {
+            "tenant_id": self._tenant_id,
+            "contact_id": str(contact_id),
+            "degree": degree,
+            "strength": strength,
+            "reachability": reachability,
+        })
+        return await result.single() is not None
+
+    async def delete_contact(self, *, contact_id: UUID) -> bool:
+        """Reject (delete) a contact (D222/D215) — DETACH DELETE. Detected from the
+        summary's nodes-deleted counter."""
+        session = self._bound_session
+        result = await session.run(_DELETE_CONTACT, {
+            "tenant_id": self._tenant_id,
+            "contact_id": str(contact_id),
         })
         summary = await result.consume()
         return summary.counters.nodes_deleted > 0

@@ -158,6 +158,24 @@ class OpportunityRecord:
 
 
 @dataclass(frozen=True)
+class ContactRecord:
+    """One contact (a person in the operator's network) as read from the graph
+    (S103u, D222). Linked to a company by ``company`` (a normalized string, not a
+    node). ``degree``/``strength``/``reachability`` are ``None`` until the operator
+    proofs them (the operator authors the relationship, D200)."""
+
+    contact_id: UUID
+    name: str
+    email: str | None
+    company: str | None
+    degree: str | None
+    strength: str | None
+    reachability: str | None
+    capture_source: str  # email / linkedin / manual (distinct from a lead's origination_source)
+    provenance_origin: str
+
+
+@dataclass(frozen=True)
 class AuthoredEdgeRecord:
     """One authored causal edge as read from the graph (S102, D200).
 
@@ -437,6 +455,46 @@ class OutcomeGraphPort(Protocol):
         survive; only the node + BELONGS_TO go. True when a node was deleted."""
         ...
 
+    # --- Contacts (S103u, D222) --------------------------------------------
+
+    async def merge_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID, name: str,
+        email: str | None, company: str | None, degree: str | None,
+        strength: str | None, reachability: str | None, capture_source: str,
+        provenance_origin: str,
+    ) -> None:
+        """Idempotently MERGE a :Contact (D222) — a person in the operator's network,
+        linked to a company by a normalized string. Seeded system_suggested from the
+        moat senders, or hand-added user_authored."""
+        ...
+
+    async def list_contacts(
+        self, *, tenant_context: TenantContext
+    ) -> Sequence[ContactRecord]:
+        """The tenant's contacts (D222) — read for the derive, the proof surface, and
+        a lead's inline contacts."""
+        ...
+
+    async def confirm_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        """Confirm a system-suggested contact → user_authored (D222/D215)."""
+        ...
+
+    async def enrich_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        degree: str | None, strength: str | None, reachability: str | None,
+    ) -> bool:
+        """Enrich a contact with degree/strength/reachability (D222) — also flips
+        provenance to user_authored (the operator authors the relationship)."""
+        ...
+
+    async def delete_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        """Reject (delete) a contact (D222/D215) — the user-initiated delete."""
+        ...
+
     async def attach_unit_to_opportunity(
         self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
     ) -> None:
@@ -590,6 +648,7 @@ __all__ = [
     "AuthoredCddRecord",
     "AuthoredEdgeRecord",
     "AuthoredElementRecord",
+    "ContactRecord",
     "GateRecord",
     "LeverEdgeRecord",
     "OpportunityRecord",

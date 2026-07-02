@@ -27,6 +27,7 @@ from uuid import UUID
 
 from contexts.ingestion.ports.outcome_graph_port import (
     AuthoredCddRecord,
+    ContactRecord,
     GateRecord,
     OpportunityRecord,
     OutcomeGraphRecord,
@@ -556,6 +557,98 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.delete_opportunity(opportunity_id=opportunity_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    # --- Contacts (S103u, D222) --------------------------------------------
+
+    async def merge_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID, name: str,
+        email: str | None, company: str | None, degree: str | None,
+        strength: str | None, reachability: str | None, capture_source: str,
+        provenance_origin: str,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_contact(
+                    contact_id=contact_id, name=name, email=email, company=company,
+                    degree=degree, strength=strength, reachability=reachability,
+                    capture_source=capture_source, provenance_origin=provenance_origin,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_contacts(
+        self, *, tenant_context: TenantContext
+    ) -> Sequence[ContactRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                rows = await s.list_contacts()
+                return [
+                    ContactRecord(
+                        contact_id=UUID(r["contact_id"]),
+                        name=r["name"],
+                        email=r.get("email"),
+                        company=r.get("company"),
+                        degree=r.get("degree"),
+                        strength=r.get("strength"),
+                        reachability=r.get("reachability"),
+                        capture_source=r["capture_source"],
+                        provenance_origin=r["provenance_origin"],
+                    )
+                    for r in rows
+                ]
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def confirm_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.confirm_contact(contact_id=contact_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def enrich_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        degree: str | None, strength: str | None, reachability: str | None,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.enrich_contact(
+                    contact_id=contact_id, degree=degree, strength=strength,
+                    reachability=reachability,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def delete_contact(
+        self, *, tenant_context: TenantContext, contact_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.delete_contact(contact_id=contact_id)
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:
