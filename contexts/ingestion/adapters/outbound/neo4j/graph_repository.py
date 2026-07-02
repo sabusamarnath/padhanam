@@ -68,6 +68,16 @@ _RETRYABLE_DRIVER_EXC = (ServiceUnavailable, SessionExpired, TransientError)
 _NON_RETRYABLE_DRIVER_EXC = (AuthError, ConfigurationError)
 
 
+def _as_channel_list(value) -> list[str]:
+    """Normalise capture_source to a list (S103x, D230) — tolerant of the pre-D230
+    scalar, the post-backfill list, and null."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if v is not None]
+    return [str(value)]
+
+
 def make_async_driver(settings: Neo4jSettings) -> AsyncDriver:
     """Construct a Neo4j AsyncDriver from Neo4jSettings.
 
@@ -608,7 +618,7 @@ class Neo4jGraphRepository:
                         degree=r.get("degree"),
                         strength=r.get("strength"),
                         reachability=r.get("reachability"),
-                        capture_source=r["capture_source"],
+                        capture_source=_as_channel_list(r.get("capture_source")),
                         provenance_origin=r["provenance_origin"],
                         process_role=r.get("process_role"),
                     )
@@ -657,6 +667,34 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.delete_contact(contact_id=contact_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def add_capture_source(
+        self, *, tenant_context: TenantContext, contact_id: UUID, channel: str
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.add_capture_source(
+                    contact_id=contact_id, channel=channel
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def backfill_capture_source(
+        self, *, tenant_context: TenantContext
+    ) -> int:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.backfill_capture_source()
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

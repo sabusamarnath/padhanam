@@ -1142,7 +1142,7 @@
         `<div class="contact-id"><span class="contact-name">${escapeHtml(c.name)}</span>` +
         (c.email ? ` <span class="contact-email">${escapeHtml(c.email)}</span>` : "") +
         ` <span class="contact-prov ${suggested ? "sug" : "auth"}">${suggested ? "suggested" : "yours"}</span>` +
-        ` <span class="contact-src">${escapeHtml(c.capture_source)}</span></div>`;
+        ` <span class="contact-src">${escapeHtml((c.capture_source||[]).join(" + "))}</span></div>`;
       const enr = document.createElement("div"); enr.className = "contact-enrich";
       const roleOpts = `<select name="process_role" title="process role"><option value="">role…</option>` +
         _ROLES.map(([v, l]) => `<option value="${v}"${c.process_role === v ? " selected" : ""}>${l}</option>`).join("") + `</select>`;
@@ -1256,7 +1256,7 @@
         ppl.forEach((c) => {
           const row = document.createElement("div"); row.className = "cmap-contact" + (contactUsable(c) ? " usable" : "");
           const meta = [c.degree, c.strength, c.reachability].filter(Boolean).join(" · ") || "unproofed";
-          row.innerHTML = `<span class="cmap-cname">${escapeHtml(c.name)}</span> <span class="cmap-cmeta">${escapeHtml(meta)}</span> <span class="contact-src">${escapeHtml(c.capture_source)}</span>`;
+          row.innerHTML = `<span class="cmap-cname">${escapeHtml(c.name)}</span> <span class="cmap-cmeta">${escapeHtml(meta)}</span> <span class="contact-src">${escapeHtml((c.capture_source||[]).join(" + "))}</span>`;
           row.appendChild(warmingBlock("contact", c.contact_id, reload));
           card.appendChild(row);
         });

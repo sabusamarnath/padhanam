@@ -627,6 +627,18 @@ DELETE r
 # company by a normalized company string (no :Company node — the S103o signature
 # precedent). Seeded system_suggested from the moat senders (read-only), proofed to
 # user_authored. Idempotent MERGE on (tenant_id, contact_id) (the 0010 constraint).
+# capture_source is set-valued (S103w->x, D230): union a channel in, never overwrite.
+# The CASE tolerates the three live shapes — null (pre-any-write), a list (post-
+# backfill), and a scalar string (pre-backfill) — via Neo4j-5 valueType().
+_CS_UNION = (
+    "CASE "
+    "WHEN c.capture_source IS NULL THEN [${val}] "
+    "WHEN valueType(c.capture_source) STARTS WITH 'LIST' THEN "
+    "(CASE WHEN ${val} IN c.capture_source THEN c.capture_source "
+    "ELSE c.capture_source + ${val} END) "
+    "ELSE (CASE WHEN c.capture_source = ${val} THEN [c.capture_source] "
+    "ELSE [c.capture_source, ${val}] END) END"
+)
 _MERGE_CONTACT = """
 MERGE (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
 ON CREATE SET
@@ -639,9 +651,25 @@ SET
     c.degree = $degree,
     c.strength = $strength,
     c.reachability = $reachability,
-    c.capture_source = $capture_source,
+    c.capture_source = """ + _CS_UNION.replace("${val}", "$capture_source") + """,
     c.process_role = $process_role,
     c.provenance_origin = $provenance_origin
+"""
+# Add a channel to an existing contact's capture_source set (S103x, D230) — the
+# dedup-match path (a person seen through a second/third channel).
+_ADD_CAPTURE_SOURCE = """
+MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+SET c.capture_source = """ + _CS_UNION.replace("${val}", "$channel") + """
+RETURN c.contact_id AS contact_id
+"""
+# Backfill pre-D230 scalar capture_source values to single-element lists (S103x) —
+# idempotent (skips values already a list), tenant-scoped.
+_BACKFILL_CAPTURE_SOURCE = """
+MATCH (c:Contact {tenant_id: $tenant_id})
+WHERE c.capture_source IS NOT NULL
+  AND NOT valueType(c.capture_source) STARTS WITH 'LIST'
+SET c.capture_source = [c.capture_source]
+RETURN count(c) AS backfilled
 """
 _LIST_CONTACTS = """
 MATCH (c:Contact {tenant_id: $tenant_id})
@@ -1610,6 +1638,27 @@ class TenantScopedNeo4jSession:
         session = self._bound_session
         result = await session.run(_LIST_CONTACTS, {"tenant_id": self._tenant_id})
         return list(await result.data())
+
+    async def add_capture_source(self, *, contact_id: UUID, channel: str) -> bool:
+        """Add a channel to a contact's capture_source set (S103x, D230) — the
+        dedup-match path. Returns True when matched."""
+        session = self._bound_session
+        result = await session.run(_ADD_CAPTURE_SOURCE, {
+            "tenant_id": self._tenant_id,
+            "contact_id": str(contact_id),
+            "channel": channel,
+        })
+        return await result.single() is not None
+
+    async def backfill_capture_source(self) -> int:
+        """Backfill scalar capture_source values to single-element lists (S103x,
+        D230) — idempotent, tenant-scoped. Returns the count backfilled."""
+        session = self._bound_session
+        result = await session.run(
+            _BACKFILL_CAPTURE_SOURCE, {"tenant_id": self._tenant_id}
+        )
+        row = await result.single()
+        return int(row["backfilled"]) if row else 0
 
     async def confirm_contact(self, *, contact_id: UUID) -> bool:
         """Confirm a system-suggested contact → user_authored (D222/D215).

@@ -638,7 +638,7 @@ class ContactDTO(BaseModel):
     degree: str | None = None
     strength: str | None = None
     reachability: str | None = None
-    capture_source: str
+    capture_source: list[str] = []       # set-valued channels (S103x, D230)
     provenance_origin: str
     process_role: str | None = None
 
@@ -680,7 +680,8 @@ def contact_to_dto(c) -> "ContactDTO":
     return ContactDTO(
         contact_id=c.contact_id, name=c.name, email=c.email, company=c.company,
         degree=c.degree, strength=c.strength, reachability=c.reachability,
-        capture_source=c.capture_source, provenance_origin=c.provenance_origin,
+        capture_source=(list(c.capture_source) if isinstance(c.capture_source, (list, tuple)) else ([c.capture_source] if c.capture_source else [])),
+        provenance_origin=c.provenance_origin,
         process_role=getattr(c, "process_role", None),
     )
 

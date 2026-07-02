@@ -173,8 +173,8 @@ class ContactRecord:
     degree: str | None
     strength: str | None
     reachability: str | None
-    capture_source: str  # email / linkedin / manual (distinct from a lead's origination_source)
-    provenance_origin: str
+    capture_source: list[str] = field(default_factory=list)  # set-valued channels (S103x, D230)
+    provenance_origin: str = "system_suggested"
     process_role: str | None = None  # the hiring-process part they play (S103w, D227)
 
 
@@ -477,6 +477,18 @@ class OutcomeGraphPort(Protocol):
         process_role: str | None,
     ) -> bool:
         """Set a contact's process role → user_authored (S103w, D227)."""
+        ...
+
+    async def add_capture_source(
+        self, *, tenant_context: TenantContext, contact_id: UUID, channel: str
+    ) -> bool:
+        """Add a channel to a contact's capture_source set (S103x, D230)."""
+        ...
+
+    async def backfill_capture_source(
+        self, *, tenant_context: TenantContext
+    ) -> int:
+        """Backfill scalar capture_source to single-element lists (S103x, D230)."""
         ...
 
     async def set_qualification_field(

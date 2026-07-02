@@ -18,7 +18,7 @@ from uuid import UUID
 DEGREES = ("first", "second")
 STRENGTHS = ("close", "medium", "weak")
 REACHABILITIES = ("easy", "hard")
-CAPTURE_SOURCES = ("email", "linkedin", "manual")
+CAPTURE_SOURCES = ("email", "linkedin", "address_book", "manual")
 
 _STRENGTH_RANK = {"close": 0, "medium": 1, "weak": 2}
 _DEGREE_RANK = {"first": 0, "second": 1}
@@ -35,7 +35,7 @@ class ContactView:
     degree: str | None
     strength: str | None
     reachability: str | None
-    capture_source: str
+    capture_source: tuple[str, ...]   # set-valued channels (S103x, D230)
     provenance_origin: str
     process_role: str | None = None   # the hiring-process part they play (S103w, D227)
 

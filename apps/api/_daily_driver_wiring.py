@@ -637,7 +637,8 @@ class GoalGraphAdapter:
             ContactView(
                 contact_id=r.contact_id, name=r.name, email=r.email,
                 company=r.company, degree=r.degree, strength=r.strength,
-                reachability=r.reachability, capture_source=r.capture_source,
+                reachability=r.reachability,
+                capture_source=tuple(r.capture_source or ()),
                 provenance_origin=r.provenance_origin,
                 process_role=getattr(r, "process_role", None),
             )
