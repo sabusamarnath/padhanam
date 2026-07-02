@@ -981,6 +981,48 @@ warm-access secondary). Once advanced to Apply it is an ordinary process and eve
 downstream surface reads it unchanged. The three properties are **schemaless adds**
 (the D214 precedent, read coalesces missing values), **no migration**.
 
+#### `:Contact` nodes (S103u, D222) — the contact graph behind warm access
+
+A **contact** is a person in the operator's network. `:Contact` is **tenant-scoped**
+(a person, not a goal), keyed by `contact_id`, and **links to a company** by a
+**normalized company string** — the S103o/D215 company-signature precedent, not a
+`:Company` node (the model has none; `:Opportunity` carries its company as free text
+in `name`). A lead reads its contacts by matching its company (its `name` before
+`" — "`) against `:Contact.company`, normalized (lower-cased, trimmed). Lands via
+`migrations/neo4j/0010_contact.cypher` (the 0009 `:MeasurableOutcome` precedent — a
+uniqueness constraint on `(tenant_id, contact_id)` + a `tenant_id` index).
+
+| Property             | Type            | Notes                                                              |
+|----------------------|-----------------|--------------------------------------------------------------------|
+| `tenant_id`          | `String`        | not empty; tenant-isolation predicate at every Cypher query        |
+| `jurisdiction`       | `String`        | first-class per D12                                                 |
+| `contact_id`         | `String`        | the contact's UUID (identity)                                       |
+| `name`               | `String`        | the person's name (from the email display name, or operator-set)   |
+| `email`              | `String`/`null` | the sender address a moat-seeded contact was extracted from (dedup key on seed); `null` for a hand-added contact |
+| `company`            | `String`/`null` | the company, normalized-matched to a lead's company. Derived from the sender's real domain on seed (title-cased second-level label), `null` for a free-domain sender the operator fills |
+| `degree`             | `String`/`null` | operator-set: `first` / `second`. `null` until proofed (the operator authors it, D200) |
+| `strength`           | `String`/`null` | operator-set: `close` / `medium` / `weak`. `null` until proofed |
+| `reachability`       | `String`/`null` | operator-set: `easy` / `hard`. `null` until proofed |
+| `capture_source`     | `String`        | the capture channel: `email` (moat-seeded) / `linkedin` (manually tagged now, bulk via the S103v file adapter) / `manual` (hand-added). Named `capture_source`, **not** `source` — distinct from a lead's `origination_source` (D221) and the D215 clustering signature; lets a lead's contacts carry where each came from |
+| `provenance_origin`  | `String`        | `system_suggested` on seed, `user_authored` once the operator confirms or hand-adds (D215/D200) |
+| `created_at`         | `DateTime`      | set on initial MERGE                                                |
+
+Uniqueness constraint: `contact_unique_per_tenant` on `(tenant_id, contact_id)`
+(the 0009 pattern). Seeding reads the moat senders **read-only** from the encrypted
+email store (D21/D148/D151 — extraction never fetches or writes) and instantiates
+`system_suggested` contacts; the operator proofs (confirm → `user_authored`, enrich
+`degree`/`strength`/`reachability`, or reject → delete). A contact is **usable** for
+warm access when `strength in {close, medium}` or `reachability = easy` (a
+`weak`+`hard` contact offers no path).
+
+**`warm_access_available` on a lead is a derived read with a manual override
+(S103u, D222).** A lead reads **warm** when at least one usable contact links to its
+company, **cold** otherwise — a read-side projection, recomputed never stored
+(D155). The S103t manual tag (`:Opportunity.warm_access_available`, D221) becomes
+the **override**: the effective warm is the override when the operator has set one,
+else the derived value (the D217 manual-over-computed precedent). The origination
+column's fit×warm sort and the warming next-best-action read the effective value.
+
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
 A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when
