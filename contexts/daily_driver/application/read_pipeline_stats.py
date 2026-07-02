@@ -80,6 +80,9 @@ async def read_pipeline_stats(
                 gate_order=gate.gate_order if gate is not None else None,
                 last_activity=latest_by_opp.get(o.opportunity_id),
                 touches=len(units_by_opp.get(o.opportunity_id, ())) or o.unit_count,
+                fit_tier=o.fit_tier,
+                warm_access_available=o.warm_access_available,
+                origination_source=o.origination_source,
             )
         )
     one_touch = cdd.disposition.pipeline if cdd.disposition is not None else 0

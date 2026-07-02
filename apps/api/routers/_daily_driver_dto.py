@@ -683,9 +683,23 @@ class PipelineCardDTO(BaseModel):
     next_action: str
 
 
+class LeadCardDTO(BaseModel):
+    """One lead in the origination column (S103t, D221) — a live opportunity at the
+    Lead gate, scored by fit tier + warm access, awaiting the apply-advance."""
+
+    opportunity_id: UUID
+    company: str
+    role: str
+    fit_tier: str | None = None
+    warm_access_available: str | None = None
+    origination_source: str | None = None
+
+
 class PipelineStatsDTO(BaseModel):
     """The Pipeline stats for a goal (S103q, D217): the three-way split (parts, no
-    faked total), the depth ladder, the Kanban gate columns + opportunity cards."""
+    faked total), the depth ladder, the Kanban gate columns + opportunity cards, and
+    the origination leads (S103t, D221) — live opportunities at the Lead gate,
+    partitioned out of the applied funnel."""
 
     rejected: SplitBucketDTO
     no_response: SplitBucketDTO
@@ -695,6 +709,7 @@ class PipelineStatsDTO(BaseModel):
     gates: list[GateColumnDTO]
     ladder: list[LadderRungDTO]
     cards: list[PipelineCardDTO]
+    leads: list[LeadCardDTO] = []
 
 
 def pipeline_stats_to_dto(s, *, gates) -> "PipelineStatsDTO":
@@ -715,6 +730,11 @@ def pipeline_stats_to_dto(s, *, gates) -> "PipelineStatsDTO":
             closed_reason=c.closed_reason, days_silent=c.days_silent,
             touches=c.touches, next_action=c.next_action,
         ) for c in s.cards],
+        leads=[LeadCardDTO(
+            opportunity_id=le.opportunity_id, company=le.company, role=le.role,
+            fit_tier=le.fit_tier, warm_access_available=le.warm_access_available,
+            origination_source=le.origination_source,
+        ) for le in s.leads],
     )
 
 

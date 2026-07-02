@@ -26,6 +26,13 @@ from uuid import UUID
 SILENT_DAYS = 14
 _CLOSED = "closed"
 _UNPLACED = "Unplaced"
+# The origination stage (S103t, D221). A live opportunity here is a lead, not yet
+# an application, so it is partitioned out of the applied funnel/ladder/cards.
+_LEAD = "Lead"
+# Lead ordering: fit tier primary (bullseye first), warm access secondary (warm
+# first). Unknown values sink to the bottom (defensive; create-lead validates).
+_FIT_ORDER = {"bullseye": 0, "strong": 1, "opportunistic": 2}
+_WARM_ORDER = {"warm": 0, "cold": 1}
 
 
 @dataclass(frozen=True)
@@ -42,6 +49,23 @@ class PipelineOpp:
     gate_order: int | None
     last_activity: datetime | None
     touches: int              # the correspondence thread length
+    # The lead-origination properties (S103t, D221) — set on a lead, None otherwise.
+    fit_tier: str | None = None
+    warm_access_available: str | None = None
+    origination_source: str | None = None
+
+
+@dataclass(frozen=True)
+class LeadCard:
+    """One lead in the origination column (S103t, D221) — a live opportunity at the
+    Lead gate, zero touches, scored by fit tier + warm access."""
+
+    opportunity_id: UUID
+    company: str
+    role: str
+    fit_tier: str | None
+    warm_access_available: str | None
+    origination_source: str | None
 
 
 @dataclass(frozen=True)
@@ -84,6 +108,7 @@ class PipelineStats:
     one_touch_volume: int
     ladder: tuple[LadderRung, ...]
     cards: tuple[CardStat, ...]
+    leads: tuple[LeadCard, ...]  # origination — live opportunities at the Lead gate
 
 
 def next_best_action(
@@ -117,9 +142,37 @@ def build_pipeline_stats(
     now: datetime,
     silent_days: int = SILENT_DAYS,
 ) -> PipelineStats:
-    """Assemble the three-way split, the depth ladder, and the cards (D217)."""
+    """Assemble the three-way split, the depth ladder, the cards, and the
+    origination leads (D217, D221)."""
+    # Partition off the leads (S103t, D221): a live opportunity at the Lead gate is
+    # origination, not yet an application, so it is excluded from the applied
+    # funnel, the depth ladder, and the engaged cards — it lives only in the leads
+    # bucket the origination column renders.
+    lead_opps = tuple(
+        o for o in opportunities if o.status != _CLOSED and o.stage == _LEAD
+    )
+    lead_ids = {o.opportunity_id for o in lead_opps}
+    pipeline_opps = tuple(
+        o for o in opportunities if o.opportunity_id not in lead_ids
+    )
+    leads = tuple(
+        LeadCard(
+            opportunity_id=o.opportunity_id, company=o.company, role=o.role,
+            fit_tier=o.fit_tier, warm_access_available=o.warm_access_available,
+            origination_source=o.origination_source,
+        )
+        for o in sorted(
+            lead_opps,
+            key=lambda o: (
+                _FIT_ORDER.get(o.fit_tier or "", 9),
+                _WARM_ORDER.get(o.warm_access_available or "", 9),
+                o.company.lower(),
+            ),
+        )
+    )
+
     rejected_ids = tuple(
-        o.opportunity_id for o in opportunities
+        o.opportunity_id for o in pipeline_opps
         if o.status == _CLOSED and o.closed_reason == "rejected"
     )
     # D219-fix (S103s follow-up): "engaged" means *actually engaged* — a LIVE
@@ -130,10 +183,10 @@ def build_pipeline_stats(
     # as engaged, so closing them never reduced the number.) The other closed
     # outcomes live in the closed record, grouped by outcome.
     engaged_ids = tuple(
-        o.opportunity_id for o in opportunities if o.status != _CLOSED
+        o.opportunity_id for o in pipeline_opps if o.status != _CLOSED
     )
     closed_other_ids = tuple(
-        o.opportunity_id for o in opportunities
+        o.opportunity_id for o in pipeline_opps
         if o.status == _CLOSED and o.closed_reason != "rejected"
     )
 
@@ -151,7 +204,7 @@ def build_pipeline_stats(
     # first, Unplaced last. Rejected ones are included (they reached gates too).
     by_stage: dict[str, list[PipelineOpp]] = {}
     order_of: dict[str, int | None] = {}
-    for o in opportunities:
+    for o in pipeline_opps:
         stage = o.stage or _UNPLACED
         by_stage.setdefault(stage, []).append(o)
         order_of[stage] = o.gate_order
@@ -187,7 +240,7 @@ def build_pipeline_stats(
             ),
         )
         for o in sorted(
-            opportunities,
+            pipeline_opps,
             key=lambda o: (o.gate_order is not None, o.gate_order or 0),
             reverse=True,
         )
@@ -195,11 +248,11 @@ def build_pipeline_stats(
     return PipelineStats(
         rejected=rejected, no_response=no_response, engaged=engaged,
         closed_other=closed_other, one_touch_volume=one_touch_volume,
-        ladder=ladder, cards=cards,
+        ladder=ladder, cards=cards, leads=leads,
     )
 
 
 __all__ = [
-    "CardStat", "LadderRung", "PipelineOpp", "PipelineStats", "SILENT_DAYS",
-    "SplitBucket", "build_pipeline_stats", "next_best_action",
+    "CardStat", "LadderRung", "LeadCard", "PipelineOpp", "PipelineStats",
+    "SILENT_DAYS", "SplitBucket", "build_pipeline_stats", "next_best_action",
 ]

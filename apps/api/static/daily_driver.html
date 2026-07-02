@@ -389,6 +389,21 @@
     .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #97c459; }
     .pipe-ctouch, .pipe-csilent { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-cact { font-size: 11.5px; color: #2BA692; line-height: 1.35; }
+    /* Origination Lead column (S103t, D221) */
+    .pipe-leadcol { background: var(--surface-work); border-color: var(--hairline-strong); }
+    .pipe-leadhint { font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .lead-form { display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
+    .lead-form input, .lead-form select { font: inherit; font-size: 11.5px; padding: 5px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    .lead-form button { margin-top: 1px; }
+    .lead-card .lead-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; align-items: center; }
+    .lead-tier { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 999px; color: #fff; }
+    .lead-tier.t-bullseye { background: #1a8070; }
+    .lead-tier.t-strong { background: #7a8190; }
+    .lead-tier.t-opportunistic { background: #b0997e; }
+    .lead-warm { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--hairline-strong); }
+    .lead-warm.w-warm { color: #b0997e; border-color: #b0997e; }
+    .lead-warm.w-cold { color: var(--ink-3); }
+    .lead-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-outgrp { margin-bottom: 12px; }
     .pipe-outh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
     .pipe-outlab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--behind-fg); }
@@ -863,9 +878,16 @@
       const board = document.createElement("div"); board.className = "pipe-board";
       board.innerHTML = `<h3>Active board <span class="pipe-grain">— live processes only (${liveCards.length})</span></h3>`;
       const kan = document.createElement("div"); kan.className = "pipe-kanban";
-      // Needs-staging holds live processes with no gate yet; then the gate ladder.
+      // Origination Lead column (S103t, D221): live opportunities at the Lead gate,
+      // scored fit x warm (server-sorted), each with an apply action that advances
+      // it to Apply. Leads are NOT in the applied funnel — this is the board's left
+      // edge, the answer to the empty board: originate.
+      kan.appendChild(buildLeadColumn(grp, s, reload));
+      // Needs-staging holds live processes with no gate yet; then the gate ladder
+      // (the Lead gate is rendered above as the origination column, not here).
       const columns = [{ gate_id: null, name: "Needs staging", stageName: "Unplaced" }]
-        .concat(s.gates.map((g) => ({ gate_id: g.gate_id, name: g.name, stageName: g.name })));
+        .concat(s.gates.filter((g) => g.name !== "Lead")
+          .map((g) => ({ gate_id: g.gate_id, name: g.name, stageName: g.name })));
       columns.forEach((col) => {
         const cells = liveCards.filter((c) => c.stage === col.stageName);
         const colEl = document.createElement("div"); colEl.className = "pipe-col";
@@ -946,6 +968,72 @@
       };
       el.appendChild(sel);
       return el;
+    }
+    // The origination Lead column (S103t, D221): a create-lead form + the leads
+    // (server-sorted fit x warm), each with an apply action that advances it to the
+    // Apply gate and drops it into the pipeline. The operator sets fit_tier +
+    // warm_access by reading the fit rubric in the CDD lens (D200; no auto-score).
+    const FIT_LABELS = { bullseye: "Bullseye", strong: "Strong", opportunistic: "Opportunistic" };
+    function buildLeadColumn(grp, s, reload) {
+      const leads = s.leads || [];
+      const col = document.createElement("div"); col.className = "pipe-col pipe-leadcol";
+      col.innerHTML = `<div class="pipe-colh">Lead <span class="pipe-coln">${leads.length}</span>` +
+        `<span class="pipe-grain pipe-leadhint">origination — set fit x warm from the rubric</span></div>`;
+      // create-lead form.
+      const form = document.createElement("form"); form.className = "lead-form";
+      form.innerHTML =
+        `<input name="company" placeholder="Company" autocomplete="off" required>` +
+        `<input name="role" placeholder="Role (optional)" autocomplete="off">` +
+        `<select name="fit_tier" title="fit tier"><option value="bullseye">Bullseye</option><option value="strong">Strong</option><option value="opportunistic">Opportunistic</option></select>` +
+        `<select name="warm_access_available" title="warm access"><option value="warm">Warm</option><option value="cold">Cold</option></select>` +
+        `<select name="origination_source" title="origination channel"><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>` +
+        `<button type="submit" class="btn-primary cdd-btn">Add lead</button>`;
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const company = String(fd.get("company") || "").trim();
+        if (!company) return;
+        const body = {
+          outcome_id: grp.outcome_id, company, role: String(fd.get("role") || "").trim(),
+          fit_tier: fd.get("fit_tier"), warm_access_available: fd.get("warm_access_available"),
+          origination_source: fd.get("origination_source"),
+        };
+        try { await api("/daily-driver/cdd/lead", { method: "POST", body: JSON.stringify(body) }); toast("Lead added"); form.reset(); await reload(); }
+        catch { toast("Add lead failed", true); }
+      };
+      col.appendChild(form);
+      // lead cards, each with an apply action.
+      const applyGate = (s.gates || []).find((g) => g.name === "Apply");
+      leads.forEach((le) => {
+        const card = document.createElement("div"); card.className = "pipe-card lead-card";
+        card.innerHTML =
+          `<div class="pipe-cco">${escapeHtml(le.company)}</div>` +
+          (le.role ? `<div class="pipe-cro">${escapeHtml(le.role)}</div>` : "") +
+          `<div class="lead-tags">` +
+            `<span class="lead-tier t-${escapeHtml(le.fit_tier || "")}">${escapeHtml(FIT_LABELS[le.fit_tier] || le.fit_tier || "?")}</span>` +
+            `<span class="lead-warm w-${escapeHtml(le.warm_access_available || "")}">${escapeHtml(le.warm_access_available || "?")}</span>` +
+            `<span class="lead-src">${escapeHtml(le.origination_source || "")}</span>` +
+          `</div>`;
+        const bar = document.createElement("div"); bar.className = "pipe-cbar";
+        const applyBtn = document.createElement("button"); applyBtn.type = "button"; applyBtn.className = "btn-primary cdd-btn";
+        applyBtn.textContent = "Apply ▸";
+        applyBtn.onclick = async () => {
+          if (!applyGate) { toast("No Apply gate", true); return; }
+          try {
+            await api(`/daily-driver/cdd/opportunity/${le.opportunity_id}/stage`, { method: "POST", body: JSON.stringify({ gate_id: applyGate.gate_id }) });
+            try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+            toast("Applied — moved to Apply"); await reload();
+          } catch { toast("Apply failed", true); }
+        };
+        bar.appendChild(applyBtn); card.appendChild(bar);
+        col.appendChild(card);
+      });
+      if (!leads.length) {
+        const e = document.createElement("div"); e.className = "pipe-empty lead-empty";
+        e.textContent = "No leads yet — add one above to originate.";
+        col.appendChild(e);
+      }
+      return col;
     }
     function pipeCard(c, opts) {
       const active = opts && opts.active;
