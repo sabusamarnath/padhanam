@@ -124,11 +124,13 @@ def test_dash_view_live_and_holds_moat_with_in_goal_suggestions():
 
 
 def test_dash_view_carries_the_list_map_toggle_over_one_source():
-    # D199/S101: the assess surface gains a List/Map toggle; both renderings read
-    # the cached units-by-goal source (assessData), with no second data path.
+    # D199/S101 + S103y/D231: the assess surface reads the cached units-by-goal
+    # source (assessData) with no second data path. The standalone "List" tab is now
+    # the by-goal altitude inside the folded Assessment tab (renderAssessList remains,
+    # called by renderAssessment); the Map tab stays.
     dash = _dash_template()
     assert 'id="assess-toggle"' in dash
-    assert 'data-mode="list"' in dash and 'data-mode="map"' in dash
+    assert 'data-mode="assessment"' in dash and 'data-mode="map"' in dash
     assert "renderAssess()" in dash  # re-render from cache on toggle — no refetch
     assert "let assessMode" in _HTML and "assessData = await api" in _HTML
     for fn in ("function renderAssessList", "function renderAssessMap",
@@ -345,10 +347,12 @@ def test_pipeline_board_splits_active_from_closed_record():
 
 
 def test_how_am_i_doing_assessment_render():
-    # D216: a "Doing" mode renders the recommendation-shaped assessment reading
-    # /cdd/assessment; the close-reason split is flagged proof-dependent and never
-    # presented as the verdict's basis.
-    assert 'data-mode="doing"' in _HTML
+    # D216 + S103y/D231: the verdict is the "verdict" altitude of the folded
+    # Assessment tab (renderAssessDoing, reached via renderAssessment) reading
+    # /cdd/assessment; the close-reason split is flagged proof-dependent, never the
+    # verdict's basis.
+    assert 'data-mode="assessment"' in _HTML
+    assert "function renderAssessment" in _HTML
     assert "function renderAssessDoing" in _HTML and "function buildAssessment" in _HTML
     doing = _fn_body("renderAssessDoing")
     assert "/cdd/assessment/" in doing
@@ -468,8 +472,11 @@ def test_map_renders_the_real_causal_graph():
 
 
 def test_map_teal_is_interactive_only():
-    # design-language §4: teal (#2BA692) only on interactive/active affordances.
-    assert "#2BA692" in _HTML  # used for hover/focus/open states
+    # design-language §4: teal only on interactive/active affordances. Since S103y/D231
+    # teal is the --teal token (light+dark), not a hardcoded literal, so the panels
+    # adapt to dark mode; the literal now lives only in the :root token definition.
+    assert "var(--teal)" in _HTML                     # used for interactive/active states
+    assert "--teal: #2ba692" in _HTML                 # the dark token definition
 
 
 def test_units_by_goal_endpoint_does_not_pass_email_source_metadata():
@@ -560,3 +567,27 @@ def test_qualification_panel_activity_log_and_stage_rename():
 def test_capture_source_renders_set_valued():
     # S103x/D230: capture_source is set-valued — the UI joins the channels.
     assert '(c.capture_source||[]).join(" + ")' in _HTML
+
+
+def test_s103y_surface_consolidation():
+    # S103y/D231: token consolidation, the assessment fold, the cross-link, drill fix.
+    # 1. tokens: the S103t-x panels no longer hardcode teal/warm (they use vars, dark-mode safe).
+    #    Only the :root token DEFINITIONS may carry the literals.
+    import re
+    non_def = [l for l in _HTML.split("\n")
+               if not re.match(r'\s*--[\w-]+:\s*#', l)]
+    body = "\n".join(non_def)
+    assert "#2BA692" not in body and "#1a8070" not in body and "#b0997e" not in body
+    assert "var(--teal)" in _HTML and "var(--warm)" in _HTML
+    # 2. shared capture-source badge (was duplicated in contactRow + the contact map)
+    assert "function captureSourceBadge(" in _HTML
+    assert _HTML.count('${captureSourceBadge(c)}') == 2   # two call-sites, one render
+    # 3. the assessment fold: one Assessment tab + a Verdict/By-goal altitude sub-toggle;
+    #    the separate Doing + List tabs are gone.
+    assert 'data-mode="assessment"' in _HTML
+    assert 'data-mode="list"' not in _HTML and 'data-mode="doing"' not in _HTML
+    assert "function renderAssessment(" in _HTML and "assessAltitude" in _HTML
+    # 4. the pipeline -> assessment inline cross-link
+    assert 'switchAssess("assessment")' in _HTML and "assess-xlink" in _HTML
+    # 5. the drill-filter fix: a drill-aware empty state, not "every process is closed"
+    assert "No live processes in" in _HTML and "Clear filter" in _HTML
