@@ -62,6 +62,31 @@ class TodayDTO(BaseModel):
     history: list[TodayItemDTO] = []
 
 
+class ActItemDTO(BaseModel):
+    """One item on the act worklist (D232). ``ref`` carries the source-specific
+    routing/render payload so the surface opens the right drawer without a refetch
+    (an opportunity's ``outcome_id``, a commitment's outcome-loop fields, a calendar
+    item's ``start_at``)."""
+
+    source: str
+    subject_kind: str
+    subject_id: str
+    subject: str
+    action: str
+    due_in_days: int
+    horizon: str
+    is_opportunity: bool
+    ref: dict = {}
+
+
+class ActWorklistDTO(BaseModel):
+    """The act worklist (D232): the six-source union over one day, sorted by
+    urgency. The surface cuts it into Today / Week / doing on the client."""
+
+    day_date: date
+    items: list[ActItemDTO]
+
+
 class CommitmentDTO(BaseModel):
     """A user-authored Commitment."""
 
@@ -1209,7 +1234,26 @@ def _item_to_dto(item: TodayItem) -> TodayItemDTO:
     )
 
 
+def act_worklist_to_dto(items, *, day_date) -> "ActWorklistDTO":
+    """Encode the act worklist (D232) into the HTTP DTO."""
+    return ActWorklistDTO(
+        day_date=day_date,
+        items=[
+            ActItemDTO(
+                source=i.source, subject_kind=i.subject_kind,
+                subject_id=i.subject_id, subject=i.subject, action=i.action,
+                due_in_days=i.due_in_days, horizon=i.horizon,
+                is_opportunity=i.is_opportunity, ref=i.ref or {},
+            )
+            for i in items
+        ],
+    )
+
+
 __all__ = [
+    "ActItemDTO",
+    "ActWorklistDTO",
+    "act_worklist_to_dto",
     "CommitmentDTO",
     "CompletionDTO",
     "CreateCommitmentRequest",

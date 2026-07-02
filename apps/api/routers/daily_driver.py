@@ -90,6 +90,8 @@ from apps.api.routers._daily_driver_dto import (
     SetOrderRequest,
     TaskDTO,
     TodayDTO,
+    ActWorklistDTO,
+    act_worklist_to_dto,
     UnitDTO,
     _empty_assessment_dto,
     _empty_grouped_units_dto,
@@ -159,6 +161,9 @@ from contexts.daily_driver.application.read_pipeline_assessment import (
 )
 from contexts.daily_driver.application.read_pipeline_stats import (
     read_pipeline_stats,
+)
+from contexts.daily_driver.application.read_act_worklist import (
+    read_act_worklist,
 )
 from contexts.daily_driver.application.correct_cdd_evidence import (
     relink_cdd_evidence,
@@ -351,6 +356,41 @@ async def get_today(
         drop_candidate_quiet_days=drop_candidate_quiet_days,
     )
     return today_view_to_dto(view)
+
+
+@router.get("/act", response_model=ActWorklistDTO)
+async def get_act_worklist(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    commitment_repository: Annotated[
+        CommitmentRepository, Depends(get_commitment_repository)
+    ],
+    open_cases_reader: Annotated[
+        OpenCasesReader, Depends(get_open_cases_reader)
+    ],
+    goal_graph: Annotated[
+        GoalGraphPort | None, Depends(get_goal_graph_optional)
+    ],
+    unit_graph: Annotated[object | None, Depends(get_unit_graph)],
+    facet_source: Annotated[object | None, Depends(get_facet_source)],
+    audit_reader: Annotated[object | None, Depends(get_audit_reader)],
+    calendar_events_reader: Annotated[
+        CalendarEventsReader | None, Depends(get_calendar_events_reader)
+    ],
+) -> ActWorklistDTO:
+    """The act worklist (D232): the six-source union — pipeline next-best-actions,
+    warming steps due, stale qualification, commitments, calendar, and open cases —
+    over one day, tagged and sorted by urgency. The surface cuts it into Today /
+    Week / doing. A projection; each source degrades cleanly if its seam is
+    absent."""
+    now = datetime.now(timezone.utc)
+    items = await read_act_worklist(
+        goal_graph=goal_graph, commitment_repository=commitment_repository,
+        open_cases_reader=open_cases_reader, actor=actor,
+        unit_graph=unit_graph, facet_source=facet_source,
+        audit_reader=audit_reader,
+        calendar_events_reader=calendar_events_reader, now=now,
+    )
+    return act_worklist_to_dto(items, day_date=now.date())
 
 
 @router.post("/commitments", response_model=CommitmentDTO, status_code=201)

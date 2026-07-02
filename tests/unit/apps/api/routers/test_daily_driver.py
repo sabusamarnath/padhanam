@@ -9,7 +9,7 @@ HTTP — no auth middleware (the authentication path is tested elsewhere).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
@@ -280,6 +280,50 @@ def test_today_no_drop_candidate_when_threshold_unset() -> None:
     client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
     items = client.get("/api/v1/daily-driver/today").json()["items"]
     assert items[0]["drop_candidate"] is False
+
+
+def test_act_worklist_unions_commitments_and_cases_tagged_and_sorted() -> None:
+    # The pipeline seams are absent (unit_graph/facet_source None) so the model
+    # sources degrade; the act read still unions commitments + cases (D232).
+    repo = _FakeCommitmentRepo()
+    overdue = Commitment(
+        id=uuid4(), tenant_id=UUID(_TENANT), jurisdiction="eu-west",
+        name="Weekly review", expected_interval_days=7,
+        authored_by_user_id="operator-001",
+        created_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+    )
+    repo.commitments[overdue.id] = overdue
+    case = OpenCase(case_id=uuid4(), title="Launch plan", created_at=datetime.now(timezone.utc))
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases((case,)))
+
+    res = client.get("/api/v1/daily-driver/act")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    sources = {i["source"] for i in body["items"]}
+    assert sources == {"commitment", "case"}
+    # most overdue first: the long-overdue commitment precedes the due-today case.
+    assert body["items"][0]["source"] == "commitment"
+    assert body["items"][0]["due_in_days"] < 0
+    assert body["items"][0]["horizon"] == "overdue"
+    case_item = next(i for i in body["items"] if i["source"] == "case")
+    assert case_item["due_in_days"] == 0 and case_item["is_opportunity"] is False
+    assert case_item["ref"]["kind"] == "CASE"
+
+
+def test_act_worklist_week_horizon_excludes_day_eight() -> None:
+    repo = _FakeCommitmentRepo()
+    # created 22 days ago on a 30-day cadence → due in 8 days: NOT in the week cut.
+    far = Commitment(
+        id=uuid4(), tenant_id=UUID(_TENANT), jurisdiction="eu-west",
+        name="Monthly report", expected_interval_days=30,
+        authored_by_user_id="operator-001",
+        created_at=datetime.now(timezone.utc) - timedelta(days=22),
+    )
+    repo.commitments[far.id] = far
+    client = _client(repo, _FakeDayRepo(), _FakeOpenCases(()))
+    item = client.get("/api/v1/daily-driver/act").json()["items"][0]
+    assert item["due_in_days"] == 8
+    assert item["horizon"] == "later"  # beyond the seven-day week
 
 
 def test_mark_done_and_reorder_persist() -> None:
