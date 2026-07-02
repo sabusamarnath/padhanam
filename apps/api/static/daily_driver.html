@@ -2684,13 +2684,26 @@
           line.textContent = "Email activity: " + order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`).join(" · ");
           body.appendChild(line);
         }
-        // D190: itemise the distinct (the head rows), count the tail.
-        (grp.units || []).forEach((u) => body.appendChild(moatRow(u, tier, false)));
-        if (grp.units_more > 0) {
-          const more = document.createElement("div");
-          more.className = "evidence-note";
-          more.textContent = `+ ${grp.units_more} more item${grp.units_more === 1 ? "" : "s"}`;
-          body.appendChild(more);
+        // D233: verdict-first — the linked-work moat (D190) is EVIDENCE, not the
+        // assessment, so it sits one interaction down behind an evidence toggle
+        // (the existing makeFold), never in the body. The lever status + activity
+        // rollup above lead; the raw items are the "why", one tap away.
+        const evUnits = grp.units || [];
+        const evMore = grp.units_more || 0;
+        const evTotal = evUnits.length + evMore;
+        if (evTotal) {
+          const evHead = `<span class="collapse-caret">▸</span>` +
+            `<span class="collapse-label">Evidence</span>` +
+            `<span class="collapse-sub">${evTotal} linked item${evTotal === 1 ? "" : "s"}</span>`;
+          body.appendChild(makeFold(evHead, (ev) => {
+            evUnits.forEach((u) => ev.appendChild(moatRow(u, tier, false)));
+            if (evMore > 0) {
+              const more = document.createElement("div");
+              more.className = "evidence-note";
+              more.textContent = `+ ${evMore} more item${evMore === 1 ? "" : "s"}`;
+              ev.appendChild(more);
+            }
+          }));
         }
         if (!kinds.length && !(grp.units || []).length && !levers.length) {
           const note = document.createElement("div");
