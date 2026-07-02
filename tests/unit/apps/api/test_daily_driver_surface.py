@@ -616,3 +616,15 @@ def test_s103y_surface_consolidation():
     assert 'switchAssess("assessment")' in _HTML and "assess-xlink" in _HTML
     # 5. the drill-filter fix: a drill-aware empty state, not "every process is closed"
     assert "No live processes in" in _HTML and "Clear filter" in _HTML
+
+
+def test_by_goal_is_verdict_first_moat_behind_evidence_toggle():
+    # D233: verdict-first with evidence-on-demand — the by-goal fold body leads with
+    # the lever-status + activity rollup; the linked-work moat sits one interaction
+    # down behind a nested evidence toggle (makeFold), never flat in the body.
+    assert 'collapse-label">Evidence</span>' in _HTML          # the evidence toggle head
+    ev = _HTML[_HTML.index("const evUnits ="):_HTML.index("const evUnits =") + 900]
+    assert "makeFold(evHead" in ev                             # a nested fold, reused
+    assert "moatRow(u, tier, false)" in ev                     # the moat builds inside it
+    # the moat is NOT appended straight to the fold body (the chart-shaped drift):
+    assert "body.appendChild(moatRow" not in _HTML
