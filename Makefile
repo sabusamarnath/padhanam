@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates seed-contacts instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates seed-contacts seed-contacts-linkedin instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -261,6 +261,14 @@ seed-get-a-job-cdd: derive-env
 # proof. Idempotent (uuid5 contact ids). The contact graph backs derived warm access.
 seed-contacts: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.seed_contacts_from_email
+
+# Seed system_suggested :Contact nodes from the LinkedIn self-export (S103v, D223).
+# FILE is the archive path inside the container (a zip or unzipped dir); copy it in
+# first, e.g. `docker compose cp ~/linkedin.zip padhanam-api:/tmp/linkedin.zip`.
+# Connections carry the real company from the export; deduped against the email
+# contacts on the normalized (name, company) signature. Idempotent (uuid5 ids).
+seed-contacts-linkedin: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.seed_contacts_from_linkedin "$(FILE)"
 
 # Author the Apply + Screening gate CDDs (S103g, D207): seed the two process-flow
 # gates with Pratt wiring, relocate Tailoring effort into the Apply gate. Idempotent.
