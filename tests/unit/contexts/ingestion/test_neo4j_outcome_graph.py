@@ -507,11 +507,49 @@ def test_merge_contact_binds_tenant_and_capture_source() -> None:
     asyncio.run(run())
     cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
     assert "MERGE (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})" in cypher
-    assert "c.capture_source = $capture_source" in cypher
+    # S103x/D230: capture_source is set-valued — merge UNIONS the channel (never SET-scalar)
+    assert "c.capture_source = CASE" in cypher
+    assert "$capture_source IN c.capture_source" in cypher
+    assert "valueType(c.capture_source)" in cypher
     assert "c.source" not in cypher  # never the reused 'source' name
     assert params["tenant_id"] == _TENANT.tenant_id
     assert params["capture_source"] == "email"
-    assert params["provenance_origin"] == "system_suggested"
+
+
+def test_add_capture_source_unions_a_channel_tenant_scoped() -> None:
+    # S103x/D230: the dedup-match path adds a channel to an existing contact's set.
+    driver, session = _mock_driver()
+    cid = UUID("00000000-0000-4000-8000-0000063c0001")
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.add_capture_source(contact_id=cid, channel="address_book")
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})" in cypher
+    assert "$channel IN c.capture_source" in cypher  # add-if-absent
+    assert params["channel"] == "address_book"
+    assert params["tenant_id"] == _TENANT.tenant_id
+
+
+def test_backfill_capture_source_scalar_to_list_tenant_scoped() -> None:
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.single = AsyncMock(return_value={"backfilled": 3})
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> int:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            return await s.backfill_capture_source()
+
+    n = asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "MATCH (c:Contact {tenant_id: $tenant_id})" in cypher
+    # only scalars are rewritten (idempotent — lists are skipped)
+    assert "NOT valueType(c.capture_source) STARTS WITH 'LIST'" in cypher
+    assert "SET c.capture_source = [c.capture_source]" in cypher
+    assert n == 3
 
 
 def test_list_contacts_scoped_to_tenant() -> None:

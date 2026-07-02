@@ -555,3 +555,8 @@ def test_qualification_panel_activity_log_and_stage_rename():
     assert 'g.name === "Application"' in _HTML
     assert '"Application"' in _HTML and '"Interviewing"' in _HTML and '"Offer"' in _HTML
     assert '["won", "In role / hired"]' in _HTML
+
+
+def test_capture_source_renders_set_valued():
+    # S103x/D230: capture_source is set-valued — the UI joins the channels.
+    assert '(c.capture_source||[]).join(" + ")' in _HTML
