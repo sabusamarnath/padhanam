@@ -88,6 +88,23 @@ def test_act_preserves_the_commitment_calendar_case_drawers_and_writes():
     assert "await loadAct()" in _HTML  # a write refreshes the act lens
 
 
+def test_act_lens_uses_tokens_not_colour_literals():
+    # AC5/D232: the act-lens styling inherits the S103y tokens (dark-mode safe) —
+    # the source tints and the dot are var(...), never a hardcoded hex.
+    assert "const ACT_SRC_TINT" in _HTML
+    tint_block = _HTML[_HTML.index("const ACT_SRC_TINT"):_HTML.index("const ACT_HINT")]
+    assert "#" not in tint_block  # no hex literals in the source-tint map
+    assert "var(--teal)" in tint_block and "var(--warm)" in tint_block
+    assert "background: var(--tint)" in _HTML  # the .act-dot
+
+
+def test_week_nav_placeholder_retired():
+    # D232: only the Week nav placeholder is retired (folded into the act lens's
+    # Week horizon); the Today nav item and the /today endpoints stay.
+    assert '{ id: "week"' not in _HTML
+    assert '{ id: "today", label: "Today", live: true }' in _HTML
+
+
 # --- S86 (D182): one lens per view (Today list-only; dash holds the moat) ----
 
 
