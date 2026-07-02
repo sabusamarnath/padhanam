@@ -570,7 +570,7 @@ class Neo4jGraphRepository:
         self, *, tenant_context: TenantContext, contact_id: UUID, name: str,
         email: str | None, company: str | None, degree: str | None,
         strength: str | None, reachability: str | None, capture_source: str,
-        provenance_origin: str,
+        provenance_origin: str, process_role: str | None = None,
     ) -> None:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
@@ -578,6 +578,7 @@ class Neo4jGraphRepository:
                     contact_id=contact_id, name=name, email=email, company=company,
                     degree=degree, strength=strength, reachability=reachability,
                     capture_source=capture_source, provenance_origin=provenance_origin,
+                    process_role=process_role,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
@@ -603,6 +604,7 @@ class Neo4jGraphRepository:
                         reachability=r.get("reachability"),
                         capture_source=r["capture_source"],
                         provenance_origin=r["provenance_origin"],
+                        process_role=r.get("process_role"),
                     )
                     for r in rows
                 ]
@@ -649,6 +651,22 @@ class Neo4jGraphRepository:
         try:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.delete_contact(contact_id=contact_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_contact_role(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        process_role: str | None,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_contact_role(
+                    contact_id=contact_id, process_role=process_role
+                )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

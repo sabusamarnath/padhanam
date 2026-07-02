@@ -628,6 +628,7 @@ SET
     c.strength = $strength,
     c.reachability = $reachability,
     c.capture_source = $capture_source,
+    c.process_role = $process_role,
     c.provenance_origin = $provenance_origin
 """
 _LIST_CONTACTS = """
@@ -635,8 +636,16 @@ MATCH (c:Contact {tenant_id: $tenant_id})
 RETURN c.contact_id AS contact_id, c.name AS name, c.email AS email,
        c.company AS company, c.degree AS degree, c.strength AS strength,
        c.reachability AS reachability, c.capture_source AS capture_source,
+       c.process_role AS process_role,
        c.provenance_origin AS provenance_origin
 ORDER BY c.company ASC, c.name ASC
+"""
+# Set a contact's process role (S103w, D227) — the part they play in a hiring
+# process (distinct from job title); authoring it flips provenance to user_authored.
+_SET_CONTACT_ROLE = """
+MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
+SET c.process_role = $process_role, c.provenance_origin = 'user_authored'
+RETURN c.contact_id AS contact_id
 """
 # Confirm a system-suggested contact → user_authored (the operator vouches it is a
 # real person, the merge_opportunity/confirm precedent). RETURN detects match.
@@ -1529,11 +1538,13 @@ class TenantScopedNeo4jSession:
         reachability: str | None,
         capture_source: str,
         provenance_origin: str,
+        process_role: str | None = None,
     ) -> None:
         """MERGE a :Contact (D222) — a person in the operator's network, linked to a
         company by a normalized string. ``capture_source`` is the channel the contact
         came from (email / linkedin / manual), distinct from a lead's
-        ``origination_source``. Idempotent on (tenant_id, contact_id)."""
+        ``origination_source``. ``process_role`` (S103w, D227) is the part they play
+        in a hiring process. Idempotent on (tenant_id, contact_id)."""
         session = self._bound_session
         await session.run(_MERGE_CONTACT, {
             "tenant_id": self._tenant_id,
@@ -1546,9 +1557,22 @@ class TenantScopedNeo4jSession:
             "strength": strength,
             "reachability": reachability,
             "capture_source": capture_source,
+            "process_role": process_role,
             "provenance_origin": provenance_origin,
             "created_at": _now_utc(),
         })
+
+    async def set_contact_role(
+        self, *, contact_id: UUID, process_role: str | None
+    ) -> bool:
+        """Set a contact's process role (S103w, D227). True when matched."""
+        session = self._bound_session
+        result = await session.run(_SET_CONTACT_ROLE, {
+            "tenant_id": self._tenant_id,
+            "contact_id": str(contact_id),
+            "process_role": process_role,
+        })
+        return await result.single() is not None
 
     async def list_contacts(self) -> list[dict]:
         """Return the tenant's contacts (D222)."""

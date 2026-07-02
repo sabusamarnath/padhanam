@@ -173,6 +173,7 @@ class ContactRecord:
     reachability: str | None
     capture_source: str  # email / linkedin / manual (distinct from a lead's origination_source)
     provenance_origin: str
+    process_role: str | None = None  # the hiring-process part they play (S103w, D227)
 
 
 @dataclass(frozen=True)
@@ -461,11 +462,19 @@ class OutcomeGraphPort(Protocol):
         self, *, tenant_context: TenantContext, contact_id: UUID, name: str,
         email: str | None, company: str | None, degree: str | None,
         strength: str | None, reachability: str | None, capture_source: str,
-        provenance_origin: str,
+        provenance_origin: str, process_role: str | None = None,
     ) -> None:
         """Idempotently MERGE a :Contact (D222) — a person in the operator's network,
         linked to a company by a normalized string. Seeded system_suggested from the
-        moat senders, or hand-added user_authored."""
+        moat senders, or hand-added user_authored. ``process_role`` is the hiring-
+        process part they play (S103w, D227)."""
+        ...
+
+    async def set_contact_role(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        process_role: str | None,
+    ) -> bool:
+        """Set a contact's process role → user_authored (S103w, D227)."""
         ...
 
     async def list_contacts(

@@ -639,6 +639,7 @@ class GoalGraphAdapter:
                 company=r.company, degree=r.degree, strength=r.strength,
                 reachability=r.reachability, capture_source=r.capture_source,
                 provenance_origin=r.provenance_origin,
+                process_role=getattr(r, "process_role", None),
             )
             for r in recs
         )
@@ -652,6 +653,12 @@ class GoalGraphAdapter:
             email=None, company=company, degree=degree, strength=strength,
             reachability=reachability, capture_source=capture_source,
             provenance_origin="user_authored",
+        )
+
+    async def set_contact_role(self, *, tenant_context, contact_id, process_role) -> bool:
+        return await self._outcome_graph.set_contact_role(
+            tenant_context=tenant_context, contact_id=contact_id,
+            process_role=process_role,
         )
 
     async def confirm_contact(self, *, tenant_context, contact_id) -> bool:

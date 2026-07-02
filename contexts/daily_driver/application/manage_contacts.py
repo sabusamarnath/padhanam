@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 from contexts.daily_driver.domain.contacts import (
     CAPTURE_SOURCES,
     DEGREES,
+    PROCESS_ROLES,
     REACHABILITIES,
     STRENGTHS,
     ContactView,
@@ -124,7 +125,23 @@ async def reject_contact(
     )
 
 
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def set_contact_role(
+    *, goal_graph: GoalGraphPort, actor: ActorContext, contact_id: UUID,
+    process_role: str | None,
+) -> bool:
+    """Set a contact's hiring-process role (S103w, D227). ``None`` clears it."""
+    if process_role is not None and process_role not in PROCESS_ROLES:
+        raise ContactValidationError(
+            f"process_role must be one of {list(PROCESS_ROLES)}"
+        )
+    return await goal_graph.set_contact_role(
+        tenant_context=actor.tenant_context, contact_id=contact_id,
+        process_role=process_role,
+    )
+
+
 __all__ = [
     "ContactValidationError", "add_contact", "confirm_contact", "enrich_contact",
-    "list_contacts", "reject_contact",
+    "list_contacts", "reject_contact", "set_contact_role",
 ]

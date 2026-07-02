@@ -1106,6 +1106,7 @@
     // The contact proof surface (S103u, D222): confirm / enrich / reject the
     // email-seeded contacts + add ones email missed. Backs derived warm access.
     const _DEG = ["first", "second"], _STR = ["close", "medium", "weak"], _REA = ["easy", "hard"];
+    const _ROLES = [["hiring_manager", "Hiring manager"], ["recruiter", "Recruiter"], ["hr_partner", "HR/Talent"], ["champion", "Champion"], ["interviewer", "Interviewer"], ["decision_maker", "Decision-maker"]];
     function contactSel(name, opts, val) {
       return `<select name="${name}" title="${name}"><option value="">${name}…</option>` +
         opts.map((o) => `<option value="${o}"${o === val ? " selected" : ""}>${o}</option>`).join("") +
@@ -1124,9 +1125,17 @@
         ` <span class="contact-prov ${suggested ? "sug" : "auth"}">${suggested ? "suggested" : "yours"}</span>` +
         ` <span class="contact-src">${escapeHtml(c.capture_source)}</span></div>`;
       const enr = document.createElement("div"); enr.className = "contact-enrich";
+      const roleOpts = `<select name="process_role" title="process role"><option value="">role…</option>` +
+        _ROLES.map(([v, l]) => `<option value="${v}"${c.process_role === v ? " selected" : ""}>${l}</option>`).join("") + `</select>`;
       enr.innerHTML = contactSel("degree", _DEG, c.degree) +
-        contactSel("strength", _STR, c.strength) + contactSel("reachability", _REA, c.reachability);
+        contactSel("strength", _STR, c.strength) + contactSel("reachability", _REA, c.reachability) + roleOpts;
       row.appendChild(enr);
+      // Process role writes immediately on change (D227), separate from the enrich Save.
+      const roleSel = enr.querySelector('select[name="process_role"]');
+      roleSel.onchange = async () => {
+        try { await api(`/daily-driver/cdd/contacts/${c.contact_id}/role`, { method: "POST", body: JSON.stringify({ process_role: roleSel.value || null }) }); toast("Role set"); await refresh(); await reload(); }
+        catch { toast("Set role failed", true); }
+      };
       const bar = document.createElement("div"); bar.className = "contact-bar";
       bar.appendChild(contactBtn("Save", "btn-primary", async () => {
         const sels = enr.querySelectorAll("select");

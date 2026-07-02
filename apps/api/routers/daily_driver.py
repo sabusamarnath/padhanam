@@ -55,6 +55,7 @@ from apps.api.routers._daily_driver_dto import (
     AddContactResponse,
     ContactDTO,
     EnrichContactRequest,
+    SetContactRoleRequest,
     contact_to_dto,
     LogWarmingStepRequest,
     WarmingStepDTO,
@@ -119,6 +120,7 @@ from contexts.daily_driver.application.manage_contacts import (
     enrich_contact as enrich_contact_uc,
     list_contacts as list_contacts_uc,
     reject_contact as reject_contact_uc,
+    set_contact_role as set_contact_role_uc,
 )
 from contexts.daily_driver.application.warming_steps import (
     WarmingStepError,
@@ -824,6 +826,26 @@ async def post_reject_contact(
     ok = await reject_contact_uc(
         goal_graph=goal_graph, actor=actor, contact_id=contact_id
     )
+    if not ok:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/contacts/{contact_id}/role", status_code=204)
+async def post_set_contact_role(
+    contact_id: UUID,
+    body: SetContactRoleRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Set a contact's hiring-process role (D227). 422 on a bad role, 404 absent."""
+    try:
+        ok = await set_contact_role_uc(
+            goal_graph=goal_graph, actor=actor, contact_id=contact_id,
+            process_role=body.process_role,
+        )
+    except ContactValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     if not ok:
         raise HTTPException(status_code=404, detail="contact not found")
     return Response(status_code=204)

@@ -37,6 +37,14 @@ class ContactView:
     reachability: str | None
     capture_source: str
     provenance_origin: str
+    process_role: str | None = None   # the hiring-process part they play (S103w, D227)
+
+
+# The process roles a contact can carry (S103w, D227) — distinct from job title.
+PROCESS_ROLES = (
+    "hiring_manager", "recruiter", "hr_partner", "champion", "interviewer",
+    "decision_maker",
+)
 
 
 def normalize_company(name: str | None) -> str:
@@ -142,7 +150,7 @@ def warming_action(
 
 
 __all__ = [
-    "CAPTURE_SOURCES", "ContactView", "DEGREES", "REACHABILITIES", "STRENGTHS",
-    "contacts_for_company", "derive_warm", "effective_warm", "is_usable",
-    "lead_company", "normalize_company", "warming_action",
+    "CAPTURE_SOURCES", "ContactView", "DEGREES", "PROCESS_ROLES", "REACHABILITIES",
+    "STRENGTHS", "contacts_for_company", "derive_warm", "effective_warm",
+    "is_usable", "lead_company", "normalize_company", "warming_action",
 ]

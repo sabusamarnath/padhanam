@@ -200,6 +200,13 @@ class GoalGraphPort(Protocol):
         """Reject (delete) a contact (D222)."""
         ...
 
+    async def set_contact_role(
+        self, *, tenant_context: TenantContext, contact_id: UUID,
+        process_role: str | None,
+    ) -> bool:
+        """Set a contact's hiring-process role → user_authored (S103w, D227)."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,

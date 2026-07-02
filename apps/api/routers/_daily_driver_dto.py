@@ -640,6 +640,13 @@ class ContactDTO(BaseModel):
     reachability: str | None = None
     capture_source: str
     provenance_origin: str
+    process_role: str | None = None
+
+
+class SetContactRoleRequest(BaseModel):
+    """Set a contact's hiring-process role (S103w, D227); null clears it."""
+
+    process_role: str | None = None
 
 
 class AddContactRequest(BaseModel):
@@ -674,6 +681,7 @@ def contact_to_dto(c) -> "ContactDTO":
         contact_id=c.contact_id, name=c.name, email=c.email, company=c.company,
         degree=c.degree, strength=c.strength, reachability=c.reachability,
         capture_source=c.capture_source, provenance_origin=c.provenance_origin,
+        process_role=getattr(c, "process_role", None),
     )
 
 
