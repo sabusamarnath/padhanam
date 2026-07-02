@@ -31,7 +31,7 @@ from ``graph_repository_port`` so callers handle one error taxonomy.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol, Sequence
 from uuid import UUID
@@ -155,6 +155,8 @@ class OpportunityRecord:
     fit_tier: str | None = None
     warm_access_available: str | None = None
     origination_source: str | None = None
+    # The qualification props (S103w, D228): a ``q_``-prefixed map (value + ``_ts``).
+    qualification: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -475,6 +477,14 @@ class OutcomeGraphPort(Protocol):
         process_role: str | None,
     ) -> bool:
         """Set a contact's process role → user_authored (S103w, D227)."""
+        ...
+
+    async def set_qualification_field(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None, touch_only: bool = False,
+    ) -> bool:
+        """Set a qualification field's value + last_touched, or bump only the
+        timestamp when ``touch_only`` (S103w, D228/D229)."""
         ...
 
     async def list_contacts(

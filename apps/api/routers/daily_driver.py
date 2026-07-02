@@ -60,6 +60,9 @@ from apps.api.routers._daily_driver_dto import (
     LogWarmingStepRequest,
     WarmingStepDTO,
     warming_step_to_dto,
+    QualificationFieldDTO,
+    SetQualificationRequest,
+    qualification_to_dto,
     ElementBindingDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
@@ -126,6 +129,11 @@ from contexts.daily_driver.application.warming_steps import (
     WarmingStepError,
     list_warming_steps as list_warming_steps_uc,
     log_warming_step as log_warming_step_uc,
+)
+from contexts.daily_driver.application.qualification import (
+    QualificationError,
+    read_opportunity_qualification as read_qualification_uc,
+    set_qualification_field as set_qualification_field_uc,
 )
 from contexts.daily_driver.application.author_cdd import (
     add_cdd_element,
@@ -848,6 +856,48 @@ async def post_set_contact_role(
         raise HTTPException(status_code=422, detail=str(e)) from e
     if not ok:
         raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+# --- Qualification (S103w, D228) — stage-aware, per opportunity ---------------
+
+@router.get(
+    "/cdd/qualification/{outcome_id}/{opportunity_id}",
+    response_model=list[QualificationFieldDTO],
+)
+async def get_qualification(
+    outcome_id: UUID,
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[QualificationFieldDTO]:
+    """The eight qualification fields for an opportunity (D228) with stage-relative
+    freshness (D229) — values, activation, and risk badges."""
+    fields = await read_qualification_uc(
+        goal_graph=goal_graph, actor=actor, outcome_id=outcome_id,
+        opportunity_id=opportunity_id,
+    )
+    return [qualification_to_dto(f) for f in fields]
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/qualification", status_code=204)
+async def post_set_qualification(
+    opportunity_id: UUID,
+    body: SetQualificationRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Author a qualification field's value (D228). 422 on an unknown field, 404
+    when the opportunity is absent."""
+    try:
+        ok = await set_qualification_field_uc(
+            goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+            field_key=body.field_key, value=body.value,
+        )
+    except QualificationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not ok:
+        raise HTTPException(status_code=404, detail="opportunity not found")
     return Response(status_code=204)
 
 

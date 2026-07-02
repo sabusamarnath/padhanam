@@ -661,6 +661,14 @@ class GoalGraphAdapter:
             process_role=process_role,
         )
 
+    async def set_qualification_field(
+        self, *, tenant_context, opportunity_id, field_key, value, touch_only=False
+    ) -> bool:
+        return await self._outcome_graph.set_qualification_field(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            field_key=field_key, value=value, touch_only=touch_only,
+        )
+
     async def confirm_contact(self, *, tenant_context, contact_id) -> bool:
         return await self._outcome_graph.confirm_contact(
             tenant_context=tenant_context, contact_id=contact_id
@@ -749,6 +757,7 @@ class GoalGraphAdapter:
                 fit_tier=getattr(o, "fit_tier", None),
                 warm_access_available=getattr(o, "warm_access_available", None),
                 origination_source=getattr(o, "origination_source", None),
+                qualification=getattr(o, "qualification", None) or {},
             )
             for o in opp_records
         )

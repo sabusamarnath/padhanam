@@ -550,8 +550,20 @@ RETURN o.opportunity_id AS opportunity_id, o.name AS name,
        o.closed_reason AS closed_reason, o.closed_at AS closed_at,
        o.fit_tier AS fit_tier,
        o.warm_access_available AS warm_access_available,
-       o.origination_source AS origination_source
+       o.origination_source AS origination_source,
+       [k IN keys(o) WHERE k STARTS WITH 'q_' | [k, o[k]]] AS qualification
 ORDER BY o.name ASC
+"""
+# Qualification field write (S103w, D228): dynamic-key schemaless props — the value
+# (q_<field>) and its last_touched (q_<field>_ts), so no migration and no widening of
+# merge_opportunity. ``touch_only`` bumps the timestamp without a value (an activity
+# naming the field, D229).
+_SET_QUALIFICATION_FIELD = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o[$ts_key] = $ts
+FOREACH (_ IN CASE WHEN $set_value THEN [1] ELSE [] END |
+    SET o[$value_key] = $value)
+RETURN o.opportunity_id AS opportunity_id
 """
 # The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
 # the required reason + closed_at; the node, its BELONGS_TO memberships, and its
@@ -1509,6 +1521,25 @@ class TenantScopedNeo4jSession:
             "current_gate_id": (
                 str(current_gate_id) if current_gate_id is not None else None
             ),
+        })
+        return await result.single() is not None
+
+    async def set_qualification_field(
+        self, *, opportunity_id: UUID, field_key: str, value: str | None,
+        touch_only: bool = False,
+    ) -> bool:
+        """Set a qualification field's value + last_touched (S103w, D228), or bump
+        only the timestamp when ``touch_only`` (an activity naming it, D229). The
+        keys are dynamic (``q_<field>`` / ``q_<field>_ts``). Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_QUALIFICATION_FIELD, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "value_key": f"q_{field_key}",
+            "ts_key": f"q_{field_key}_ts",
+            "value": value,
+            "set_value": not touch_only,
+            "ts": _now_utc().isoformat(),  # ISO string keeps the q_ map all-strings
         })
         return await result.single() is not None
 

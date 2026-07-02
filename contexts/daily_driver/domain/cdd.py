@@ -11,7 +11,7 @@ the proof read returns. The LLM call itself lives in an adapter behind the
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -190,6 +190,8 @@ class OpportunityView:
     fit_tier: str | None = None
     warm_access_available: str | None = None
     origination_source: str | None = None
+    # The qualification props (S103w, D228): a ``q_``-prefixed map (value + ``_ts``).
+    qualification: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

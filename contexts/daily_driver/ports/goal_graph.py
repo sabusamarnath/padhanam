@@ -207,6 +207,14 @@ class GoalGraphPort(Protocol):
         """Set a contact's hiring-process role → user_authored (S103w, D227)."""
         ...
 
+    async def set_qualification_field(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None, touch_only: bool = False,
+    ) -> bool:
+        """Set a qualification field's value + last_touched, or bump only the
+        timestamp when ``touch_only`` (S103w, D228/D229)."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,

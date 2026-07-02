@@ -685,6 +685,32 @@ def contact_to_dto(c) -> "ContactDTO":
     )
 
 
+class QualificationFieldDTO(BaseModel):
+    """One qualification field for an opportunity (S103w, D228/D229)."""
+
+    key: str
+    label: str
+    value: str | None = None
+    last_touched: str | None = None
+    active: bool
+    from_contact: bool = False
+    risk: str | None = None
+
+
+class SetQualificationRequest(BaseModel):
+    """Author a qualification field's value (S103w, D228)."""
+
+    field_key: str
+    value: str
+
+
+def qualification_to_dto(f) -> "QualificationFieldDTO":
+    return QualificationFieldDTO(
+        key=f.key, label=f.label, value=f.value, last_touched=f.last_touched,
+        active=f.active, from_contact=f.from_contact, risk=f.risk,
+    )
+
+
 class LogWarmingStepRequest(BaseModel):
     """Log a warming step against a contact or a lead (S103v, D224)."""
 

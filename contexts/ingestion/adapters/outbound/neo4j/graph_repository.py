@@ -466,6 +466,12 @@ class Neo4jGraphRepository:
                         fit_tier=r.get("fit_tier"),
                         warm_access_available=r.get("warm_access_available"),
                         origination_source=r.get("origination_source"),
+                        # The q_-prefixed qualification props (S103w, D228), read as
+                        # [[key, value], ...] and folded to a dict (all strings).
+                        qualification={
+                            k: v for k, v in (r.get("qualification") or [])
+                            if v is not None
+                        },
                     )
                     for r in rows
                 ]
@@ -666,6 +672,23 @@ class Neo4jGraphRepository:
             async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
                 return await s.set_contact_role(
                     contact_id=contact_id, process_role=process_role
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_qualification_field(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None, touch_only: bool = False,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_qualification_field(
+                    opportunity_id=opportunity_id, field_key=field_key,
+                    value=value, touch_only=touch_only,
                 )
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
