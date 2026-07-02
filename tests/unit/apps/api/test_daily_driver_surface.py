@@ -31,16 +31,19 @@ def test_no_per_row_reorder_chevrons():
     assert 'class="reorder"' not in _HTML
 
 
-def test_proposed_order_still_renders():
-    # AC2: the read's items still render in their proposed order.
-    assert "render(data.items)" in _HTML
-    assert "items.forEach" in _HTML
+def test_act_lens_renders_the_substrate_in_order():
+    # S103z/D232: the act read's items render in their proposed (urgency) order
+    # via actRow — the pre-S103z render(data.items) worklist is retired.
+    assert "async function loadAct()" in _HTML
+    assert 'await api("/daily-driver/act")' in _HTML
+    assert "items.forEach((it) => list.appendChild(actRow(it)))" in _HTML
 
 
-def test_action_today_meta_is_bare_no_domain_word():
-    # AC4: the meta line carries only the read's bare detail — no domain/tier
-    # word composed in the render (tint = tier, icon = category).
-    assert 'class="meta">${escapeHtml(it.detail)}' in _HTML
+def test_act_row_meta_is_source_tag_plus_action_no_domain_word():
+    # AC4/D232: the row meta carries the source tag + the read's action line —
+    # no domain/tier word composed in (tint carries the source).
+    assert 'class="act-src"' in _HTML
+    assert "${escapeHtml(it.action)}" in _HTML
 
 
 _ROUTER = (
@@ -56,30 +59,33 @@ def test_today_endpoints_untouched_server_side():
     assert '"/today/order"' in _ROUTER
 
 
-# --- S85 (D181): recommendation-shaped action Today -------------------------
+# --- S103z (D232): the act lens — Today/Week/doing over one substrate ---------
 
 
-def test_action_today_leads_with_needs_you_collapses_the_rest():
-    # The head set is {needs-you, behind} (no at-risk status exists); the render
-    # leads with them in full and collapses the quiet into a summary.
-    assert 'new Set(["NEEDS_YOU", "BEHIND"])' in _HTML
-    assert "function collapsibleSummary(" in _HTML
-    assert "on track" in _HTML       # the "N on track" quiet summary
-    assert "done earlier" in _HTML    # the "N done earlier" summary
+def test_act_lens_toggle_has_today_week_doing():
+    today = _today_template()
+    assert 'id="act-toggle"' in today
+    for seg in ('data-act="today"', 'data-act="week"', 'data-act="doing"'):
+        assert seg in today
+    assert "loadAct()" in today
 
 
-def test_collapse_is_default_state_filled_on_toggle():
-    # No display:none streaming: the summary is the default (collapsed) and its
-    # rows are appended only on an explicit expand toggle.
-    assert "collapse-body" in _HTML
-    assert 'body.style.display = "none"' in _HTML
-    assert "body.appendChild(rowEl(it))" in _HTML
+def test_act_horizon_and_doing_filter():
+    # Today = due <= 0; Week = due <= 7; doing = live-opportunity items (D232).
+    assert 'if (actMode === "today") return it.due_in_days <= 0;' in _HTML
+    assert 'if (actMode === "week") return it.due_in_days <= 7;' in _HTML
+    assert "return it.is_opportunity;" in _HTML  # doing
 
 
-def test_done_history_collapsed_not_flat():
-    # The done-earlier section is one collapsed summary, not a flat row loop.
-    assert "history.forEach" not in _HTML
-    assert "} done earlier`" in _HTML
+def test_act_preserves_the_commitment_calendar_case_drawers_and_writes():
+    # Opportunity items open the pipeline process detail; commitment/calendar/case
+    # items rebuild the today-item shape their existing drawer reads, so the
+    # D157/D162/S60 loops and their writes are preserved (D232).
+    assert "function openActItem(" in _HTML
+    assert "openProcessDetail(it.ref.opportunity_id" in _HTML
+    assert "openItem(keyOf(t))" in _HTML
+    assert "/daily-driver/commitments/${it.item_id}/completions" in _HTML  # Did-it
+    assert "await loadAct()" in _HTML  # a write refreshes the act lens
 
 
 # --- S86 (D182): one lens per view (Today list-only; dash holds the moat) ----
@@ -103,12 +109,14 @@ def _coverage_template() -> str:
     return _HTML[start:end]
 
 
-def test_today_renders_list_and_history_only():
+def test_today_holds_the_act_lens_not_the_dash_internals():
+    # One lens per view (D182): the act lens carries its list + toggle, and does
+    # not pull the dash/moat internals.
     today = _today_template()
     assert 'id="list"' in today
-    assert 'id="history-section"' in today
+    assert 'id="act-toggle"' in today
     for cut in ('id="goals"', 'id="tasks"', 'id="moat"', 'id="suggestions"'):
-        assert cut not in today, f"{cut} must not render on Today (D182)"
+        assert cut not in today, f"{cut} must not render on the act lens (D182)"
 
 
 def test_dash_view_live_and_holds_moat_with_in_goal_suggestions():

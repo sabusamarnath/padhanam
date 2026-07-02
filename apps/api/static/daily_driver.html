@@ -106,6 +106,10 @@
     .row[data-tier="work"]:hover { background: var(--surface-hover-work); border-color: var(--hairline-strong); }
     .row[data-tier="personal"]:hover { background: var(--surface-hover-personal); border-color: var(--hairline-strong); }
     .row.is-done { opacity: 0.6; }
+    /* S103z/D232: the act lens — a source dot + source tag on each worklist row. */
+    .act-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tint); display: inline-block; }
+    .act-src { font-weight: 700; color: var(--ink-1); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+    .act-hint { font-size: 12px; color: var(--ink-3); margin: 2px 0 12px; }
     .cue { flex-shrink: 0; height: 18px; color: var(--tint); display: inline-flex; align-items: center; gap: 3px; }
     .cue svg { width: 16px; height: 16px; display: block; }
     .cue-init { font-size: 10px; font-weight: 700; line-height: 1; }
@@ -693,6 +697,9 @@
     // D199/S101: the assess surface's List/Map toggle. One source (assessData,
     // the units-by-goal read) behind both renderings — no second data path.
     let assessMode = "assessment", assessAltitude = "verdict", assessData = null;
+    // S103z/D232: the act lens — Today/Week horizons + a doing (live-opportunity)
+    // filter, all over the one act substrate (/daily-driver/act).
+    let actMode = "today", actData = null;
     function renderNav() {
       const nav = document.getElementById("nav"), foot = document.getElementById("nav-foot");
       const item = (n) => `<div class="navitem ${n.id === activeView ? "on" : ""}" data-nav="${n.id}">${ICONS[n.id] || ""}${escapeHtml(n.label)}</div>`;
@@ -715,11 +722,14 @@
         left.innerHTML = "";
         view.innerHTML = `
           <div class="day-head"><h1>Today</h1><span class="date" id="day-date"></span></div>
-          <p class="sub">One prioritised list across your whole day — what needs you, and what has gone quiet.</p>
-          <div class="list" id="list"></div>
-          <div id="history-section" style="display:none">
-            <div class="list" id="history-list"></div>
+          <p class="sub">One worklist across your whole day — leads, live processes, warming, qualification, commitments, and your calendar, in one place.</p>
+          <div class="assess-toggle" id="act-toggle" role="tablist">
+            <button class="seg ${actMode === "today" ? "on" : ""}" data-act="today" type="button" role="tab">Today</button>
+            <button class="seg ${actMode === "week" ? "on" : ""}" data-act="week" type="button" role="tab">Week</button>
+            <button class="seg ${actMode === "doing" ? "on" : ""}" data-act="doing" type="button" role="tab">Doing</button>
           </div>
+          <p class="act-hint" id="act-hint"></p>
+          <div class="list" id="list"></div>
           <div class="section-label">New commitment</div>
           <div class="new-form">
             <input class="name" id="c-name" placeholder="e.g. Weekly 1:1 with each report" />
@@ -727,9 +737,10 @@
             <input class="name" id="c-expected" placeholder="What do you expect to come of it? (optional)" />
             <button class="btn-primary" id="c-add">Add commitment</button>
           </div>`;
+        document.querySelectorAll("#act-toggle .seg").forEach((b) => b.onclick = () => switchAct(b.dataset.act));
         document.getElementById("c-add").onclick = addCommitment;
         document.getElementById("c-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addCommitment(); });
-        loadToday();
+        loadAct();
       } else if (activeView === "dash") {
         left.innerHTML = `<h1>How am I doing</h1>`;
         view.innerHTML = `
@@ -763,25 +774,89 @@
       }
     }
 
-    // --- Today (S60 surface, live inside the shell) ---
-    async function loadToday() {
+    // --- The act lens (S103z/D232): Today/Week/doing over the act substrate ---
+    // One read (/daily-driver/act) unions the six sources; the toggle cuts it
+    // into Today (due ≤ 0), Week (due ≤ 7), and doing (live-opportunity items).
+    // Commitment/calendar/case items keep their D157/D162/S60 drawers; opportunity
+    // items open the pipeline process detail — the writes are all preserved.
+    const ACT_SRC_LABEL = { pipeline: "Follow-up", warming: "Warm-up", qualification: "Qualify", commitment: "Commitment", calendar: "Calendar", case: "Case" };
+    const ACT_SRC_TINT = { pipeline: "var(--teal)", warming: "var(--teal)", qualification: "var(--teal)", commitment: "var(--cool)", calendar: "var(--warm)", case: "var(--warm)" };
+    const ACT_HINT = {
+      today: "Due today or overdue — what needs you now.",
+      week: "Everything due in the next seven days.",
+      doing: "Every live process, whatever its horizon — the active board as a worklist.",
+    };
+    async function loadAct() {
       let data;
-      try { data = await api("/daily-driver/today"); } catch { return; }
+      try { data = await api("/daily-driver/act"); } catch { return; }
       const dd = document.getElementById("day-date"); if (dd) dd.textContent = data.day_date;
-      itemsByKey = {}; data.items.forEach((it) => { itemsByKey[keyOf(it)] = it; });
-      render(data.items);
-      renderHistory(data.history || []);
+      actData = data.items || [];
+      renderAct();
     }
-    // D175/D181: the observed stream — completed/ended items today, off the live
-    // plan — collapses into one expandable "N done earlier" summary.
-    function renderHistory(history) {
-      const section = document.getElementById("history-section");
-      const list = document.getElementById("history-list");
-      if (!section || !list) return;
-      if (!history.length) { section.style.display = "none"; list.innerHTML = ""; return; }
-      section.style.display = "";
+    function switchAct(mode) {
+      actMode = mode;
+      document.querySelectorAll("#act-toggle .seg").forEach((x) => x.classList.toggle("on", x.dataset.act === mode));
+      renderAct();
+    }
+    function actFilter(it) {
+      if (actMode === "today") return it.due_in_days <= 0;
+      if (actMode === "week") return it.due_in_days <= 7;
+      return it.is_opportunity;  // doing — live-opportunity items, no horizon cut
+    }
+    function actEmpty() {
+      if (actMode === "today") return "Nothing due today — you're clear. Check Week for what's coming.";
+      if (actMode === "week") return "Nothing due in the next seven days.";
+      return "No live processes — every opportunity is closed, or none has started.";
+    }
+    function actPill(it) {
+      if (it.horizon === "overdue") return `<span class="pill behind">${Math.abs(it.due_in_days)}d over</span>`;
+      if (it.horizon === "today") return `<span class="pill needs_you">Today</span>`;
+      if (it.horizon === "week") return `<span class="pill on_track">in ${it.due_in_days}d</span>`;
+      return `<span class="pill done">later</span>`;
+    }
+    function actRow(it) {
+      const row = document.createElement("div");
+      row.className = "row"; row.dataset.tier = "work";
+      const tint = ACT_SRC_TINT[it.source] || "var(--cool)";
+      const label = ACT_SRC_LABEL[it.source] || it.source;
+      row.innerHTML = `<span class="cue" style="--tint:${tint}"><span class="act-dot"></span></span>
+        <div class="main-c"><div class="title">${escapeHtml(it.subject)}</div>
+        <div class="meta"><span class="act-src">${escapeHtml(label)}</span> · ${escapeHtml(it.action)}</div></div>
+        ${actPill(it)}`;
+      row.addEventListener("click", () => openActItem(it));
+      return row;
+    }
+    function renderAct() {
+      const list = document.getElementById("list"); if (!list || actData === null) return;
+      const hint = document.getElementById("act-hint"); if (hint) hint.textContent = ACT_HINT[actMode] || "";
       list.innerHTML = "";
-      list.appendChild(collapsibleSummary(`${history.length} done earlier`, "completed today", history));
+      const items = actData.filter(actFilter);
+      if (!items.length) { list.innerHTML = `<div class="empty">${escapeHtml(actEmpty())}</div>`; return; }
+      items.forEach((it) => list.appendChild(actRow(it)));
+    }
+    // Route an act item to its drawer: opportunity items open the pipeline process
+    // detail; commitment/calendar/case items rebuild the today-item shape their
+    // existing drawer (openItem) reads, so the D157/D162/S60 loops are untouched.
+    function openActItem(it) {
+      if (it.is_opportunity) {
+        if (it.ref && it.ref.opportunity_id) openProcessDetail(it.ref.opportunity_id, { outcome_id: it.ref.outcome_id });
+        return;
+      }
+      const t = actTodayShape(it);
+      itemsByKey[keyOf(t)] = t;
+      openItem(keyOf(t));
+    }
+    function actTodayShape(it) {
+      const r = it.ref || {};
+      return {
+        kind: r.kind, item_id: r.item_id, title: it.subject,
+        status: r.status || "NEEDS_YOU", detail: r.detail || it.action,
+        start_at: r.start_at || null, domain: "work", done: false,
+        expected_outcome: r.expected_outcome || null,
+        observed_outcome: r.observed_outcome || null,
+        outcome_status: r.outcome_status || null,
+        drop_candidate: !!r.drop_candidate,
+      };
     }
     // --- Units of work (S66, D168: cross-tool correlation, read-only) ---
     const FACET_GLYPH = { task: "✓", meeting: "📅", email: "✉" };
@@ -2797,62 +2872,12 @@
     // (D190/S94: the global suggestion list is gone — missing-facet suggestions
     // now ride the goal they concern, inside its expand, a flood collapsed to a
     // count. The /daily-driver/suggestions endpoint stays for debugging.)
-    function cueHTML(it) { const d = domainOf(it); return `<span class="cue" style="--tint:${d.tint}">${d.icon}</span>`; }
-    // The attention statuses lead the surface; on-track is the quiet remainder.
-    // (No at-risk status exists; the head set is {needs-you, behind}.)
-    const NEEDS_ATTENTION = new Set(["NEEDS_YOU", "BEHIND"]);
-    function rowEl(it) {
-      const d = domainOf(it);
-      const row = document.createElement("div");
-      row.className = "row" + (it.done ? " is-done" : ""); row.dataset.tier = d.tier;
-      const nudge = it.drop_candidate ? `<div class="drop-nudge"><span class="dn-why">gone quiet</span> drop it?</div>` : "";
-      row.innerHTML = `${cueHTML(it)}<div class="main-c"><div class="title">${escapeHtml(it.title)}</div>
-        <div class="meta">${escapeHtml(it.detail)}</div>${nudge}</div>
-        <span class="pill ${it.status.toLowerCase()}">${escapeHtml(pillLabel(it.status))}</span>`;
-      row.addEventListener("click", () => openItem(keyOf(it)));
-      return row;
-    }
-    // A collapsed summary line — the default state — that fills with its rows on
-    // an explicit toggle (no display:none streaming; the rows render on expand).
-    function collapsibleSummary(label, subtitle, items) {
-      const wrap = document.createElement("div"); wrap.className = "collapse";
-      const head = document.createElement("button"); head.type = "button"; head.className = "collapse-head";
-      head.innerHTML = `<span class="collapse-caret">▸</span><span class="collapse-label">${escapeHtml(label)}</span><span class="collapse-sub">${escapeHtml(subtitle)}</span>`;
-      const body = document.createElement("div"); body.className = "collapse-body"; body.style.display = "none";
-      let filled = false;
-      head.onclick = () => {
-        const opening = body.style.display === "none";
-        if (opening && !filled) { items.forEach((it) => body.appendChild(rowEl(it))); filled = true; }
-        body.style.display = opening ? "" : "none";
-        head.querySelector(".collapse-caret").textContent = opening ? "▾" : "▸";
-      };
-      wrap.appendChild(head); wrap.appendChild(body);
-      return wrap;
-    }
-    // D181: recommendation-shaped. Lead with what needs you, in full; collapse
-    // the quiet (on-track) into one expandable "N on track" summary. The
-    // proposed order holds within the needs-you section.
-    function render(items) {
-      const list = document.getElementById("list"); if (!list) return;
-      list.innerHTML = "";
-      if (!items.length) { list.innerHTML = '<div class="empty">Nothing on your plate. Connect a calendar or add a commitment below.</div>'; return; }
-      const head = items.filter((it) => NEEDS_ATTENTION.has(it.status));
-      const quiet = items.filter((it) => !NEEDS_ATTENTION.has(it.status));
-      if (head.length) {
-        head.forEach((it) => list.appendChild(rowEl(it)));
-      } else {
-        const none = document.createElement("div"); none.className = "sub"; none.style.margin = "0 0 4px";
-        none.textContent = "Nothing needs you right now — all on track.";
-        list.appendChild(none);
-      }
-      if (quiet.length) list.appendChild(collapsibleSummary(`${quiet.length} on track`, "what has gone quiet", quiet));
-    }
     async function onDone(key) {
       const it = itemsByKey[key];
       try {
         if (it.kind === "COMMITMENT") { await api(`/daily-driver/commitments/${it.item_id}/completions`, { method: "POST" }); toast("Logged — back on track"); }
         else { await api("/daily-driver/today/done", { method: "POST", body: JSON.stringify({ kind: it.kind, item_id: it.item_id, done: !it.done }) }); }
-        closePanel(); await loadToday();
+        closePanel(); await loadAct();
       } catch {}
     }
 
@@ -2915,7 +2940,7 @@
       try {
         await api(`/daily-driver/commitments/${it.item_id}/observed-outcome`, { method: "POST", body: JSON.stringify(body) });
         toast(status === "dropped" ? "Dropped — off your plate" : "Outcome recorded");
-        await loadToday();
+        await loadAct();
         const fresh = itemsByKey[key];
         if (fresh) { document.getElementById("panel-body").innerHTML = commitmentDetailHTML(fresh); wireOutcomeForm(key, fresh); }
         else closePanel();
@@ -2973,7 +2998,7 @@
       if (expected) body.expected_outcome = expected;
       try { await api("/daily-driver/commitments", { method: "POST", body: JSON.stringify(body) });
         document.getElementById("c-name").value = ""; document.getElementById("c-expected").value = "";
-        toast("Commitment added"); await loadToday(); } catch {}
+        toast("Commitment added"); await loadAct(); } catch {}
     }
     function closePanel() { document.getElementById("panel").classList.remove("open"); document.getElementById("backdrop").classList.remove("open"); }
 
