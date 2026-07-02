@@ -1023,6 +1023,37 @@ the **override**: the effective warm is the override when the operator has set o
 else the derived value (the D217 manual-over-computed precedent). The origination
 column's fit×warm sort and the warming next-best-action read the effective value.
 
+**The LinkedIn source port + the self-export adapter (S103v, D223).** LinkedIn
+contacts enter through a **LinkedIn source port** whose only built adapter parses the
+member's **self-export archive** (Settings → Data Privacy → "Get a copy of your
+data"): `Connections.csv` (first-degree connections, name + **Company** + Position
+read directly from the export — no extraction; the file carries a 3-4-line "Notes"
+preamble the parser skips) and `messages.csv` (message senders, keyed on `FROM`). It
+seeds `system_suggested` `:Contact` via `merge_contact` with **`capture_source` =
+`linkedin`**, `degree` = `first` for connections, deduped against the email-seeded
+contacts on the normalized (name, company) signature. The **DMA Member Data
+Portability API** (Snapshot API, CONNECTIONS/INBOX domains) is a **deferred adapter
+behind the same port, not built** — token generation is EEA/Switzerland-only and the
+operator is UK-based; the port lets it slot in if UK eligibility opens. Read-only on
+the archive; no vendor SDK in domain.
+
+**Warming steps are append-only audit events (S103v, D224).** A warming action
+(intro requested / follow-up sent / referral asked / message sent) against a
+`:Contact` or `:Opportunity` is stored via `AuditPort.emit` — **not a `:WarmingStep`
+node**, no migration. The event uses `action_verb` = **`warming.step`**,
+`resource_type` = `contact` / `opportunity`, `resource_id` = the subject id, and the
+step kind + note in `after_state`; it is read back per subject through the faceted
+audit reader (`AuditEventListFilters(resource_type, resource_id, action_verbs)`, the
+D203 correction precedent). The warming next-best-action reads the last step to
+advance its suggestion. The compliance record and the future warming-learning signal
+are the same hash-chained artefact.
+
+**The contact network map (S103v, D225)** is a read-only List/Map toggle lens over
+the contact surface (the D199 pattern): `:Contact` grouped by company, the leads at
+each company, the derived-warm state (override marked), and the logged warming steps,
+rendered honestly for unproofed contacts (the proofed/unproofed split visible, D171).
+A projection, recomputed on read (D155); no model change.
+
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
 A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when
