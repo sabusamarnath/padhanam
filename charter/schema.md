@@ -1054,6 +1054,47 @@ each company, the derived-warm state (override marked), and the logged warming s
 rendered honestly for unproofed contacts (the proofed/unproofed split visible, D171).
 A projection, recomputed on read (D155); no model change.
 
+#### The qualification + history layer (S103w, D226-D229)
+
+**The stage ladder (S103w, D226)** is five active gates — **Lead** (`gate_order` 2),
+**Application** (3, renamed from Apply), **Screening** (4), **Interviewing** (5),
+**Offer** (6) — seeded via `merge_gate` (no migration). **In role** is the terminal
+`won` state (closing `won`, already in `CLOSE_REASONS` — a relabel, not a new reason;
+`close_opportunity` unchanged), not a gate. Onboarding folds into the
+offer-accepted-to-start transition; interview-round texture lives in the qualification
+(D228), not in columns. "Needs staging" stays a render-only column for
+`current_gate_id = null`.
+
+**`:Contact.process_role` (S103w, D227)** is a schemaless property: `hiring_manager`
+/ `recruiter` / `hr_partner` / `champion` / `interviewer` / `decision_maker`, distinct
+from job title. The qualification's champion + decision-maker fields seed from the
+role-typed contacts at the opportunity's company (the normalized company match, S103o).
+No migration.
+
+**The qualification model (S103w, D228)** — `:Opportunity` gains eight
+**dynamic-key schemaless** fields, each a value (`q_<field>`) plus a `last_touched`
+(`q_<field>_ts`), written via `SET o[$key]` and read back as a `q_`-prefixed property
+map (no migration, no `merge_opportunity` widening — a dedicated `set_qualification_field`
+write). The fields (native names, MEDDPICC equivalent): `q_role_open` (pain),
+`q_success_measures` (metrics), `q_selection_criteria` (decision criteria),
+`q_interview_process` (decision process), `q_champion`, `q_decision_maker`,
+`q_competing_candidates` (competition), `q_vetting_checks` (paperwork). An authored
+**stage-activation map** (a domain-level default this session, operator-tunable
+deferred) assigns each field its active stage(s): Lead → role_open + success_measures;
+Application → selection_criteria; Screening → champion + decision_maker; Interviewing
+→ interview_process; Offer → competing_candidates + vetting_checks. Activation is
+**soft** (all visible, active highlighted, rest dimmed). Seed-and-proof (D200).
+
+**Activity history + stage-relative freshness (S103w, D229)** — a per-opportunity
+append-only **activity stream** over the D224 audit route: `warming.step` (D224,
+retained) plus a general **`opportunity.activity`** verb, read as the **union** per
+opportunity (`resource_type=opportunity` / `resource_id` / both verbs). An entry may
+name a qualification field it touched, bumping that field's `q_<field>_ts`.
+**Freshness** reuses `staleness.py` (D187, `is_overdue`/`days_elapsed` over
+`last_touched`) and is **stage-relative**: computed always, surfaced as a risk badge
+only when the field is active at the current stage per the activation map. No new node
+type, no migration.
+
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
 A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when
