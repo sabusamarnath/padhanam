@@ -618,13 +618,20 @@ def test_s103y_surface_consolidation():
     assert "No live processes in" in _HTML and "Clear filter" in _HTML
 
 
-def test_by_goal_is_verdict_first_moat_behind_evidence_toggle():
-    # D233: verdict-first with evidence-on-demand — the by-goal fold body leads with
-    # the lever-status + activity rollup; the linked-work moat sits one interaction
-    # down behind a nested evidence toggle (makeFold), never flat in the body.
-    assert 'collapse-label">Evidence</span>' in _HTML          # the evidence toggle head
-    ev = _HTML[_HTML.index("const evUnits ="):_HTML.index("const evUnits =") + 900]
-    assert "makeFold(evHead" in ev                             # a nested fold, reused
-    assert "moatRow(u, tier, false)" in ev                     # the moat builds inside it
-    # the moat is NOT appended straight to the fold body (the chart-shaped drift):
-    assert "body.appendChild(moatRow" not in _HTML
+def test_by_goal_drill_down_shows_workstreams_not_the_moat():
+    # D234: the by-goal drill-down shows the goal's WORKSTREAMS (opportunities with
+    # status), each drilling into the D219 process detail; the ingested-email moat
+    # is retired from the assessment body (it relocated to the corrections block).
+    assert "async function renderGoalWorkstreams(" in _HTML
+    ws = _HTML[_HTML.index("async function renderGoalWorkstreams("):
+               _HTML.index("async function renderGoalWorkstreams(") + 2000]
+    # reads the goal's opportunities by outcome (N-goal-ready), renders pipeCards
+    assert "/daily-driver/cdd/pipeline-stats/${grp.outcome_id}" in ws
+    assert "pipeCard(c, { grp: { outcome_id: grp.outcome_id } })" in ws  # drills to D219
+    # verdict-first still holds: the drill body (verdictLineEl) calls the renderer
+    assert "renderGoalWorkstreams(wsWrap, grp)" in _HTML
+    # the moat (moatRow) and the S103aa evidence toggle are gone from the surface
+    assert "function moatRow(" not in _HTML
+    assert "makeFold(evHead" not in _HTML
+    # the moat relocated: the corrections block names the ingested work bound here
+    assert "Ingested work bound here" in _HTML

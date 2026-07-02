@@ -402,6 +402,12 @@
     .pipe-clive { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: var(--ok); }
     .pipe-ctouch, .pipe-csilent { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .pipe-cact { font-size: 11.5px; color: var(--teal); line-height: 1.35; }
+    /* D234: goal workstreams in the assessment drill-down — opportunities by stage */
+    .ws-block { margin: 6px 0 2px; }
+    .ws-stage { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); margin: 10px 0 5px; }
+    .ws-stage-n { font-family: var(--font-mono); font-weight: 700; color: var(--ink-2); }
+    .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .ws-grid .pipe-card { cursor: default; margin-bottom: 0; }
     /* Origination Lead column (S103t, D221) */
     .pipe-leadcol { background: var(--surface-work); border-color: var(--hairline-strong); }
     .pipe-leadhint { font-weight: 500; text-transform: none; letter-spacing: 0; }
@@ -2684,28 +2690,16 @@
           line.textContent = "Email activity: " + order.map((k) => `${ea[k]} ${k}${ea[k] === 1 ? "" : "s"}`).join(" · ");
           body.appendChild(line);
         }
-        // D233: verdict-first — the linked-work moat (D190) is EVIDENCE, not the
-        // assessment, so it sits one interaction down behind an evidence toggle
-        // (the existing makeFold), never in the body. The lever status + activity
-        // rollup above lead; the raw items are the "why", one tap away.
-        const evUnits = grp.units || [];
-        const evMore = grp.units_more || 0;
-        const evTotal = evUnits.length + evMore;
-        if (evTotal) {
-          const evHead = `<span class="collapse-caret">▸</span>` +
-            `<span class="collapse-label">Evidence</span>` +
-            `<span class="collapse-sub">${evTotal} linked item${evTotal === 1 ? "" : "s"}</span>`;
-          body.appendChild(makeFold(evHead, (ev) => {
-            evUnits.forEach((u) => ev.appendChild(moatRow(u, tier, false)));
-            if (evMore > 0) {
-              const more = document.createElement("div");
-              more.className = "evidence-note";
-              more.textContent = `+ ${evMore} more item${evMore === 1 ? "" : "s"}`;
-              ev.appendChild(more);
-            }
-          }));
-        }
-        if (!kinds.length && !(grp.units || []).length && !levers.length) {
+        // D234: the goal's WORKSTREAMS — the opportunities (tracked applications),
+        // grouped by stage, each drilling into the process detail (D219). This
+        // supersedes the S103aa moat toggle: the assessment body shows the work the
+        // operator runs, not the ingested emails. The moat (raw linked emails) is
+        // NOT here — it lives in the corrections block below, where mis-bindings get
+        // fixed. N-goal-ready: each goal fetches its own opportunities by outcome.
+        const wsWrap = document.createElement("div"); wsWrap.className = "ws-block";
+        body.appendChild(wsWrap);
+        renderGoalWorkstreams(wsWrap, grp);
+        if (!kinds.length && !levers.length) {
           const note = document.createElement("div");
           note.className = "evidence-note";
           note.textContent = grp.status === "not_tracked"
@@ -2732,6 +2726,43 @@
         renderGoalCorrections(body, grp);  // S103c-fix-2: correct from List too
       });
     }
+    // D234: a goal's workstreams — its opportunities grouped by stage, each a
+    // pipeCard drilling into the process detail (D219). Reads the goal's pipeline
+    // stats by outcome (N-goal-ready); the moat (ingested emails) is NOT here — it
+    // lives in the corrections block, where mis-bindings get fixed. pipeCard is
+    // reused verbatim in its non-active variant (card + "Open process ▸", no board
+    // drag); the stage grouping carries the status the flat card does not show.
+    async function renderGoalWorkstreams(wrap, grp) {
+      if (!grp.outcome_id) return;
+      let s; try { s = await api(`/daily-driver/cdd/pipeline-stats/${grp.outcome_id}`); } catch { return; }
+      const cards = s.cards || [];
+      const leads = (s.leads || []).length;
+      const lbl = document.createElement("div"); lbl.className = "feeder-label";
+      lbl.textContent = `Workstreams — ${cards.length} tracked ${cards.length === 1 ? "application" : "applications"}` +
+        (leads ? ` · ${leads} lead${leads === 1 ? "" : "s"} in origination` : "");
+      wrap.appendChild(lbl);
+      if (!cards.length) {
+        const e = document.createElement("div"); e.className = "evidence-note";
+        e.textContent = leads
+          ? "No tracked applications yet — leads sit in the pipeline's origination column."
+          : "No workstreams yet — applications you track appear here.";
+        wrap.appendChild(e); return;
+      }
+      // Group by stage, deepest gate first — status is where each application sits.
+      const byStage = {};
+      cards.forEach((c) => { const st = c.stage || "Unplaced"; (byStage[st] = byStage[st] || []).push(c); });
+      const stages = Object.keys(byStage).sort((a, b) =>
+        (byStage[b][0].gate_order || 0) - (byStage[a][0].gate_order || 0));
+      stages.forEach((st) => {
+        const sh = document.createElement("div"); sh.className = "ws-stage";
+        sh.innerHTML = `<span class="ws-stage-name">${escapeHtml(st)}</span>` +
+          `<span class="ws-stage-n">${byStage[st].length}</span>`;
+        wrap.appendChild(sh);
+        const grid = document.createElement("div"); grid.className = "ws-grid";
+        byStage[st].forEach((c) => grid.appendChild(pipeCard(c, { grp: { outcome_id: grp.outcome_id } })));
+        wrap.appendChild(grid);
+      });
+    }
     // S103c-fix-2: per-goal corrections in List and Map — the goal's bound units
     // with unlink + cross-goal element-level relink, identical semantics to the
     // CDD view (D203: any view is just the entry point; the correction is the same).
@@ -2749,9 +2780,12 @@
       const initial = (cddBindings || []).filter(goalBinds);
       if (!initial.length) return;
       const correctedUnits = (bs) => new Set(bs.filter((b) => goalBinds(b) && b.user_owned).map((b) => String(b.unit_id))).size;
+      const boundUnits = new Set(initial.map((b) => String(b.unit_id))).size;
       const lbl = document.createElement("div"); lbl.className = "feeder-label";
       const doneNote = () => { const n = correctedUnits(cddBindings || []); return n ? ` · ${n} corrected` : ""; };
-      lbl.textContent = "Corrections — fix what's bound here" + doneNote();
+      // D234: this is where the ingested work bound to the goal lives now (the moat
+      // relocated here from the assessment body) — see it, fix any mis-links.
+      lbl.textContent = `Ingested work bound here (${boundUnits}) — fix any mis-links` + doneNote();
       body.appendChild(lbl);
       const corr = document.createElement("div"); body.appendChild(corr);
       // In-place refresh: re-read the shared bindings cache, re-render just this
@@ -2862,21 +2896,9 @@
         rows.forEach((u) => box.appendChild(coverageRow(u)));
       });
     }
-    function moatRow(u, tier, unlinked) {
-      const row = document.createElement("div");
-      row.className = "row"; row.dataset.tier = tier;
-      const glyphs = (u.facet_types || []).map((t) => FACET_GLYPH[t] || "•").join(" ");
-      const bits = [];
-      if (u.instance_count > 1) bits.push(`×${u.instance_count}`);
-      bits.push(`${u.facet_count} facet${u.facet_count === 1 ? "" : "s"}`);
-      // One status pill: a candidate link is the suggestion-to-confirm; a
-      // confirmed link is the settled default and carries no pill.
-      const pill = (!unlinked && !u.confirmed) ? `<span class="pill needs_you">suggested</span>` : "";
-      row.innerHTML = `<span class="facet-cue">${glyphs || "•"}</span><div class="main-c">` +
-        `<div class="title">${escapeHtml(u.title)}</div>` +
-        `<div class="meta">${escapeHtml(bits.join(" · "))}</div></div>${pill}`;
-      return row;
-    }
+    // (D234: moatRow — the raw ingested-email row — is retired. The assessment
+    // drill-down now shows workstreams (opportunities); the ingested work bound to
+    // a goal lives in the corrections block, rendered by renderCorrectionList.)
     // (D180: the former flat "Units of work" panel and the coverage-stats "How
     // am I doing" panel are collapsed into loadUnitsByGoal above — the moat read
     // anchored on the goal served. Coverage + uncovered ride the coverage line.)
