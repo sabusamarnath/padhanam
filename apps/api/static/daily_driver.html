@@ -425,6 +425,36 @@
     .contact-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .contact-enrich { display: flex; gap: 5px; }
     .contact-bar { display: flex; gap: 5px; margin-left: auto; }
+    /* Contact network map (S103v, D225) */
+    .cmap-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
+    .cmap-toggle .seg { font: inherit; font-size: 11px; padding: 3px 12px; border: 1px solid var(--hairline-strong); border-radius: 999px; background: var(--page); color: var(--ink-2); cursor: pointer; }
+    .cmap-toggle .seg.on { background: #1a8070; color: #fff; border-color: #1a8070; }
+    .map-honest { font-size: 11.5px; color: var(--ink-2); font-style: italic; margin-bottom: 10px; }
+    .cmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+    .cmap-co { border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px; background: var(--surface-work); }
+    .cmap-co.warm { border-color: #1a8070; }
+    .cmap-coh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .cmap-coname { font-size: 12.5px; font-weight: 700; color: var(--ink-1); }
+    .cmap-warm { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
+    .cmap-warm.w-warm { background: #1a8070; color: #fff; }
+    .cmap-warm.w-cold { background: var(--behind-bg); color: var(--ink-3); }
+    .cmap-leads { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .cmap-lead { font-size: 9.5px; padding: 1px 6px; border-radius: 4px; background: var(--page); border: 0.5px solid var(--hairline-strong); }
+    .cmap-lead.k-lead { color: #b0997e; border-color: #b0997e; }
+    .cmap-lead.k-closed { color: var(--ink-3); opacity: 0.75; }
+    .cmap-contact { padding: 4px 0; border-top: 0.5px solid var(--hairline); font-size: 11.5px; }
+    .cmap-contact.usable .cmap-cname { color: #1a8070; font-weight: 600; }
+    .cmap-cname { color: var(--ink-1); }
+    .cmap-cmeta { font-size: 10px; color: var(--ink-3); }
+    .warm-steps { margin-top: 3px; }
+    .warm-steps summary { font-size: 10px; color: #2BA692; cursor: pointer; }
+    .warm-list { margin: 4px 0; }
+    .warm-row { font-size: 10.5px; color: var(--ink-2); }
+    .warm-kind { font-weight: 600; }
+    .warm-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); }
+    .warm-empty { font-size: 10px; color: var(--ink-3); font-style: italic; }
+    .warm-form { display: flex; gap: 4px; margin-top: 3px; }
+    .warm-form select, .warm-form input { font: inherit; font-size: 10.5px; padding: 2px 5px; border: 1px solid var(--hairline-strong); border-radius: 5px; background: var(--page); color: var(--ink-1); }
     .pipe-outgrp { margin-bottom: 12px; }
     .pipe-outh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
     .pipe-outlab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--behind-fg); }
@@ -850,7 +880,7 @@
       // 0. The contact graph behind warm access (S103u, D222): proof the
       // email-seeded contacts + add ones email missed; a lead's warm derives from
       // a usable contact at its company.
-      wrap.appendChild(buildContactsPanel(reload));
+      wrap.appendChild(buildContactsPanel(s, reload));
       // 1. The split — engaged is LIVE processes only; rejected + closed-other are
       // terminal (in the closed record); no-response is the one-touch grain (D171).
       const split = document.createElement("div"); split.className = "pipe-split";
@@ -1115,47 +1145,138 @@
       row.appendChild(bar);
       return row;
     }
-    function buildContactsPanel(reload) {
+    const _WARM_KINDS = [["intro_requested","Intro requested"],["follow_up_sent","Follow-up sent"],["referral_asked","Referral asked"],["message_sent","Message sent"]];
+    const _normco = (s) => (s || "").trim().toLowerCase();
+    function contactUsable(c) { return c.strength === "close" || c.strength === "medium" || c.reachability === "easy"; }
+    // Warming-step block (S103v, D224): read the logged steps for a subject + a log form.
+    function warmingBlock(subjectType, subjectId, onLog) {
+      const box = document.createElement("details"); box.className = "warm-steps";
+      const sum = document.createElement("summary"); sum.textContent = "Warming steps"; box.appendChild(sum);
+      const list = document.createElement("div"); list.className = "warm-list"; box.appendChild(list);
+      const load = async () => {
+        let steps = [];
+        try { steps = await api(`/daily-driver/cdd/warming/${subjectType}/${encodeURIComponent(subjectId)}`); } catch { list.innerHTML = "<div class='warm-empty'>—</div>"; return; }
+        list.innerHTML = steps.length ? "" : "<div class='warm-empty'>No steps logged yet.</div>";
+        steps.forEach((st) => {
+          const row = document.createElement("div"); row.className = "warm-row";
+          const when = (st.occurred_at || "").slice(0, 10);
+          row.innerHTML = `<span class="warm-kind">${escapeHtml((st.kind || "").replace(/_/g, " "))}</span>` +
+            (st.note ? ` <span class="warm-note">${escapeHtml(st.note)}</span>` : "") + ` <span class="warm-when">${escapeHtml(when)}</span>`;
+          list.appendChild(row);
+        });
+      };
+      const form = document.createElement("form"); form.className = "warm-form";
+      form.innerHTML = `<select name="kind">` + _WARM_KINDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("") + `</select>` +
+        `<input name="note" placeholder="note (optional)" autocomplete="off">` +
+        `<button type="submit" class="btn-ghost cdd-btn">Log</button>`;
+      form.onsubmit = async (e) => {
+        e.preventDefault(); const fd = new FormData(form);
+        const bd = { subject_type: subjectType, subject_id: subjectId, kind: fd.get("kind"), note: String(fd.get("note") || "").trim() };
+        try { await api("/daily-driver/cdd/warming", { method: "POST", body: JSON.stringify(bd) }); toast("Warming step logged"); form.reset(); await load(); if (onLog) await onLog(); }
+        catch { toast("Log failed", true); }
+      };
+      box.appendChild(form);
+      box.ontoggle = () => { if (box.open) load(); };
+      return box;
+    }
+    function contactAddForm(refresh, reload) {
+      const form = document.createElement("form"); form.className = "contact-add-form";
+      form.innerHTML =
+        `<input name="name" placeholder="Name" autocomplete="off" required>` +
+        `<input name="company" placeholder="Company" autocomplete="off">` +
+        contactSel("degree", _DEG, "") + contactSel("strength", _STR, "") + contactSel("reachability", _REA, "") +
+        `<select name="capture_source" title="capture source"><option value="manual">Manual</option><option value="linkedin">LinkedIn</option></select>` +
+        `<button type="submit" class="btn-primary cdd-btn">Add contact</button>`;
+      form.onsubmit = async (e) => {
+        e.preventDefault(); const fd = new FormData(form);
+        const name = String(fd.get("name") || "").trim(); if (!name) return;
+        const bd = { name, company: String(fd.get("company") || "").trim(),
+          degree: fd.get("degree") || null, strength: fd.get("strength") || null,
+          reachability: fd.get("reachability") || null, capture_source: fd.get("capture_source") };
+        try { await api("/daily-driver/cdd/contacts", { method: "POST", body: JSON.stringify(bd) }); toast("Contact added"); form.reset(); await refresh(); await reload(); }
+        catch { toast("Add contact failed", true); }
+      };
+      return form;
+    }
+    // The contact network map (S103v, D225): contacts grouped by company, the leads at
+    // each company, the derived-warm state, and a warming block — honest for unproofed.
+    function renderContactsMap(body, contacts, s, refresh, reload) {
+      const leadsByCo = {}; // normalized company -> [{name, kind}]
+      (s.leads || []).forEach((l) => { (leadsByCo[_normco(l.company)] = leadsByCo[_normco(l.company)] || []).push({ name: l.company + (l.role ? " — " + l.role : ""), kind: "lead" }); });
+      (s.cards || []).forEach((c) => { (leadsByCo[_normco(c.company)] = leadsByCo[_normco(c.company)] || []).push({ name: c.company + (c.role ? " — " + c.role : ""), kind: c.status === "closed" ? "closed" : "process" }); });
+      const groups = {};
+      contacts.forEach((c) => { const k = c.company || "(no company)"; (groups[k] = groups[k] || []).push(c); });
+      const proofed = contacts.filter((c) => c.provenance_origin !== "system_suggested").length;
+      const note = document.createElement("div"); note.className = "map-honest";
+      note.textContent = `${proofed} of ${contacts.length} contacts proofed — warm derives from proofed usable contacts, so unproofed companies read cold (proof to light them up).`;
+      body.appendChild(note);
+      // companies with leads first (actionable), then by contact count.
+      const cos = Object.keys(groups).sort((a, b) => {
+        const la = (leadsByCo[_normco(a)] || []).length, lb = (leadsByCo[_normco(b)] || []).length;
+        if ((lb > 0) - (la > 0)) return (lb > 0) - (la > 0);
+        return groups[b].length - groups[a].length;
+      });
+      const grid = document.createElement("div"); grid.className = "cmap-grid";
+      cos.forEach((company) => {
+        const ppl = groups[company];
+        const warm = ppl.some(contactUsable);
+        const leads = leadsByCo[_normco(company)] || [];
+        const card = document.createElement("div"); card.className = "cmap-co" + (warm ? " warm" : "");
+        card.innerHTML = `<div class="cmap-coh"><span class="cmap-coname">${escapeHtml(company)}</span>` +
+          `<span class="cmap-warm w-${warm ? "warm" : "cold"}">${warm ? "warm" : "cold"}</span></div>` +
+          (leads.length ? `<div class="cmap-leads">${leads.map((l) => `<span class="cmap-lead k-${l.kind}">${escapeHtml(l.name)}</span>`).join("")}</div>` : "");
+        ppl.forEach((c) => {
+          const row = document.createElement("div"); row.className = "cmap-contact" + (contactUsable(c) ? " usable" : "");
+          const meta = [c.degree, c.strength, c.reachability].filter(Boolean).join(" · ") || "unproofed";
+          row.innerHTML = `<span class="cmap-cname">${escapeHtml(c.name)}</span> <span class="cmap-cmeta">${escapeHtml(meta)}</span> <span class="contact-src">${escapeHtml(c.capture_source)}</span>`;
+          row.appendChild(warmingBlock("contact", c.contact_id, reload));
+          card.appendChild(row);
+        });
+        grid.appendChild(card);
+      });
+      body.appendChild(grid);
+      if (!contacts.length) { const e = document.createElement("div"); e.className = "pipe-empty"; e.textContent = "No contacts yet — seed (make seed-contacts / seed-contacts-linkedin) or add one."; body.appendChild(e); }
+    }
+    function renderContactsList(body, contacts, refresh, reload) {
+      const groups = {};
+      contacts.forEach((c) => { const k = c.company || "(no company)"; (groups[k] = groups[k] || []).push(c); });
+      Object.keys(groups).sort().forEach((company) => {
+        const grp = document.createElement("div"); grp.className = "contact-group";
+        grp.innerHTML = `<div class="contact-company">${escapeHtml(company)}</div>`;
+        groups[company].forEach((c) => grp.appendChild(contactRow(c, refresh, reload)));
+        body.appendChild(grp);
+      });
+      if (!contacts.length) {
+        const e = document.createElement("div"); e.className = "pipe-empty";
+        e.textContent = "No contacts yet — seed from email (make seed-contacts) or add one above.";
+        body.appendChild(e);
+      }
+    }
+    let contactsMode = "list";
+    function buildContactsPanel(s, reload) {
       const panel = document.createElement("details"); panel.className = "contacts-panel";
       const summary = document.createElement("summary"); summary.textContent = "Contacts — the network behind warm access";
       panel.appendChild(summary);
       const body = document.createElement("div"); body.className = "contacts-body";
       panel.appendChild(body);
-      const refresh = async () => {
-        let contacts = [];
-        try { contacts = await api("/daily-driver/cdd/contacts"); } catch { body.innerHTML = "<div class='pipe-empty'>Could not load contacts.</div>"; return; }
-        summary.textContent = `Contacts (${contacts.length}) — the network behind warm access`;
+      let cache = [];
+      const draw = (refresh) => {
         body.innerHTML = "";
-        const form = document.createElement("form"); form.className = "contact-add-form";
-        form.innerHTML =
-          `<input name="name" placeholder="Name" autocomplete="off" required>` +
-          `<input name="company" placeholder="Company" autocomplete="off">` +
-          contactSel("degree", _DEG, "") + contactSel("strength", _STR, "") + contactSel("reachability", _REA, "") +
-          `<select name="capture_source" title="capture source"><option value="manual">Manual</option><option value="linkedin">LinkedIn</option></select>` +
-          `<button type="submit" class="btn-primary cdd-btn">Add contact</button>`;
-        form.onsubmit = async (e) => {
-          e.preventDefault(); const fd = new FormData(form);
-          const name = String(fd.get("name") || "").trim(); if (!name) return;
-          const bd = { name, company: String(fd.get("company") || "").trim(),
-            degree: fd.get("degree") || null, strength: fd.get("strength") || null,
-            reachability: fd.get("reachability") || null, capture_source: fd.get("capture_source") };
-          try { await api("/daily-driver/cdd/contacts", { method: "POST", body: JSON.stringify(bd) }); toast("Contact added"); form.reset(); await refresh(); await reload(); }
-          catch { toast("Add contact failed", true); }
-        };
-        body.appendChild(form);
-        const groups = {};
-        contacts.forEach((c) => { const k = c.company || "(no company)"; (groups[k] = groups[k] || []).push(c); });
-        Object.keys(groups).sort().forEach((company) => {
-          const grp = document.createElement("div"); grp.className = "contact-group";
-          grp.innerHTML = `<div class="contact-company">${escapeHtml(company)}</div>`;
-          groups[company].forEach((c) => grp.appendChild(contactRow(c, refresh, reload)));
-          body.appendChild(grp);
+        const bar = document.createElement("div"); bar.className = "cmap-toggle";
+        [["list", "List"], ["map", "Map"]].forEach(([m, lbl]) => {
+          const b = document.createElement("button"); b.type = "button"; b.className = "seg" + (contactsMode === m ? " on" : ""); b.textContent = lbl;
+          b.onclick = () => { contactsMode = m; draw(refresh); };
+          bar.appendChild(b);
         });
-        if (!contacts.length) {
-          const e = document.createElement("div"); e.className = "pipe-empty";
-          e.textContent = "No contacts yet — seed from email (make seed-contacts) or add one above.";
-          body.appendChild(e);
-        }
+        body.appendChild(bar);
+        body.appendChild(contactAddForm(refresh, reload));
+        if (contactsMode === "map") renderContactsMap(body, cache, s, refresh, reload);
+        else renderContactsList(body, cache, refresh, reload);
+      };
+      const refresh = async () => {
+        try { cache = await api("/daily-driver/cdd/contacts"); } catch { body.innerHTML = "<div class='pipe-empty'>Could not load contacts.</div>"; return; }
+        summary.textContent = `Contacts (${cache.length}) — the network behind warm access`;
+        draw(refresh);
       };
       refresh();
       return panel;
