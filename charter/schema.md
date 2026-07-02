@@ -1003,7 +1003,7 @@ uniqueness constraint on `(tenant_id, contact_id)` + a `tenant_id` index).
 | `degree`             | `String`/`null` | operator-set: `first` / `second`. `null` until proofed (the operator authors it, D200) |
 | `strength`           | `String`/`null` | operator-set: `close` / `medium` / `weak`. `null` until proofed |
 | `reachability`       | `String`/`null` | operator-set: `easy` / `hard`. `null` until proofed |
-| `capture_source`     | `String`        | the capture channel: `email` (moat-seeded) / `linkedin` (manually tagged now, bulk via the S103v file adapter) / `manual` (hand-added). Named `capture_source`, **not** `source` — distinct from a lead's `origination_source` (D221) and the D215 clustering signature; lets a lead's contacts carry where each came from |
+| `capture_source`     | `List<String>`  | (**set-valued since S103w→x, D230**) the capture channels a contact came through: any of `email` (moat-seeded) / `linkedin` (S103v archive) / `address_book` (S103x Google Contacts) / `manual` (hand-added). A multi-channel contact carries **every** channel (the confirmation is a strength signal). `merge_contact` **unions** its channel in (never overwrites); a dedup match adds the channel to the existing contact's set. Pre-D230 scalar values are backfilled to single-element lists (`valueType()` normalises; reads tolerate scalar-or-list). Named `capture_source`, **not** `source` — distinct from a lead's `origination_source` (D221) and the D215 clustering signature |
 | `provenance_origin`  | `String`        | `system_suggested` on seed, `user_authored` once the operator confirms or hand-adds (D215/D200) |
 | `created_at`         | `DateTime`      | set on initial MERGE                                                |
 
@@ -1036,6 +1036,17 @@ Portability API** (Snapshot API, CONNECTIONS/INBOX domains) is a **deferred adap
 behind the same port, not built** — token generation is EEA/Switzerland-only and the
 operator is UK-based; the port lets it slot in if UK eligibility opens. Read-only on
 the archive; no vendor SDK in domain.
+
+**The Google Contacts feeder (S103x, D230)** is a third adapter behind a general
+`ContactSource` port (parallel to the S103v LinkedIn adapter): the People API
+(`people.connections.list` on `people/me`, `personFields=names,emailAddresses,organizations`,
+scope `contacts.readonly`) through the Nango-proxied Google connector, read-only, no
+vendor SDK in domain. It seeds `system_suggested` `:Contact` with `capture_source`
+including `address_book`, company from the `organizations` field, **filtered to
+company-carrying contacts** (a company-less contact can't link to a lead), deduped on
+the normalized signature. **Live seed is operator-gated on a re-consent** — the
+connector lacks a contacts scope; the operator adds `contacts.readonly` to the Nango
+Google integration + re-authorises. The vCard/CSV file fallback is deferred.
 
 **Warming steps are append-only audit events (S103v, D224).** A warming action
 (intro requested / follow-up sent / referral asked / message sent) against a
