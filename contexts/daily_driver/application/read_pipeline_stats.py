@@ -86,10 +86,13 @@ async def read_pipeline_stats(
             )
         )
     one_touch = cdd.disposition.pipeline if cdd.disposition is not None else 0
+    # The contact graph backs a lead's derived warm access (S103u, D222).
+    contacts = await goal_graph.list_contacts(tenant_context=actor.tenant_context)
     return build_pipeline_stats(
         opportunities=tuple(opps),
         one_touch_volume=one_touch,
         now=now or datetime.now(timezone.utc),
+        contacts=contacts,
     )
 
 

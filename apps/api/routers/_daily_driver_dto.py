@@ -732,9 +732,24 @@ class PipelineCardDTO(BaseModel):
     next_action: str
 
 
+class LeadContactDTO(BaseModel):
+    """A lead's linked contact for the inline surface (S103u, D222)."""
+
+    name: str
+    degree: str | None = None
+    strength: str | None = None
+    reachability: str | None = None
+    usable: bool = False
+
+
 class LeadCardDTO(BaseModel):
     """One lead in the origination column (S103t, D221) — a live opportunity at the
-    Lead gate, scored by fit tier + warm access, awaiting the apply-advance."""
+    Lead gate, scored by fit tier + warm access, awaiting the apply-advance.
+
+    Warm access is derived from contacts with a manual override (S103u, D222):
+    ``warm_access_available`` is the effective value; ``warm_derived`` /
+    ``warm_override`` expose the inputs; ``warming_action`` names the real contact;
+    ``contacts`` are the lead's company's linked contacts."""
 
     opportunity_id: UUID
     company: str
@@ -742,6 +757,10 @@ class LeadCardDTO(BaseModel):
     fit_tier: str | None = None
     warm_access_available: str | None = None
     origination_source: str | None = None
+    warm_derived: str | None = None
+    warm_override: str | None = None
+    warming_action: str | None = None
+    contacts: list[LeadContactDTO] = []
 
 
 class PipelineStatsDTO(BaseModel):
@@ -783,6 +802,12 @@ def pipeline_stats_to_dto(s, *, gates) -> "PipelineStatsDTO":
             opportunity_id=le.opportunity_id, company=le.company, role=le.role,
             fit_tier=le.fit_tier, warm_access_available=le.warm_access_available,
             origination_source=le.origination_source,
+            warm_derived=le.warm_derived, warm_override=le.warm_override,
+            warming_action=le.warming_action,
+            contacts=[LeadContactDTO(
+                name=k.name, degree=k.degree, strength=k.strength,
+                reachability=k.reachability, usable=k.usable,
+            ) for k in le.contacts],
         ) for le in s.leads],
     )
 

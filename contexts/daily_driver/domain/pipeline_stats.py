@@ -22,6 +22,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from contexts.daily_driver.domain.contacts import (
+    ContactView,
+    contacts_for_company,
+    derive_warm,
+    effective_warm,
+    is_usable,
+    warming_action,
+)
+
 # A process with no activity for at least this many days reads as silent.
 SILENT_DAYS = 14
 _CLOSED = "closed"
@@ -56,16 +65,37 @@ class PipelineOpp:
 
 
 @dataclass(frozen=True)
+class LeadContact:
+    """A lead's linked contact for the inline surface (S103u, D222)."""
+
+    name: str
+    degree: str | None
+    strength: str | None
+    reachability: str | None
+    usable: bool
+
+
+@dataclass(frozen=True)
 class LeadCard:
     """One lead in the origination column (S103t, D221) — a live opportunity at the
-    Lead gate, zero touches, scored by fit tier + warm access."""
+    Lead gate, zero touches, scored by fit tier + warm access.
+
+    Warm access is a derived state with a manual override (S103u, D222):
+    ``warm_access_available`` is the **effective** value (override else derived) the
+    sort + display read; ``warm_derived`` and ``warm_override`` expose the two
+    inputs; ``warming_action`` names the real contact; ``contacts`` are the lead's
+    company's linked contacts for the inline surface."""
 
     opportunity_id: UUID
     company: str
     role: str
     fit_tier: str | None
-    warm_access_available: str | None
+    warm_access_available: str | None    # the effective warm (override ?? derived)
     origination_source: str | None
+    warm_derived: str | None = None      # from the contact graph
+    warm_override: str | None = None     # the S103t manual tag (D221)
+    warming_action: str | None = None    # the contact-specific NBA (D222)
+    contacts: tuple["LeadContact", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -135,15 +165,38 @@ def next_best_action(
     return "Recently active — await their reply."
 
 
+def _lead_card(o: PipelineOpp, contacts: tuple[ContactView, ...]) -> LeadCard:
+    """Build a lead card with its derived warm access + contact-specific warming
+    action (S103u, D222). The S103t manual tag (``o.warm_access_available``) is the
+    override; the effective value is override-else-derived (D217)."""
+    derived = derive_warm(o.company, contacts)
+    override = o.warm_access_available if o.warm_access_available in ("warm", "cold") else None
+    effective = effective_warm(override, o.company, contacts)
+    matched = contacts_for_company(o.company, contacts)
+    return LeadCard(
+        opportunity_id=o.opportunity_id, company=o.company, role=o.role,
+        fit_tier=o.fit_tier, warm_access_available=effective,
+        origination_source=o.origination_source, warm_derived=derived,
+        warm_override=override, warming_action=warming_action(o.company, contacts),
+        contacts=tuple(
+            LeadContact(name=c.name, degree=c.degree, strength=c.strength,
+                        reachability=c.reachability, usable=is_usable(c))
+            for c in matched
+        ),
+    )
+
+
 def build_pipeline_stats(
     *,
     opportunities: tuple[PipelineOpp, ...],
     one_touch_volume: int,
     now: datetime,
     silent_days: int = SILENT_DAYS,
+    contacts: tuple[ContactView, ...] = (),
 ) -> PipelineStats:
     """Assemble the three-way split, the depth ladder, the cards, and the
-    origination leads (D217, D221)."""
+    origination leads (D217, D221). ``contacts`` back a lead's derived warm access
+    (D222)."""
     # Partition off the leads (S103t, D221): a live opportunity at the Lead gate is
     # origination, not yet an application, so it is excluded from the applied
     # funnel, the depth ladder, and the engaged cards — it lives only in the leads
@@ -155,18 +208,15 @@ def build_pipeline_stats(
     pipeline_opps = tuple(
         o for o in opportunities if o.opportunity_id not in lead_ids
     )
+    # Warm access is derived from contacts; the sort reads the effective warm (D222).
+    lead_cards = [_lead_card(o, contacts) for o in lead_opps]
     leads = tuple(
-        LeadCard(
-            opportunity_id=o.opportunity_id, company=o.company, role=o.role,
-            fit_tier=o.fit_tier, warm_access_available=o.warm_access_available,
-            origination_source=o.origination_source,
-        )
-        for o in sorted(
-            lead_opps,
-            key=lambda o: (
-                _FIT_ORDER.get(o.fit_tier or "", 9),
-                _WARM_ORDER.get(o.warm_access_available or "", 9),
-                o.company.lower(),
+        sorted(
+            lead_cards,
+            key=lambda lc: (
+                _FIT_ORDER.get(lc.fit_tier or "", 9),
+                _WARM_ORDER.get(lc.warm_access_available or "", 9),
+                lc.company.lower(),
             ),
         )
     )
@@ -253,6 +303,7 @@ def build_pipeline_stats(
 
 
 __all__ = [
-    "CardStat", "LadderRung", "LeadCard", "PipelineOpp", "PipelineStats",
-    "SILENT_DAYS", "SplitBucket", "build_pipeline_stats", "next_best_action",
+    "CardStat", "LadderRung", "LeadCard", "LeadContact", "PipelineOpp",
+    "PipelineStats", "SILENT_DAYS", "SplitBucket", "build_pipeline_stats",
+    "next_best_action",
 ]
