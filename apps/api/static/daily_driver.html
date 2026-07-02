@@ -169,6 +169,10 @@
       border: none; border-radius: 9999px; padding: 5px 16px; cursor: pointer; }
     .seg:hover { color: var(--ink-1); }
     .seg.on { background: var(--surface-work); color: var(--teal); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+    /* the assessment altitude sub-toggle (S103y, D231) — verdict vs by-goal */
+    .assess-altitude { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface-2);
+      border: 1px solid var(--hairline); border-radius: 9999px; margin: 0 0 12px; }
+    .assess-altitude .seg { font-size: 11px; padding: 3px 12px; }
     .map-platform-note { font-size: 12px; color: var(--ink-2); background: var(--surface-2);
       border: 1px solid var(--hairline); border-radius: var(--radius-card); padding: 9px 12px; margin: 0 0 12px; }
     .mapnode { margin: 6px 0; }
@@ -684,7 +688,7 @@
     let activeView = "today";
     // D199/S101: the assess surface's List/Map toggle. One source (assessData,
     // the units-by-goal read) behind both renderings — no second data path.
-    let assessMode = "list", assessData = null;
+    let assessMode = "assessment", assessAltitude = "verdict", assessData = null;
     function renderNav() {
       const nav = document.getElementById("nav"), foot = document.getElementById("nav-foot");
       const item = (n) => `<div class="navitem ${n.id === activeView ? "on" : ""}" data-nav="${n.id}">${ICONS[n.id] || ""}${escapeHtml(n.label)}</div>`;
@@ -725,11 +729,10 @@
       } else if (activeView === "dash") {
         left.innerHTML = `<h1>How am I doing</h1>`;
         view.innerHTML = `
-          <p class="sub">Your work under the goal it serves. <strong>List</strong> is one verdict line per goal; <strong>Map</strong> shows each goal as a causal node with the levers and work feeding it.</p>
+          <p class="sub">Your work under the goal it serves. <strong>Assessment</strong> is the recommendation-shaped verdict, with a by-goal altitude; <strong>Map</strong> shows each goal as a causal node with the levers and work feeding it.</p>
           <div class="assess-toggle" id="assess-toggle" role="tablist">
-            <button class="seg ${assessMode === "doing" ? "on" : ""}" data-mode="doing" type="button" role="tab">Doing</button>
+            <button class="seg ${assessMode === "assessment" ? "on" : ""}" data-mode="assessment" type="button" role="tab">Assessment</button>
             <button class="seg ${assessMode === "pipeline" ? "on" : ""}" data-mode="pipeline" type="button" role="tab">Pipeline stats</button>
-            <button class="seg ${assessMode === "list" ? "on" : ""}" data-mode="list" type="button" role="tab">List</button>
             <button class="seg ${assessMode === "map" ? "on" : ""}" data-mode="map" type="button" role="tab">Map</button>
             <button class="seg ${assessMode === "cdd" ? "on" : ""}" data-mode="cdd" type="button" role="tab">CDD</button>
           </div>
@@ -798,10 +801,27 @@
     }
     function renderAssess() {
       const box = document.getElementById("moat"); if (!box || !assessData) return;
-      if (assessMode === "doing") return renderAssessDoing(box, assessData);
+      if (assessMode === "assessment") return renderAssessment(box, assessData);
       if (assessMode === "pipeline") return renderAssessPipeline(box, assessData);
       if (assessMode === "cdd") return renderAssessCdd(box, assessData);
       (assessMode === "map" ? renderAssessMap : renderAssessList)(box, assessData);
+    }
+    // S103y/D231: the assessment lens carries BOTH altitudes under one tab — the D216
+    // recommendation-shaped verdict and the D199 by-goal view — folding the former
+    // separate "Doing" (verdict) and "List" (by-goal) tabs into one honest lens.
+    function renderAssessment(box, g) {
+      box.innerHTML = "";
+      const bar = document.createElement("div"); bar.className = "assess-altitude";
+      [["verdict", "Verdict"], ["goal", "By goal"]].forEach(([m, lbl]) => {
+        const b = document.createElement("button"); b.type = "button";
+        b.className = "seg" + (assessAltitude === m ? " on" : ""); b.textContent = lbl;
+        b.onclick = () => { assessAltitude = m; renderAssess(); };
+        bar.appendChild(b);
+      });
+      box.appendChild(bar);
+      const inner = document.createElement("div"); box.appendChild(inner);
+      if (assessAltitude === "goal") renderAssessList(inner, g);
+      else renderAssessDoing(inner, g);   // the D216 verdict (was the "Doing" tab)
     }
     // D216: the "how am I doing" assessment — a recommendation-shaped verdict per
     // goal, headline anchored on the label-independent funnel, the close-reason
