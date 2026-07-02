@@ -444,6 +444,52 @@ def test_merge_opportunity_binds_tenant_and_fields() -> None:
     assert params["provenance_origin"] == "system_suggested"
 
 
+def test_merge_opportunity_binds_lead_origination_properties() -> None:
+    # S103t/D221: a lead carries fit_tier / warm_access_available /
+    # origination_source; all bind on the write under the tenant scope.
+    driver, session = _mock_driver()
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.merge_opportunity(
+                opportunity_id=_OPP_ID, outcome_id=_OUTCOME_ID, name="BigBank — VP",
+                current_gate_id=_GATE_ID, provenance_origin="user_authored",
+                proof_state="accepted", fit_tier="bullseye",
+                warm_access_available="warm", origination_source="inbound",
+            )
+
+    asyncio.run(run())
+    cypher, params = session.run.call_args.args[0], session.run.call_args.args[1]
+    assert "o.fit_tier = $fit_tier" in cypher
+    assert "o.warm_access_available = $warm_access_available" in cypher
+    assert "o.origination_source = $origination_source" in cypher
+    assert params["tenant_id"] == _TENANT.tenant_id  # tenant-scoped write
+    assert params["fit_tier"] == "bullseye"
+    assert params["warm_access_available"] == "warm"
+    assert params["origination_source"] == "inbound"
+    assert params["provenance_origin"] == "user_authored"
+
+
+def test_list_opportunities_returns_lead_origination_properties() -> None:
+    # The read surfaces the three lead properties so the origination column + the
+    # pipeline projection can render + sort them (S103t/D221).
+    driver, session = _mock_driver()
+    result = MagicMock()
+    result.data = AsyncMock(return_value=[])
+    session.run = AsyncMock(return_value=result)
+
+    async def run() -> None:
+        async with TenantScopedNeo4jSession(driver, _TENANT) as s:
+            await s.list_opportunities(outcome_id=_OUTCOME_ID)
+
+    asyncio.run(run())
+    cypher = session.run.call_args.args[0]
+    assert "o.fit_tier AS fit_tier" in cypher
+    assert "o.warm_access_available AS warm_access_available" in cypher
+    assert "o.origination_source AS origination_source" in cypher
+    assert "tenant_id: $tenant_id" in cypher  # tenant-scoped read
+
+
 def test_attach_unit_to_opportunity_merges_belongs_to() -> None:
     driver, session = _mock_driver()
 

@@ -41,6 +41,44 @@ def test_split_engaged_is_live_only_closed_go_to_their_buckets():
     assert s.no_response.count == 102 and s.no_response.opportunity_ids == ()  # grain: count only
 
 
+def _lead(*, company, tier, warm, source="outbound"):
+    return PipelineOpp(
+        opportunity_id=uuid4(), company=company, role="", status="live",
+        closed_reason=None, stage="Lead", gate_order=2, last_activity=None,
+        touches=0, fit_tier=tier, warm_access_available=warm,
+        origination_source=source,
+    )
+
+
+def test_leads_partitioned_out_and_sorted_fit_then_warm():
+    # S103t/D221: a live opportunity at the Lead gate is a lead — origination, not
+    # an application — so it is excluded from the engaged split, the depth ladder,
+    # and the cards, and surfaced in the leads bucket sorted fit primary (bullseye >
+    # strong > opportunistic), warm secondary (warm > cold).
+    opps = (
+        _lead(company="Zeta", tier="opportunistic", warm="cold"),
+        _opp(status="live", stage="Screening", order=4),           # applied, not a lead
+        _lead(company="Beta", tier="bullseye", warm="cold"),
+        _lead(company="Alpha", tier="bullseye", warm="warm"),
+        _lead(company="Gamma", tier="strong", warm="warm"),
+    )
+    s = build_pipeline_stats(opportunities=opps, one_touch_volume=0, now=_NOW)
+    assert [le.company for le in s.leads] == ["Alpha", "Beta", "Gamma", "Zeta"]
+    assert s.leads[0].fit_tier == "bullseye" and s.leads[0].warm_access_available == "warm"
+    # leads are NOT in the applied funnel / ladder / cards
+    assert s.engaged.count == 1                                    # only the Screening one
+    assert all(c.stage != "Lead" for c in s.cards)
+    assert all(r.stage != "Lead" for r in s.ladder)
+
+
+def test_no_leads_yields_empty_leads_bucket():
+    s = build_pipeline_stats(
+        opportunities=(_opp(status="live", stage="Apply", order=3),),
+        one_touch_volume=0, now=_NOW,
+    )
+    assert s.leads == ()
+
+
 def test_depth_ladder_deepest_first_unplaced_last_includes_rejected():
     apply_g, screen_g = "Apply", "Screening"
     opps = (

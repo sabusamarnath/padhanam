@@ -488,3 +488,23 @@ def test_units_by_goal_endpoint_does_not_pass_email_source_metadata():
     # the list_units_by_goal( ... ) call block must not carry the kwarg
     call = src.split("grouped = await list_units_by_goal(")[1].split(")")[0]
     assert "email_source_metadata" not in call
+
+
+def test_origination_lead_column_renders_with_form_and_apply():
+    # S103t/D221: the active board has an origination Lead column at its left — a
+    # create-lead form (POST /cdd/lead) + lead cards each with an apply action that
+    # advances the lead to Apply via the /stage write. The empty Lead gate column is
+    # filtered out of the normal gate columns (leads render in the origination
+    # column instead).
+    assert "function buildLeadColumn(" in _HTML
+    assert "kan.appendChild(buildLeadColumn(" in _HTML
+    assert '"/daily-driver/cdd/lead"' in _HTML          # create-lead POST
+    assert "Add lead" in _HTML                            # the form submit
+    assert 'name="fit_tier"' in _HTML
+    assert 'name="warm_access_available"' in _HTML
+    assert 'name="origination_source"' in _HTML
+    # the apply action advances Lead -> Apply via the existing stage write
+    assert 'g.name === "Apply"' in _HTML
+    assert "/stage" in _HTML
+    # the Lead gate is not double-rendered as an empty normal column
+    assert 'g.name !== "Lead"' in _HTML
