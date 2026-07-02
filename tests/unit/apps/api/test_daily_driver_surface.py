@@ -504,7 +504,7 @@ def test_origination_lead_column_renders_with_form_and_apply():
     assert 'name="warm_access_available"' in _HTML
     assert 'name="origination_source"' in _HTML
     # the apply action advances Lead -> Apply via the existing stage write
-    assert 'g.name === "Apply"' in _HTML
+    assert 'g.name === "Application"' in _HTML
     assert "/stage" in _HTML
     # the Lead gate is not double-rendered as an empty normal column
     assert 'g.name !== "Lead"' in _HTML
@@ -539,3 +539,19 @@ def test_contact_network_map_and_warming_surface():
     assert '"/daily-driver/cdd/warming"' in _HTML            # log a warming step
     assert "/daily-driver/cdd/warming/" in _HTML             # read steps per subject
     assert "proofed — warm derives" in _HTML                 # honest unproofed note (D171)
+
+
+def test_qualification_panel_activity_log_and_stage_rename():
+    # S103w: the process detail view carries a soft-activated qualification panel + an
+    # activity log; the ladder renamed Apply->Application; In role relabels won.
+    assert "function buildQualificationSection(" in _HTML
+    assert "function buildActivitySection(" in _HTML
+    assert "buildQualificationSection(grp, oppId, card, reload)" in _HTML
+    assert "/cdd/qualification/" in _HTML                     # read qualification
+    assert "/qualification" in _HTML                          # set a field
+    assert "/activity" in _HTML                               # log + read activity
+    assert "qual-row" in _HTML and "qual-stale" in _HTML      # soft activation + risk badge
+    # the Apply->Application rename + In-role relabel
+    assert 'g.name === "Application"' in _HTML
+    assert '"Application"' in _HTML and '"Interviewing"' in _HTML and '"Offer"' in _HTML
+    assert '["won", "In role / hired"]' in _HTML

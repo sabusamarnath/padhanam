@@ -455,6 +455,25 @@
     .warm-empty { font-size: 10px; color: var(--ink-3); font-style: italic; }
     .warm-form { display: flex; gap: 4px; margin-top: 3px; }
     .warm-form select, .warm-form input { font: inherit; font-size: 10.5px; padding: 2px 5px; border: 1px solid var(--hairline-strong); border-radius: 5px; background: var(--page); color: var(--ink-1); }
+    /* Qualification + activity (S103w, D228/D229) */
+    .pd-sub { font-weight: 400; font-size: 10px; color: var(--ink-3); text-transform: none; letter-spacing: 0; }
+    .qual-row { padding: 6px 0; border-top: 0.5px solid var(--hairline); }
+    .qual-row.dim { opacity: 0.5; }
+    .qual-row.active { opacity: 1; }
+    .qual-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 3px; }
+    .qual-label { font-size: 12px; font-weight: 600; color: var(--ink-1); }
+    .qual-now { font-size: 8.5px; font-weight: 700; text-transform: uppercase; background: #1a8070; color: #fff; padding: 1px 5px; border-radius: 999px; }
+    .qual-stale { font-size: 8.5px; font-weight: 700; text-transform: uppercase; background: var(--atrisk-fg, #c0503f); color: #fff; padding: 1px 5px; border-radius: 999px; }
+    .qual-fromc { font-size: 9px; color: #b0997e; font-style: italic; }
+    .qual-line { display: flex; gap: 5px; }
+    .qual-val { flex: 1; font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    .act-form { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+    .act-form input, .act-form select { font: inherit; font-size: 11px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    .act-form input[name="kind"] { flex: 1; min-width: 120px; }
+    .act-row { font-size: 11px; color: var(--ink-2); padding: 3px 0; border-top: 0.5px solid var(--hairline); }
+    .act-kind { font-weight: 600; color: var(--ink-1); }
+    .act-touch { color: #1a8070; font-size: 10px; }
+    .act-when { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); }
     .pipe-outgrp { margin-bottom: 12px; }
     .pipe-outh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
     .pipe-outlab { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--behind-fg); }
@@ -2371,6 +2390,9 @@
       const bsub = document.createElement("div"); bd.appendChild(bsub);
       renderCorrectionList(bsub, { bindings: (cddBindings || []).filter((b) => String(b.opportunity_id) === String(oppId)), refresh: reload, emptyMsg: "No binds for this process.", dedupeByUnit: true });
       pb.appendChild(bd);
+      // Qualification (S103w, D228 — soft activation) + activity history (D229).
+      pb.appendChild(buildQualificationSection(grp, oppId, card, reload));
+      pb.appendChild(buildActivitySection(oppId, reload));
       // Close row (live) — close with an outcome; (closed) — reopen.
       const cr = document.createElement("div"); cr.className = "pd-close";
       if (closed) {
@@ -2382,6 +2404,71 @@
         cr.appendChild(closeReasonPicker(oppId, reload));
       }
       pb.appendChild(cr);
+    }
+    // The 8 qualification fields (S103w, D228) — for the activity "refreshes" select.
+    const QUAL_FIELDS_JS = [["role_open", "Why the role is open"], ["success_measures", "Role success measures"], ["selection_criteria", "Selection criteria"], ["interview_process", "Interview process"], ["champion", "Champion"], ["decision_maker", "Hiring decision-maker"], ["competing_candidates", "Competing candidates"], ["vetting_checks", "Vetting & checks"]];
+    // The qualification panel (S103w, D228): all 8 fields, active-at-stage highlighted +
+    // the rest dimmed (soft activation), each editable, a stale badge when active + silent.
+    function buildQualificationSection(grp, oppId, card, reload) {
+      const sec = document.createElement("div"); sec.className = "pd-sec pd-qual";
+      sec.innerHTML = `<div class="pd-lab">Qualification <span class="pd-sub">— highlighted = active at ${escapeHtml(card.stage)}</span></div>`;
+      const body = document.createElement("div"); sec.appendChild(body);
+      const load = async () => {
+        let fields = [];
+        try { fields = await api(`/daily-driver/cdd/qualification/${grp.outcome_id}/${oppId}`); } catch { body.innerHTML = "<div class='map-empty'>Could not load qualification.</div>"; return; }
+        body.innerHTML = "";
+        fields.forEach((f) => {
+          const row = document.createElement("div"); row.className = "qual-row" + (f.active ? " active" : " dim");
+          row.innerHTML = `<div class="qual-head"><span class="qual-label">${escapeHtml(f.label)}</span>` +
+            (f.active ? ` <span class="qual-now">now</span>` : "") +
+            (f.risk === "stale" ? ` <span class="qual-stale">stale</span>` : "") +
+            (f.from_contact ? ` <span class="qual-fromc">from contact</span>` : "") + `</div>`;
+          const line = document.createElement("div"); line.className = "qual-line";
+          const val = document.createElement("input"); val.className = "qual-val"; val.value = f.value || ""; val.placeholder = "record…";
+          const save = contactBtn("Save", "btn-ghost", async () => {
+            try { await api(`/daily-driver/cdd/opportunity/${oppId}/qualification`, { method: "POST", body: JSON.stringify({ field_key: f.key, value: val.value }) }); toast("Recorded"); await load(); await reload(); }
+            catch { toast("Save failed", true); }
+          });
+          line.appendChild(val); line.appendChild(save); row.appendChild(line); body.appendChild(row);
+        });
+      };
+      load();
+      return sec;
+    }
+    // The activity history (S103w, D229): append-only log + a form; naming a field refreshes it.
+    function buildActivitySection(oppId, reload) {
+      const sec = document.createElement("div"); sec.className = "pd-sec pd-activity";
+      sec.innerHTML = `<div class="pd-lab">Activity history</div>`;
+      const list = document.createElement("div"); sec.appendChild(list);
+      const form = document.createElement("form"); form.className = "act-form";
+      form.innerHTML = `<input name="kind" placeholder="what (call, email, applied…)" autocomplete="off" required>` +
+        `<input name="note" placeholder="note (optional)" autocomplete="off">` +
+        `<select name="touches_field"><option value="">refreshes…</option>` +
+        QUAL_FIELDS_JS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("") + `</select>` +
+        `<button type="submit" class="btn-ghost cdd-btn">Log</button>`;
+      const load = async () => {
+        let entries = [];
+        try { entries = await api(`/daily-driver/cdd/opportunity/${oppId}/activity`); } catch { list.innerHTML = ""; return; }
+        list.innerHTML = entries.length ? "" : "<div class='map-empty'>No activity yet.</div>";
+        entries.forEach((a) => {
+          const row = document.createElement("div"); row.className = "act-row";
+          const when = (a.occurred_at || "").slice(0, 10);
+          row.innerHTML = `<span class="act-kind">${escapeHtml((a.kind || "").replace(/_/g, " "))}</span>` +
+            (a.note ? ` <span class="act-note">${escapeHtml(a.note)}</span>` : "") +
+            (a.touches_field ? ` <span class="act-touch">↻ ${escapeHtml(a.touches_field.replace(/_/g, " "))}</span>` : "") +
+            ` <span class="act-when">${escapeHtml(when)}</span>`;
+          list.appendChild(row);
+        });
+      };
+      form.onsubmit = async (e) => {
+        e.preventDefault(); const fd = new FormData(form);
+        const kind = String(fd.get("kind") || "").trim(); if (!kind) return;
+        const bd = { kind, note: String(fd.get("note") || "").trim(), touches_field: fd.get("touches_field") || null };
+        try { await api(`/daily-driver/cdd/opportunity/${oppId}/activity`, { method: "POST", body: JSON.stringify(bd) }); toast("Logged"); form.reset(); await load(); await reload(); }
+        catch { toast("Log failed", true); }
+      };
+      sec.appendChild(form); load();
+      return sec;
     }
     // A close-with-outcome picker (reuses S103n /close); the process moves to the
     // closed record. Shared by the detail view's close row and the active cards.
