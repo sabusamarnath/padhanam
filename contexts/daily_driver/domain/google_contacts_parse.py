@@ -11,7 +11,7 @@ contact (family, friends) cannot link to a lead and would flood the proof queue.
 
 from __future__ import annotations
 
-from contexts.daily_driver.ports.contact_source import SourcedContact
+from contexts.daily_driver.domain.contacts import SourcedContact
 
 
 def _display_name(person: dict) -> str:

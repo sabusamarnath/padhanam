@@ -25,6 +25,18 @@ _DEGREE_RANK = {"first": 0, "second": 1}
 
 
 @dataclass(frozen=True)
+class SourcedContact:
+    """One contact parsed from an external source (S103x, D230) — the seed input
+    before it becomes a :Contact. ``company`` is the linking key for warm access;
+    a contact with no company is dropped by the seed's filter. This is a pure
+    value object, so it lives in the domain; the ``ContactSource`` port re-exports
+    it (S103z hexagonal-contract fix — a domain module must not import a port)."""
+
+    name: str
+    company: str | None
+
+
+@dataclass(frozen=True)
 class ContactView:
     """One contact as read for the surface + the derive (D222)."""
 
@@ -151,6 +163,7 @@ def warming_action(
 
 __all__ = [
     "CAPTURE_SOURCES", "ContactView", "DEGREES", "PROCESS_ROLES", "REACHABILITIES",
-    "STRENGTHS", "contacts_for_company", "derive_warm", "effective_warm",
-    "is_usable", "lead_company", "normalize_company", "warming_action",
+    "STRENGTHS", "SourcedContact", "contacts_for_company", "derive_warm",
+    "effective_warm", "is_usable", "lead_company", "normalize_company",
+    "warming_action",
 ]

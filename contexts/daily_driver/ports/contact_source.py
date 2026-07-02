@@ -9,17 +9,12 @@ channel (`capture_source`) and does the dedup, so the port stays channel-agnosti
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass(frozen=True)
-class SourcedContact:
-    """One contact parsed from a source (S103x, D230). ``company`` is the linking
-    key for warm access; a contact with no company is dropped by the seed's filter."""
-
-    name: str
-    company: str | None
+# ``SourcedContact`` is a pure value object, so it lives in the domain; the port
+# re-exports it for the adapters/seed (S103z hexagonal-contract fix — a domain
+# module such as ``google_contacts_parse`` must not import from ``ports``).
+from contexts.daily_driver.domain.contacts import SourcedContact
 
 
 class ContactSource(Protocol):
