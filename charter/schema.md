@@ -910,6 +910,17 @@ steps (the steps stay as the goal's sequence-status, D163). Lands via
 Uniqueness constraint: `gate_unique_per_tenant` on `(tenant_id, gate_id)` (the
 0005 authored-node pattern).
 
+**The Lead gate (S103t, D221).** A **Lead gate** (`gate_order` 2, below Apply=3,
+Screening=4) is the origination stage: the flow ladder now reads Lead → Apply →
+Screening. A **new lead** is a `user_authored` `:Opportunity` positioned at the
+Lead gate with zero touches and no correspondence thread (§2 origination, the
+framework's portfolio layer). The Lead gate is seeded via the existing
+`merge_gate` (idempotent MERGE — the 0007 `gate_unique_per_tenant` constraint
+already covers it, **no migration**), `llm_drafted`/`pending` like Apply and
+Screening. Its local CDD is not authored this session (out of scope); the fit
+rubric that governs origination is a **goal-level** lever feeding Pipeline depth
+(the portfolio altitude), not a Lead-gate-local element.
+
 #### `:Opportunity` nodes (S103h, D208) — process instances / Flow items
 
 An opportunity (one company/role) is a first-class **process instance** — a Flow
@@ -931,7 +942,10 @@ evidence distributes across opportunities plus an honest unclustered residual
 | `current_gate_id`   | `String`/`null` | the furthest gate the opportunity's units evidence; operator-correctable |
 | `provenance_origin` | `String`        | `system_suggested` at instantiation, `user_authored` once the operator confirms (D200) |
 | `proof_state`       | `String`        | `pending` / `accepted`                                            |
-| `source`            | `String`/`null` | the clustering signature (e.g. the company domain)                |
+| `source`            | `String`/`null` | the clustering signature (e.g. the company domain, S103o/D215). **Not** the origination channel — see `origination_source` |
+| `fit_tier`          | `String`/`null` | (S103t, D221) the operator-set fit tier of a lead: `bullseye` / `strong` / `opportunistic` (below-tier is not originated). Set on a `user_authored` lead; `null` on opportunities that entered via clustering. Read by the origination Lead column's primary sort |
+| `warm_access_available` | `String`/`null` | (S103t, D221) whether the lead has a warm path: `warm` / `cold`. The Lead column's secondary sort. With `fit_tier` it drives the fit-times-warm origination rule (D221) |
+| `origination_source` | `String`/`null` | (S103t, D221) the origination channel: `inbound` / `outbound` (framework §2). Named `origination_source`, **not** `source`, because `source` already holds the D215 clustering signature |
 | `status`            | `String`        | `live` or `closed` (S103n, D214). Absent on opportunities created before D214; the read coalesces a missing value to `live`, so the live-set filter needs no backfill. Closing sets `closed`; reopen sets `live` |
 | `closed_reason`     | `String`/`null` | required when `closed` (S103n, D214): one of `won`, `declined`, `withdrawn_or_killed`, `rejected`, `went_cold`. `null` when live. With `current_gate_id` it gives the real-outcome-versus-non-start signal (closed at Apply = response problem; closed after a final round = conversion problem) |
 | `closed_at`         | `DateTime`/`null` | when the opportunity was closed (S103n, D214); cleared on reopen |
@@ -952,6 +966,20 @@ opportunity node, its `BELONGS_TO` memberships, its units' binds, and its
 correspondence all stay intact and reopenable — a closed process is read-only
 history, never deleted. The live set is the read filtered to `coalesce(status,
 'live') <> 'closed'`; closed opportunities still list, marked with their reason.
+
+**Leads and origination (S103t, D221).** A **lead** is a `user_authored`
+opportunity at the Lead gate with zero touches, carrying `fit_tier`,
+`warm_access_available`, `origination_source`. It is created directly (the
+create-lead path reuses `merge_opportunity`, provenance `user_authored`,
+`current_gate_id` = the Lead gate, `status` `live`, no `BELONGS_TO` units) and
+advanced to Apply by `set_opportunity_gate` (the apply-advance, the S103q `/stage`
+write). Because a lead is origination and not yet an application, the pipeline
+projection (`build_pipeline_stats`, D217) **partitions leads out** of the
+engaged/applied split, the depth ladder, and the cards, surfacing them in a
+dedicated leads bucket the origination Lead column renders (fit-tier primary,
+warm-access secondary). Once advanced to Apply it is an ordinary process and every
+downstream surface reads it unchanged. The three properties are **schemaless adds**
+(the D214 precedent, read coalesces missing values), **no migration**.
 
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
