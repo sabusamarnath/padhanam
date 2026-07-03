@@ -272,6 +272,11 @@
     .cdd-source-subj { font-weight: 600; color: var(--ink-1); margin: 3px 0; }
     .cdd-source-body { white-space: pre-wrap; max-height: 220px; overflow-y: auto; color: var(--ink-2); line-height: 1.4; margin-top: 3px; }
     .cdd-source-loading { font-size: 11.5px; color: var(--ink-3); }
+    /* D235: source-on-demand toggle — the verification source opens on a click. */
+    .vcard-src { margin-top: 5px; }
+    .src-toggle { font: inherit; font-size: 11px; font-weight: 600; color: var(--teal); background: none; border: none; padding: 2px 0; cursor: pointer; }
+    .src-toggle:hover { text-decoration: underline; }
+    .cdd-source-wrap { margin-top: 5px; }
     .cdd-binding { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
     .cdd-pick { flex-shrink: 0; }
     .cdd-binding-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
@@ -1748,9 +1753,10 @@
       }
       return row;
     }
-    // Leg 2 (D212): the openable read-only source — sender, date, body — shown by
-    // default for an email item, so reading it to confirm is the default action.
-    // Read-only; it shows ingested content (§9), fetched lazily on render.
+    // Leg 2 (D212, superseded by D235): the openable read-only source — sender,
+    // date, body. It is now opened ON DEMAND (via openableSource / the thread
+    // panels), never inline by default, so no raw email body renders in a body (D233).
+    // Read-only; it shows ingested content (§9), fetched lazily when opened.
     function bindingSourceBlock(b) {
       const box = document.createElement("div"); box.className = "cdd-source";
       if (b.source_facet_type !== "email" || !b.source_facet_id) {
@@ -1772,6 +1778,28 @@
           `<div class="cdd-source-body">${escapeHtml(s.body || "(no body ingested)")}</div>`;
       }).catch(() => { box.innerHTML = `<span class="cdd-source-none">(source unavailable)</span>`; });
       return box;
+    }
+    // D235: source-on-demand — the openable source (D212) opens on a click, never
+    // inline by default (D233; supersedes D212's source-by-default). Matches the
+    // Correspondence/thread panels' click-to-open, so verify is one click, not a wall
+    // of raw email bodies. The single renderCorrectionList call site routes all four
+    // verification surfaces (corrections, process Binds, by-goal, CDD proof) through
+    // this. Non-email items have no body to open, so their inline "(no openable
+    // source)" note (not raw source) is shown as-is.
+    function openableSource(b) {
+      if (b.source_facet_type !== "email" || !b.source_facet_id) return bindingSourceBlock(b);
+      const wrap = document.createElement("div"); wrap.className = "vcard-src";
+      const btn = document.createElement("button"); btn.type = "button"; btn.className = "src-toggle";
+      btn.textContent = "Open source ▸";
+      const src = document.createElement("div"); src.className = "cdd-source-wrap"; src.style.display = "none";
+      btn.onclick = () => {
+        const open = src.style.display !== "none";
+        src.style.display = open ? "none" : "block";
+        btn.textContent = open ? "Open source ▸" : "Hide source ▾";
+        if (!open && !src.dataset.built) { src.appendChild(bindingSourceBlock(b)); src.dataset.built = "1"; }
+      };
+      wrap.appendChild(btn); wrap.appendChild(src);
+      return wrap;
     }
     function renderCorrectionList(container, opts) {
       const { bindings, refresh, relinkControlFor, emptyMsg } = opts;
@@ -1839,8 +1867,9 @@
         // Leg 1 — the discriminative basis row (D212): the most discriminative term
         // it linked on, or a flagged "no clear basis" when only generic tokens match.
         card.appendChild(bindingBasisRow(b));
-        // Leg 2 — the openable read-only source (D212), shown by default.
-        card.appendChild(bindingSourceBlock(b));
+        // Leg 2 — the openable read-only source (D212, superseded by D235): opens
+        // on a click, never inline by default, so no raw email body is in the body (D233).
+        card.appendChild(openableSource(b));
         container.appendChild(card);
       });
       if (shown.length > 50) {

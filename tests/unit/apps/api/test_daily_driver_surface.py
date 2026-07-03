@@ -446,7 +446,7 @@ def test_correction_row_shows_why_and_strength_consistently():
     src = _fn_body("renderCorrectionList")
     assert "cdd-strength" in src
     assert "bindingBasisRow(" in src      # leg 1: the discriminative basis row
-    assert "bindingSourceBlock(" in src   # leg 2: the openable read-only source
+    assert "openableSource(" in src       # leg 2: the openable source (D235: on-demand, was bindingSourceBlock)
 
 
 def test_draft_missing_has_a_clear_empty_state():
@@ -635,3 +635,22 @@ def test_by_goal_drill_down_shows_workstreams_not_the_moat():
     assert "makeFold(evHead" not in _HTML
     # the moat relocated: the corrections block names the ingested work bound here
     assert "Ingested work bound here" in _HTML
+
+
+def test_verification_source_is_on_demand_not_inline_by_default():
+    # D235: no raw email body renders in any surface body by default; the openable
+    # source (D212) opens on a click everywhere (verification surfaces included),
+    # enforcing D233 with no carve-out and superseding D212's source-by-default.
+    import re
+    # the inline-by-default append (the one source of all four sites' drift) is gone;
+    # renderCorrectionList now routes the source through the click-to-open toggle.
+    assert "card.appendChild(bindingSourceBlock" not in _HTML
+    assert "function openableSource(" in _HTML
+    assert "card.appendChild(openableSource(b))" in _HTML
+    assert "src-toggle" in _HTML  # the click-to-open control (button className + CSS)
+    # every place that paints the email body does so LAZILY, inside a click handler
+    # guarded by !src.dataset.built — 3 sites (openableSource + the 2 thread panels),
+    # all guarded; no unguarded body paint remains.
+    appends = re.findall(r"appendChild\(bindingSourceBlock\(b\)\)", _HTML)
+    guarded = re.findall(r"!src\.dataset\.built.{0,50}appendChild\(bindingSourceBlock\(b\)\)", _HTML)
+    assert len(appends) == 3 and len(guarded) == 3
