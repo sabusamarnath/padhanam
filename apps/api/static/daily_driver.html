@@ -190,6 +190,17 @@
     .map-outcome-chip .map-aim { font-size: 9.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 5px; }
     .map-feeders { display: flex; flex-direction: column; gap: 10px; padding: 2px; }
     .feeder-label { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+    /* D237: the corrected-receipt expander — a reviewable, reversible correction trail */
+    .corr-receipt { margin: 4px 0 2px; }
+    .corr-receipt-head { font: inherit; font-size: 11px; font-weight: 600; color: var(--teal); background: none; border: none; padding: 3px 0; cursor: pointer; }
+    .corr-receipt-head:hover { text-decoration: underline; }
+    .corr-receipt-body { margin-top: 4px; }
+    .corr-r { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 6px; margin: 4px 0; background: var(--surface-work); }
+    .corr-r-main { flex: 1; min-width: 0; }
+    .corr-r-title { font-size: 12px; color: var(--ink-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .corr-r-where { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+    .corr-r-kind { font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: var(--ink-3); background: var(--surface-2); padding: 1px 5px; border-radius: 999px; }
+    .corr-r-noundo { font-size: 10px; color: var(--ink-3); font-style: italic; }
     .feeder-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .feeder { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 12.5px; color: var(--ink-1);
       background: var(--surface-work); border: 1px solid var(--hairline); border-radius: 8px; padding: 6px 11px; text-align: left; }
@@ -2849,30 +2860,99 @@
       const toFix = (b) => goalBinds(b) && !b.user_owned;
       const initial = (cddBindings || []).filter(goalBinds);
       if (!initial.length) return;
-      const correctedUnits = (bs) => new Set(bs.filter((b) => goalBinds(b) && b.user_owned).map((b) => String(b.unit_id))).size;
       const boundUnits = new Set(initial.map((b) => String(b.unit_id))).size;
       const lbl = document.createElement("div"); lbl.className = "feeder-label";
-      const doneNote = () => { const n = correctedUnits(cddBindings || []); return n ? ` · ${n} corrected` : ""; };
       // D234: this is where the ingested work bound to the goal lives now (the moat
       // relocated here from the assessment body) — see it, fix any mis-links.
-      lbl.textContent = `Ingested work bound here (${boundUnits}) — fix any mis-links` + doneNote();
+      lbl.textContent = `Ingested work bound here (${boundUnits}) — fix any mis-links`;
       body.appendChild(lbl);
       const corr = document.createElement("div"); body.appendChild(corr);
+      // D237: the corrected receipt — the shrinking to-fix queue used to swallow
+      // corrections into a silent "N corrected" counter (168 invisible); now they are
+      // a reviewable, reversible list of what was corrected and where it went.
+      const receipt = buildCorrectedReceipt(grp); body.appendChild(receipt);
       // In-place refresh: re-read the shared bindings cache, re-render just this
       // corrections list (not a full loadAssess that would collapse the fold).
       const refresh = async () => {
         try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
         try { cddEvidence = await api("/daily-driver/cdd/evidence"); } catch {}
-        lbl.textContent = "Corrections — fix what's bound here" + doneNote();
         renderCorrectionList(corr, {
           bindings: (cddBindings || []).filter(toFix),
           refresh, relinkControlFor: relinkPicker, emptyMsg: "All corrected — nothing left to fix here.",
           dedupeByUnit: true,
         });
+        receipt.refresh();
       };
       renderCorrectionList(corr, {
         bindings: initial.filter((b) => !b.user_owned), refresh, relinkControlFor: relinkPicker,
         emptyMsg: "All corrected — nothing left to fix here.", dedupeByUnit: true,
+      });
+    }
+    // D237: the corrected-receipt expander — "N corrected ▸" opens a list of every
+    // user_owned binding for the goal and where it went (target element), each with
+    // an Undo where the D203 audit trail recorded its origin (pre-S103v corrections
+    // have no origin → listed but not undoable). Reads existing bindings + the goal
+    // CDD (labels) + /cdd/correction-origins; Undo rides the existing relink endpoint.
+    function buildCorrectedReceipt(grp) {
+      const goalBinds = (b) => b.outcome_id === grp.outcome_id;
+      const count = () => new Set((cddBindings || []).filter((b) => goalBinds(b) && b.user_owned).map((b) => String(b.unit_id))).size;
+      const wrap = document.createElement("div"); wrap.className = "corr-receipt";
+      const head = document.createElement("button"); head.type = "button"; head.className = "corr-receipt-head";
+      const bodyEl = document.createElement("div"); bodyEl.className = "corr-receipt-body"; bodyEl.style.display = "none";
+      const setHead = () => { const open = bodyEl.style.display !== "none"; head.innerHTML = `<span class="collapse-caret">${open ? "▾" : "▸"}</span> ${count()} corrected`; };
+      head.onclick = () => { const open = bodyEl.style.display !== "none"; bodyEl.style.display = open ? "none" : "block"; setHead(); if (!open) renderCorrectedReceipt(bodyEl, grp); };
+      wrap.refresh = () => { setHead(); if (bodyEl.style.display !== "none") renderCorrectedReceipt(bodyEl, grp); };
+      wrap.appendChild(head); wrap.appendChild(bodyEl);
+      if (!count()) { wrap.style.display = "none"; }
+      setHead();
+      return wrap;
+    }
+    async function renderCorrectedReceipt(container, grp) {
+      const goalBinds = (b) => b.outcome_id === grp.outcome_id;
+      container.innerHTML = "<div class='sub' style='margin:4px 0'>Loading…</div>";
+      // element labels for the goal (the target a correction moved TO)
+      const labelByEl = {};
+      try {
+        const cdd = await api(`/daily-driver/cdd/${grp.outcome_id}`);
+        (cdd.elements || []).forEach((e) => { labelByEl[String(e.element_id)] = { label: e.label, kind: e.kind }; });
+        labelByEl[String(grp.outcome_id)] = { label: "expected outcome", kind: "outcome" };
+      } catch {}
+      // recorded origins (for Undo); units absent here are show-only (pre-S103v)
+      const origins = {};
+      try { (await api("/daily-driver/cdd/correction-origins")).forEach((o) => { origins[String(o.unit_id)] = o; }); } catch {}
+      // the corrected (user_owned) bindings for this goal, one row per unit
+      const seen = new Set(); const rows = [];
+      (cddBindings || []).filter((b) => goalBinds(b) && b.user_owned).forEach((b) => { const k = String(b.unit_id); if (!seen.has(k)) { seen.add(k); rows.push(b); } });
+      container.innerHTML = "";
+      if (!rows.length) { container.innerHTML = "<div class='evidence-note'>Nothing corrected yet.</div>"; return; }
+      const undoable = rows.filter((b) => origins[String(b.unit_id)] && origins[String(b.unit_id)].from_element_id).length;
+      const note = document.createElement("div"); note.className = "evidence-note";
+      note.textContent = `Where your corrections went. ${undoable} of ${rows.length} can be undone (the rest were corrected before change-tracking).`;
+      container.appendChild(note);
+      rows.forEach((b) => {
+        const tgt = labelByEl[String(b.element_id)] || { label: "", kind: b.element_kind };
+        const row = document.createElement("div"); row.className = "corr-r";
+        const where = tgt.label || b.element_kind;
+        const main = document.createElement("div"); main.className = "corr-r-main";
+        main.innerHTML = `<div class="corr-r-title">${escapeHtml(b.title)}</div>` +
+          `<div class="corr-r-where">→ ${escapeHtml(where)} <span class="corr-r-kind">${escapeHtml(tgt.kind || b.element_kind)}</span></div>`;
+        row.appendChild(main);
+        const o = origins[String(b.unit_id)];
+        if (o && o.from_kind && o.from_element_id) {
+          const fromLbl = (labelByEl[String(o.from_element_id)] || {}).label || o.from_kind;
+          row.appendChild(contactBtn("Undo", "btn-ghost", async () => {
+            try {
+              await api("/daily-driver/cdd/evidence/relink", { method: "POST", body: JSON.stringify({ unit_id: b.unit_id, from_kind: b.element_kind, from_element_id: b.element_id, to_kind: o.from_kind, to_element_id: o.from_element_id }) });
+              toast(`Undone → ${(fromLbl || "").split(":")[0]}`);
+              try { cddBindings = await api("/daily-driver/cdd/bindings"); } catch {}
+              renderCorrectedReceipt(container, grp);
+            } catch { toast("Undo failed", true); }
+          }));
+        } else {
+          const ni = document.createElement("span"); ni.className = "corr-r-noundo"; ni.textContent = "no recorded origin"; ni.title = "corrected before change-tracking (pre-S103v) — cannot undo";
+          row.appendChild(ni);
+        }
+        container.appendChild(row);
       });
     }
     // The cross-goal element picker (S103c-fix-2): choose a goal, then an element
