@@ -50,6 +50,7 @@ from contexts.daily_driver.domain.cdd import (
     parse_cdd_draft,
 )
 from contexts.daily_driver.domain.contacts import ContactView
+from contexts.daily_driver.domain.skills import SkillItemView
 from contexts.daily_driver.domain.jd_extraction import (
     JD_EXTRACT_SCHEMA,
     build_jd_extract_prompt,
@@ -707,6 +708,41 @@ class GoalGraphAdapter:
     async def reject_contact(self, *, tenant_context, contact_id) -> bool:
         return await self._outcome_graph.delete_contact(
             tenant_context=tenant_context, contact_id=contact_id
+        )
+
+    # --- Skills profile (S103af, D238) -------------------------------------
+
+    async def list_skill_items(self, *, tenant_context) -> tuple[SkillItemView, ...]:
+        recs = await self._outcome_graph.list_skill_items(tenant_context=tenant_context)
+        return tuple(
+            SkillItemView(
+                item_id=r.item_id, kind=r.kind, text=r.text,
+                proof_state=r.proof_state, provenance_origin=r.provenance_origin,
+            )
+            for r in recs
+        )
+
+    async def create_skill_item(
+        self, *, tenant_context, item_id, kind, text
+    ) -> None:
+        await self._outcome_graph.merge_skill_item(
+            tenant_context=tenant_context, item_id=item_id, kind=kind, text=text,
+            proof_state="confirmed", provenance_origin="user_authored",
+        )
+
+    async def confirm_skill_item(self, *, tenant_context, item_id) -> bool:
+        return await self._outcome_graph.confirm_skill_item(
+            tenant_context=tenant_context, item_id=item_id
+        )
+
+    async def edit_skill_item(self, *, tenant_context, item_id, text) -> bool:
+        return await self._outcome_graph.edit_skill_item(
+            tenant_context=tenant_context, item_id=item_id, text=text
+        )
+
+    async def reject_skill_item(self, *, tenant_context, item_id) -> bool:
+        return await self._outcome_graph.delete_skill_item(
+            tenant_context=tenant_context, item_id=item_id
         )
 
     async def read_goal_cdd(self, *, tenant_context, outcome_id) -> GoalCddView:

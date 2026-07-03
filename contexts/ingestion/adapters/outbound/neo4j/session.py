@@ -730,6 +730,45 @@ MATCH (c:Contact {tenant_id: $tenant_id, contact_id: $contact_id})
 DETACH DELETE c
 """
 
+# --- Skills profile (S103af, D238) — the operator's standing profile ----------
+# A :SkillItem is one entry in the operator's skills profile, extracted from their CV
+# and read by every opportunity (not per-opportunity data). Tenant-scoped, keyed by
+# item_id (the 0011 constraint). Drafted proof_state='suggested' by CV extraction,
+# promoted to 'confirmed' by the operator's confirm/edit — the extract-and-proof
+# lifecycle (D215/D222). Idempotent MERGE on (tenant_id, item_id).
+_MERGE_SKILL_ITEM = """
+MERGE (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
+ON CREATE SET s.created_at = $created_at
+SET s.kind = $kind,
+    s.text = $text,
+    s.proof_state = $proof_state,
+    s.provenance_origin = $provenance_origin
+"""
+_LIST_SKILL_ITEMS = """
+MATCH (s:SkillItem {tenant_id: $tenant_id})
+RETURN s.item_id AS item_id, s.kind AS kind, s.text AS text,
+       s.proof_state AS proof_state, s.provenance_origin AS provenance_origin
+ORDER BY s.kind ASC, s.text ASC
+"""
+# Confirm a suggested item → confirmed (the operator vouches it — the confirm_contact
+# precedent). RETURN detects the match.
+_CONFIRM_SKILL_ITEM = """
+MATCH (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
+SET s.proof_state = 'confirmed'
+RETURN s.item_id AS item_id
+"""
+# Edit an item's text — an authoring act, so it also promotes proof_state to confirmed.
+_EDIT_SKILL_ITEM = """
+MATCH (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
+SET s.text = $text, s.proof_state = 'confirmed'
+RETURN s.item_id AS item_id
+"""
+# Reject (delete) an item — the user-initiated delete (the reject-suggested precedent).
+_DELETE_SKILL_ITEM = """
+MATCH (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
+DETACH DELETE s
+"""
+
 # The authored stance on the outcome — the measurable result that means the goal
 # is met (D200), stored on the existing :Outcome node (D199's two faces). S103a
 # makes it proofable: it carries an origin + proof_state alongside the text, all
@@ -1742,6 +1781,64 @@ class TenantScopedNeo4jSession:
         result = await session.run(_DELETE_CONTACT, {
             "tenant_id": self._tenant_id,
             "contact_id": str(contact_id),
+        })
+        summary = await result.consume()
+        return summary.counters.nodes_deleted > 0
+
+    # --- Skills profile (S103af, D238) -------------------------------------
+
+    async def merge_skill_item(
+        self, *, item_id: UUID, kind: str, text: str,
+        proof_state: str, provenance_origin: str,
+    ) -> None:
+        """MERGE a :SkillItem (D238) — one entry in the operator's skills profile,
+        drafted 'suggested' by CV extraction or hand-added 'confirmed'. Idempotent
+        on (tenant_id, item_id)."""
+        session = self._bound_session
+        await session.run(_MERGE_SKILL_ITEM, {
+            "tenant_id": self._tenant_id,
+            "item_id": str(item_id),
+            "kind": kind,
+            "text": text,
+            "proof_state": proof_state,
+            "provenance_origin": provenance_origin,
+            "created_at": _now_utc(),
+        })
+
+    async def list_skill_items(self) -> list[dict]:
+        """Return the tenant's skill-profile items (D238)."""
+        session = self._bound_session
+        result = await session.run(
+            _LIST_SKILL_ITEMS, {"tenant_id": self._tenant_id}
+        )
+        return list(await result.data())
+
+    async def confirm_skill_item(self, *, item_id: UUID) -> bool:
+        """Confirm a suggested item → confirmed (D238). True when matched."""
+        session = self._bound_session
+        result = await session.run(_CONFIRM_SKILL_ITEM, {
+            "tenant_id": self._tenant_id,
+            "item_id": str(item_id),
+        })
+        return await result.single() is not None
+
+    async def edit_skill_item(self, *, item_id: UUID, text: str) -> bool:
+        """Edit an item's text → confirmed (an authoring act, D238). True on match."""
+        session = self._bound_session
+        result = await session.run(_EDIT_SKILL_ITEM, {
+            "tenant_id": self._tenant_id,
+            "item_id": str(item_id),
+            "text": text,
+        })
+        return await result.single() is not None
+
+    async def delete_skill_item(self, *, item_id: UUID) -> bool:
+        """Reject (delete) an item (D238) — DETACH DELETE. Detected from the
+        summary's nodes-deleted counter."""
+        session = self._bound_session
+        result = await session.run(_DELETE_SKILL_ITEM, {
+            "tenant_id": self._tenant_id,
+            "item_id": str(item_id),
         })
         summary = await result.consume()
         return summary.counters.nodes_deleted > 0

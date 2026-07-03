@@ -31,6 +31,7 @@ from contexts.ingestion.ports.outcome_graph_port import (
     GateRecord,
     OpportunityRecord,
     OutcomeGraphRecord,
+    SkillItemRecord,
 )
 from contexts.ingestion.ports.unit_graph_port import (
     ElementEvidenceRecord,
@@ -711,6 +712,87 @@ class Neo4jGraphRepository:
                 return await s.set_contact_role(
                     contact_id=contact_id, process_role=process_role
                 )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    # --- Skills profile (S103af, D238) -------------------------------------
+
+    async def merge_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, kind: str,
+        text: str, proof_state: str, provenance_origin: str,
+    ) -> None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                await s.merge_skill_item(
+                    item_id=item_id, kind=kind, text=text,
+                    proof_state=proof_state, provenance_origin=provenance_origin,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def list_skill_items(
+        self, *, tenant_context: TenantContext
+    ) -> Sequence[SkillItemRecord]:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                rows = await s.list_skill_items()
+                return [
+                    SkillItemRecord(
+                        item_id=UUID(r["item_id"]),
+                        kind=r["kind"],
+                        text=r["text"],
+                        proof_state=r["proof_state"],
+                        provenance_origin=r["provenance_origin"],
+                    )
+                    for r in rows
+                ]
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def confirm_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.confirm_skill_item(item_id=item_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def edit_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, text: str
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.edit_skill_item(item_id=item_id, text=text)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def delete_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.delete_skill_item(item_id=item_id)
         except _RETRYABLE_DRIVER_EXC as e:
             raise GraphRepositoryError(str(e)) from e
         except _NON_RETRYABLE_DRIVER_EXC as e:

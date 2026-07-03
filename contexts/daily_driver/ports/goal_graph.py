@@ -26,6 +26,7 @@ from contexts.daily_driver.domain.cdd import (
 )
 from contexts.daily_driver.domain.contacts import ContactView
 from contexts.daily_driver.domain.goal import Goal
+from contexts.daily_driver.domain.skills import SkillItemView
 from shared_kernel import TenantContext
 
 
@@ -205,6 +206,40 @@ class GoalGraphPort(Protocol):
         process_role: str | None,
     ) -> bool:
         """Set a contact's hiring-process role → user_authored (S103w, D227)."""
+        ...
+
+    # --- Skills profile (S103af, D238) -------------------------------------
+
+    async def list_skill_items(
+        self, *, tenant_context: TenantContext
+    ) -> tuple[SkillItemView, ...]:
+        """The tenant's skill-profile items (D238) — read for the proof surface and
+        the leg-3 fit read."""
+        ...
+
+    async def create_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, kind: str, text: str,
+    ) -> None:
+        """Add a user-authored skill item (D238) — the manual add route. Provenance
+        user_authored, proof_state confirmed (the operator authored it directly)."""
+        ...
+
+    async def confirm_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        """Confirm a suggested item → confirmed (D238)."""
+        ...
+
+    async def edit_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, text: str
+    ) -> bool:
+        """Edit an item's text → confirmed (an authoring act, D238)."""
+        ...
+
+    async def reject_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        """Reject (delete) a skill item (D238)."""
         ...
 
     async def set_qualification_field(

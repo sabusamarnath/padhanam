@@ -179,6 +179,19 @@ class ContactRecord:
 
 
 @dataclass(frozen=True)
+class SkillItemRecord:
+    """One skill-profile entry as read from the graph (S103af, D238). Extracted from
+    the operator's CV, ``proof_state`` ``suggested`` until the operator confirms/edits
+    → ``confirmed`` (the extract-and-proof lifecycle, D215/D222)."""
+
+    item_id: UUID
+    kind: str
+    text: str
+    proof_state: str
+    provenance_origin: str
+
+
+@dataclass(frozen=True)
 class AuthoredEdgeRecord:
     """One authored causal edge as read from the graph (S102, D200).
 
@@ -540,6 +553,41 @@ class OutcomeGraphPort(Protocol):
         """Reject (delete) a contact (D222/D215) — the user-initiated delete."""
         ...
 
+    # --- Skills profile (S103af, D238) -------------------------------------
+
+    async def merge_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, kind: str,
+        text: str, proof_state: str, provenance_origin: str,
+    ) -> None:
+        """Idempotently MERGE a :SkillItem (D238) — one entry in the operator's skills
+        profile, drafted 'suggested' by CV extraction or hand-added 'confirmed'."""
+        ...
+
+    async def list_skill_items(
+        self, *, tenant_context: TenantContext
+    ) -> Sequence[SkillItemRecord]:
+        """The tenant's skill-profile items (D238) — read for the proof surface and
+        the leg-3 fit read."""
+        ...
+
+    async def confirm_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        """Confirm a suggested item → confirmed (D238)."""
+        ...
+
+    async def edit_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, text: str
+    ) -> bool:
+        """Edit an item's text → confirmed (an authoring act, D238)."""
+        ...
+
+    async def delete_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID
+    ) -> bool:
+        """Reject (delete) a skill item (D238) — the user-initiated delete."""
+        ...
+
     async def attach_unit_to_opportunity(
         self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
     ) -> None:
@@ -699,4 +747,5 @@ __all__ = [
     "OpportunityRecord",
     "OutcomeGraphPort",
     "OutcomeGraphRecord",
+    "SkillItemRecord",
 ]
