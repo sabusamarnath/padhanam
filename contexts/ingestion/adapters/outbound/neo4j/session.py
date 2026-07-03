@@ -562,7 +562,26 @@ _SET_QUALIFICATION_FIELD = """
 MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
 SET o[$ts_key] = $ts
 FOREACH (_ IN CASE WHEN $set_value THEN [1] ELSE [] END |
-    SET o[$value_key] = $value)
+    SET o[$value_key] = $value
+    REMOVE o[$draft_key])
+RETURN o.opportunity_id AS opportunity_id
+"""
+# S103ad/D236: the JD-extracted draft slot (q_<field>_draft) — a suggestion the
+# operator Uses (populates the input) then Saves, or Dismisses. A draft is never the
+# field value; writing a value (above) clears it. Schemaless, no migration; setting
+# null removes the slot (Dismiss). The read picks it up via the `q_` prefix scan.
+_SET_QUALIFICATION_DRAFT = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+FOREACH (_ IN CASE WHEN $value IS NULL THEN [1] ELSE [] END | REMOVE o[$draft_key])
+FOREACH (_ IN CASE WHEN $value IS NULL THEN [] ELSE [1] END | SET o[$draft_key] = $value)
+RETURN o.opportunity_id AS opportunity_id
+"""
+# S103ad/D236: the pasted job-description text — a durable source for extraction and
+# leg 3's match. Schemaless prop (D214), not a q_ field, so it never enters the
+# qualification map. No migration.
+_SET_OPPORTUNITY_JOB_DESCRIPTION = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.job_description = $text
 RETURN o.opportunity_id AS opportunity_id
 """
 # The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
@@ -1565,9 +1584,39 @@ class TenantScopedNeo4jSession:
             "opportunity_id": str(opportunity_id),
             "value_key": f"q_{field_key}",
             "ts_key": f"q_{field_key}_ts",
+            "draft_key": f"q_{field_key}_draft",  # a saved value clears its draft (D236)
             "value": value,
             "set_value": not touch_only,
             "ts": _now_utc().isoformat(),  # ISO string keeps the q_ map all-strings
+        })
+        return await result.single() is not None
+
+    async def set_qualification_draft(
+        self, *, opportunity_id: UUID, field_key: str, value: str | None,
+    ) -> bool:
+        """Set or clear a qualification field's JD-extracted draft (``q_<field>_draft``,
+        S103ad/D236). ``value=None`` removes the slot (Dismiss). A draft is a
+        suggestion, never the field value. Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_QUALIFICATION_DRAFT, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "draft_key": f"q_{field_key}_draft",
+            "value": value,
+        })
+        return await result.single() is not None
+
+    async def set_opportunity_job_description(
+        self, *, opportunity_id: UUID, text: str,
+    ) -> bool:
+        """Store the pasted job-description text on the opportunity (S103ad/D236) —
+        a schemaless ``job_description`` prop, the durable source for extraction and
+        leg 3's match. Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_OPPORTUNITY_JOB_DESCRIPTION, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "text": text,
         })
         return await result.single() is not None
 

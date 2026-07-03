@@ -227,6 +227,7 @@ class AppCompositions:
     # S62 (D163): the goal-layer graph reader/raiser over the shared Neo4j.
     daily_driver_goal_graph: object | None = None
     daily_driver_cdd_drafter: object | None = None
+    daily_driver_jd_extractor: object | None = None
     # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
     # when unwired (the /tasks view degrades to an empty list).
     daily_driver_tasks_reader: object | None = None
@@ -597,6 +598,7 @@ def _build_default_compositions() -> AppCompositions:
         build_email_job_search_source,
         build_email_source_metadata,
         build_cdd_drafter,
+        build_jd_extractor,
         build_facet_source,
         build_goal_graph,
         build_open_cases_reader,
@@ -642,6 +644,11 @@ def _build_default_compositions() -> AppCompositions:
     # S102 (D200): the CDD drafter over the structured-output seam (Ollama dev
     # model by default), the authored-layer LLM draft.
     daily_driver_cdd_drafter = build_cdd_drafter(
+        structured_output_port=inference_port
+    )
+    # S103ad (D236): the JD extractor over the same structured-output seam — drafts
+    # three qualification fields from a pasted job description (matching-engine leg 1).
+    daily_driver_jd_extractor = build_jd_extractor(
         structured_output_port=inference_port
     )
     # S65 (D167): the Tasks-view reader over the ingested tasks cache.
@@ -755,6 +762,7 @@ def _build_default_compositions() -> AppCompositions:
         ),
         daily_driver_goal_graph=daily_driver_goal_graph,
         daily_driver_cdd_drafter=daily_driver_cdd_drafter,
+        daily_driver_jd_extractor=daily_driver_jd_extractor,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
         daily_driver_email_source_metadata=daily_driver_email_source_metadata,
@@ -1017,6 +1025,7 @@ def create_app(
     # S62 (D163): the goal-layer graph reader/raiser.
     app.state.daily_driver_goal_graph = compositions.daily_driver_goal_graph
     app.state.daily_driver_cdd_drafter = compositions.daily_driver_cdd_drafter
+    app.state.daily_driver_jd_extractor = compositions.daily_driver_jd_extractor
     app.state.daily_driver_tasks_reader = (
         compositions.daily_driver_tasks_reader
     )

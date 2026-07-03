@@ -61,6 +61,7 @@ class QualificationField:
     active: bool
     from_contact: bool = False
     risk: str | None = None   # None / "stale" (surfaced only when active, D229)
+    draft: str | None = None  # a JD-extracted suggestion (S103ad/D236); never the value
 
 
 def qualification_value(qual_props: dict, key: str) -> str | None:
@@ -69,6 +70,11 @@ def qualification_value(qual_props: dict, key: str) -> str | None:
 
 def qualification_ts(qual_props: dict, key: str) -> str | None:
     return qual_props.get(f"q_{key}_ts") or None
+
+
+def qualification_draft(qual_props: dict, key: str) -> str | None:
+    """The JD-extracted draft suggestion for a field (``q_<key>_draft``, D236)."""
+    return qual_props.get(f"q_{key}_draft") or None
 
 
 def build_qualification_base(
@@ -90,12 +96,13 @@ def build_qualification_base(
             key=key, label=label, value=value,
             last_touched=qualification_ts(qual_props, key),
             active=field_active_at_stage(key, stage), from_contact=from_contact,
+            draft=qualification_draft(qual_props, key),
         ))
     return tuple(out)
 
 
 __all__ = [
     "ACTIVATION", "QUAL_FIELDS", "QUAL_FIELD_KEYS", "QualificationField",
-    "build_qualification_base", "field_active_at_stage", "qualification_ts",
-    "qualification_value",
+    "build_qualification_base", "field_active_at_stage", "qualification_draft",
+    "qualification_ts", "qualification_value",
 ]

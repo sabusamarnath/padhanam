@@ -43,12 +43,29 @@ async def set_qualification_field(
     *, goal_graph: GoalGraphPort, actor: ActorContext, opportunity_id: UUID,
     field_key: str, value: str,
 ) -> bool:
-    """Author a qualification field's value + bump its last_touched (D228)."""
+    """Author a qualification field's value + bump its last_touched (D228). A saved
+    value also clears any JD-extracted draft for the field (S103ad/D236 — Save
+    supersedes the suggestion)."""
     if field_key not in QUAL_FIELD_KEYS:
         raise QualificationError(f"unknown qualification field: {field_key}")
     return await goal_graph.set_qualification_field(
         tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
         field_key=field_key, value=value.strip(), touch_only=False,
+    )
+
+
+@requires_authorisation(DAILY_DRIVER_CDD_WRITE)
+async def dismiss_qualification_draft(
+    *, goal_graph: GoalGraphPort, actor: ActorContext, opportunity_id: UUID,
+    field_key: str,
+) -> bool:
+    """Dismiss a JD-extracted draft suggestion (S103ad/D236) — clears ``q_<key>_draft``
+    without writing a value."""
+    if field_key not in QUAL_FIELD_KEYS:
+        raise QualificationError(f"unknown qualification field: {field_key}")
+    return await goal_graph.set_qualification_draft(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
+        field_key=field_key, value=None,
     )
 
 
@@ -115,7 +132,7 @@ async def read_opportunity_qualification(
         QualificationField(
             key=f.key, label=f.label, value=f.value, last_touched=f.last_touched,
             active=f.active, from_contact=f.from_contact,
-            risk=_stale(f, now, stale_days),
+            risk=_stale(f, now, stale_days), draft=f.draft,
         )
         for f in base
     )
@@ -123,5 +140,6 @@ async def read_opportunity_qualification(
 
 __all__ = [
     "QUALIFICATION_STALE_DAYS", "QualificationError",
-    "read_opportunity_qualification", "set_qualification_field",
+    "dismiss_qualification_draft", "read_opportunity_qualification",
+    "set_qualification_field",
 ]

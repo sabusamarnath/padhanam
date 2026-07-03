@@ -212,7 +212,26 @@ class GoalGraphPort(Protocol):
         field_key: str, value: str | None, touch_only: bool = False,
     ) -> bool:
         """Set a qualification field's value + last_touched, or bump only the
-        timestamp when ``touch_only`` (S103w, D228/D229)."""
+        timestamp when ``touch_only`` (S103w, D228/D229). Writing a value also
+        clears any JD-extracted draft for the field (Save supersedes the suggestion,
+        S103ad/D236)."""
+        ...
+
+    async def set_opportunity_job_description(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, text: str,
+    ) -> bool:
+        """Store the pasted job-description text on the opportunity (a schemaless
+        ``job_description`` prop, S103ad/D236) — the durable source for extraction and
+        leg 3's match. Returns True on match."""
+        ...
+
+    async def set_qualification_draft(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None,
+    ) -> bool:
+        """Set or clear a qualification field's JD-extracted draft (``q_<key>_draft``,
+        S103ad/D236). ``value=None`` clears it (Dismiss). The draft is a suggestion,
+        never the field value — only ``set_qualification_field`` creates a value."""
         ...
 
     async def set_disposition_counts(

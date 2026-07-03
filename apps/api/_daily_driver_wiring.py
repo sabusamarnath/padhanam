@@ -50,7 +50,13 @@ from contexts.daily_driver.domain.cdd import (
     parse_cdd_draft,
 )
 from contexts.daily_driver.domain.contacts import ContactView
+from contexts.daily_driver.domain.jd_extraction import (
+    JD_EXTRACT_SCHEMA,
+    build_jd_extract_prompt,
+    parse_jd_extract,
+)
 from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
+from contexts.daily_driver.ports.jd_extractor import JdExtractorPort
 from shared_kernel.structured_output import (
     StructuredOutputParseFailure,
     StructuredOutputPort,
@@ -668,6 +674,21 @@ class GoalGraphAdapter:
         return await self._outcome_graph.set_qualification_field(
             tenant_context=tenant_context, opportunity_id=opportunity_id,
             field_key=field_key, value=value, touch_only=touch_only,
+        )
+
+    async def set_qualification_draft(
+        self, *, tenant_context, opportunity_id, field_key, value
+    ) -> bool:
+        return await self._outcome_graph.set_qualification_draft(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            field_key=field_key, value=value,
+        )
+
+    async def set_opportunity_job_description(
+        self, *, tenant_context, opportunity_id, text
+    ) -> bool:
+        return await self._outcome_graph.set_opportunity_job_description(
+            tenant_context=tenant_context, opportunity_id=opportunity_id, text=text,
         )
 
     async def confirm_contact(self, *, tenant_context, contact_id) -> bool:
@@ -1505,6 +1526,35 @@ def build_cdd_drafter(
     return CddDrafterAdapter(structured_output_port=structured_output_port)
 
 
+class JdExtractorAdapter:
+    """apps/ adapter implementing daily-driver's ``JdExtractorPort`` over the
+    provider-agnostic ``StructuredOutputPort`` (S103ad, D236 — the CddDrafterAdapter
+    precedent). The pure domain helpers build the prompt + schema and parse the
+    response; the litellm SDK stays confined to the inference adapter, never here."""
+
+    def __init__(self, *, structured_output_port: StructuredOutputPort) -> None:
+        self._structured_output = structured_output_port
+
+    async def extract(self, *, jd_text: str):
+        request = StructuredOutputRequest(
+            prompt=build_jd_extract_prompt(jd_text),
+            schema=JD_EXTRACT_SCHEMA,
+        )
+        try:
+            response = await self._structured_output.generate_structured(request)
+        except StructuredOutputParseFailure:
+            # No schema-conforming extraction — the use case writes no drafts.
+            return None
+        return parse_jd_extract(response.value)
+
+
+def build_jd_extractor(
+    *, structured_output_port: StructuredOutputPort
+) -> JdExtractorAdapter:
+    """Wire daily-driver's ``JdExtractorPort`` over the structured-output seam."""
+    return JdExtractorAdapter(structured_output_port=structured_output_port)
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
     "CddDrafterAdapter",
@@ -1512,11 +1562,13 @@ __all__ = [
     "DayRepositoryRouter",
     "FacetSourceAdapter",
     "GoalGraphAdapter",
+    "JdExtractorAdapter",
     "OpenCasesReaderAdapter",
     "TasksReaderAdapter",
     "UnitGraphAdapter",
     "build_calendar_events_reader",
     "build_cdd_drafter",
+    "build_jd_extractor",
     "build_commitment_repository",
     "build_day_repository",
     "build_facet_source",

@@ -496,7 +496,21 @@ class OutcomeGraphPort(Protocol):
         field_key: str, value: str | None, touch_only: bool = False,
     ) -> bool:
         """Set a qualification field's value + last_touched, or bump only the
-        timestamp when ``touch_only`` (S103w, D228/D229)."""
+        timestamp when ``touch_only`` (S103w, D228/D229). A saved value clears any
+        JD-extracted draft (S103ad/D236)."""
+        ...
+
+    async def set_qualification_draft(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None,
+    ) -> bool:
+        """Set or clear a qualification field's JD-extracted draft (S103ad/D236)."""
+        ...
+
+    async def set_opportunity_job_description(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, text: str,
+    ) -> bool:
+        """Store the pasted job-description text on the opportunity (S103ad/D236)."""
         ...
 
     async def list_contacts(

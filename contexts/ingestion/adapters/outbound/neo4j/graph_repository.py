@@ -735,6 +735,37 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def set_qualification_draft(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        field_key: str, value: str | None,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_qualification_draft(
+                    opportunity_id=opportunity_id, field_key=field_key, value=value,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_opportunity_job_description(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, text: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_opportunity_job_description(
+                    opportunity_id=opportunity_id, text=text,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     async def attach_unit_to_opportunity(
         self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
     ) -> None:

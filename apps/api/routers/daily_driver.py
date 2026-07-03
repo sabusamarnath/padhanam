@@ -62,6 +62,7 @@ from apps.api.routers._daily_driver_dto import (
     warming_step_to_dto,
     QualificationFieldDTO,
     SetQualificationRequest,
+    ExtractJdRequest,
     qualification_to_dto,
     LogActivityRequest,
     ActivityEntryDTO,
@@ -137,8 +138,12 @@ from contexts.daily_driver.application.warming_steps import (
 )
 from contexts.daily_driver.application.qualification import (
     QualificationError,
+    dismiss_qualification_draft as dismiss_qualification_draft_uc,
     read_opportunity_qualification as read_qualification_uc,
     set_qualification_field as set_qualification_field_uc,
+)
+from contexts.daily_driver.application.extract_jd import (
+    extract_jd_qualification as extract_jd_uc,
 )
 from contexts.daily_driver.application.activity import (
     ActivityError,
@@ -251,6 +256,11 @@ def get_audit_reader(request: Request):
 def get_cdd_drafter(request: Request):
     """FastAPI dependency: the daily-driver CddDrafterPort (S102, D200)."""
     return _state(request, "daily_driver_cdd_drafter")
+
+
+def get_jd_extractor(request: Request):
+    """FastAPI dependency: the daily-driver JdExtractorPort (S103ad, D236)."""
+    return _state(request, "daily_driver_jd_extractor")
 
 
 def get_tasks_reader(request: Request):
@@ -946,6 +956,47 @@ async def post_set_qualification(
         raise HTTPException(status_code=422, detail=str(e)) from e
     if not ok:
         raise HTTPException(status_code=404, detail="opportunity not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/opportunity/{opportunity_id}/extract-jd", status_code=204)
+async def post_extract_jd(
+    opportunity_id: UUID,
+    body: ExtractJdRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    jd_extractor: Annotated[object, Depends(get_jd_extractor)],
+) -> Response:
+    """Paste a job description onto the opportunity and draft the three JD-derivable
+    qualification fields as suggestions (S103ad/D236). The drafts land in `q_<key>_draft`
+    slots — never a field value; the surface then offers Use/Dismiss. Stores the JD as
+    a durable source. The surface reloads the qualification to show the suggestions."""
+    await extract_jd_uc(
+        goal_graph=goal_graph, jd_extractor=jd_extractor, actor=actor,
+        opportunity_id=opportunity_id, jd_text=body.text,
+    )
+    return Response(status_code=204)
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/qualification/{field_key}/dismiss-draft",
+    status_code=204,
+)
+async def post_dismiss_qualification_draft(
+    opportunity_id: UUID,
+    field_key: str,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Dismiss a JD-extracted draft suggestion (S103ad/D236) — clears the draft slot
+    without writing a value. 422 on an unknown field."""
+    try:
+        await dismiss_qualification_draft_uc(
+            goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+            field_key=field_key,
+        )
+    except QualificationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     return Response(status_code=204)
 
 

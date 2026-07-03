@@ -721,6 +721,7 @@ class QualificationFieldDTO(BaseModel):
     active: bool
     from_contact: bool = False
     risk: str | None = None
+    draft: str | None = None  # a JD-extracted suggestion (S103ad/D236); never the value
 
 
 class SetQualificationRequest(BaseModel):
@@ -730,10 +731,16 @@ class SetQualificationRequest(BaseModel):
     value: str
 
 
+class ExtractJdRequest(BaseModel):
+    """Paste a job description onto an opportunity to draft its fields (S103ad/D236)."""
+
+    text: str
+
+
 def qualification_to_dto(f) -> "QualificationFieldDTO":
     return QualificationFieldDTO(
         key=f.key, label=f.label, value=f.value, last_touched=f.last_touched,
-        active=f.active, from_contact=f.from_contact, risk=f.risk,
+        active=f.active, from_contact=f.from_contact, risk=f.risk, draft=f.draft,
     )
 
 
