@@ -654,3 +654,21 @@ def test_verification_source_is_on_demand_not_inline_by_default():
     appends = re.findall(r"appendChild\(bindingSourceBlock\(b\)\)", _HTML)
     guarded = re.findall(r"!src\.dataset\.built.{0,50}appendChild\(bindingSourceBlock\(b\)\)", _HTML)
     assert len(appends) == 3 and len(guarded) == 3
+
+
+def test_corrections_have_a_reviewable_reversible_receipt():
+    # D237: the silent "N corrected" counter becomes an expander listing every
+    # user_owned binding + where it went, each with an Undo where the D203 origin
+    # was recorded (pre-S103v corrections are listed but not undoable).
+    assert "function buildCorrectedReceipt(" in _HTML
+    assert "async function renderCorrectedReceipt(" in _HTML
+    assert "corr-receipt-head" in _HTML
+    assert "corrected" in _HTML  # the "N corrected ▸" expander head
+    # the receipt reads the recorded origins; Undo reverses via the EXISTING relink
+    assert "/daily-driver/cdd/correction-origins" in _HTML
+    rc = _HTML[_HTML.index("async function renderCorrectedReceipt("):
+              _HTML.index("async function renderCorrectedReceipt(") + 3400]
+    assert "/daily-driver/cdd/evidence/relink" in rc          # Undo = existing relink, no new write
+    assert "no recorded origin" in rc                          # the show-only (pre-S103v) case
+    # the old silent-counter suffix is gone (the counter is now the expander head)
+    assert "` · ${n} corrected`" not in _HTML
