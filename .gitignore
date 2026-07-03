@@ -48,3 +48,8 @@ charter-2026*/
 
 # Charter-snapshot tooling artefacts (recreated by charter-export script after each run).
 docs/archive/snapshots/
+
+# SECRET — the real→placeholder scrub mapping (per the "real names never enter committed
+# files" principle). This single file reverses the entire public scrub; it is a credential,
+# never committed. Backed up outside the repo. Do not remove this ignore line.
+charter/.scrub-mapping
