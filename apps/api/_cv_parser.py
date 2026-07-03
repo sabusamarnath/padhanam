@@ -16,7 +16,7 @@ from io import BytesIO
 
 import pdfplumber
 
-from contexts.daily_driver.domain.cv import ParsedCv
+from contexts.daily_driver.domain.cv import CvParseError, ParsedCv
 
 _LINE_Y_TOL = 3.0  # words within this vertical distance are the same line
 _GUTTER_STRADDLE = 0.08  # ≤8% of words may straddle the midline for a 2-column split
@@ -69,12 +69,18 @@ def _page_text(page) -> str:
 def _parse_sync(pdf_bytes: bytes) -> ParsedCv:
     parts: list[str] = []
     page_count = 0
-    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-        page_count = len(pdf.pages)
-        for page in pdf.pages:
-            t = _page_text(page)
-            if t.strip():
-                parts.append(t)
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            page_count = len(pdf.pages)
+            for page in pdf.pages:
+                t = _page_text(page)
+                if t.strip():
+                    parts.append(t)
+    except CvParseError:
+        raise
+    except Exception as e:  # pdfminer/pdfplumber raise a family of exceptions
+        # Not a readable PDF — surface a domain error, never a vendor exception.
+        raise CvParseError(str(e)) from e
     text = "\n\n".join(parts).strip()
     return ParsedCv(
         text=text, has_text_layer=bool(text), page_count=page_count,

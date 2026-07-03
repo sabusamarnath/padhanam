@@ -737,17 +737,19 @@ DETACH DELETE c
 # promoted to 'confirmed' by the operator's confirm/edit — the extract-and-proof
 # lifecycle (D215/D222). Idempotent MERGE on (tenant_id, item_id).
 #
-# proof_state + provenance_origin are ON CREATE only: re-uploading a CV (which seeds
-# on a deterministic item_id, S103af) must never un-confirm an already-confirmed item
-# or overwrite its authored provenance. kind/text always SET (a re-seed carries the
-# same text; a manual create is always a fresh id, so always ON CREATE anyway).
+# The seed is purely additive — every field is ON CREATE. Re-uploading a CV (which
+# seeds on a deterministic item_id, S103af) must never clobber an existing item: not
+# its proof_state (an un-confirm), its provenance, nor its TEXT (an operator edit is
+# lost otherwise — caught live in S103af). The only text mutator is _EDIT_SKILL_ITEM,
+# the only proof_state promoters are _CONFIRM/_EDIT. A manual create is always a fresh
+# id (derived from its own text), so ON CREATE covers it too.
 _MERGE_SKILL_ITEM = """
 MERGE (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
 ON CREATE SET s.created_at = $created_at,
+    s.kind = $kind,
+    s.text = $text,
     s.proof_state = $proof_state,
     s.provenance_origin = $provenance_origin
-SET s.kind = $kind,
-    s.text = $text
 """
 _LIST_SKILL_ITEMS = """
 MATCH (s:SkillItem {tenant_id: $tenant_id})

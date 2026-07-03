@@ -672,3 +672,23 @@ def test_corrections_have_a_reviewable_reversible_receipt():
     assert "no recorded origin" in rc                          # the show-only (pre-S103v) case
     # the old silent-counter suffix is gone (the counter is now the expander head)
     assert "` · ${n} corrected`" not in _HTML
+
+
+def test_skills_profile_panel_uploads_cv_and_proofs_items():
+    # S103af/D238: the pipeline view carries a skills-profile panel — upload a CV to
+    # seed SUGGESTED items, confirm / edit / reject each, add ones the CV missed. The
+    # summary counts confirmed, and nothing "counts" until confirmed (leg-3 gate).
+    assert "function buildSkillsPanel(" in _HTML
+    assert "wrap.appendChild(buildSkillsPanel(" in _HTML
+    assert '"/daily-driver/cdd/skills"' in _HTML                 # list + add
+    # CV upload posts multipart to /cdd/cv (the JSON api() helper can't send a file)
+    assert "async function uploadCv(" in _HTML
+    assert '"/daily-driver/cdd/cv"' in _HTML
+    assert 'new FormData()' in _HTML and 'fd.append("file"' in _HTML
+    # proof affordances mirror contacts: confirm / edit / reject
+    sp = _HTML[_HTML.index("function skillRow("):_HTML.index("function skillRow(") + 2200]
+    assert "/confirm" in sp and "/edit" in sp and "/reject" in sp
+    # the honest posture: suggested seeds don't count until confirmed
+    assert "nothing counts until you confirm" in _HTML
+    # a scanned PDF (no text layer) is flagged for re-export, not silently empty
+    assert "needs_text_layer" in _HTML

@@ -711,6 +711,51 @@ def contact_to_dto(c) -> "ContactDTO":
     )
 
 
+class SkillItemDTO(BaseModel):
+    """One entry in the operator's skills profile (S103af, D238)."""
+
+    item_id: UUID
+    kind: str          # skill | experience
+    text: str
+    proof_state: str   # suggested | confirmed
+    provenance_origin: str
+
+
+class AddSkillItemRequest(BaseModel):
+    """Add a skill item the CV did not surface (S103af, D238) — confirmed on add."""
+
+    kind: str          # skill | experience
+    text: str
+
+
+class EditSkillItemRequest(BaseModel):
+    """Edit a skill item's text (S103af, D238) — an authoring act → confirmed."""
+
+    text: str
+
+
+class AddSkillItemResponse(BaseModel):
+    """The id of the added skill item (S103af, D238)."""
+
+    item_id: UUID
+
+
+class CvUploadResponse(BaseModel):
+    """The outcome of a CV upload (S103af, D238): how many items were seeded, and
+    whether the PDF lacked a text layer (a scanned image → flagged for re-export)."""
+
+    seeded: int
+    needs_text_layer: bool
+    page_count: int
+
+
+def skill_item_to_dto(s) -> "SkillItemDTO":
+    return SkillItemDTO(
+        item_id=s.item_id, kind=s.kind, text=s.text,
+        proof_state=s.proof_state, provenance_origin=s.provenance_origin,
+    )
+
+
 class QualificationFieldDTO(BaseModel):
     """One qualification field for an opportunity (S103w, D228/D229)."""
 

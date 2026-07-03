@@ -460,6 +460,23 @@
     .contact-src { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
     .contact-enrich { display: flex; gap: 5px; }
     .contact-bar { display: flex; gap: 5px; margin-left: auto; }
+    /* Skills profile (S103af, D238) — matching-engine leg 2 */
+    .skills-upload { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 0.5px solid var(--hairline); }
+    .skills-upload input[type=file] { font: inherit; font-size: 11.5px; color: var(--ink-2); }
+    .skills-upload .skills-hint { font-size: 11px; color: var(--ink-3); font-style: italic; }
+    .skills-add-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+    .skills-add-form input, .skills-add-form select { font: inherit; font-size: 11.5px; padding: 4px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--surface-work); color: var(--ink-1); }
+    .skills-add-form input[name=text] { flex: 1; min-width: 180px; }
+    .skill-group { margin-bottom: 10px; }
+    .skill-group-h { font-size: 11px; font-weight: 700; color: var(--behind-fg); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .skill-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 0.5px solid var(--hairline); }
+    .skill-text { font-size: 12.5px; color: var(--ink-1); flex: 1; min-width: 160px; }
+    .skill-text[contenteditable=true] { outline: 1px solid var(--teal); border-radius: 4px; padding: 2px 5px; background: var(--surface-work); }
+    .skill-prov { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 5px; border-radius: 999px; }
+    .skill-prov.sug { background: var(--behind-bg); color: var(--behind-fg); }
+    .skill-prov.conf { background: var(--teal); color: #fff; }
+    .skill-bar { display: flex; gap: 5px; margin-left: auto; }
+    .skills-empty { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
     /* Contact network map (S103v, D225) */
     .cmap-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
     .cmap-toggle .seg { font: inherit; font-size: 11px; padding: 3px 12px; border: 1px solid var(--hairline-strong); border-radius: 999px; background: var(--page); color: var(--ink-2); cursor: pointer; }
@@ -1043,6 +1060,10 @@
       // email-seeded contacts + add ones email missed; a lead's warm derives from
       // a usable contact at its company.
       wrap.appendChild(buildContactsPanel(s, reload));
+      // 0b. The skills profile behind role fit (S103af, D238): upload a CV to seed
+      // suggested skills + experiences, proof them; leg 3 reads the confirmed profile
+      // against a role's selection criteria.
+      wrap.appendChild(buildSkillsPanel());
       // 1. The split — engaged is LIVE processes only; rejected + closed-other are
       // terminal (in the closed record); no-response is the one-touch grain (D171).
       const split = document.createElement("div"); split.className = "pipe-split";
@@ -1463,6 +1484,125 @@
       const refresh = async () => {
         try { cache = await api("/daily-driver/cdd/contacts"); } catch { body.innerHTML = "<div class='pipe-empty'>Could not load contacts.</div>"; return; }
         summary.textContent = `Contacts (${cache.length}) — the network behind warm access`;
+        draw(refresh);
+      };
+      refresh();
+      return panel;
+    }
+    // The skills profile proof surface (S103af, D238) — matching-engine leg 2. Upload
+    // a CV to seed suggested items; confirm / edit / reject each; add ones the CV
+    // missed. The confirmed profile is what leg 3 reads against a role's criteria.
+    const _SKILL_KINDS = [["skill", "Skill"], ["experience", "Experience"]];
+    // Multipart upload — the JSON api() helper can't send a file (it forces a JSON
+    // content-type), so post FormData directly with only the auth header (the browser
+    // sets the multipart boundary itself).
+    async function uploadCv(file) {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch(API + "/daily-driver/cdd/cv", {
+        method: "POST", headers: { "Authorization": `Bearer ${token()}` }, body: fd,
+      });
+      if (res.status === 401) { localStorage.removeItem("dd_token"); window.location.href = "/login"; throw new Error("401"); }
+      if (!res.ok) { throw new Error(String(res.status)); }
+      return res.json();
+    }
+    function skillBtn(text, cls, fn) {
+      const b = document.createElement("button"); b.type = "button";
+      b.className = cls + " cdd-btn"; b.textContent = text; b.onclick = fn; return b;
+    }
+    function skillRow(s, refresh) {
+      const row = document.createElement("div"); row.className = "skill-row";
+      const suggested = s.proof_state !== "confirmed";
+      const txt = document.createElement("span"); txt.className = "skill-text"; txt.textContent = s.text;
+      const prov = document.createElement("span");
+      prov.className = "skill-prov " + (suggested ? "sug" : "conf");
+      prov.textContent = suggested ? "suggested" : "confirmed";
+      row.appendChild(txt); row.appendChild(prov);
+      const bar = document.createElement("div"); bar.className = "skill-bar";
+      let editing = false;
+      const editBtn = skillBtn("Edit", "btn-ghost", async () => {
+        if (!editing) {
+          editing = true; txt.contentEditable = "true"; txt.focus(); editBtn.textContent = "Save";
+          return;
+        }
+        const newText = txt.textContent.trim();
+        txt.contentEditable = "false"; editing = false; editBtn.textContent = "Edit";
+        if (!newText || newText === s.text) { txt.textContent = s.text; return; }
+        try { await api(`/daily-driver/cdd/skills/${s.item_id}/edit`, { method: "POST", body: JSON.stringify({ text: newText }) }); toast("Updated"); await refresh(); }
+        catch { toast("Update failed", true); await refresh(); }
+      });
+      if (suggested) bar.appendChild(skillBtn("Confirm", "btn-primary", async () => {
+        try { await api(`/daily-driver/cdd/skills/${s.item_id}/confirm`, { method: "POST" }); toast("Confirmed"); await refresh(); }
+        catch { toast("Confirm failed", true); }
+      }));
+      bar.appendChild(editBtn);
+      bar.appendChild(skillBtn("Reject", "btn-ghost", async () => {
+        try { await api(`/daily-driver/cdd/skills/${s.item_id}/reject`, { method: "POST" }); toast("Rejected"); await refresh(); }
+        catch { toast("Reject failed", true); }
+      }));
+      row.appendChild(bar);
+      return row;
+    }
+    function skillAddForm(refresh) {
+      const form = document.createElement("form"); form.className = "skills-add-form";
+      form.innerHTML =
+        `<select name="kind" title="kind">` + _SKILL_KINDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("") + `</select>` +
+        `<input name="text" placeholder="A skill or experience the CV missed" autocomplete="off" required>` +
+        `<button type="submit" class="btn-primary cdd-btn">Add</button>`;
+      form.onsubmit = async (e) => {
+        e.preventDefault(); const fd = new FormData(form);
+        const text = String(fd.get("text") || "").trim(); if (!text) return;
+        try { await api("/daily-driver/cdd/skills", { method: "POST", body: JSON.stringify({ kind: fd.get("kind"), text }) }); toast("Added"); form.reset(); await refresh(); }
+        catch { toast("Add failed", true); }
+      };
+      return form;
+    }
+    function buildSkillsPanel() {
+      const panel = document.createElement("details"); panel.className = "contacts-panel";
+      const summary = document.createElement("summary"); summary.textContent = "Skills profile — what you bring to every role";
+      panel.appendChild(summary);
+      const body = document.createElement("div"); body.className = "contacts-body";
+      panel.appendChild(body);
+      let cache = [];
+      const draw = (refresh) => {
+        body.innerHTML = "";
+        // CV upload — seeds suggested items to proof.
+        const up = document.createElement("div"); up.className = "skills-upload";
+        const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "application/pdf";
+        const upBtn = skillBtn("Upload CV", "btn-primary", async () => {
+          const f = fileIn.files && fileIn.files[0];
+          if (!f) { toast("Choose a PDF first", true); return; }
+          upBtn.disabled = true; upBtn.textContent = "Reading…";
+          try {
+            const r = await uploadCv(f);
+            if (r.needs_text_layer) toast("That PDF has no text layer (scanned) — re-export a text PDF", true);
+            else toast(`Read your CV — ${r.seeded} item${r.seeded === 1 ? "" : "s"} to proof`);
+            fileIn.value = ""; await refresh();
+          } catch (e) {
+            toast(e.message === "422" ? "Not a readable PDF" : (e.message === "413" ? "File too large" : "Upload failed"), true);
+          } finally { upBtn.disabled = false; upBtn.textContent = "Upload CV"; }
+        });
+        up.appendChild(fileIn); up.appendChild(upBtn);
+        const hint = document.createElement("span"); hint.className = "skills-hint";
+        hint.textContent = "Extracted skills seed as suggestions — nothing counts until you confirm it.";
+        up.appendChild(hint);
+        body.appendChild(up);
+        body.appendChild(skillAddForm(refresh));
+        if (!cache.length) { const e = document.createElement("div"); e.className = "skills-empty"; e.textContent = "No skills yet — upload your CV to seed them, or add one above."; body.appendChild(e); return; }
+        // Grouped skills then experiences; suggested before confirmed within each.
+        _SKILL_KINDS.forEach(([kind, label]) => {
+          const items = cache.filter((s) => s.kind === kind)
+            .sort((a, b) => (a.proof_state === "confirmed") - (b.proof_state === "confirmed") || a.text.localeCompare(b.text));
+          if (!items.length) return;
+          const grp = document.createElement("div"); grp.className = "skill-group";
+          const h = document.createElement("div"); h.className = "skill-group-h"; h.textContent = label + "s"; grp.appendChild(h);
+          items.forEach((s) => grp.appendChild(skillRow(s, refresh)));
+          body.appendChild(grp);
+        });
+      };
+      const refresh = async () => {
+        try { cache = await api("/daily-driver/cdd/skills"); } catch { body.innerHTML = "<div class='skills-empty'>Could not load your skills profile.</div>"; return; }
+        const conf = cache.filter((s) => s.proof_state === "confirmed").length;
+        summary.textContent = `Skills profile (${conf}/${cache.length} confirmed) — what you bring to every role`;
         draw(refresh);
       };
       refresh();

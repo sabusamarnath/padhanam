@@ -228,6 +228,10 @@ class AppCompositions:
     daily_driver_goal_graph: object | None = None
     daily_driver_cdd_drafter: object | None = None
     daily_driver_jd_extractor: object | None = None
+    # S103af (D238): the CV parser (pdfplumber) + skills-profile extractor over the
+    # structured-output seam — matching-engine leg 2.
+    daily_driver_cv_parser: object | None = None
+    daily_driver_cv_extractor: object | None = None
     # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
     # when unwired (the /tasks view degrades to an empty list).
     daily_driver_tasks_reader: object | None = None
@@ -598,6 +602,7 @@ def _build_default_compositions() -> AppCompositions:
         build_email_job_search_source,
         build_email_source_metadata,
         build_cdd_drafter,
+        build_cv_extractor,
         build_jd_extractor,
         build_facet_source,
         build_goal_graph,
@@ -649,6 +654,15 @@ def _build_default_compositions() -> AppCompositions:
     # S103ad (D236): the JD extractor over the same structured-output seam — drafts
     # three qualification fields from a pasted job description (matching-engine leg 1).
     daily_driver_jd_extractor = build_jd_extractor(
+        structured_output_port=inference_port
+    )
+    # S103af (D238): the CV parser (pdfplumber, text-layer + multi-column) and the
+    # skills-profile extractor over the same structured-output seam — matching-engine
+    # leg 2. The parser has no vendor SDK in domain; the extractor drafts suggestions.
+    from apps.api._cv_parser import build_cv_parser
+
+    daily_driver_cv_parser = build_cv_parser()
+    daily_driver_cv_extractor = build_cv_extractor(
         structured_output_port=inference_port
     )
     # S65 (D167): the Tasks-view reader over the ingested tasks cache.
@@ -763,6 +777,8 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_goal_graph=daily_driver_goal_graph,
         daily_driver_cdd_drafter=daily_driver_cdd_drafter,
         daily_driver_jd_extractor=daily_driver_jd_extractor,
+        daily_driver_cv_parser=daily_driver_cv_parser,
+        daily_driver_cv_extractor=daily_driver_cv_extractor,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
         daily_driver_email_source_metadata=daily_driver_email_source_metadata,
@@ -1026,6 +1042,8 @@ def create_app(
     app.state.daily_driver_goal_graph = compositions.daily_driver_goal_graph
     app.state.daily_driver_cdd_drafter = compositions.daily_driver_cdd_drafter
     app.state.daily_driver_jd_extractor = compositions.daily_driver_jd_extractor
+    app.state.daily_driver_cv_parser = compositions.daily_driver_cv_parser
+    app.state.daily_driver_cv_extractor = compositions.daily_driver_cv_extractor
     app.state.daily_driver_tasks_reader = (
         compositions.daily_driver_tasks_reader
     )

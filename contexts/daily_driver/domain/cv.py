@@ -11,6 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+class CvParseError(Exception):
+    """The uploaded bytes are not a readable PDF (S103af, D238) — the adapter raises
+    this instead of leaking a vendor exception, so the caller can return a 422. A
+    *readable* PDF with no text layer is not an error — that is ``has_text_layer=False``."""
+
+
 @dataclass(frozen=True)
 class ParsedCv:
     """The result of parsing a CV PDF (S103af, D238).
@@ -26,4 +32,4 @@ class ParsedCv:
     page_count: int = 0
 
 
-__all__ = ["ParsedCv"]
+__all__ = ["CvParseError", "ParsedCv"]

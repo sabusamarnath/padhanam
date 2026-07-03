@@ -19,7 +19,8 @@ class CvParserPort(Protocol):
     async def parse(self, *, pdf_bytes: bytes) -> ParsedCv:
         """Return the parsed CV. When the PDF has no text layer (scanned), returns
         ``ParsedCv(text="", has_text_layer=False, ...)`` — the caller flags it for a
-        text-layer re-export (OCR deferred)."""
+        text-layer re-export (OCR deferred). Raises ``CvParseError`` when the bytes are
+        not a readable PDF (the adapter converts the vendor exception)."""
         ...
 
 

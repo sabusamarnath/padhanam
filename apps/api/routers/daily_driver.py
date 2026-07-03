@@ -33,7 +33,15 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 
 from apps.api.middleware import get_actor_context
@@ -57,6 +65,12 @@ from apps.api.routers._daily_driver_dto import (
     EnrichContactRequest,
     SetContactRoleRequest,
     contact_to_dto,
+    SkillItemDTO,
+    AddSkillItemRequest,
+    AddSkillItemResponse,
+    EditSkillItemRequest,
+    CvUploadResponse,
+    skill_item_to_dto,
     LogWarmingStepRequest,
     WarmingStepDTO,
     warming_step_to_dto,
@@ -145,6 +159,18 @@ from contexts.daily_driver.application.qualification import (
 )
 from contexts.daily_driver.application.extract_jd import (
     extract_jd_qualification as extract_jd_uc,
+)
+from contexts.daily_driver.application.extract_cv import (
+    extract_cv_profile as extract_cv_uc,
+)
+from contexts.daily_driver.domain.cv import CvParseError
+from contexts.daily_driver.application.manage_skills import (
+    SkillValidationError,
+    add_skill_item as add_skill_item_uc,
+    confirm_skill_item as confirm_skill_item_uc,
+    edit_skill_item as edit_skill_item_uc,
+    list_skill_items as list_skill_items_uc,
+    reject_skill_item as reject_skill_item_uc,
 )
 from contexts.daily_driver.application.correction_receipt import (
     list_correction_origins,
@@ -265,6 +291,16 @@ def get_cdd_drafter(request: Request):
 def get_jd_extractor(request: Request):
     """FastAPI dependency: the daily-driver JdExtractorPort (S103ad, D236)."""
     return _state(request, "daily_driver_jd_extractor")
+
+
+def get_cv_parser(request: Request):
+    """FastAPI dependency: the daily-driver CvParserPort (S103af, D238)."""
+    return _state(request, "daily_driver_cv_parser")
+
+
+def get_cv_extractor(request: Request):
+    """FastAPI dependency: the daily-driver CvExtractorPort (S103af, D238)."""
+    return _state(request, "daily_driver_cv_extractor")
 
 
 def get_tasks_reader(request: Request):
@@ -918,6 +954,119 @@ async def post_set_contact_role(
         raise HTTPException(status_code=422, detail=str(e)) from e
     if not ok:
         raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+# --- Skills profile (S103af, D238) — matching-engine leg 2 --------------------
+
+# A defensive cap on the uploaded CV size (a CV is a page or two; a PDF that large
+# is either not a CV or an attack). Read is bounded before the parser sees it.
+_MAX_CV_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/cdd/cv", response_model=CvUploadResponse)
+async def post_upload_cv(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    cv_parser: Annotated[object, Depends(get_cv_parser)],
+    cv_extractor: Annotated[object, Depends(get_cv_extractor)],
+    file: Annotated[UploadFile, File()],
+) -> CvUploadResponse:
+    """Upload a CV PDF and seed the operator's skills profile as suggestions (D238).
+    The parse resolves text-layer + multi-column; a scanned PDF (no text layer) seeds
+    nothing and reports ``needs_text_layer`` for re-export. 413 when too large, 422
+    when the bytes are not a readable PDF."""
+    pdf_bytes = await file.read(_MAX_CV_UPLOAD_BYTES + 1)
+    if len(pdf_bytes) > _MAX_CV_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="CV file too large")
+    if not pdf_bytes:
+        raise HTTPException(status_code=422, detail="empty upload")
+    try:
+        result = await extract_cv_uc(
+            goal_graph=goal_graph, cv_parser=cv_parser, cv_extractor=cv_extractor,
+            actor=actor, pdf_bytes=pdf_bytes,
+        )
+    except CvParseError as e:
+        raise HTTPException(status_code=422, detail="not a readable PDF") from e
+    return CvUploadResponse(
+        seeded=result.seeded, needs_text_layer=result.needs_text_layer,
+        page_count=result.page_count,
+    )
+
+
+@router.get("/cdd/skills", response_model=list[SkillItemDTO])
+async def get_skill_items(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[SkillItemDTO]:
+    """The tenant's skill-profile items (D238) for the proof surface."""
+    items = await list_skill_items_uc(goal_graph=goal_graph, actor=actor)
+    return [skill_item_to_dto(s) for s in items]
+
+
+@router.post("/cdd/skills", status_code=201)
+async def post_add_skill_item(
+    body: AddSkillItemRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> AddSkillItemResponse:
+    """Add a skill item the CV did not surface (D238) — confirmed on add. 422 on a
+    bad kind or empty text."""
+    try:
+        item_id = await add_skill_item_uc(
+            goal_graph=goal_graph, actor=actor, kind=body.kind, text=body.text,
+        )
+    except SkillValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return AddSkillItemResponse(item_id=item_id)
+
+
+@router.post("/cdd/skills/{item_id}/confirm", status_code=204)
+async def post_confirm_skill_item(
+    item_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Confirm a suggested item → confirmed (D238). 404 when absent."""
+    ok = await confirm_skill_item_uc(
+        goal_graph=goal_graph, actor=actor, item_id=item_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="skill item not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/skills/{item_id}/edit", status_code=204)
+async def post_edit_skill_item(
+    item_id: UUID,
+    body: EditSkillItemRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Edit a skill item's text → confirmed (D238). 422 on empty text, 404 absent."""
+    try:
+        ok = await edit_skill_item_uc(
+            goal_graph=goal_graph, actor=actor, item_id=item_id, text=body.text,
+        )
+    except SkillValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not ok:
+        raise HTTPException(status_code=404, detail="skill item not found")
+    return Response(status_code=204)
+
+
+@router.post("/cdd/skills/{item_id}/reject", status_code=204)
+async def post_reject_skill_item(
+    item_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Reject (delete) a skill item (D238). 404 when absent."""
+    ok = await reject_skill_item_uc(
+        goal_graph=goal_graph, actor=actor, item_id=item_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="skill item not found")
     return Response(status_code=204)
 
 
