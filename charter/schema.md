@@ -1106,6 +1106,24 @@ name a qualification field it touched, bumping that field's `q_<field>_ts`.
 only when the field is active at the current stage per the activation map. No new node
 type, no migration.
 
+#### `:SkillItem` nodes (S103af, D238) — the operator skills profile (matching-engine leg 2)
+
+A **skill item** is one entry in the operator's **standing skills profile** extracted
+from their CV, read by every opportunity (not per-opportunity data). `:SkillItem` is
+**tenant-scoped**, keyed by `item_id` (like `:Contact` by `contact_id`), landing via
+`migrations/neo4j/0011_skills_profile.cypher` (the `0010_contact` precedent — a
+`(tenant_id, item_id)` uniqueness constraint + a `tenant_id` index, idempotent DDL).
+Properties: **`kind`** (`skill` | `experience`), **`text`** (the skill name or the
+experience line), **`proof_state`** (`suggested` → `confirmed`, the extract-and-proof
+lifecycle mirroring `:Contact`'s `system_suggested`/`user_authored`, D215/D222), and
+**`provenance_origin`** (`cv_extraction`). The CV PDF is parsed behind a
+`CvParserPort` (pdfplumber adapter, text-layer + multi-column; OCR deferred) and its
+text stored on a tenant-scoped `:CvDocument` (or the parsed text held for
+re-extraction); a `CvExtractorPort` over the `StructuredOutputPort` (the D236 seam)
+drafts items **`suggested`**, and only the operator's **confirm** promotes an item to
+`confirmed` — the profile leg 3 reads against the D228 selection criteria to feed the
+D221 fit tier. No vendor SDK in domain (parser + LLM both behind ports).
+
 #### `gate_id` on authored elements (S103g, D207) — the dual rollup
 
 A `:Lever` / `:Intermediary` / `:External` carries an optional **`gate_id`** when

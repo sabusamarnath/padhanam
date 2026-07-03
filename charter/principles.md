@@ -200,6 +200,16 @@ This extends "observability is foundation" and "optimization output is recommend
 
 Origin: D185 — pointing the Phase-1 optimization loop at the moat's matcher as its first non-inference target, the pivot from hand-correction to process improvement, dogfooded in the gate week.
 
+### Real names never enter committed files; placeholders go in at write time
+
+Real company names, contact names, personal email addresses, and other personal identifiers never appear in any committed file (session logs, charter entries, code, or comments). At the moment a log or charter entry would name a real entity, it is written with a stable fictional placeholder. **The mapping file (`charter/.scrub-mapping`, git-ignored) is the source of truth, not the placeholder set.** A real name is looked up in the mapping first; only a name not yet in the mapping gets a new placeholder, drawn from the Microsoft-style fictional pool (Contoso, Fabrikam, Litware, Wingtip, Northwind, Adventure Works) and then appended to the mapping. A placeholder is **stable per real entity**: the same real name maps to the same placeholder in every file, forever. Generic recruiting infrastructure (ATS/vendor names such as Ashby, Workday, Oracle, iCIMS, LinkedIn) is **not** scrubbed; it is platform plumbing that reveals no job target.
+
+**The mapping file is a secret, never committed.** It is the single document that reverses the entire public scrub, so it is treated as a credential: git-ignored, never committed, backed up outside the repo, never echoed to any surface.
+
+**The rule is enforced, not just stated.** Two checks make known leakage impossible: the mapping path is in `.gitignore`, and a tree-wide check confirms no committed file contains any real name from the mapping's real-name column. Residual, stated honestly: the checks catch only names already in the mapping; a brand-new real name is caught by writer judgment at write time. The mapping plus checks make known leakage impossible and new leakage a one-lookup discipline; they do not make it zero-judgment.
+
+Origin: adopted in the S103ae conversation after the publish sequence exposed that the scrub-before-publish gate had failed by silent omission (the S103ad/S103ae token-list miss) — the rule for which names to scrub lived in memory, not a checkable artifact; landed here (S103af) as the first charter-first commit after adoption.
+
 ### A proof on fakes is not a proof on the real surface
 
 Verification has to exercise the live surface — the real database constraint, the real render, the real integration — not only in-memory repositories, CLI smoke, or fixtures. A test that passes against a fake proves the code's logic; it does not prove the system works, because the fake does not carry the real surface's constraints. "Proven on a fixture" and "live-broken" can be true at the same moment, and the gap is invisible until the live surface is touched.
