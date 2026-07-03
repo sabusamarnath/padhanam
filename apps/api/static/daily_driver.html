@@ -491,6 +491,16 @@
     .qual-fromc { font-size: 9px; color: var(--warm); font-style: italic; }
     .qual-line { display: flex; gap: 5px; }
     .qual-val { flex: 1; font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    /* D236: the JD paste box + the draft-as-suggestion block */
+    .qual-paste { margin: 8px 0 4px; }
+    .qual-paste > summary { font-size: 11px; font-weight: 600; color: var(--teal); cursor: pointer; }
+    .qual-paste-body { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .qual-jd { font: inherit; font-size: 11.5px; padding: 6px 8px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); resize: vertical; }
+    .qual-draft { margin: 5px 0 2px; padding: 6px 8px; border: 1px solid var(--teal); border-radius: 6px; background: var(--surface-2); }
+    .qual-draft-lab { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal); }
+    .qual-draft-text { font-size: 11.5px; color: var(--ink-2); line-height: 1.4; margin: 3px 0 5px; white-space: pre-wrap; }
+    .qual-draft.used { opacity: 0.55; }
+    .qual-draft-bar { display: flex; gap: 5px; }
     .act-form { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
     .act-form input, .act-form select { font: inherit; font-size: 11px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
     .act-form input[name="kind"] { flex: 1; min-width: 120px; }
@@ -2591,9 +2601,40 @@
             try { await api(`/daily-driver/cdd/opportunity/${oppId}/qualification`, { method: "POST", body: JSON.stringify({ field_key: f.key, value: val.value }) }); toast("Recorded"); await load(); await reload(); }
             catch { toast("Save failed", true); }
           });
-          line.appendChild(val); line.appendChild(save); row.appendChild(line); body.appendChild(row);
+          line.appendChild(val); line.appendChild(save); row.appendChild(line);
+          // D236: a JD-extracted draft is a SUGGESTION — Use populates the editable
+          // input (Save then writes the value + clears the draft), Dismiss clears it.
+          // The draft is never the field value; only the operator's Save creates one.
+          if (f.draft) {
+            const d = document.createElement("div"); d.className = "qual-draft";
+            d.innerHTML = `<span class="qual-draft-lab">Drafted from the JD</span>` +
+              `<div class="qual-draft-text">${escapeHtml(f.draft)}</div>`;
+            const dbar = document.createElement("div"); dbar.className = "qual-draft-bar";
+            dbar.appendChild(contactBtn("Use", "btn-ghost", () => { val.value = f.draft; val.focus(); d.classList.add("used"); }));
+            dbar.appendChild(contactBtn("Dismiss", "btn-ghost", async () => {
+              try { await api(`/daily-driver/cdd/opportunity/${oppId}/qualification/${f.key}/dismiss-draft`, { method: "POST" }); toast("Dismissed"); await load(); await reload(); }
+              catch { toast("Dismiss failed", true); }
+            }));
+            d.appendChild(dbar); row.appendChild(d);
+          }
+          body.appendChild(row);
         });
       };
+      // D236: the paste box — paste a job description to draft why-open / success-
+      // measures / selection-criteria as Use/Dismiss suggestions (matching-engine leg 1).
+      const paste = document.createElement("details"); paste.className = "qual-paste";
+      paste.appendChild(Object.assign(document.createElement("summary"), { textContent: "Paste job description → draft 3 fields" }));
+      const pwrap = document.createElement("div"); pwrap.className = "qual-paste-body";
+      const pta = document.createElement("textarea"); pta.className = "qual-jd"; pta.placeholder = "Paste the job description here…"; pta.rows = 5;
+      const pbtn = contactBtn("Extract from JD", "btn-primary", async () => {
+        const text = pta.value.trim(); if (!text) return;
+        pbtn.disabled = true; pbtn.textContent = "Extracting…";
+        try { await api(`/daily-driver/cdd/opportunity/${oppId}/extract-jd`, { method: "POST", body: JSON.stringify({ text }) }); toast("Drafted — review the suggestions"); pta.value = ""; paste.open = false; await load(); await reload(); }
+        catch { toast("Extract failed", true); }
+        finally { pbtn.disabled = false; pbtn.textContent = "Extract from JD"; }
+      });
+      pwrap.appendChild(pta); pwrap.appendChild(pbtn); paste.appendChild(pwrap);
+      sec.appendChild(paste);
       load();
       return sec;
     }
