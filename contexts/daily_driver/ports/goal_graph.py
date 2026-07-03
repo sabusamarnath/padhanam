@@ -224,6 +224,14 @@ class GoalGraphPort(Protocol):
         user_authored, proof_state confirmed (the operator authored it directly)."""
         ...
 
+    async def seed_skill_item(
+        self, *, tenant_context: TenantContext, item_id: UUID, kind: str, text: str,
+    ) -> None:
+        """Seed a CV-extracted skill item (D238) — provenance cv_extraction,
+        proof_state suggested. Idempotent + non-clobbering on re-upload (proof_state
+        is written ON CREATE only, so re-seeding never un-confirms a proofed item)."""
+        ...
+
     async def confirm_skill_item(
         self, *, tenant_context: TenantContext, item_id: UUID
     ) -> bool:

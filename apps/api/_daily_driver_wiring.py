@@ -51,12 +51,18 @@ from contexts.daily_driver.domain.cdd import (
 )
 from contexts.daily_driver.domain.contacts import ContactView
 from contexts.daily_driver.domain.skills import SkillItemView
+from contexts.daily_driver.domain.cv_extraction import (
+    CV_EXTRACT_SCHEMA,
+    build_cv_extract_prompt,
+    parse_cv_extract,
+)
 from contexts.daily_driver.domain.jd_extraction import (
     JD_EXTRACT_SCHEMA,
     build_jd_extract_prompt,
     parse_jd_extract,
 )
 from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
+from contexts.daily_driver.ports.cv_extractor import CvExtractorPort
 from contexts.daily_driver.ports.jd_extractor import JdExtractorPort
 from shared_kernel.structured_output import (
     StructuredOutputParseFailure,
@@ -728,6 +734,14 @@ class GoalGraphAdapter:
         await self._outcome_graph.merge_skill_item(
             tenant_context=tenant_context, item_id=item_id, kind=kind, text=text,
             proof_state="confirmed", provenance_origin="user_authored",
+        )
+
+    async def seed_skill_item(
+        self, *, tenant_context, item_id, kind, text
+    ) -> None:
+        await self._outcome_graph.merge_skill_item(
+            tenant_context=tenant_context, item_id=item_id, kind=kind, text=text,
+            proof_state="suggested", provenance_origin="cv_extraction",
         )
 
     async def confirm_skill_item(self, *, tenant_context, item_id) -> bool:
@@ -1591,9 +1605,39 @@ def build_jd_extractor(
     return JdExtractorAdapter(structured_output_port=structured_output_port)
 
 
+class CvExtractorAdapter:
+    """apps/ adapter implementing daily-driver's ``CvExtractorPort`` over the
+    provider-agnostic ``StructuredOutputPort`` (S103af, D238 — the JdExtractorAdapter
+    precedent). The pure domain helpers build the prompt + schema and parse the
+    response; the litellm SDK stays confined to the inference adapter, never here."""
+
+    def __init__(self, *, structured_output_port: StructuredOutputPort) -> None:
+        self._structured_output = structured_output_port
+
+    async def extract(self, *, cv_text: str):
+        request = StructuredOutputRequest(
+            prompt=build_cv_extract_prompt(cv_text),
+            schema=CV_EXTRACT_SCHEMA,
+        )
+        try:
+            response = await self._structured_output.generate_structured(request)
+        except StructuredOutputParseFailure:
+            # No schema-conforming extraction — the use case seeds nothing.
+            return None
+        return parse_cv_extract(response.value)
+
+
+def build_cv_extractor(
+    *, structured_output_port: StructuredOutputPort
+) -> CvExtractorAdapter:
+    """Wire daily-driver's ``CvExtractorPort`` over the structured-output seam."""
+    return CvExtractorAdapter(structured_output_port=structured_output_port)
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
     "CddDrafterAdapter",
+    "CvExtractorAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
     "FacetSourceAdapter",
@@ -1604,6 +1648,7 @@ __all__ = [
     "UnitGraphAdapter",
     "build_calendar_events_reader",
     "build_cdd_drafter",
+    "build_cv_extractor",
     "build_jd_extractor",
     "build_commitment_repository",
     "build_day_repository",

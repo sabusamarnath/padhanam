@@ -736,13 +736,18 @@ DETACH DELETE c
 # item_id (the 0011 constraint). Drafted proof_state='suggested' by CV extraction,
 # promoted to 'confirmed' by the operator's confirm/edit — the extract-and-proof
 # lifecycle (D215/D222). Idempotent MERGE on (tenant_id, item_id).
+#
+# proof_state + provenance_origin are ON CREATE only: re-uploading a CV (which seeds
+# on a deterministic item_id, S103af) must never un-confirm an already-confirmed item
+# or overwrite its authored provenance. kind/text always SET (a re-seed carries the
+# same text; a manual create is always a fresh id, so always ON CREATE anyway).
 _MERGE_SKILL_ITEM = """
 MERGE (s:SkillItem {tenant_id: $tenant_id, item_id: $item_id})
-ON CREATE SET s.created_at = $created_at
-SET s.kind = $kind,
-    s.text = $text,
+ON CREATE SET s.created_at = $created_at,
     s.proof_state = $proof_state,
     s.provenance_origin = $provenance_origin
+SET s.kind = $kind,
+    s.text = $text
 """
 _LIST_SKILL_ITEMS = """
 MATCH (s:SkillItem {tenant_id: $tenant_id})
