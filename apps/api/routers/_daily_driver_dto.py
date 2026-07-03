@@ -1071,6 +1071,17 @@ def element_binding_to_dto(b) -> "ElementBindingDTO":
     )
 
 
+class CorrectionOriginDTO(BaseModel):
+    """A corrected unit's recorded origin, for the corrected-receipt Undo (S103ae/D237).
+    ``from_kind``/``from_element_id`` are the element the correction moved AWAY from —
+    what Undo relinks back to. Absent from the list = no recorded origin = not undoable."""
+
+    unit_id: str
+    verb: str
+    from_kind: str | None = None
+    from_element_id: str | None = None
+
+
 class EmailSourceDTO(BaseModel):
     """The read-only ingested source of one email facet, for the verification
     drawer's openable-source leg (D212): sender, date, subject, body."""

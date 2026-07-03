@@ -68,6 +68,7 @@ from apps.api.routers._daily_driver_dto import (
     ActivityEntryDTO,
     activity_to_dto,
     ElementBindingDTO,
+    CorrectionOriginDTO,
     ElementEvidenceSummaryDTO,
     EmailSourceDTO,
     PipelineAssessmentDTO,
@@ -144,6 +145,9 @@ from contexts.daily_driver.application.qualification import (
 )
 from contexts.daily_driver.application.extract_jd import (
     extract_jd_qualification as extract_jd_uc,
+)
+from contexts.daily_driver.application.correction_receipt import (
+    list_correction_origins,
 )
 from contexts.daily_driver.application.activity import (
     ActivityError,
@@ -1156,6 +1160,25 @@ async def post_relink_cdd_evidence(
             status_code=404, detail="binding or target element not found"
         )
     return Response(status_code=204)
+
+
+@router.get("/cdd/correction-origins", response_model=list[CorrectionOriginDTO])
+async def get_correction_origins(
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    audit_reader: Annotated[object | None, Depends(get_audit_reader)],
+) -> list[CorrectionOriginDTO]:
+    """The recorded origins of corrected bindings (S103ae/D237) — the from-target of
+    each unit's latest relink/unlink, from the D203 audit trail, for the corrected-
+    receipt Undo. Units absent here have no recorded origin (pre-S103v) → not undoable.
+    Declared before ``/cdd/{outcome_id}`` so ``correction-origins`` is not parsed as one."""
+    origins = await list_correction_origins(audit_reader=audit_reader, actor=actor)
+    return [
+        CorrectionOriginDTO(
+            unit_id=uid, verb=o["verb"],
+            from_kind=o.get("from_kind"), from_element_id=o.get("from_element_id"),
+        )
+        for uid, o in origins.items()
+    ]
 
 
 @router.get("/cdd/{outcome_id}", response_model=GoalCddDTO)
