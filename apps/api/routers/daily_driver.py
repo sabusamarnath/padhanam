@@ -78,6 +78,8 @@ from apps.api.routers._daily_driver_dto import (
     SetQualificationRequest,
     ExtractJdRequest,
     qualification_to_dto,
+    MatchViewDTO,
+    match_view_to_dto,
     LogActivityRequest,
     ActivityEntryDTO,
     activity_to_dto,
@@ -171,6 +173,11 @@ from contexts.daily_driver.application.manage_skills import (
     edit_skill_item as edit_skill_item_uc,
     list_skill_items as list_skill_items_uc,
     reject_skill_item as reject_skill_item_uc,
+)
+from contexts.daily_driver.application.opportunity_match import (
+    accept_fit_tier_suggestion as accept_fit_tier_uc,
+    read_opportunity_match as read_match_uc,
+    run_opportunity_match as run_match_uc,
 )
 from contexts.daily_driver.application.correction_receipt import (
     list_correction_origins,
@@ -301,6 +308,11 @@ def get_cv_parser(request: Request):
 def get_cv_extractor(request: Request):
     """FastAPI dependency: the daily-driver CvExtractorPort (S103af, D238)."""
     return _state(request, "daily_driver_cv_extractor")
+
+
+def get_match_port(request: Request):
+    """FastAPI dependency: the daily-driver MatchPort (S103ag, D239)."""
+    return _state(request, "daily_driver_match_port")
 
 
 def get_tasks_reader(request: Request):
@@ -1150,6 +1162,73 @@ async def post_dismiss_qualification_draft(
         )
     except QualificationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    return Response(status_code=204)
+
+
+# --- The match: coverage of the confirmed profile vs selection criteria (S103ag, D239) ---
+
+@router.get(
+    "/cdd/opportunity/{opportunity_id}/match",
+    response_model=MatchViewDTO,
+)
+async def get_opportunity_match(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> MatchViewDTO:
+    """The stored match for an opportunity (S103ag, D239) — per-criterion coverage,
+    the fit-tier suggestion next to the current fit tier, and an on-read staleness
+    flag. 404 when the opportunity is absent."""
+    view = await read_match_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+    )
+    if view is None:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return match_view_to_dto(view)
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/match",
+    response_model=MatchViewDTO,
+)
+async def post_run_opportunity_match(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    match_port: Annotated[object, Depends(get_match_port)],
+) -> MatchViewDTO:
+    """Run (or re-run) the match (S103ag, D239) — reads the selection criteria + the
+    confirmed profile, marks each criterion strength/partial/gap grounded-strict, and
+    stores the result with its fit-tier suggestion. Returns the fresh view. 404 when
+    the opportunity is absent."""
+    view = await run_match_uc(
+        goal_graph=goal_graph, match_port=match_port, actor=actor,
+        opportunity_id=opportunity_id,
+    )
+    if view is None:
+        raise HTTPException(status_code=404, detail="opportunity not found")
+    return match_view_to_dto(view)
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/fit-tier/accept",
+    status_code=204,
+)
+async def post_accept_fit_tier(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> Response:
+    """Accept the match's fit-tier suggestion (S103ag, D239) — promotes it to the
+    operator's ``fit_tier``. 404 when there is nothing to accept (no run yet, or the
+    opportunity is absent)."""
+    ok = await accept_fit_tier_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=404, detail="no fit-tier suggestion to accept",
+        )
     return Response(status_code=204)
 
 

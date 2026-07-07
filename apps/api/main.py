@@ -232,6 +232,9 @@ class AppCompositions:
     # structured-output seam — matching-engine leg 2.
     daily_driver_cv_parser: object | None = None
     daily_driver_cv_extractor: object | None = None
+    # S103ag (D239): the match — confirmed profile vs a role's selection criteria over
+    # the structured-output seam — matching-engine leg 3.
+    daily_driver_match_port: object | None = None
     # S65 (D167): the Tasks-view reader over the ingested tasks cache. None
     # when unwired (the /tasks view degrades to an empty list).
     daily_driver_tasks_reader: object | None = None
@@ -604,6 +607,7 @@ def _build_default_compositions() -> AppCompositions:
         build_cdd_drafter,
         build_cv_extractor,
         build_jd_extractor,
+        build_match,
         build_facet_source,
         build_goal_graph,
         build_open_cases_reader,
@@ -663,6 +667,11 @@ def _build_default_compositions() -> AppCompositions:
 
     daily_driver_cv_parser = build_cv_parser()
     daily_driver_cv_extractor = build_cv_extractor(
+        structured_output_port=inference_port
+    )
+    # S103ag (D239): the match over the same structured-output seam — per-criterion
+    # coverage of the confirmed profile against a role's selection criteria (leg 3).
+    daily_driver_match_port = build_match(
         structured_output_port=inference_port
     )
     # S65 (D167): the Tasks-view reader over the ingested tasks cache.
@@ -779,6 +788,7 @@ def _build_default_compositions() -> AppCompositions:
         daily_driver_jd_extractor=daily_driver_jd_extractor,
         daily_driver_cv_parser=daily_driver_cv_parser,
         daily_driver_cv_extractor=daily_driver_cv_extractor,
+        daily_driver_match_port=daily_driver_match_port,
         daily_driver_tasks_reader=daily_driver_tasks_reader,
         daily_driver_facet_source=daily_driver_facet_source,
         daily_driver_email_source_metadata=daily_driver_email_source_metadata,
@@ -1044,6 +1054,7 @@ def create_app(
     app.state.daily_driver_jd_extractor = compositions.daily_driver_jd_extractor
     app.state.daily_driver_cv_parser = compositions.daily_driver_cv_parser
     app.state.daily_driver_cv_extractor = compositions.daily_driver_cv_extractor
+    app.state.daily_driver_match_port = compositions.daily_driver_match_port
     app.state.daily_driver_tasks_reader = (
         compositions.daily_driver_tasks_reader
     )

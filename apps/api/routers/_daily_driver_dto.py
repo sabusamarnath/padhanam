@@ -789,6 +789,43 @@ def qualification_to_dto(f) -> "QualificationFieldDTO":
     )
 
 
+class CriterionCoverageDTO(BaseModel):
+    """One selection criterion's coverage verdict (S103ag, D239)."""
+
+    criterion: str
+    band: str          # strength / partial / gap
+    evidence: str      # profile evidence for a strength/partial; empty for a gap
+
+
+class MatchViewDTO(BaseModel):
+    """The match of the confirmed profile against a role's selection criteria
+    (S103ag, D239) — per-criterion coverage + a fit-tier suggestion shown next to the
+    operator's current fit tier, with an on-read staleness flag."""
+
+    has_result: bool               # a match has been run and stored
+    has_criteria: bool             # selection_criteria present to match on
+    coverages: list[CriterionCoverageDTO]
+    band_counts: dict[str, int]
+    suggested_fit_tier: str | None = None
+    current_fit_tier: str | None = None
+    accepted: bool                 # current fit tier == suggestion
+    stale: bool                    # inputs changed since the run
+    ran_at: str | None = None
+
+
+def match_view_to_dto(v) -> "MatchViewDTO":
+    return MatchViewDTO(
+        has_result=v.has_result, has_criteria=v.has_criteria,
+        coverages=[
+            CriterionCoverageDTO(criterion=c.criterion, band=c.band, evidence=c.evidence)
+            for c in v.coverages
+        ],
+        band_counts=v.band_counts, suggested_fit_tier=v.suggested_fit_tier,
+        current_fit_tier=v.current_fit_tier, accepted=v.accepted,
+        stale=v.stale, ran_at=v.ran_at,
+    )
+
+
 class LogActivityRequest(BaseModel):
     """Log an activity against an opportunity (S103w, D229)."""
 

@@ -704,6 +704,31 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, opportunity_id=opportunity_id, text=text,
         )
 
+    async def set_opportunity_match(
+        self, *, tenant_context, opportunity_id, result_json,
+        fit_tier_suggested, inputs_hash,
+    ) -> bool:
+        return await self._outcome_graph.set_opportunity_match(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            result_json=result_json, fit_tier_suggested=fit_tier_suggested,
+            inputs_hash=inputs_hash,
+        )
+
+    async def set_opportunity_fit_tier(
+        self, *, tenant_context, opportunity_id, fit_tier
+    ) -> bool:
+        return await self._outcome_graph.set_opportunity_fit_tier(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            fit_tier=fit_tier,
+        )
+
+    async def read_opportunity_match(
+        self, *, tenant_context, opportunity_id
+    ) -> dict | None:
+        return await self._outcome_graph.read_opportunity_match(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+        )
+
     async def confirm_contact(self, *, tenant_context, contact_id) -> bool:
         return await self._outcome_graph.confirm_contact(
             tenant_context=tenant_context, contact_id=contact_id

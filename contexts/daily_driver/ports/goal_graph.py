@@ -268,6 +268,29 @@ class GoalGraphPort(Protocol):
         leg 3's match. Returns True on match."""
         ...
 
+    async def set_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        result_json: str, fit_tier_suggested: str | None, inputs_hash: str,
+    ) -> bool:
+        """Store the leg-3 match result on the opportunity (S103ag, D239) — the
+        per-criterion coverage JSON, the fit-tier suggestion, and the input
+        fingerprint (the staleness signal). Never touches ``fit_tier``."""
+        ...
+
+    async def set_opportunity_fit_tier(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, fit_tier: str,
+    ) -> bool:
+        """Promote the match's fit-tier suggestion to the operator's ``fit_tier``
+        (S103ag, D239) — the accept path, a targeted SET. Returns True on match."""
+        ...
+
+    async def read_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+    ) -> dict | None:
+        """Read the stored match + the current selection criteria (S103ag, D239) for
+        the on-demand match read + staleness recompute. ``None`` when absent."""
+        ...
+
     async def set_qualification_draft(
         self, *, tenant_context: TenantContext, opportunity_id: UUID,
         field_key: str, value: str | None,

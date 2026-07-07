@@ -526,6 +526,29 @@ class OutcomeGraphPort(Protocol):
         """Store the pasted job-description text on the opportunity (S103ad/D236)."""
         ...
 
+    async def set_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        result_json: str, fit_tier_suggested: str | None, inputs_hash: str,
+    ) -> bool:
+        """Store the leg-3 match result on the opportunity (S103ag, D239) —
+        schemaless props (coverage JSON, fit-tier suggestion, input fingerprint, run
+        instant); never touches ``fit_tier``."""
+        ...
+
+    async def set_opportunity_fit_tier(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, fit_tier: str,
+    ) -> bool:
+        """Promote the match's suggestion to the operator's ``fit_tier`` (S103ag,
+        D239) — the accept path, a targeted SET."""
+        ...
+
+    async def read_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+    ) -> dict | None:
+        """Read the stored match + the current selection criteria (S103ag, D239) for
+        the on-demand match read + staleness recompute."""
+        ...
+
     async def list_contacts(
         self, *, tenant_context: TenantContext
     ) -> Sequence[ContactRecord]:

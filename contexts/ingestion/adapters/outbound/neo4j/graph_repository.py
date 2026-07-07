@@ -848,6 +848,51 @@ class Neo4jGraphRepository:
         except Neo4jError as e:
             raise GraphRepositoryConfigurationError(str(e)) from e
 
+    async def set_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        result_json: str, fit_tier_suggested: str | None, inputs_hash: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_opportunity_match(
+                    opportunity_id=opportunity_id, result_json=result_json,
+                    fit_tier_suggested=fit_tier_suggested, inputs_hash=inputs_hash,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def set_opportunity_fit_tier(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID, fit_tier: str,
+    ) -> bool:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.set_opportunity_fit_tier(
+                    opportunity_id=opportunity_id, fit_tier=fit_tier,
+                )
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
+    async def read_opportunity_match(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+    ) -> dict | None:
+        try:
+            async with TenantScopedNeo4jSession(self._driver, tenant_context) as s:
+                return await s.read_opportunity_match(opportunity_id=opportunity_id)
+        except _RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryError(str(e)) from e
+        except _NON_RETRYABLE_DRIVER_EXC as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+        except Neo4jError as e:
+            raise GraphRepositoryConfigurationError(str(e)) from e
+
     async def attach_unit_to_opportunity(
         self, *, tenant_context: TenantContext, unit_id: UUID, opportunity_id: UUID
     ) -> None:

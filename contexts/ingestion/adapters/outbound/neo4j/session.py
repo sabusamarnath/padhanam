@@ -584,6 +584,40 @@ MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
 SET o.job_description = $text
 RETURN o.opportunity_id AS opportunity_id
 """
+# The match result (S103ag, D239): leg 3 stores the per-criterion coverage (a JSON
+# string), the coverage-computed fit-tier suggestion, an input fingerprint (the
+# staleness signal), and the run instant — all schemaless props, no migration. The
+# match never writes o.fit_tier (that stays the operator's, D221/D200).
+_SET_OPPORTUNITY_MATCH = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.match_result = $match_result,
+    o.fit_tier_suggested = $fit_tier_suggested,
+    o.match_inputs_hash = $match_inputs_hash,
+    o.match_ran_at = $match_ran_at
+RETURN o.opportunity_id AS opportunity_id
+"""
+# Accept the suggestion (S103ag, D239): promote fit_tier_suggested → fit_tier via a
+# targeted SET (not merge_opportunity, which would rewrite the whole node). The only
+# place the match's suggestion reaches the operator's authoritative fit_tier.
+_SET_OPPORTUNITY_FIT_TIER = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.fit_tier = $fit_tier
+RETURN o.opportunity_id AS opportunity_id
+"""
+# Read the stored match + its current inputs (S103ag, D239) — a targeted per-opportunity
+# read (the read_opportunity_qualification altitude), not a widening of
+# _LIST_OPPORTUNITIES. Returns the current selection criteria (+ its timestamp) so the
+# read use case recomputes the input fingerprint and flags staleness.
+_READ_OPPORTUNITY_MATCH = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+RETURN o.fit_tier AS fit_tier,
+       o.fit_tier_suggested AS fit_tier_suggested,
+       o.match_result AS match_result,
+       o.match_ran_at AS match_ran_at,
+       o.match_inputs_hash AS match_inputs_hash,
+       o.q_selection_criteria AS selection_criteria,
+       o.q_selection_criteria_ts AS selection_criteria_ts
+"""
 # The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
 # the required reason + closed_at; the node, its BELONGS_TO memberships, and its
 # units' binds are untouched — a closed process is read-only history, reopenable.
@@ -1665,6 +1699,62 @@ class TenantScopedNeo4jSession:
             "text": text,
         })
         return await result.single() is not None
+
+    async def set_opportunity_match(
+        self, *, opportunity_id: UUID, result_json: str,
+        fit_tier_suggested: str | None, inputs_hash: str,
+    ) -> bool:
+        """Store the leg-3 match result on the opportunity (S103ag, D239) — the
+        per-criterion coverage JSON, the fit-tier suggestion, the input fingerprint,
+        and the run instant (``_now_utc``). Schemaless, no migration; never touches
+        ``o.fit_tier``. Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_OPPORTUNITY_MATCH, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "match_result": result_json,
+            "fit_tier_suggested": fit_tier_suggested,
+            "match_inputs_hash": inputs_hash,
+            "match_ran_at": _now_utc().isoformat(),
+        })
+        return await result.single() is not None
+
+    async def set_opportunity_fit_tier(
+        self, *, opportunity_id: UUID, fit_tier: str,
+    ) -> bool:
+        """Promote the match's fit-tier suggestion to the operator's ``fit_tier``
+        (S103ag, D239) — the accept path, a targeted SET. Returns True on match."""
+        session = self._bound_session
+        result = await session.run(_SET_OPPORTUNITY_FIT_TIER, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "fit_tier": fit_tier,
+        })
+        return await result.single() is not None
+
+    async def read_opportunity_match(
+        self, *, opportunity_id: UUID,
+    ) -> dict | None:
+        """Read the stored match + the current selection criteria (S103ag, D239) for
+        the on-demand match read. ``None`` when the opportunity is absent or
+        cross-tenant. All values are strings or None."""
+        session = self._bound_session
+        result = await session.run(_READ_OPPORTUNITY_MATCH, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        })
+        row = await result.single()
+        if row is None:
+            return None
+        return {
+            "fit_tier": row["fit_tier"],
+            "fit_tier_suggested": row["fit_tier_suggested"],
+            "match_result": row["match_result"],
+            "match_ran_at": row["match_ran_at"],
+            "match_inputs_hash": row["match_inputs_hash"],
+            "selection_criteria": row["selection_criteria"],
+            "selection_criteria_ts": row["selection_criteria_ts"],
+        }
 
     async def delete_opportunity(self, *, opportunity_id: UUID) -> bool:
         """Reject (delete) a suggested opportunity (S103o, D215) — DETACH DELETE the
