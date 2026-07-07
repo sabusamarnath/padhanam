@@ -949,6 +949,10 @@ evidence distributes across opportunities plus an honest unclustered residual
 | `status`            | `String`        | `live` or `closed` (S103n, D214). Absent on opportunities created before D214; the read coalesces a missing value to `live`, so the live-set filter needs no backfill. Closing sets `closed`; reopen sets `live` |
 | `closed_reason`     | `String`/`null` | required when `closed` (S103n, D214): one of `won`, `declined`, `withdrawn_or_killed`, `rejected`, `went_cold`. `null` when live. With `current_gate_id` it gives the real-outcome-versus-non-start signal (closed at Apply = response problem; closed after a final round = conversion problem) |
 | `closed_at`         | `DateTime`/`null` | when the opportunity was closed (S103n, D214); cleared on reopen |
+| `fit_tier_suggested` | `String`/`null` | (S103ag, D239) the match's coverage-computed fit-tier suggestion (`bullseye`/`strong`/`opportunistic`), a **separate slot** from `fit_tier`; the surface shows both and an accept action promotes it. The match never writes `fit_tier` |
+| `match_result`      | `String`/`null` | (S103ag, D239) the last match's per-criterion assessments as a JSON string (`[{criterion, band, evidence}]`, band ∈ `strength`/`partial`/`gap`); read on demand and structured for leg 4 (tailoring) |
+| `match_ran_at`      | `String`/`null` | (S103ag, D239) ISO timestamp when the match last ran (shown as "matched N days ago") |
+| `match_inputs_hash` | `String`/`null` | (S103ag, D239) a stable hash over the normalized selection criteria + the sorted confirmed `(item_id, text)` profile pairs at match time; the read recomputes the current inputs' hash and flags the match **stale** on any mismatch (D155, no silent stale verdict). A fingerprint, not a timestamp, because the profile carries no usable change timestamp and a timestamp misses a skill deletion |
 | `created_at`        | `DateTime`      | set on initial MERGE                                               |
 
 Uniqueness constraint: `opportunity_unique_per_tenant` on `(tenant_id,
@@ -966,6 +970,15 @@ opportunity node, its `BELONGS_TO` memberships, its units' binds, and its
 correspondence all stay intact and reopenable — a closed process is read-only
 history, never deleted. The live set is the read filtered to `coalesce(status,
 'live') <> 'closed'`; closed opportunities still list, marked with their reason.
+
+The **match result** (S103ag, D239) is likewise a **schemaless property add** — no new
+label, **no migration** (the `job_description`/closed-state precedent). Leg 3 reads the
+opportunity's `q_selection_criteria` (D236) against the operator's confirmed `:SkillItem`
+profile (D238) via a `MatchPort` over the `StructuredOutputPort`, and stores
+`fit_tier_suggested` + `match_result` + `match_ran_at` + `match_inputs_hash` on the
+opportunity. The match runs on demand (an LLM call, too expensive per read) and is read
+back through a dedicated per-opportunity read; staleness is recomputed on read from the
+input fingerprint, never persisted stale.
 
 **Leads and origination (S103t, D221).** A **lead** is a `user_authored`
 opportunity at the Lead gate with zero touches, carrying `fit_tier`,
