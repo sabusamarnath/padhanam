@@ -61,9 +61,15 @@ from contexts.daily_driver.domain.jd_extraction import (
     build_jd_extract_prompt,
     parse_jd_extract,
 )
+from contexts.daily_driver.domain.matching import (
+    MATCH_SCHEMA,
+    build_match_prompt,
+    parse_match,
+)
 from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
 from contexts.daily_driver.ports.cv_extractor import CvExtractorPort
 from contexts.daily_driver.ports.jd_extractor import JdExtractorPort
+from contexts.daily_driver.ports.match import MatchPort
 from shared_kernel.structured_output import (
     StructuredOutputParseFailure,
     StructuredOutputPort,
@@ -1634,6 +1640,40 @@ def build_cv_extractor(
     return CvExtractorAdapter(structured_output_port=structured_output_port)
 
 
+class MatchAdapter:
+    """apps/ adapter implementing daily-driver's ``MatchPort`` over the
+    provider-agnostic ``StructuredOutputPort`` (S103ag, D239 — the JdExtractorAdapter
+    precedent). The pure domain helpers build the prompt + schema and parse the
+    response grounded-strict; the litellm SDK stays confined to the inference
+    adapter, never here."""
+
+    def __init__(self, *, structured_output_port: StructuredOutputPort) -> None:
+        self._structured_output = structured_output_port
+
+    async def match(self, *, criteria, skills, experiences):
+        if not criteria:
+            return ()
+        request = StructuredOutputRequest(
+            prompt=build_match_prompt(
+                criteria=criteria, skills=skills, experiences=experiences,
+            ),
+            schema=MATCH_SCHEMA,
+        )
+        try:
+            response = await self._structured_output.generate_structured(request)
+        except StructuredOutputParseFailure:
+            # No schema-conforming match — the use case persists nothing.
+            return None
+        return parse_match(criteria, response.value)
+
+
+def build_match(
+    *, structured_output_port: StructuredOutputPort
+) -> MatchAdapter:
+    """Wire daily-driver's ``MatchPort`` over the structured-output seam."""
+    return MatchAdapter(structured_output_port=structured_output_port)
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
     "CddDrafterAdapter",
@@ -1643,6 +1683,7 @@ __all__ = [
     "FacetSourceAdapter",
     "GoalGraphAdapter",
     "JdExtractorAdapter",
+    "MatchAdapter",
     "OpenCasesReaderAdapter",
     "TasksReaderAdapter",
     "UnitGraphAdapter",
