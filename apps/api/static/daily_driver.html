@@ -552,6 +552,20 @@
     .pd-sec { display: flex; flex-direction: column; gap: 2px; }
     .pd-lab { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 4px; }
     .pd-close { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+    /* The match (S103ag, D239) — strengths & gaps + fit-tier suggestion. */
+    .pd-match-hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .pd-match-tier { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-2); margin-bottom: 6px; }
+    .pd-match-tier .lead-tier { text-transform: uppercase; }
+    .match-stale { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 999px; color: #fff; background: var(--warm); }
+    .match-counts { font-size: 11px; color: var(--ink-3); margin-bottom: 6px; }
+    .match-crit { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; border-top: 1px solid var(--hairline); }
+    .match-band { flex: 0 0 auto; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 999px; color: #fff; margin-top: 1px; }
+    .match-band.b-strength { background: var(--teal); }
+    .match-band.b-partial { background: var(--cool); }
+    .match-band.b-gap { background: var(--ink-3); }
+    .match-crit-body { flex: 1 1 auto; min-width: 0; }
+    .match-crit-text { font-size: 12px; color: var(--ink-1); }
+    .match-crit-ev { font-size: 10.5px; color: var(--ink-3); margin-top: 1px; }
     .pd-open { margin-top: 6px; font-size: 10.5px; color: var(--teal); background: none; border: none; cursor: pointer; padding: 2px 0; text-align: left; }
     .pipe-cbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
     .map-opp-chip { display: block; font-size: 11px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 8px; padding: 2px 8px; margin-top: 4px; cursor: pointer; text-align: left; width: 100%; }
@@ -2688,6 +2702,9 @@
         const nba = document.createElement("div"); nba.className = "pd-nba"; nba.innerHTML = `<span class="pd-lab">Next</span> ▸ ${escapeHtml(card.next_action)}`;
         pb.appendChild(nba);
       }
+      // The match (S103ag, D239) — where do I stand: coverage of the confirmed profile
+      // against this role's selection criteria + a fit-tier suggestion.
+      pb.appendChild(buildMatchSection(oppId, card, reload));
       // Correspondence — the whole thread in time order, sources openable (S103l/m).
       const th = document.createElement("div"); th.className = "pd-sec";
       th.innerHTML = `<div class="pd-lab">Correspondence</div>`;
@@ -2730,6 +2747,77 @@
     }
     // The 8 qualification fields (S103w, D228) — for the activity "refreshes" select.
     const QUAL_FIELDS_JS = [["role_open", "Why the role is open"], ["success_measures", "Role success measures"], ["selection_criteria", "Selection criteria"], ["interview_process", "Interview process"], ["champion", "Champion"], ["decision_maker", "Hiring decision-maker"], ["competing_candidates", "Competing candidates"], ["vetting_checks", "Vetting & checks"]];
+    // The match (S103ag, D239): per-criterion coverage of the confirmed skills profile
+    // against this role's selection criteria (strength/partial/gap + evidence), a
+    // fit-tier suggestion shown next to the operator's current fit tier (accept to
+    // adopt — never auto-override), and a stale badge when the inputs changed since the
+    // last run. Run/re-run is on demand (an LLM call).
+    const BAND_LABELS = { strength: "Strength", partial: "Partial", gap: "Gap" };
+    function buildMatchSection(oppId, card, reload) {
+      const sec = document.createElement("div"); sec.className = "pd-sec pd-match";
+      sec.innerHTML = `<div class="pd-lab">Match — fit vs the role's selection criteria</div>`;
+      const body = document.createElement("div"); sec.appendChild(body);
+      async function run() {
+        body.innerHTML = `<div class="map-empty">Matching…</div>`;
+        try { render(await api(`/daily-driver/cdd/opportunity/${oppId}/match`, { method: "POST" })); }
+        catch { body.innerHTML = `<div class="map-empty">Match failed.</div>`; }
+      }
+      function runBtn(label) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "cdd-btn"; b.textContent = label;
+        b.onclick = run; return b;
+      }
+      function render(v) {
+        body.innerHTML = "";
+        if (!v) { body.innerHTML = `<div class="map-empty">Match unavailable.</div>`; return; }
+        if (!v.has_criteria) {
+          const e = document.createElement("div"); e.className = "map-empty";
+          e.textContent = "Add the role's selection criteria (in Qualification below, or paste the JD) to run the match.";
+          body.appendChild(e); return;
+        }
+        if (!v.has_result) {
+          const hd = document.createElement("div"); hd.className = "pd-match-hd";
+          const e = document.createElement("span"); e.className = "map-empty"; e.textContent = "Not matched yet.";
+          hd.appendChild(e); hd.appendChild(runBtn("Run match")); body.appendChild(hd); return;
+        }
+        // Fit-tier suggestion next to the operator's current tier (accept to adopt).
+        const tier = document.createElement("div"); tier.className = "pd-match-tier";
+        const cur = v.current_fit_tier ? `<span class="lead-tier t-${v.current_fit_tier}">${escapeHtml(FIT_LABELS[v.current_fit_tier] || v.current_fit_tier)}</span>` : `<span class="pd-sub">no fit tier set</span>`;
+        tier.innerHTML = `<span class="pd-sub">Current</span> ${cur} <span class="pd-sub">· Suggested</span> ` +
+          (v.suggested_fit_tier ? `<span class="lead-tier t-${v.suggested_fit_tier}">${escapeHtml(FIT_LABELS[v.suggested_fit_tier] || v.suggested_fit_tier)}</span>` : `<span class="pd-sub">—</span>`);
+        if (v.suggested_fit_tier && !v.accepted) {
+          const acc = document.createElement("button"); acc.type = "button"; acc.className = "cdd-btn"; acc.textContent = "Accept suggestion";
+          acc.onclick = async () => { try { await api(`/daily-driver/cdd/opportunity/${oppId}/fit-tier/accept`, { method: "POST" }); toast("Fit tier updated"); await reload(); } catch { toast("Accept failed", true); } };
+          tier.appendChild(acc);
+        } else if (v.accepted) {
+          const ok = document.createElement("span"); ok.className = "pd-sub"; ok.textContent = "✓ adopted"; tier.appendChild(ok);
+        }
+        body.appendChild(tier);
+        // Stale badge + re-run control.
+        const hd = document.createElement("div"); hd.className = "pd-match-hd";
+        if (v.stale) { const s = document.createElement("span"); s.className = "match-stale"; s.textContent = "Stale — inputs changed"; hd.appendChild(s); }
+        hd.appendChild(runBtn(v.stale ? "Re-run match" : "Re-run"));
+        body.appendChild(hd);
+        // Coverage summary.
+        const c = v.band_counts || {};
+        const sum = document.createElement("div"); sum.className = "match-counts";
+        sum.textContent = `${c.strength || 0} strength · ${c.partial || 0} partial · ${c.gap || 0} gap`;
+        body.appendChild(sum);
+        // Per-criterion strengths & gaps.
+        (v.coverages || []).forEach((cov) => {
+          const row = document.createElement("div"); row.className = "match-crit";
+          const chip = document.createElement("span"); chip.className = `match-band b-${cov.band}`; chip.textContent = BAND_LABELS[cov.band] || cov.band;
+          const bod = document.createElement("div"); bod.className = "match-crit-body";
+          bod.innerHTML = `<div class="match-crit-text">${escapeHtml(cov.criterion)}</div>` +
+            (cov.evidence ? `<div class="match-crit-ev">${escapeHtml(cov.evidence)}</div>` : "");
+          row.appendChild(chip); row.appendChild(bod); body.appendChild(row);
+        });
+      }
+      (async () => {
+        try { render(await api(`/daily-driver/cdd/opportunity/${oppId}/match`)); }
+        catch { body.innerHTML = `<div class="map-empty">Match unavailable.</div>`; }
+      })();
+      return sec;
+    }
     // The qualification panel (S103w, D228): all 8 fields, active-at-stage highlighted +
     // the rest dimmed (soft activation), each editable, a stale badge when active + silent.
     function buildQualificationSection(grp, oppId, card, reload) {
