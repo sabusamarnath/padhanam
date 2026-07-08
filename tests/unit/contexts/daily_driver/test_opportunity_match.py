@@ -11,6 +11,7 @@ from contexts.daily_driver.application.opportunity_match import (
     read_opportunity_match,
     run_opportunity_match,
 )
+from contexts.daily_driver.domain import demand_requirements as dr
 from contexts.daily_driver.domain.matching import CriterionCoverage
 from contexts.daily_driver.domain.skills import SkillItemView
 from shared_kernel import ActorContext, TenantContext
@@ -179,3 +180,33 @@ def test_accepted_flag_true_once_current_equals_suggestion() -> None:
     ))
     assert view.suggested_fit_tier == "opportunistic"
     assert view.accepted is True
+
+
+def test_match_reads_confirmed_requirements_over_the_blob_and_ignores_drafts() -> None:
+    """D240 coupling — when discrete requirements exist, the match uses the CONFIRMED
+    ones as its criteria (not the legacy selection_criteria blob, not the drafts)."""
+    graph, match = _FakeGraph(criteria="- OLD BLOB CRITERION"), _FakeMatch()
+    reqs = dr.parse_extracted([
+        {"text": "SQL", "importance": "essential"},
+        {"text": "Draft only", "importance": "preferred"},
+    ])
+    reqs = dr.confirm(reqs, reqs[0]["id"])  # confirm SQL only; "Draft only" stays draft
+    graph.store["demand_requirements"] = dr.serialize(reqs)
+    view = asyncio.run(run_opportunity_match(
+        goal_graph=graph, match_port=match, actor=_actor(), opportunity_id=uuid4(),
+    ))
+    crits = [c.criterion for c in view.coverages]
+    assert crits == ["SQL"]  # the confirmed requirement — not the blob, not the draft
+
+
+def test_match_falls_back_to_the_blob_when_no_confirmed_requirements() -> None:
+    """Back-compat — an opportunity extracted before D240 (only a blob, no discrete
+    requirements) still matches on the split blob."""
+    graph, match = _FakeGraph(criteria="- SQL\n- Leadership"), _FakeMatch()
+    # a draft-only requirement must NOT flip it away from the blob
+    reqs = dr.parse_extracted([{"text": "Draft", "importance": "essential"}])
+    graph.store["demand_requirements"] = dr.serialize(reqs)
+    view = asyncio.run(run_opportunity_match(
+        goal_graph=graph, match_port=match, actor=_actor(), opportunity_id=uuid4(),
+    ))
+    assert [c.criterion for c in view.coverages] == ["SQL", "Leadership"]
