@@ -546,7 +546,24 @@ class OutcomeGraphPort(Protocol):
         self, *, tenant_context: TenantContext, opportunity_id: UUID,
     ) -> dict | None:
         """Read the stored match + the current selection criteria (S103ag, D239) for
-        the on-demand match read + staleness recompute."""
+        the on-demand match read + staleness recompute. Also returns the stored
+        ``demand_requirements`` (S103ah/D240), the match's discrete criteria source."""
+        ...
+
+    async def read_opportunity_requirements(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+    ) -> str | None:
+        """Read the opportunity's stored ``demand_requirements`` JSON list (S103ah,
+        D240), or ``None`` when absent / none stored."""
+        ...
+
+    async def set_opportunity_requirements(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        requirements_json: str,
+    ) -> bool:
+        """Store the opportunity's discrete demand requirements as a schemaless JSON
+        list (``demand_requirements``, S103ah/D240, D214, no migration). True on
+        match."""
         ...
 
     async def list_contacts(

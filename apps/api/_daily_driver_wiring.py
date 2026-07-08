@@ -729,6 +729,21 @@ class GoalGraphAdapter:
             tenant_context=tenant_context, opportunity_id=opportunity_id,
         )
 
+    async def read_opportunity_requirements(
+        self, *, tenant_context, opportunity_id
+    ) -> str | None:
+        return await self._outcome_graph.read_opportunity_requirements(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+        )
+
+    async def set_opportunity_requirements(
+        self, *, tenant_context, opportunity_id, requirements_json
+    ) -> bool:
+        return await self._outcome_graph.set_opportunity_requirements(
+            tenant_context=tenant_context, opportunity_id=opportunity_id,
+            requirements_json=requirements_json,
+        )
+
     async def confirm_contact(self, *, tenant_context, contact_id) -> bool:
         return await self._outcome_graph.confirm_contact(
             tenant_context=tenant_context, contact_id=contact_id

@@ -616,7 +616,21 @@ RETURN o.fit_tier AS fit_tier,
        o.match_ran_at AS match_ran_at,
        o.match_inputs_hash AS match_inputs_hash,
        o.q_selection_criteria AS selection_criteria,
-       o.q_selection_criteria_ts AS selection_criteria_ts
+       o.q_selection_criteria_ts AS selection_criteria_ts,
+       o.demand_requirements AS demand_requirements
+"""
+# The discrete demand requirements (S103ah, D240): a schemaless JSON list on the
+# opportunity (D214, no migration) — extraction merges drafts in, the operator proofs,
+# and the match reads the confirmed ones as its criteria. Read + whole-list write; the
+# use case owns the read-modify-write for each proof op.
+_READ_OPPORTUNITY_REQUIREMENTS = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+RETURN o.demand_requirements AS demand_requirements
+"""
+_SET_OPPORTUNITY_REQUIREMENTS = """
+MATCH (o:Opportunity {tenant_id: $tenant_id, opportunity_id: $opportunity_id})
+SET o.demand_requirements = $requirements_json
+RETURN o.opportunity_id AS opportunity_id
 """
 # The closed state (S103n, D214): archive-not-erase (D114). Closing sets status +
 # the required reason + closed_at; the node, its BELONGS_TO memberships, and its
@@ -1754,7 +1768,38 @@ class TenantScopedNeo4jSession:
             "match_inputs_hash": row["match_inputs_hash"],
             "selection_criteria": row["selection_criteria"],
             "selection_criteria_ts": row["selection_criteria_ts"],
+            "demand_requirements": row["demand_requirements"],
         }
+
+    async def read_opportunity_requirements(
+        self, *, opportunity_id: UUID,
+    ) -> str | None:
+        """Read the opportunity's stored ``demand_requirements`` JSON list (S103ah,
+        D240), or ``None`` when the opportunity is absent / has none stored."""
+        session = self._bound_session
+        result = await session.run(_READ_OPPORTUNITY_REQUIREMENTS, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+        })
+        row = await result.single()
+        if row is None:
+            return None
+        return row["demand_requirements"]
+
+    async def set_opportunity_requirements(
+        self, *, opportunity_id: UUID, requirements_json: str,
+    ) -> bool:
+        """Store the opportunity's discrete demand requirements as a schemaless JSON
+        list (``demand_requirements``, S103ah/D240, D214, no migration). Whole-list
+        write; the use case owns the read-modify-write for each proof op. True on
+        match."""
+        session = self._bound_session
+        result = await session.run(_SET_OPPORTUNITY_REQUIREMENTS, {
+            "tenant_id": self._tenant_id,
+            "opportunity_id": str(opportunity_id),
+            "requirements_json": requirements_json,
+        })
+        return await result.single() is not None
 
     async def delete_opportunity(self, *, opportunity_id: UUID) -> bool:
         """Reject (delete) a suggested opportunity (S103o, D215) — DETACH DELETE the

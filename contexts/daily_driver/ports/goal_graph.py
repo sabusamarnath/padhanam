@@ -300,6 +300,24 @@ class GoalGraphPort(Protocol):
         never the field value — only ``set_qualification_field`` creates a value."""
         ...
 
+    async def read_opportunity_requirements(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+    ) -> str | None:
+        """Read the opportunity's stored ``demand_requirements`` JSON list (S103ah,
+        D240), or ``None`` when the opportunity is absent / has none. The use case
+        deserializes it into discrete requirement items."""
+        ...
+
+    async def set_opportunity_requirements(
+        self, *, tenant_context: TenantContext, opportunity_id: UUID,
+        requirements_json: str,
+    ) -> bool:
+        """Store the opportunity's discrete demand requirements as a schemaless JSON
+        list (``demand_requirements``, S103ah/D240, D214, no migration). Whole-list
+        write; the use case owns the read-modify-write for each proof op. True on
+        match."""
+        ...
+
     async def set_disposition_counts(
         self,
         *,
