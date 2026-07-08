@@ -17,6 +17,7 @@ import json
 from dataclasses import dataclass
 from uuid import UUID
 
+from contexts.daily_driver.domain import demand_requirements as dr
 from contexts.daily_driver.domain.matching import (
     BANDS,
     FIT_BULLSEYE,
@@ -65,13 +66,25 @@ def _profile_pairs(
     return tuple((i.item_id, i.text) for i in items)
 
 
+def _resolve_criteria(data: dict) -> tuple[str, ...]:
+    """The match's criteria (S103ah/D240): the **confirmed** discrete demand requirements
+    when any exist, else the legacy free-text ``selection_criteria`` blob split into
+    criteria (back-compat for opportunities extracted before D240). Discrete requirements
+    fix the compression the blob split could not recover."""
+    confirmed = dr.confirmed_texts(dr.deserialize(data.get("demand_requirements")))
+    if confirmed:
+        return confirmed
+    return split_criteria(data.get("selection_criteria"))
+
+
 def _assemble_view(
     *, data: dict, items: tuple[SkillItemView, ...]
 ) -> MatchView:
     """Build the view from the stored match record + the current confirmed profile,
     recomputing staleness. Single-sourced so run (post-store) and read agree."""
-    criteria_text = data.get("selection_criteria")
-    has_criteria = bool(split_criteria(criteria_text))
+    criteria = _resolve_criteria(data)
+    criteria_text = "\n".join(criteria)
+    has_criteria = bool(criteria)
     result_json = data.get("match_result")
     suggested = data.get("fit_tier_suggested")
     current = data.get("fit_tier")
@@ -159,7 +172,7 @@ async def run_opportunity_match(
     items = confirmed_only(
         await goal_graph.list_skill_items(tenant_context=actor.tenant_context)
     )
-    criteria = split_criteria(data.get("selection_criteria"))
+    criteria = _resolve_criteria(data)
     if not criteria:
         return _assemble_view(data=data, items=items)
 
@@ -173,7 +186,7 @@ async def run_opportunity_match(
         return _assemble_view(data=data, items=items)
 
     inputs_hash = match_inputs_fingerprint(
-        criteria_text=data.get("selection_criteria"),
+        criteria_text="\n".join(criteria),
         confirmed_items=_profile_pairs(items),
     )
     await goal_graph.set_opportunity_match(

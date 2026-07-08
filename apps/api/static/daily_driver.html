@@ -529,6 +529,22 @@
     .qual-draft-text { font-size: 11.5px; color: var(--ink-2); line-height: 1.4; margin: 3px 0 5px; white-space: pre-wrap; }
     .qual-draft.used { opacity: 0.55; }
     .qual-draft-bar { display: flex; gap: 5px; }
+    /* D240: discrete demand requirements — proof each, importance-graded */
+    .req-row { display: flex; align-items: flex-start; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--hairline); }
+    .req-row.draft { background: var(--surface-2); }
+    .req-imp { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 5px; border-radius: 5px; white-space: nowrap; margin-top: 1px; }
+    .req-imp.imp-essential { background: var(--teal); color: #fff; }
+    .req-imp.imp-preferred { background: var(--surface-2); color: var(--ink-1); border: 1px solid var(--teal); }
+    .req-imp.imp-nice_to_have { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline-strong); }
+    .req-body { flex: 1; }
+    .req-text { font-size: 11.5px; color: var(--ink-1); line-height: 1.4; }
+    .req-draft-tag { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal); margin-left: 5px; }
+    .req-bar { display: flex; gap: 5px; margin-top: 3px; }
+    .req-add { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .req-add input { flex: 1; min-width: 160px; font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    .req-add select, .req-edit select { font: inherit; font-size: 11px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
+    .req-edit { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .req-edit input { flex: 1; min-width: 160px; font: inherit; font-size: 11.5px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
     .act-form { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
     .act-form input, .act-form select { font: inherit; font-size: 11px; padding: 3px 6px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--page); color: var(--ink-1); }
     .act-form input[name="kind"] { flex: 1; min-width: 120px; }
@@ -2705,6 +2721,7 @@
       // The match (S103ag, D239) — where do I stand: coverage of the confirmed profile
       // against this role's selection criteria + a fit-tier suggestion.
       pb.appendChild(buildMatchSection(oppId, card, reload));
+      pb.appendChild(buildRequirementsSection(oppId, reload));
       // Correspondence — the whole thread in time order, sources openable (S103l/m).
       const th = document.createElement("div"); th.className = "pd-sec";
       th.innerHTML = `<div class="pd-lab">Correspondence</div>`;
@@ -2753,6 +2770,8 @@
     // adopt — never auto-override), and a stale badge when the inputs changed since the
     // last run. Run/re-run is on demand (an LLM call).
     const BAND_LABELS = { strength: "Strength", partial: "Partial", gap: "Gap" };
+    const IMPORTANCE_LABELS = { essential: "Essential", preferred: "Preferred", nice_to_have: "Nice to have" };
+    const IMPORTANCE_ORDER = { essential: 0, preferred: 1, nice_to_have: 2 };
     function buildMatchSection(oppId, card, reload) {
       const sec = document.createElement("div"); sec.className = "pd-sec pd-match";
       sec.innerHTML = `<div class="pd-lab">Match — fit vs the role's selection criteria</div>`;
@@ -2771,7 +2790,7 @@
         if (!v) { body.innerHTML = `<div class="map-empty">Match unavailable.</div>`; return; }
         if (!v.has_criteria) {
           const e = document.createElement("div"); e.className = "map-empty";
-          e.textContent = "Add the role's selection criteria (in Qualification below, or paste the JD) to run the match.";
+          e.textContent = "Confirm the role's requirements (below, drafted from the JD) to run the match.";
           body.appendChild(e); return;
         }
         if (!v.has_result) {
@@ -2818,6 +2837,81 @@
       })();
       return sec;
     }
+    // The role requirements (S103ah, D240): the role's discrete demand requirements, each
+    // text + three-level importance, proofed individually (Use / edit / Dismiss) with
+    // add-missed. Drafts come from the JD paste (in Qualification); only confirmed
+    // requirements feed the match. Each op returns the fresh list; the section re-loads
+    // and the panel reloads so the match picks up the change (stale).
+    function importanceSelect(current) {
+      const s = document.createElement("select");
+      Object.keys(IMPORTANCE_LABELS).forEach((k) => {
+        const o = document.createElement("option"); o.value = k; o.textContent = IMPORTANCE_LABELS[k];
+        if (k === current) o.selected = true; s.appendChild(o);
+      });
+      return s;
+    }
+    function buildRequirementsSection(oppId, reload) {
+      const sec = document.createElement("div"); sec.className = "pd-sec pd-reqs";
+      sec.innerHTML = `<div class="pd-lab">Role requirements <span class="pd-sub">— what the role selects on; proof each, add any missed</span></div>`;
+      const body = document.createElement("div"); sec.appendChild(body);
+      const post = async (path) => {
+        try { renderList(await api(path, { method: "POST" })); await reload(); }
+        catch { toast("Failed", true); }
+      };
+      const load = async () => {
+        try { renderList(await api(`/daily-driver/cdd/opportunity/${oppId}/requirements`)); }
+        catch { body.innerHTML = "<div class='map-empty'>Could not load requirements.</div>"; }
+      };
+      function renderList(items) {
+        body.innerHTML = "";
+        const sorted = (items || []).slice().sort((a, b) =>
+          (IMPORTANCE_ORDER[a.importance] ?? 9) - (IMPORTANCE_ORDER[b.importance] ?? 9));
+        if (!sorted.length) {
+          const e = document.createElement("div"); e.className = "map-empty";
+          e.textContent = "No requirements yet — paste the job description in Qualification below to draft them, or add one.";
+          body.appendChild(e);
+        }
+        sorted.forEach((r) => {
+          const row = document.createElement("div"); row.className = "req-row" + (r.proof_state === "draft" ? " draft" : "");
+          const imp = document.createElement("span"); imp.className = `req-imp imp-${r.importance}`; imp.textContent = IMPORTANCE_LABELS[r.importance] || r.importance;
+          const bod = document.createElement("div"); bod.className = "req-body";
+          bod.innerHTML = `<div class="req-text">${escapeHtml(r.text)}` + (r.proof_state === "draft" ? `<span class="req-draft-tag">drafted</span>` : "") + `</div>`;
+          const bar = document.createElement("div"); bar.className = "req-bar";
+          if (r.proof_state === "draft") {
+            bar.appendChild(contactBtn("Use", "btn-ghost", () => post(`/daily-driver/cdd/opportunity/${oppId}/requirements/${r.id}/confirm`)));
+          }
+          bar.appendChild(contactBtn("Edit", "btn-ghost", () => openEdit(r, bod)));
+          bar.appendChild(contactBtn("Dismiss", "btn-ghost", () => post(`/daily-driver/cdd/opportunity/${oppId}/requirements/${r.id}/dismiss`)));
+          bod.appendChild(bar);
+          row.appendChild(imp); row.appendChild(bod); body.appendChild(row);
+        });
+        // Add a missed requirement (confirmed on add).
+        const add = document.createElement("div"); add.className = "req-add";
+        const inp = document.createElement("input"); inp.placeholder = "Add a requirement the JD listed but extraction missed…";
+        const sel = importanceSelect("essential");
+        const btn = contactBtn("Add", "btn-primary", async () => {
+          const text = inp.value.trim(); if (!text) return;
+          try { renderList(await api(`/daily-driver/cdd/opportunity/${oppId}/requirements/add`, { method: "POST", body: JSON.stringify({ text, importance: sel.value }) })); await reload(); }
+          catch { toast("Add failed", true); }
+        });
+        add.appendChild(inp); add.appendChild(sel); add.appendChild(btn); body.appendChild(add);
+      }
+      function openEdit(r, bod) {
+        const ed = document.createElement("div"); ed.className = "req-edit";
+        const inp = document.createElement("input"); inp.value = r.text;
+        const sel = importanceSelect(r.importance);
+        const save = contactBtn("Save", "btn-ghost", async () => {
+          const text = inp.value.trim(); if (!text) return;
+          try { renderList(await api(`/daily-driver/cdd/opportunity/${oppId}/requirements/${r.id}/edit`, { method: "POST", body: JSON.stringify({ text, importance: sel.value }) })); await reload(); }
+          catch { toast("Save failed", true); }
+        });
+        const cancel = contactBtn("Cancel", "btn-ghost", () => { ed.remove(); });
+        ed.appendChild(inp); ed.appendChild(sel); ed.appendChild(save); ed.appendChild(cancel);
+        bod.appendChild(ed);
+      }
+      load();
+      return sec;
+    }
     // The qualification panel (S103w, D228): all 8 fields, active-at-stage highlighted +
     // the rest dimmed (soft activation), each editable, a stale badge when active + silent.
     function buildQualificationSection(grp, oppId, card, reload) {
@@ -2859,10 +2953,11 @@
           body.appendChild(row);
         });
       };
-      // D236: the paste box — paste a job description to draft why-open / success-
-      // measures / selection-criteria as Use/Dismiss suggestions (matching-engine leg 1).
+      // D236/D240: the paste box — paste a job description to draft the two context
+      // fields (why-open / success-measures) as Use/Dismiss suggestions AND the role's
+      // discrete requirements (proofed in Role requirements above); matching-engine leg 1.
       const paste = document.createElement("details"); paste.className = "qual-paste";
-      paste.appendChild(Object.assign(document.createElement("summary"), { textContent: "Paste job description → draft 3 fields" }));
+      paste.appendChild(Object.assign(document.createElement("summary"), { textContent: "Paste job description → draft context + requirements" }));
       const pwrap = document.createElement("div"); pwrap.className = "qual-paste-body";
       const pta = document.createElement("textarea"); pta.className = "qual-jd"; pta.placeholder = "Paste the job description here…"; pta.rows = 5;
       const pbtn = contactBtn("Extract from JD", "btn-primary", async () => {

@@ -80,6 +80,9 @@ from apps.api.routers._daily_driver_dto import (
     qualification_to_dto,
     MatchViewDTO,
     match_view_to_dto,
+    RequirementDTO,
+    RequirementTextRequest,
+    requirement_to_dto,
     LogActivityRequest,
     ActivityEntryDTO,
     activity_to_dto,
@@ -161,6 +164,13 @@ from contexts.daily_driver.application.qualification import (
 )
 from contexts.daily_driver.application.extract_jd import (
     extract_jd_qualification as extract_jd_uc,
+)
+from contexts.daily_driver.application.demand_requirements import (
+    add_requirement as add_requirement_uc,
+    confirm_requirement as confirm_requirement_uc,
+    dismiss_requirement as dismiss_requirement_uc,
+    edit_requirement as edit_requirement_uc,
+    read_demand_requirements as read_requirements_uc,
 )
 from contexts.daily_driver.application.extract_cv import (
     extract_cv_profile as extract_cv_uc,
@@ -1132,15 +1142,110 @@ async def post_extract_jd(
     goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
     jd_extractor: Annotated[object, Depends(get_jd_extractor)],
 ) -> Response:
-    """Paste a job description onto the opportunity and draft the three JD-derivable
-    qualification fields as suggestions (S103ad/D236). The drafts land in `q_<key>_draft`
-    slots — never a field value; the surface then offers Use/Dismiss. Stores the JD as
-    a durable source. The surface reloads the qualification to show the suggestions."""
+    """Paste a job description onto the opportunity: draft the two JD-derivable context
+    fields as `q_<key>_draft` suggestions (S103ad/D236) and merge the role's **discrete
+    demand requirements** into `demand_requirements` (S103ah/D240) — each a draft the
+    operator proofs. Confirmed requirements survive re-extraction (invariant 4). Stores
+    the JD as a durable source. The surface reloads to show the suggestions."""
     await extract_jd_uc(
         goal_graph=goal_graph, jd_extractor=jd_extractor, actor=actor,
         opportunity_id=opportunity_id, jd_text=body.text,
     )
     return Response(status_code=204)
+
+
+# --- Demand requirements: discrete typed requirements, proofed individually (S103ah, D240) ---
+
+@router.get(
+    "/cdd/opportunity/{opportunity_id}/requirements",
+    response_model=list[RequirementDTO],
+)
+async def get_opportunity_requirements(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[RequirementDTO]:
+    """The opportunity's discrete demand requirements (S103ah, D240) — draft + confirmed,
+    each with text + three-level importance, for the proof surface."""
+    items = await read_requirements_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+    )
+    return [requirement_to_dto(r) for r in items]
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/requirements/{requirement_id}/confirm",
+    response_model=list[RequirementDTO],
+)
+async def post_confirm_requirement(
+    opportunity_id: UUID,
+    requirement_id: str,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[RequirementDTO]:
+    """Use a draft requirement as-is → confirmed (S103ah, D240). Returns the fresh list."""
+    items = await confirm_requirement_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+        requirement_id=requirement_id,
+    )
+    return [requirement_to_dto(r) for r in items]
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/requirements/{requirement_id}/dismiss",
+    response_model=list[RequirementDTO],
+)
+async def post_dismiss_requirement(
+    opportunity_id: UUID,
+    requirement_id: str,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[RequirementDTO]:
+    """Dismiss a requirement → remove it (S103ah, D240). Returns the fresh list."""
+    items = await dismiss_requirement_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+        requirement_id=requirement_id,
+    )
+    return [requirement_to_dto(r) for r in items]
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/requirements/{requirement_id}/edit",
+    response_model=list[RequirementDTO],
+)
+async def post_edit_requirement(
+    opportunity_id: UUID,
+    requirement_id: str,
+    body: RequirementTextRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[RequirementDTO]:
+    """Edit a requirement's text/importance and confirm it (S103ah, D240). Returns the
+    fresh list."""
+    items = await edit_requirement_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+        requirement_id=requirement_id, text=body.text, importance=body.importance,
+    )
+    return [requirement_to_dto(r) for r in items]
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/requirements/add",
+    response_model=list[RequirementDTO],
+)
+async def post_add_requirement(
+    opportunity_id: UUID,
+    body: RequirementTextRequest,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+) -> list[RequirementDTO]:
+    """Add an operator-authored requirement the extraction missed, confirmed (S103ah,
+    D240). Returns the fresh list."""
+    items = await add_requirement_uc(
+        goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
+        text=body.text, importance=body.importance,
+    )
+    return [requirement_to_dto(r) for r in items]
 
 
 @router.post(

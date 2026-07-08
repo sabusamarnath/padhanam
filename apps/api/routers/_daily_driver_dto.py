@@ -782,6 +782,30 @@ class ExtractJdRequest(BaseModel):
     text: str
 
 
+class RequirementDTO(BaseModel):
+    """One discrete demand requirement for an opportunity (S103ah, D240) — text +
+    three-level importance + its proof state (draft / confirmed)."""
+
+    id: str
+    text: str
+    importance: str        # essential / preferred / nice_to_have
+    proof_state: str       # draft / confirmed
+
+
+class RequirementTextRequest(BaseModel):
+    """Add or edit a demand requirement's text + importance (S103ah, D240)."""
+
+    text: str
+    importance: str
+
+
+def requirement_to_dto(r: dict) -> "RequirementDTO":
+    return RequirementDTO(
+        id=r["id"], text=r["text"], importance=r["importance"],
+        proof_state=r["proof_state"],
+    )
+
+
 def qualification_to_dto(f) -> "QualificationFieldDTO":
     return QualificationFieldDTO(
         key=f.key, label=f.label, value=f.value, last_touched=f.last_touched,
