@@ -214,6 +214,13 @@ class Goal:
     # ``resolve_calendar_domain``. A distinct ``health`` tier is a deferred
     # surface addition (S83), so the health regimen carries ``personal`` today.
     domain: str | None = None
+    # The source class this goal ingests (S103ah, D240): a per-goal config flag
+    # (``:Outcome.ingests_source_class``) naming a source-of-signal the correlation
+    # engine binds to this goal — e.g. ``email_job_search`` binds the rule-confirmed
+    # job-search emails here. None for a goal that ingests no special source class.
+    # Retires the hardcoded ``_JOB_SEARCH_GOAL_NAME`` — the engine reads the flag, so it
+    # no longer names a specific goal.
+    ingests_source_class: str | None = None
 
     def __post_init__(self) -> None:
         if not self.jurisdiction.strip():

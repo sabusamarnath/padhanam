@@ -17,6 +17,14 @@ from uuid import UUID
 
 from shared_kernel import ActorContext
 
+# The source class a goal declares (``:Outcome.ingests_source_class``) to ingest the
+# rule-confirmed job-search emails (S103ah, D240). The correlation engine binds this
+# source's evidence to whichever goal carries the flag — so the engine names a *source
+# class* (this ingestion path), never a specific job goal, retiring the one place a goal
+# name was hardcoded inside the otherwise goal-agnostic engine (the retired
+# ``_JOB_SEARCH_GOAL_NAME``). The per-goal flag is dogfood-set by an ops script.
+EMAIL_JOB_SEARCH_SOURCE_CLASS = "email_job_search"
+
 
 @dataclass(frozen=True)
 class EmailJobSearchClassification:
@@ -38,4 +46,8 @@ class EmailJobSearchSource(Protocol):
         ...
 
 
-__all__ = ["EmailJobSearchClassification", "EmailJobSearchSource"]
+__all__ = [
+    "EMAIL_JOB_SEARCH_SOURCE_CLASS",
+    "EmailJobSearchClassification",
+    "EmailJobSearchSource",
+]

@@ -81,6 +81,10 @@ class OutcomeGraphRecord:
     # under (work / personal / family). None when unset (the read falls through
     # to the connection default).
     domain: str | None = None
+    # The source class this goal ingests (S103ah, D240): a per-goal config flag on
+    # the Outcome naming a source-of-signal the correlation engine binds to this
+    # goal (e.g. ``email_job_search``). None when unset.
+    ingests_source_class: str | None = None
 
 
 @dataclass(frozen=True)
@@ -296,6 +300,15 @@ class OutcomeGraphPort(Protocol):
         id. Returns the new level on success, ``None`` when the outcome is
         absent or cross-tenant.
         """
+        ...
+
+    async def set_outcome_source_class(
+        self, *, tenant_context: TenantContext, outcome_id: UUID, source_class: str,
+    ) -> bool:
+        """Set the goal's per-goal source-class flag (S103ah, D240) —
+        ``:Outcome.ingests_source_class``, the source-of-signal the correlation engine
+        binds to this goal (e.g. ``email_job_search``). Schemaless, no migration.
+        Returns ``True`` when the goal was found."""
         ...
 
     async def archive_outcome(

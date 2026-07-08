@@ -536,6 +536,7 @@ class GoalGraphAdapter:
             steps=steps,
             aliases=tuple(getattr(record, "aliases", ()) or ()),
             domain=getattr(record, "domain", None),
+            ingests_source_class=getattr(record, "ingests_source_class", None),
         )
 
     async def list_goals(

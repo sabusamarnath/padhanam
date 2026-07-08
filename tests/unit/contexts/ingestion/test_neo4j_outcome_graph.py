@@ -141,6 +141,7 @@ def _row(**overrides) -> dict:
         "terminal_state": None,
         "aliases": None,
         "domain": None,
+        "ingests_source_class": None,
         "commitment_id": str(_COMMITMENT_ID),
         "step_order": None,
         "step_state": None,

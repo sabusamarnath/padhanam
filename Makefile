@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate seed-get-a-job-cdd seed-get-a-job-gates seed-contacts seed-contacts-linkedin seed-contacts-google instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate set-dogfood-source-class seed-get-a-job-cdd seed-get-a-job-gates seed-contacts seed-contacts-linkedin seed-contacts-google instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -246,6 +246,12 @@ rescope-dogfood: derive-env
 
 rescope-dogfood-reactivate: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.rescope_dogfood_to_get_a_job --reactivate
+
+# Set the dogfood get-a-job goal's source-class flag (S103ah, D240) so the
+# correlation engine binds job-search emails by the per-goal flag, not a
+# hardcoded goal name. Pass ARGS="--clear" to remove it.
+set-dogfood-source-class: derive-env
+	$(COMPOSE) exec padhanam-api python -m ops.set_dogfood_source_class $(ARGS)
 
 # Author get-a-job's goal-level CDD from the job-search decision framework
 # (S103f, D206): seed the portfolio levers, measured intermediaries, and

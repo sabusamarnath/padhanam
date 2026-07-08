@@ -34,6 +34,7 @@ from contexts.daily_driver.ports.commitment_repository import (
     CommitmentRepository,
 )
 from contexts.daily_driver.ports.email_job_search_source import (
+    EMAIL_JOB_SEARCH_SOURCE_CLASS,
     EmailJobSearchSource,
 )
 from contexts.daily_driver.ports.email_source_metadata import (
@@ -49,10 +50,16 @@ from contexts.daily_driver.ports.matcher_quality_recorder import (
 from contexts.daily_driver.ports.suppression_policy import SuppressionPolicy
 from contexts.daily_driver.ports.unit_graph import UnitGraphPort
 
-# The job-search emails serve this goal (D183). Named match against the seeded
-# Get-a-job outcome; a goal-level "this is the job-search goal" flag is the
-# general form, deferred (one dogfood instance).
-_JOB_SEARCH_GOAL_NAME = "get a job"
+# The job-search emails serve whichever goal declares it ingests that source class
+# (S103ah, D240) — a per-goal ``:Outcome.ingests_source_class`` flag, not a hardcoded
+# goal name. The engine names the *source class* (``email_job_search``), never a
+# specific job goal, so the correlation stays goal-agnostic. Retires the former
+# hardcoded goal-name constant (the one core leak, D240).
+def _goal_for_source_class(goals, source_class: str):
+    return next(
+        (g for g in goals if getattr(g, "ingests_source_class", None) == source_class),
+        None,
+    )
 from shared_kernel import ActorContext
 from shared_kernel.authorisation import (
     DAILY_DRIVER_UNITS_CORRELATE,
@@ -207,10 +214,7 @@ async def correlate_goal_facets(
     # element (read back from the persisted store verdict, durable across runs).
     # email-first so its high-specificity basis wins a same-element tie.
     if email_job_search_source is not None and confirmed_ids:
-        target = next(
-            (g for g in goals if g.name.strip().lower() == _JOB_SEARCH_GOAL_NAME),
-            None,
-        )
+        target = _goal_for_source_class(goals, EMAIL_JOB_SEARCH_SOURCE_CLASS)
         if target is not None:
             email_ev = infer_email_job_search_evidence(
                 views, target.id, confirmed_ids
@@ -240,9 +244,7 @@ async def correlate_goal_facets(
     # D210: persist the precision pass's disposition counts on the job-search goal
     # so the Map's recommendation-shaped summary reads them (the moat is the
     # confirmed job-email count). Derived state, set each correlate.
-    job_goal = next(
-        (g for g in goals if g.name.strip().lower() == _JOB_SEARCH_GOAL_NAME), None
-    )
+    job_goal = _goal_for_source_class(goals, EMAIL_JOB_SEARCH_SOURCE_CLASS)
     if job_goal is not None:
         await goal_graph.set_disposition_counts(
             tenant_context=actor.tenant_context, outcome_id=job_goal.id,

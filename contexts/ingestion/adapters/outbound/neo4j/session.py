@@ -214,6 +214,15 @@ REMOVE o.archived_at
 RETURN o.outcome_id AS outcome_id
 """
 
+# The per-goal source-class flag (S103ah, D240): a schemaless prop naming a
+# source-of-signal the correlation engine binds to this goal (e.g. email_job_search).
+# Retires the hardcoded goal-name leak — dogfood-set by an ops script. No migration.
+_SET_OUTCOME_SOURCE_CLASS = """
+MATCH (o:Outcome {tenant_id: $tenant_id, outcome_id: $outcome_id})
+SET o.ingests_source_class = $source_class
+RETURN o.outcome_id AS outcome_id
+"""
+
 # The archived set — the complement of _LIST_OUTCOMES (which scopes to active).
 # Reactivation reads this directly rather than guessing ids from seed modules, so
 # it cannot drift from what is actually archived.
@@ -246,6 +255,7 @@ RETURN o.outcome_id AS outcome_id,
        o.terminal_state AS terminal_state,
        o.aliases AS aliases,
        o.domain AS domain,
+       o.ingests_source_class AS ingests_source_class,
        l.commitment_id AS commitment_id,
        r.step_order AS step_order,
        r.step_state AS step_state
@@ -1390,6 +1400,20 @@ class TenantScopedNeo4jSession:
             return None
         return record["current_target_level"]
 
+    async def set_outcome_source_class(
+        self, *, outcome_id: UUID, source_class: str,
+    ) -> bool:
+        """Set the goal's per-goal source-class flag (S103ah, D240) — the source-of-
+        signal the correlation engine binds to this goal (e.g. email_job_search).
+        Schemaless, no migration. Returns ``True`` when the goal was found."""
+        session = self._bound_session
+        result = await session.run(_SET_OUTCOME_SOURCE_CLASS, {
+            "tenant_id": self._tenant_id,
+            "outcome_id": str(outcome_id),
+            "source_class": source_class,
+        })
+        return await result.single() is not None
+
     async def archive_outcome(self, *, outcome_id: UUID) -> bool:
         """Mark a goal archived (S103e, D205) — a reversible, non-destructive
         removal (the no-auto-deletion invariant: a user-initiated removal marks,
@@ -1459,6 +1483,7 @@ class TenantScopedNeo4jSession:
                     terminal_state=row["terminal_state"],
                     aliases=tuple(row["aliases"] or ()),
                     domain=row["domain"],
+                    ingests_source_class=row["ingests_source_class"],
                     levers=(lever,),
                 )
             else:
