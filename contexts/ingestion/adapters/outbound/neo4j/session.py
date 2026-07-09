@@ -627,7 +627,8 @@ RETURN o.fit_tier AS fit_tier,
        o.match_inputs_hash AS match_inputs_hash,
        o.q_selection_criteria AS selection_criteria,
        o.q_selection_criteria_ts AS selection_criteria_ts,
-       o.demand_requirements AS demand_requirements
+       o.demand_requirements AS demand_requirements,
+       o.job_description AS job_description
 """
 # The discrete demand requirements (S103ah, D240): a schemaless JSON list on the
 # opportunity (D214, no migration) — extraction merges drafts in, the operator proofs,
@@ -1794,6 +1795,7 @@ class TenantScopedNeo4jSession:
             "selection_criteria": row["selection_criteria"],
             "selection_criteria_ts": row["selection_criteria_ts"],
             "demand_requirements": row["demand_requirements"],
+            "job_description": row["job_description"],
         }
 
     async def read_opportunity_requirements(

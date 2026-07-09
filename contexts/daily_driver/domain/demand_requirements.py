@@ -136,6 +136,11 @@ def _collect(entries: Any, *, proof_state: str | None) -> tuple[dict, ...]:
             )
             if req is None or req["id"] in seen:
                 continue
+            # Preserve a criticality assessment (S103ai/D241) riding on a stored item —
+            # a nested dict the criticality layer attaches; opaque to this module.
+            crit = entry.get("criticality")
+            if isinstance(crit, dict):
+                req["criticality"] = crit
             seen.add(req["id"])
             out.append(req)
             if len(out) >= MAX_REQUIREMENTS:
@@ -163,18 +168,20 @@ def deserialize(stored: str | None) -> tuple[dict, ...]:
 
 
 def serialize(items: tuple[dict, ...]) -> str:
-    """The stored JSON shape (D214) — id/text/importance/proof_state per item."""
-    return json.dumps(
-        [
-            {
-                "id": r["id"],
-                "text": r["text"],
-                "importance": r["importance"],
-                "proof_state": r["proof_state"],
-            }
-            for r in items
-        ]
-    )
+    """The stored JSON shape (D214) — id/text/importance/proof_state per item, plus a
+    nested ``criticality`` assessment when present (S103ai/D241)."""
+    out: list[dict] = []
+    for r in items:
+        item = {
+            "id": r["id"],
+            "text": r["text"],
+            "importance": r["importance"],
+            "proof_state": r["proof_state"],
+        }
+        if isinstance(r.get("criticality"), dict):
+            item["criticality"] = r["criticality"]
+        out.append(item)
+    return json.dumps(out)
 
 
 def merge_extracted(
