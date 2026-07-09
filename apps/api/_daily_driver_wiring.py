@@ -66,7 +66,14 @@ from contexts.daily_driver.domain.matching import (
     build_match_prompt,
     parse_match,
 )
+from contexts.daily_driver.domain.criticality import (
+    build_criticality_prompt,
+    criticality_batch_schema,
+    parse_criticality,
+)
+from contexts.daily_driver.domain.demand_spec import spans_for_prompt
 from contexts.daily_driver.ports.cdd_drafter import CddDrafterPort
+from contexts.daily_driver.ports.criticality import CriticalityPort
 from contexts.daily_driver.ports.cv_extractor import CvExtractorPort
 from contexts.daily_driver.ports.jd_extractor import JdExtractorPort
 from contexts.daily_driver.ports.match import MatchPort
@@ -1715,9 +1722,45 @@ def build_match(
     return MatchAdapter(structured_output_port=structured_output_port)
 
 
+class CriticalityAdapter:
+    """apps/ adapter implementing daily-driver's ``CriticalityPort`` over the
+    provider-agnostic ``StructuredOutputPort`` (S103ai, D241 — the MatchAdapter
+    precedent). The pure domain helpers build the prompt + schema from the addressable
+    spec and parse the response grounded-strict (references validated to resolve); the
+    litellm SDK stays confined to the inference adapter, never here."""
+
+    def __init__(self, *, structured_output_port: StructuredOutputPort) -> None:
+        self._structured_output = structured_output_port
+
+    async def assess(self, *, requirement_texts, spec_index):
+        if not requirement_texts or spec_index.is_empty():
+            return {}
+        request = StructuredOutputRequest(
+            prompt=build_criticality_prompt(
+                requirement_texts=requirement_texts,
+                spec_prompt=spans_for_prompt(spec_index),
+            ),
+            schema=criticality_batch_schema(requirement_texts),
+        )
+        try:
+            response = await self._structured_output.generate_structured(request)
+        except StructuredOutputParseFailure:
+            # No schema-conforming assessment — the use case persists nothing.
+            return None
+        return parse_criticality(requirement_texts, spec_index, response.value)
+
+
+def build_criticality(
+    *, structured_output_port: StructuredOutputPort
+) -> CriticalityAdapter:
+    """Wire daily-driver's ``CriticalityPort`` over the structured-output seam."""
+    return CriticalityAdapter(structured_output_port=structured_output_port)
+
+
 __all__ = [
     "CalendarEventsReaderAdapter",
     "CddDrafterAdapter",
+    "CriticalityAdapter",
     "CvExtractorAdapter",
     "CommitmentRepositoryRouter",
     "DayRepositoryRouter",
