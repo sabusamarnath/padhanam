@@ -782,14 +782,30 @@ class ExtractJdRequest(BaseModel):
     text: str
 
 
+class CriticalitySpanDTO(BaseModel):
+    """One resolved demand-spec span backing a criticality claim (S103ai, D241)."""
+
+    id: str
+    kind: str          # section / sentence
+    text: str
+
+
 class RequirementDTO(BaseModel):
     """One discrete demand requirement for an opportunity (S103ah, D240) — text +
-    three-level importance + its proof state (draft / confirmed)."""
+    three-level importance + proof state, plus its criticality assessment (S103ai, D241):
+    the reasoned explanation, the hard-gate flag, the resolved spec spans backing it, the
+    confidence, the D239 coverage band, and the critical-gap flag."""
 
     id: str
     text: str
     importance: str        # essential / preferred / nice_to_have
     proof_state: str       # draft / confirmed
+    criticality: str | None = None            # the reasoned explanation (D241)
+    hard_gate: bool = False                    # a pass-fail bar (D241)
+    criticality_confidence: str | None = None  # high / low (honest low-confidence, D241)
+    criticality_spans: list[CriticalitySpanDTO] = []   # resolved evidence (D241)
+    coverage_band: str | None = None           # the D239 match band, when a match exists
+    critical_gap: bool = False                 # a gap on a high-criticality requirement
 
 
 class RequirementTextRequest(BaseModel):
@@ -803,6 +819,15 @@ def requirement_to_dto(r: dict) -> "RequirementDTO":
     return RequirementDTO(
         id=r["id"], text=r["text"], importance=r["importance"],
         proof_state=r["proof_state"],
+        criticality=r.get("criticality"),
+        hard_gate=bool(r.get("hard_gate")),
+        criticality_confidence=r.get("criticality_confidence"),
+        criticality_spans=[
+            CriticalitySpanDTO(id=s["id"], kind=s["kind"], text=s["text"])
+            for s in (r.get("criticality_spans") or [])
+        ],
+        coverage_band=r.get("coverage_band"),
+        critical_gap=bool(r.get("critical_gap")),
     )
 
 

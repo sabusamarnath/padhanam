@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from contexts.daily_driver.domain import criticality as crit
 from contexts.daily_driver.domain import demand_requirements as dr
 from contexts.daily_driver.ports.goal_graph import GoalGraphPort
 from shared_kernel import ActorContext
@@ -32,6 +33,24 @@ async def _load(
     )
 
 
+async def _enriched(
+    goal_graph: GoalGraphPort, actor: ActorContext, opportunity_id: UUID
+) -> tuple[dict, ...]:
+    """The enriched requirement views (S103ai/D241) — each item with its criticality
+    resolved (spans → text, coverage band, critical-gap flag) against the addressable
+    spec + the D239 match. Read after any write so the surface re-renders coherently."""
+    data = await goal_graph.read_opportunity_match(
+        tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
+    )
+    if data is None:
+        return ()
+    return crit.build_requirement_views(
+        dr.deserialize(data.get("demand_requirements")),
+        data.get("job_description"),
+        data.get("match_result"),
+    )
+
+
 async def _store(
     goal_graph: GoalGraphPort, actor: ActorContext, opportunity_id: UUID,
     items: tuple[dict, ...],
@@ -40,16 +59,16 @@ async def _store(
         tenant_context=actor.tenant_context, opportunity_id=opportunity_id,
         requirements_json=dr.serialize(items),
     )
-    return items
+    return await _enriched(goal_graph, actor, opportunity_id)
 
 
 @requires_authorisation(DAILY_DRIVER_CDD_READ)
 async def read_demand_requirements(
     *, goal_graph: GoalGraphPort, actor: ActorContext, opportunity_id: UUID,
 ) -> tuple[dict, ...]:
-    """The opportunity's discrete demand requirements (draft + confirmed), for the
-    proof surface (D240)."""
-    return await _load(goal_graph, actor, opportunity_id)
+    """The opportunity's discrete demand requirements (draft + confirmed) with their
+    criticality (D241) resolved — the proof surface's enriched view (D240/D241)."""
+    return await _enriched(goal_graph, actor, opportunity_id)
 
 
 @requires_authorisation(DAILY_DRIVER_CDD_WRITE)

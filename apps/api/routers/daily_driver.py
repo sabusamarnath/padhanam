@@ -172,6 +172,9 @@ from contexts.daily_driver.application.demand_requirements import (
     edit_requirement as edit_requirement_uc,
     read_demand_requirements as read_requirements_uc,
 )
+from contexts.daily_driver.application.criticality import (
+    assess_criticality as assess_criticality_uc,
+)
 from contexts.daily_driver.application.extract_cv import (
     extract_cv_profile as extract_cv_uc,
 )
@@ -323,6 +326,11 @@ def get_cv_extractor(request: Request):
 def get_match_port(request: Request):
     """FastAPI dependency: the daily-driver MatchPort (S103ag, D239)."""
     return _state(request, "daily_driver_match_port")
+
+
+def get_criticality_port(request: Request):
+    """FastAPI dependency: the daily-driver CriticalityPort (S103ai, D241)."""
+    return _state(request, "daily_driver_criticality_port")
 
 
 def get_tasks_reader(request: Request):
@@ -1244,6 +1252,26 @@ async def post_add_requirement(
     items = await add_requirement_uc(
         goal_graph=goal_graph, actor=actor, opportunity_id=opportunity_id,
         text=body.text, importance=body.importance,
+    )
+    return [requirement_to_dto(r) for r in items]
+
+
+@router.post(
+    "/cdd/opportunity/{opportunity_id}/requirements/criticality",
+    response_model=list[RequirementDTO],
+)
+async def post_assess_criticality(
+    opportunity_id: UUID,
+    actor: Annotated[ActorContext, Depends(get_actor_context)],
+    goal_graph: Annotated[GoalGraphPort, Depends(get_goal_graph)],
+    criticality_port: Annotated[object, Depends(get_criticality_port)],
+) -> list[RequirementDTO]:
+    """Assess each requirement's criticality against the addressable demand spec (S103ai,
+    D241) — a reasoned, span-linked explanation + hard-gate flag, references validated to
+    resolve. Returns the fresh enriched list (criticality + critical gaps)."""
+    items = await assess_criticality_uc(
+        goal_graph=goal_graph, criticality_port=criticality_port, actor=actor,
+        opportunity_id=opportunity_id,
     )
     return [requirement_to_dto(r) for r in items]
 

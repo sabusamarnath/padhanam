@@ -46,6 +46,17 @@ class _StatefulGraph:
         self.store[(str(tenant_context.tenant_id), str(opportunity_id))] = requirements_json
         return True
 
+    async def read_opportunity_match(self, *, tenant_context, opportunity_id):
+        # the per-opportunity read the enriched view (D241) reads: requirements + JD + match
+        key = (str(tenant_context.tenant_id), str(opportunity_id))
+        if key not in self.store:
+            return None
+        return {
+            "demand_requirements": self.store[key],
+            "job_description": None,
+            "match_result": None,
+        }
+
 
 def _seed(graph, opp, items, tenant=_TENANT):
     graph.store[(tenant, str(opp))] = dr.serialize(items)
