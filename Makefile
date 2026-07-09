@@ -1,4 +1,4 @@
-.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate set-dogfood-source-class seed-get-a-job-cdd seed-get-a-job-gates seed-contacts seed-contacts-linkedin seed-contacts-google instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size
+.PHONY: help up down derive-env logs ps psql pull-model smoke-llm scan sbom clean-pyc lint test test-live-llm migrate seed-tenants dogfood-provision dogfood-token dogfood-wipe seed-german seed-get-a-job seed-dogfood-goals rescope-dogfood rescope-dogfood-reactivate set-dogfood-source-class seed-get-a-job-cdd seed-get-a-job-gates seed-contacts seed-contacts-linkedin seed-contacts-google instantiate-opportunities pull-tasks sync-email-jobsearch classify-job-search sync-calendar dump-calendar-titles correlate-units coverage-report domain-report scheduled-check eval-run eval-report ingest-run ingest-worker neo4j-up neo4j-down neo4j-reset neo4j-shell charter-export charter-size scrub-check install-hooks
 
 # .env carries the operator-edited values; .env.derived carries values
 # computed from padhanam/config/ (currently just LITELLM_OTEL_HEADERS).
@@ -437,3 +437,14 @@ charter-size:
 # current gate to its furthest-evidenced gate. Idempotent. Run correlate-units after.
 instantiate-opportunities: derive-env
 	$(COMPOSE) exec padhanam-api python -m ops.instantiate_get_a_job_opportunities
+
+# Scrub guard (S103ai): fail if any real name from the git-ignored
+# charter/.scrub-mapping appears in a tracked file. No-ops without the mapping.
+scrub-check:
+	python3 scripts/check_scrub.py
+
+# Install the git hooks (pre-commit scrub guard) by pointing core.hooksPath
+# at the committed .githooks/ directory. Run once per clone.
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "hooks installed: core.hooksPath=.githooks (pre-commit scrub guard active)"

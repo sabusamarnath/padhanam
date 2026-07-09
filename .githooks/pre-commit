@@ -1,0 +1,5 @@
+#!/bin/sh
+# Scrub guard (S103ai): block a commit that reintroduces a real name from the
+# git-ignored charter/.scrub-mapping into any tracked file. No-ops when the mapping
+# is absent (fresh clones without the secret). Install: `make install-hooks`.
+exec python3 scripts/check_scrub.py
